@@ -44,4 +44,6 @@ export interface RenderOptions {
    * When true, a single merged heatmap across all providers.
    */
   all?: boolean;
+  /** When set, only include days from this calendar year. */
+  year?: number;
 }

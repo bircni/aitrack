@@ -157,7 +157,10 @@ export function percentile(sorted: number[], p: number): number {
   return sortedAsc[idx] ?? 0;
 }
 
-function buildDateGrid(): Array<Array<string | null>> {
+function buildDateGrid(year?: number): Array<Array<string | null>> {
+  if (year !== undefined) {
+    return buildYearGrid(year);
+  }
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const start = new Date(today);
@@ -182,19 +185,91 @@ function buildDateGrid(): Array<Array<string | null>> {
   return weeks;
 }
 
-function currentStreak(dayMap: DayMap): number {
+function buildYearGrid(year: number): Array<Array<string | null>> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(year, 0, 1);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay());
+  const end =
+    year === today.getFullYear() ? today : new Date(year, 11, 31);
+  end.setHours(0, 0, 0, 0);
+
+  const weeks: Array<Array<string | null>> = [];
+  const cur = new Date(start);
+  do {
+    const week: Array<string | null> = [];
+    for (let d = 0; d < 7; d++) {
+      if (cur <= end && cur.getFullYear() === year) {
+        week.push(dateKey(cur));
+      } else {
+        week.push(null);
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    weeks.push(week);
+  } while (cur <= end || cur.getDay() !== 0);
+  return weeks;
+}
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function hasActivity(dayMap: DayMap, key: string): boolean {
+  const v = dayMap.get(key);
+  return v !== undefined && v.inputTokens + v.outputTokens > 0;
+}
+
+export function currentStreak(dayMap: DayMap): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const cur = new Date(today);
   let streak = 0;
   for (;;) {
-    const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-    const v = dayMap.get(key);
-    if (!v || v.inputTokens + v.outputTokens === 0) break;
+    if (!hasActivity(dayMap, dateKey(cur))) break;
     streak++;
     cur.setDate(cur.getDate() - 1);
   }
   return streak;
+}
+
+export function longestStreak(dayMap: DayMap): number {
+  const activeDates = [...dayMap.entries()]
+    .filter(([, v]) => v.inputTokens + v.outputTokens > 0)
+    .map(([d]) => d)
+    .sort();
+  if (activeDates.length === 0) return 0;
+
+  let longest = 1;
+  let current = 1;
+  for (let i = 1; i < activeDates.length; i++) {
+    const prev = new Date(`${activeDates[i - 1]}T12:00:00`);
+    const cur = new Date(`${activeDates[i]}T12:00:00`);
+    const diffDays = Math.round((cur.getTime() - prev.getTime()) / 86_400_000);
+    if (diffDays === 1) {
+      current++;
+      longest = Math.max(longest, current);
+    } else if (diffDays > 1) {
+      current = 1;
+    }
+  }
+  return longest;
+}
+
+export function peakMonth(dayMap: DayMap): { month: string; tokens: number } | null {
+  const months = new Map<string, number>();
+  for (const [date, day] of dayMap) {
+    const total = day.inputTokens + day.outputTokens;
+    if (total === 0) continue;
+    const month = date.slice(0, 7);
+    months.set(month, (months.get(month) ?? 0) + total);
+  }
+  let best: { month: string; tokens: number } | null = null;
+  for (const [month, tokens] of months) {
+    if (!best || tokens > best.tokens) best = { month, tokens };
+  }
+  return best;
 }
 
 interface ModelTop {
@@ -279,6 +354,12 @@ function formatPeakDate(date: string): string {
   const [y, m, d] = date.split('-');
   const monthIdx = parseInt(m, 10) - 1;
   return `${MONTH_SHORT[monthIdx] ?? m} ${parseInt(d, 10)}, ${y}`;
+}
+
+function formatMonthLabel(month: string): string {
+  const [y, m] = month.split('-');
+  const monthIdx = parseInt(m, 10) - 1;
+  return `${MONTH_SHORT[monthIdx] ?? m} ${y}`;
 }
 
 // ── Drawing ────────────────────────────────────────────────────────────────
@@ -417,6 +498,8 @@ function drawSection(
 
   const { topAllTime, topRecent, peak } = computeModelStats(dayMap);
   const cs = currentStreak(dayMap);
+  const ls = longestStreak(dayMap);
+  const peakMo = peakMonth(dayMap);
 
   const bottomStats = [
     {
@@ -431,7 +514,12 @@ function drawSection(
       label: 'PEAK DAY',
       value: peak ? `${formatPeakDate(peak.date)} (${fmt(peak.tokens)})` : '—',
     },
+    {
+      label: 'PEAK MONTH',
+      value: peakMo ? `${formatMonthLabel(peakMo.month)} (${fmt(peakMo.tokens)})` : '—',
+    },
     { label: 'CURRENT STREAK', value: `${cs} day${cs !== 1 ? 's' : ''}` },
+    { label: 'LONGEST STREAK', value: `${ls} day${ls !== 1 ? 's' : ''}` },
   ];
 
   const bColW = GRID_W / bottomStats.length;
@@ -473,11 +561,11 @@ export function mergeAllProviderDayMaps(providerData: ProviderData): DayMap {
 export function renderToPng(
   providerData: ProviderData,
   _machineData: MachineFile[],
-  { dark = false, all = false }: RenderOptions = {},
+  { dark = false, all = false, year }: RenderOptions = {},
 ): Buffer {
   const mode: 'light' | 'dark' = dark ? 'dark' : 'light';
   const C = PALETTE[mode];
-  const weeks = buildDateGrid();
+  const weeks = buildDateGrid(year);
 
   const layoutData: ProviderData = all
     ? { all: mergeAllProviderDayMaps(providerData) }

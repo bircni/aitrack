@@ -2,12 +2,13 @@ import { loadConfig } from './config.js';
 import { isCloned, listDataFiles, pull, readDataFile } from './git.js';
 import { readCursorData } from './readers/cursor.js';
 import type { DayMap, ProviderData } from './types.js';
-import { getOrCreateDay } from './dayMap.js';
+import { getOrCreateDay, filterProviderDataByYear } from './dayMap.js';
 import { mergeProviderDay } from './show.js';
 
 interface SummaryOptions {
   noCursor?: boolean;
   noPull?: boolean;
+  year?: number;
 }
 
 interface MonthBucket {
@@ -118,7 +119,10 @@ export async function summaryCommand(opts: SummaryOptions = {}): Promise<void> {
     if (cursorMap.size > 0) providers.cursor = cursorMap;
   }
 
-  if (Object.keys(providers).length === 0) {
+  const reportData =
+    opts.year !== undefined ? filterProviderDataByYear(providers, opts.year) : providers;
+
+  if (Object.keys(reportData).length === 0) {
     console.log('No usage data found.');
     return;
   }
@@ -132,11 +136,11 @@ export async function summaryCommand(opts: SummaryOptions = {}): Promise<void> {
   };
   const order = ['claude_code', 'codex', 'cursor', 'gemini', 'opencode'];
   const ordered = [
-    ...order.filter((k) => providers[k]),
-    ...Object.keys(providers).filter((k) => !order.includes(k)),
+    ...order.filter((k) => reportData[k]),
+    ...Object.keys(reportData).filter((k) => !order.includes(k)),
   ];
   for (const key of ordered) {
-    const dayMap = providers[key];
+    const dayMap = reportData[key];
     if (dayMap) printProvider(labels[key] ?? key, dayMap);
   }
 }

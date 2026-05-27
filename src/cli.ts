@@ -52,14 +52,23 @@ program
   .option('--no-cursor', 'skip local Cursor usage (no state.vscdb / CSV export)')
   .option('--all', 'single merged heatmap across all providers instead of one row per provider')
   .option('--no-open', 'do not auto-open the generated PNG (useful for scripts / CI)')
+  .option('--year <year>', 'only include days from this calendar year', parseInt)
   .action(
-    (opts: { output: string; dark?: boolean; cursor?: boolean; all?: boolean; open?: boolean }) =>
+    (opts: {
+      output: string;
+      dark?: boolean;
+      cursor?: boolean;
+      all?: boolean;
+      open?: boolean;
+      year?: number;
+    }) =>
       showCommand({
         output: opts.output,
         dark: opts.dark,
         all: opts.all,
         open: opts.open,
         noCursor: opts.cursor === false,
+        year: Number.isFinite(opts.year) ? opts.year : undefined,
       }).catch((err: unknown) => {
         console.error(errorMessage(err));
         process.exit(1);
@@ -71,8 +80,13 @@ program
   .description('Print per-provider monthly token + cost totals to stdout (no PNG)')
   .option('--no-cursor', 'skip local Cursor usage')
   .option('--no-pull', 'skip pulling latest from remote first')
-  .action((opts: { cursor?: boolean; pull?: boolean }) =>
-    summaryCommand({ noCursor: opts.cursor === false, noPull: opts.pull === false }).catch(
+  .option('--year <year>', 'only include days from this calendar year', parseInt)
+  .action((opts: { cursor?: boolean; pull?: boolean; year?: number }) =>
+    summaryCommand({
+      noCursor: opts.cursor === false,
+      noPull: opts.pull === false,
+      year: Number.isFinite(opts.year) ? opts.year : undefined,
+    }).catch(
       (err: unknown) => {
         console.error(errorMessage(err));
         process.exit(1);

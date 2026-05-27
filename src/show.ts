@@ -8,7 +8,7 @@ import { estimateClaudeCostFromAggregateTokens } from './readers/claude.js';
 import { estimateCodexCostUSD } from './pricing/codex.js';
 import { renderToPng } from './render.js';
 import type { DayEntry, MachineFile, ProviderData, ProviderDay, TokenCounts } from './types.js';
-import { getOrCreateDay } from './dayMap.js';
+import { getOrCreateDay, filterProviderDataByYear } from './dayMap.js';
 
 // Resolve the per-model cost for one provider-day, backfilling claude_code rows
 // from aggregate token counts when sync wrote no costUSD (older data).
@@ -110,6 +110,8 @@ interface ShowOptions {
   all?: boolean;
   /** Commander sets this to false when --no-open is passed. Defaults to true. */
   open?: boolean;
+  /** When set, only include days from this calendar year. */
+  year?: number;
 }
 
 export async function showCommand(opts: ShowOptions = {}): Promise<void> {
@@ -133,7 +135,10 @@ export async function showCommand(opts: ShowOptions = {}): Promise<void> {
     if (cursorMap.size > 0) providerData.cursor = cursorMap;
   }
 
-  if (Object.keys(providerData).length === 0) {
+  const renderData =
+    opts.year !== undefined ? filterProviderDataByYear(providerData, opts.year) : providerData;
+
+  if (Object.keys(renderData).length === 0) {
     if (files.length === 0) {
       console.log(
         'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
@@ -145,9 +150,10 @@ export async function showCommand(opts: ShowOptions = {}): Promise<void> {
   }
 
   const outputPath = resolve(opts.output ?? 'aitrack.png');
-  const png = renderToPng(providerData, machineData, {
+  const png = renderToPng(renderData, machineData, {
     dark: Boolean(opts.dark),
     all: Boolean(opts.all),
+    year: opts.year,
   });
   writeFileSync(outputPath, png);
 
