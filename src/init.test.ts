@@ -39,10 +39,7 @@ describe('initCommand', () => {
   });
 
   it('clones and saves a trimmed repo URL for a new config', async () => {
-    mocks.isCloned
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(false)
-      .mockReturnValue(true);
+    mocks.isCloned.mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValue(true);
     mocks.prompts
       .mockResolvedValueOnce({ repoUrl: '  git@example.com:me/data.git  ' })
       .mockResolvedValueOnce({ machineId: 'work-laptop' });

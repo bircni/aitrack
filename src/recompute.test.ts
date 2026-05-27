@@ -36,6 +36,7 @@ vi.mock('fs', () => ({
 vi.mock('child_process', () => ({ execSync: mocks.execSync }));
 
 import { recomputeCostsCommand } from './recompute.js';
+import type { MachineFile } from './types.js';
 
 const machineJson = {
   hostname: 'host',
@@ -145,11 +146,10 @@ describe('recomputeCostsCommand', () => {
 
     await recomputeCostsCommand();
 
-    const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1]));
-    expect(written.days['2024-01-01'].claude_code.byModel['claude-opus-4-7'].costUSD).toBeCloseTo(
-      3.5,
-      5,
-    );
+    const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
+    expect(
+      written.days['2024-01-01']?.claude_code?.byModel['claude-opus-4-7']?.costUSD,
+    ).toBeCloseTo(3.5, 5);
   });
 
   it('leaves legacy rows without cache breakdown unchanged', async () => {

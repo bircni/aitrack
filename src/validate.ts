@@ -15,7 +15,10 @@ function validateTokenCounts(value: unknown, path: string): string | null {
   if (value.cachedInputTokens !== undefined && !isFiniteNumber(value.cachedInputTokens)) {
     return `${path}.cachedInputTokens must be a number`;
   }
-  if (value.cacheCreationInputTokens !== undefined && !isFiniteNumber(value.cacheCreationInputTokens)) {
+  if (
+    value.cacheCreationInputTokens !== undefined &&
+    !isFiniteNumber(value.cacheCreationInputTokens)
+  ) {
     return `${path}.cacheCreationInputTokens must be a number`;
   }
   if (value.rawInputTokens !== undefined && !isFiniteNumber(value.rawInputTokens)) {

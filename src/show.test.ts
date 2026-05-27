@@ -148,7 +148,10 @@ describe('loadMergedProviderData', () => {
   });
 
   it('merges git data from other machines and overlays fresh local read', async () => {
-    mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git', machineId: 'host' });
+    mocks.tryLoadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: 'host',
+    });
     mocks.resolveMachineId.mockReturnValue('host');
     mocks.isCloned.mockReturnValue(true);
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json', '/repo/data/host.json']);
