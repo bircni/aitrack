@@ -1,7 +1,6 @@
-import { hostname } from 'os';
 import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { loadConfig } from './config.js';
+import { loadConfig, resolveMachineId } from './config.js';
 import { readClaudeData } from './readers/claude.js';
 import { readCodexData } from './readers/codex.js';
 import { isCloned, LOCAL_REPO, pull, commitAndPush } from './git.js';
@@ -31,7 +30,7 @@ function buildMachineData(host: string, allProviders: Record<string, DayMap>): M
 }
 
 export async function syncCommand(): Promise<void> {
-  loadConfig();
+  const config = loadConfig();
 
   if (!isCloned()) {
     throw new Error('Repo not cloned. Run: npx aitrack init');
@@ -56,7 +55,7 @@ export async function syncCommand(): Promise<void> {
   if (codexData.size > 0) sources.push(`Codex (${codexData.size} days)`);
   console.log(`Found: ${sources.join(', ')}`);
 
-  const host = hostname();
+  const host = resolveMachineId(config);
   const dataDir = join(LOCAL_REPO, 'data');
   mkdirSync(dataDir, { recursive: true });
 

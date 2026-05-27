@@ -1,6 +1,7 @@
 import prompts from 'prompts';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { hostname } from 'os';
 import { loadConfig, saveConfig } from './config.js';
 import { isCloned, cloneRepo, removeLocalClone, LOCAL_REPO } from './git.js';
 
@@ -36,6 +37,19 @@ async function promptRepoUrl(): Promise<string | undefined> {
   });
   const repoUrl: unknown = answers.repoUrl;
   return typeof repoUrl === 'string' ? repoUrl.trim() : undefined;
+}
+
+async function promptMachineId(initial: string): Promise<string | undefined> {
+  const answers = await prompts<'machineId'>({
+    type: 'text',
+    name: 'machineId',
+    message: 'Machine name (used as data filename):',
+    hint: 'e.g. work-laptop',
+    initial,
+    validate: (v: string) => v.trim().length > 0 || 'Name is required',
+  });
+  const machineId: unknown = answers.machineId;
+  return typeof machineId === 'string' ? machineId.trim() : undefined;
 }
 
 export async function initCommand(): Promise<void> {
@@ -86,7 +100,13 @@ export async function initCommand(): Promise<void> {
     cloneRepo(repoUrl);
   }
 
-  saveConfig({ repoUrl });
+  const machineId = await promptMachineId(existing?.machineId ?? hostname());
+  if (!machineId) {
+    console.log('Aborted.');
+    return;
+  }
+
+  saveConfig({ repoUrl, machineId });
 
   console.log('');
   console.log('Done! Next steps:');

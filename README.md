@@ -111,9 +111,12 @@ Config is stored at `~/.config/aitrack/config.json`:
 
 ```json
 {
-  "repoUrl": "git@github.com:your-username/aitrack-data.git"
+  "repoUrl": "git@github.com:your-username/aitrack-data.git",
+  "machineId": "work-laptop"
 }
 ```
+
+`machineId` is optional — if omitted, `sync` uses your OS hostname as the filename (`data/{machineId}.json`). Set a stable name during `init` if your hostname might collide across machines or change after reinstall. Existing hostname-based files in the repo continue to work when reading; only new syncs use the configured ID.
 
 ---
 
