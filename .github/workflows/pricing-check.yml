@@ -1,0 +1,75 @@
+name: Pricing drift check
+
+# Anthropic occasionally adds models or adjusts prices. Run weekly to catch
+# drift between src/pricing/claude.ts and the published pricing table.
+# (Codex pricing is hand-maintained — OpenAI's pricing page blocks
+# unauthenticated fetches.)
+
+on:
+  schedule:
+    - cron: '0 9 * * *' # daily at 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - id: check
+        name: Run pricing:check
+        continue-on-error: true
+        run: |
+          set +e
+          pnpm run pricing:check 2>&1 | tee pricing-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update drift issue
+        if: steps.check.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TITLE="Pricing drift detected by scheduled check"
+          BODY=$(cat <<EOF
+          The scheduled \`pricing:check\` run flagged drift between
+          \`src/pricing/claude.ts\` and the Anthropic pricing docs.
+
+          Update the table and re-run \`pnpm run pricing:check\` locally
+          to confirm.
+
+          <details><summary>Script output</summary>
+
+          \`\`\`
+          $(cat pricing-output.txt)
+          \`\`\`
+
+          </details>
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          )
+
+          # Reuse an existing open issue with the same title instead of spamming new ones.
+          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY" --label "pricing"
+          fi
+
+      - name: Fail job if drift detected
+        if: steps.check.outputs.exit_code != '0'
+        run: exit 1
