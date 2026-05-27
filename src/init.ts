@@ -1,0 +1,71 @@
+import prompts from 'prompts';
+import { mkdirSync } from 'fs';
+import { dirname } from 'path';
+import { loadConfig, saveConfig } from './config.js';
+import { isCloned, cloneRepo, LOCAL_REPO } from './git.js';
+
+async function promptOverwrite(): Promise<boolean | undefined> {
+  const answers = await prompts<'overwrite'>({
+    type: 'confirm',
+    name: 'overwrite',
+    message: 'Config already exists. Overwrite?',
+    initial: false,
+  });
+  const overwrite: unknown = answers.overwrite;
+  return typeof overwrite === 'boolean' ? overwrite : undefined;
+}
+
+async function promptRepoUrl(): Promise<string | undefined> {
+  const answers = await prompts<'repoUrl'>({
+    type: 'text',
+    name: 'repoUrl',
+    message: 'Git remote URL (SSH or HTTPS):',
+    hint: 'e.g. git@github.com:you/aitrack-data.git',
+    validate: (v: string) => v.trim().length > 0 || 'URL is required',
+  });
+  const repoUrl: unknown = answers.repoUrl;
+  return typeof repoUrl === 'string' ? repoUrl.trim() : undefined;
+}
+
+export async function initCommand(): Promise<void> {
+  let existing = null;
+  try {
+    existing = loadConfig();
+  } catch {
+    /* not yet configured */
+  }
+
+  if (existing) {
+    console.log(`Current config: repo=${existing.repoUrl}`);
+    const overwrite = await promptOverwrite();
+    if (!overwrite) {
+      console.log('Aborted.');
+      return;
+    }
+  }
+
+  console.log('First, create an empty GitHub repository (or any git remote) for storing data.');
+  console.log('Example: https://github.com/new — name it something like "aitrack-data".');
+  console.log('');
+
+  const repoUrl = await promptRepoUrl();
+  if (!repoUrl) {
+    console.log('Aborted.');
+    return;
+  }
+
+  if (isCloned()) {
+    console.log(`Repo already cloned at ${LOCAL_REPO}. Skipping clone.`);
+  } else {
+    console.log(`Cloning ${repoUrl} into ${LOCAL_REPO}...`);
+    mkdirSync(dirname(LOCAL_REPO), { recursive: true });
+    cloneRepo(repoUrl);
+  }
+
+  saveConfig({ repoUrl });
+
+  console.log('');
+  console.log('Done! Next steps:');
+  console.log('  npx aitrack sync   # push your local AI usage data');
+  console.log('  npx aitrack show   # render heatmap PNG');
+}
