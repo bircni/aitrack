@@ -62,6 +62,13 @@ export function mergeProviderDay(
   if (pData.totals.cachedInputTokens !== undefined) {
     rec.cachedInputTokens = (rec.cachedInputTokens ?? 0) + pData.totals.cachedInputTokens;
   }
+  if (pData.totals.rawInputTokens !== undefined) {
+    rec.rawInputTokens = (rec.rawInputTokens ?? 0) + pData.totals.rawInputTokens;
+  }
+  if (pData.totals.cacheCreationInputTokens !== undefined) {
+    rec.cacheCreationInputTokens =
+      (rec.cacheCreationInputTokens ?? 0) + pData.totals.cacheCreationInputTokens;
+  }
 
   let summedModelCost = 0;
   let anyModelHadCost = false;
@@ -71,6 +78,13 @@ export function mergeProviderDay(
     m.outputTokens += counts.outputTokens;
     if (counts.cachedInputTokens !== undefined) {
       m.cachedInputTokens = (m.cachedInputTokens ?? 0) + counts.cachedInputTokens;
+    }
+    if (counts.rawInputTokens !== undefined) {
+      m.rawInputTokens = (m.rawInputTokens ?? 0) + counts.rawInputTokens;
+    }
+    if (counts.cacheCreationInputTokens !== undefined) {
+      m.cacheCreationInputTokens =
+        (m.cacheCreationInputTokens ?? 0) + counts.cacheCreationInputTokens;
     }
     const cost = resolveModelCost(providerKey, model, counts, date);
     if (cost !== undefined) {

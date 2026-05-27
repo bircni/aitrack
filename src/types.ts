@@ -7,6 +7,10 @@ export interface TokenCounts {
    * the value as 0 — older synced data lacks this split.
    */
   cachedInputTokens?: number;
+  /** Claude: non-cache input_tokens only. Omitted in legacy synced data. */
+  rawInputTokens?: number;
+  /** Claude: cache_creation_input_tokens. Omitted in legacy synced data. */
+  cacheCreationInputTokens?: number;
   costUSD?: number;
 }
 

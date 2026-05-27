@@ -15,6 +15,12 @@ function validateTokenCounts(value: unknown, path: string): string | null {
   if (value.cachedInputTokens !== undefined && !isFiniteNumber(value.cachedInputTokens)) {
     return `${path}.cachedInputTokens must be a number`;
   }
+  if (value.cacheCreationInputTokens !== undefined && !isFiniteNumber(value.cacheCreationInputTokens)) {
+    return `${path}.cacheCreationInputTokens must be a number`;
+  }
+  if (value.rawInputTokens !== undefined && !isFiniteNumber(value.rawInputTokens)) {
+    return `${path}.rawInputTokens must be a number`;
+  }
   if (value.costUSD !== undefined && !isFiniteNumber(value.costUSD)) {
     return `${path}.costUSD must be a number`;
   }

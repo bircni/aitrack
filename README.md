@@ -85,7 +85,7 @@ Each machine writes its own file (`data/{hostname}.json`) so there are no merge 
 | `npx aitrack show -o path.png` | Write PNG to a custom path                                                                  |
 | `npx aitrack tui`              | Terminal stats table (same local-first merge as `show`, no PNG)                             |
 | `npx aitrack summary`          | Print per-provider monthly token + cost totals to stdout (no PNG)                           |
-| `npx aitrack recompute-costs`  | Recompute claude_code costs across all synced data using the current pricing table          |
+| `npx aitrack recompute-costs`  | Refresh costs: local JSONL on this machine; reprice others from stored cache breakdown      |
 
 ---
 
@@ -102,7 +102,7 @@ aitrack reads (and never transmits) your local Cursor access token solely to cal
 
 Cost handling follows OpenUsage-style semantics: Claude Code cost is an API-equivalent estimate from per-model pricing and token/cache usage. Pricing is keyed by Claude API model id (date suffix stripped) — see [`src/readers/claude.ts`](src/readers/claude.ts). Cursor and Codex local session cost are left unknown because their available local data does not expose a reliable all-history cost.
 
-If you updated to a newer version and noticed your stored costs look off (Anthropic dropped Opus pricing 3× between 4.1 and 4.5), run `npx aitrack recompute-costs` to refresh every synced day from the current pricing table. Note: aggregated synced data doesn't preserve the cache vs raw-input split, so recomputed costs are an upper bound — for an exact recompute, delete the per-host JSON and re-run `aitrack sync` from each machine.
+If stored costs are missing or pricing changed, run `npx aitrack recompute-costs`. It re-reads local JSONL on this machine (same accuracy as `sync`) and reprices other machines from the cache breakdown stored at sync time. Legacy synced data without a breakdown is left unchanged — re-sync from that machine to upgrade it.
 
 Heatmap intensity anchors on the 90th-percentile day rather than the absolute maximum, so a single huge day doesn't flatten the rest of the year into the lightest shade.
 

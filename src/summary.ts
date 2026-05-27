@@ -1,9 +1,7 @@
-import { loadConfig } from './config.js';
-import { isCloned, listDataFiles, tryPull, readDataFile } from './git.js';
-import { readCursorData } from './readers/cursor.js';
-import type { DayMap, MachineFile, ProviderData } from './types.js';
-import { getOrCreateDay, filterProviderDataByYear } from './dayMap.js';
-import { mergeProviderDay } from './show.js';
+import { loadMergedProviderData, emptyUsageMessage } from './show.js';
+import { tryLoadConfig } from './config.js';
+import { isCloned } from './git.js';
+import type { DayMap } from './types.js';
 
 interface SummaryOptions {
   noCursor?: boolean;
@@ -88,35 +86,17 @@ function printProvider(name: string, dayMap: DayMap): void {
 }
 
 export async function summaryCommand(opts: SummaryOptions = {}): Promise<void> {
-  loadConfig();
+  const loaded = await loadMergedProviderData({
+    noCursor: opts.noCursor,
+    year: opts.year,
+  });
 
-  if (!isCloned()) {
-    throw new Error('Repo not cloned. Run: npx aitrack init');
+  if (!loaded) {
+    console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));
+    return;
   }
 
-  tryPull();
-
-  const machineData = listDataFiles()
-    .map(readDataFile)
-    .filter((data): data is MachineFile => data !== null);
-  const providers: ProviderData = {};
-  for (const data of machineData) {
-    for (const [date, providerData] of Object.entries(data.days)) {
-      for (const [providerKey, pData] of Object.entries(providerData)) {
-        if (providerKey === 'cursor') continue;
-        const dayMap = (providers[providerKey] ??= new Map());
-        mergeProviderDay(getOrCreateDay(dayMap, date), providerKey, pData, date);
-      }
-    }
-  }
-
-  if (!opts.noCursor) {
-    const cursorMap = await readCursorData();
-    if (cursorMap.size > 0) providers.cursor = cursorMap;
-  }
-
-  const reportData =
-    opts.year !== undefined ? filterProviderDataByYear(providers, opts.year) : providers;
+  const reportData = loaded.providerData;
 
   if (Object.keys(reportData).length === 0) {
     console.log('No usage data found.');

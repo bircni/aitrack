@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { estimateClaudeCostUSD, parseJsonlFile } from './claude.js';
+import { estimateClaudeCostFromStoredCounts, estimateClaudeCostUSD, parseJsonlFile } from './claude.js';
 
 let tmpDir: string;
 
@@ -112,6 +112,9 @@ describe('parseJsonlFile', () => {
     const day = result.get('2024-01-15');
     expect(day?.inputTokens).toBe(160); // 100 + 50 cache_read + 10 cache_creation
     expect(day?.outputTokens).toBe(25);
+    expect(day?.rawInputTokens).toBe(100);
+    expect(day?.cachedInputTokens).toBe(50);
+    expect(day?.cacheCreationInputTokens).toBe(10);
     expect(day?.costUSD).toBeCloseTo(0.0007275);
   });
 
@@ -166,6 +169,24 @@ describe('parseJsonlFile', () => {
         output_tokens: 1_000_000,
       }),
     ).toBe(22.05);
+  });
+
+  it('reprices from stored cache breakdown without inflating cache reads', () => {
+    const cost = estimateClaudeCostFromStoredCounts('claude-opus-4-7', {
+      inputTokens: 1_100_000,
+      outputTokens: 100_000,
+      rawInputTokens: 100_000,
+      cachedInputTokens: 1_000_000,
+      cacheCreationInputTokens: 0,
+    });
+    // 100k*$5/M + 1M*$0.5/M + 100k*$25/M = 0.5 + 0.5 + 2.5 = 3.5
+    expect(cost).toBeCloseTo(3.5, 5);
+    expect(
+      estimateClaudeCostFromStoredCounts('claude-opus-4-7', {
+        inputTokens: 1_100_000,
+        outputTokens: 100_000,
+      }),
+    ).toBeUndefined();
   });
 
   it('skips non-assistant entries', async () => {

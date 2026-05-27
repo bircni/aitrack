@@ -112,14 +112,14 @@ program
 
 program
   .command('recompute-costs')
-  .description('Recompute claude_code costs for all synced data using the current pricing table')
-  .action(() => {
-    try {
-      recomputeCostsCommand();
-    } catch (err) {
+  .description(
+    'Refresh costs: re-read local JSONL on this machine; reprice other machines from stored cache breakdown',
+  )
+  .action(() =>
+    recomputeCostsCommand().catch((err: unknown) => {
       console.error(errorMessage(err));
       process.exit(1);
-    }
-  });
+    }),
+  );
 
 program.parse();
