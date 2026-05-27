@@ -8,6 +8,7 @@ import { showCommand } from './show.js';
 import { initCommand } from './init.js';
 import { recomputeCostsCommand } from './recompute.js';
 import { summaryCommand } from './summary.js';
+import { tuiCommand } from './tui.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -73,6 +74,25 @@ program
         console.error(errorMessage(err));
         process.exit(1);
       }),
+  );
+
+program
+  .command('tui')
+  .description('Display usage stats table in the terminal (no PNG)')
+  .option('--dark', 'high-contrast table colors')
+  .option('--no-cursor', 'skip local Cursor usage')
+  .option('--all', 'single merged stats row across all providers')
+  .option('--year <year>', 'only include days from this calendar year', parseInt)
+  .action((opts: { dark?: boolean; cursor?: boolean; all?: boolean; year?: number }) =>
+    tuiCommand({
+      dark: opts.dark,
+      all: opts.all,
+      noCursor: opts.cursor === false,
+      year: Number.isFinite(opts.year) ? opts.year : undefined,
+    }).catch((err: unknown) => {
+      console.error(errorMessage(err));
+      process.exit(1);
+    }),
   );
 
 program

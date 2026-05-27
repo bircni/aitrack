@@ -22,7 +22,13 @@ vi.mock('./git.js', () => ({
   readDataFile: mocks.readDataFile,
 }));
 vi.mock('./readers/cursor.js', () => ({ readCursorData: mocks.readCursorData }));
-vi.mock('./render.js', () => ({ renderToPng: mocks.renderToPng }));
+vi.mock('./render.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./render.js')>();
+  return {
+    ...actual,
+    renderToPng: mocks.renderToPng,
+  };
+});
 
 import { mergeProviderDay, showCommand } from './show.js';
 import type { DayEntry, MachineFile, ProviderData, ProviderDay, RenderOptions } from './types.js';
@@ -117,13 +123,15 @@ describe('showCommand', () => {
     );
   });
 
-  it('prints a shorter empty message when data files contain no providers', async () => {
+  it('prints the setup hint when synced files contain no provider data', async () => {
     mocks.listDataFiles.mockReturnValue(['/repo/data/empty.json']);
     mocks.readDataFile.mockReturnValue({ hostname: 'host', lastUpdated: 'now', days: {} });
 
     await showCommand({ noCursor: true });
 
-    expect(console.log).toHaveBeenCalledWith('No usage data found.');
+    expect(console.log).toHaveBeenCalledWith(
+      'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
+    );
   });
 
   it('renders cursor-only data when local cursor data is available', async () => {
@@ -143,7 +151,7 @@ describe('showCommand', () => {
     await showCommand({ output: 'out.png', dark: true, all: true });
 
     const [providerData, machineData, renderOptions] = getRenderCall();
-    expect(providerData.cursor).toBeInstanceOf(Map);
+    expect(providerData.all).toBeInstanceOf(Map);
     expect(machineData).toEqual([]);
     expect(renderOptions).toEqual({ dark: true, all: true });
     expect(mocks.writeFileSync).toHaveBeenCalledWith(

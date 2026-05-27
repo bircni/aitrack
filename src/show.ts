@@ -6,7 +6,7 @@ import { isCloned, pull, listDataFiles, readDataFile } from './git.js';
 import { readCursorData } from './readers/cursor.js';
 import { estimateClaudeCostFromAggregateTokens } from './readers/claude.js';
 import { estimateCodexCostUSD } from './pricing/codex.js';
-import { renderToPng } from './render.js';
+import { mergeAllProviderDayMaps, renderToPng } from './render.js';
 import type { DayEntry, MachineFile, ProviderData, ProviderDay, TokenCounts } from './types.js';
 import { getOrCreateDay, filterProviderDataByYear } from './dayMap.js';
 
@@ -76,6 +76,53 @@ export function mergeProviderDay(
   if (dayCost !== undefined) rec.costUSD = (rec.costUSD ?? 0) + dayCost;
 }
 
+export interface LoadUsageOptions {
+  noCursor?: boolean;
+  noPull?: boolean;
+  year?: number;
+}
+
+export interface LoadedUsageData {
+  providerData: ProviderData;
+  machineData: MachineFile[];
+  fileCount: number;
+}
+
+export async function loadMergedProviderData(
+  opts: LoadUsageOptions = {},
+): Promise<LoadedUsageData | null> {
+  loadConfig();
+
+  if (!isCloned()) {
+    throw new Error('Repo not cloned. Run: npx aitrack init');
+  }
+
+  if (!opts.noPull) {
+    console.log('Pulling latest from remote...');
+    pull();
+  }
+
+  const files = listDataFiles();
+  const machineData = files
+    .map(readDataFile)
+    .filter((data): data is MachineFile => data !== null);
+  const providerData = splitByProvider(machineData);
+
+  if (!opts.noCursor) {
+    const cursorMap = await readCursorData();
+    if (cursorMap.size > 0) providerData.cursor = cursorMap;
+  }
+
+  const filtered =
+    opts.year !== undefined ? filterProviderDataByYear(providerData, opts.year) : providerData;
+
+  if (Object.keys(filtered).length === 0) {
+    return null;
+  }
+
+  return { providerData: filtered, machineData, fileCount: files.length };
+}
+
 function splitByProvider(machineFiles: MachineFile[]): ProviderData {
   const providers: ProviderData = {};
   for (const data of machineFiles) {
@@ -115,42 +162,24 @@ interface ShowOptions {
 }
 
 export async function showCommand(opts: ShowOptions = {}): Promise<void> {
-  loadConfig();
+  const loaded = await loadMergedProviderData({
+    noCursor: opts.noCursor,
+    year: opts.year,
+  });
 
-  if (!isCloned()) {
-    throw new Error('Repo not cloned. Run: npx aitrack init');
-  }
-
-  console.log('Pulling latest from remote...');
-  pull();
-
-  const files = listDataFiles();
-  const machineData = files
-    .map(readDataFile)
-    .filter((data): data is MachineFile => data !== null);
-  const providerData = splitByProvider(machineData);
-
-  if (!opts.noCursor) {
-    const cursorMap = await readCursorData();
-    if (cursorMap.size > 0) providerData.cursor = cursorMap;
-  }
-
-  const renderData =
-    opts.year !== undefined ? filterProviderDataByYear(providerData, opts.year) : providerData;
-
-  if (Object.keys(renderData).length === 0) {
-    if (files.length === 0) {
-      console.log(
-        'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
-      );
-    } else {
-      console.log('No usage data found.');
-    }
+  if (!loaded) {
+    console.log(
+      'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
+    );
     return;
   }
 
+  const layoutData: ProviderData = opts.all
+    ? { all: mergeAllProviderDayMaps(loaded.providerData) }
+    : loaded.providerData;
+
   const outputPath = resolve(opts.output ?? 'aitrack.png');
-  const png = renderToPng(renderData, machineData, {
+  const png = renderToPng(layoutData, loaded.machineData, {
     dark: Boolean(opts.dark),
     all: Boolean(opts.all),
     year: opts.year,
