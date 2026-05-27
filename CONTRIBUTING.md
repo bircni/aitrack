@@ -32,26 +32,28 @@ Commits **must** follow [Conventional Commits](https://www.conventionalcommits.o
 
 ## Releasing
 
-Releases are generated from Conventional Commits using [git-cliff](https://git-cliff.org/).
+Releases are generated from Conventional Commits using [git-cliff](https://git-cliff.org/). Tagging and pushing happen locally; **npm publish runs in CI** when the tag lands on GitHub.
 
-Prepare a release (version bump, changelog, tag, push) without publishing to npm:
+### One-time setup
+
+Add an `NPM_TOKEN` secret to the GitHub repository (npm → Access Tokens → Granular or Classic with publish permission).
+
+### Cut a release locally
 
 ```sh
-pnpm run release -- patch
+pnpm run release
 ```
 
-Dry-run the release flow:
+Patch bump by default. Pass a bump type if needed: `pnpm run release -- minor`.
+
+This runs `validate` and `build`, bumps `package.json`, updates `CHANGELOG.md`, commits, tags (`v*`), and pushes branch + tag. npm publish happens in CI — not locally.
+
+Preview without changing anything:
 
 ```sh
 pnpm run release:dry-run
 ```
 
-Publish to npm when ready:
+### After the tag is pushed
 
-```sh
-pnpm run release:publish
-```
-
-Use `minor`, `major`, `prepatch`, `preminor`, `premajor`, or `prerelease` instead of `patch` as needed. Use `none` to release the current version in `package.json` without bumping (intended for the very first release).
-
-The release script runs `validate` and `build`, bumps `package.json`, updates `CHANGELOG.md`, commits, tags, and pushes. Add `--publish` to also run `pnpm publish --access public`.
+The [Publish workflow](.github/workflows/publish.yml) triggers on `v*` tags (local `git push --tags`), re-runs `validate`, builds, then publishes with `pnpm publish --provenance --access public` and `NPM_TOKEN` — same pattern as [GitHub's npm publish guide](https://docs.github.com/en/actions/tutorials/publish-packages/publish-nodejs-packages#publishing-packages-to-the-npm-registry).

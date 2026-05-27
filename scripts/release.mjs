@@ -55,7 +55,6 @@ function parseArgs(argv) {
   return {
     bump: bumpArg,
     dryRun: argv.includes('--dry-run'),
-    publish: argv.includes('--publish'),
   };
 }
 
@@ -71,7 +70,7 @@ function ensureCleanGitTree(dryRun) {
 }
 
 function main() {
-  const { bump, dryRun, publish } = parseArgs(process.argv.slice(2));
+  const { bump, dryRun } = parseArgs(process.argv.slice(2));
   const opts = { dryRun };
 
   ensureCleanGitTree(dryRun);
@@ -94,13 +93,10 @@ function main() {
   run('git', ['push'], opts);
   run('git', ['push', '--tags'], opts);
 
-  if (publish) {
-    run('pnpm', ['publish', '--access', 'public'], opts);
-  } else {
-    console.log('Skipping package publish by default. Run with --publish when you are ready.');
-  }
-
   console.log(`Release complete: ${tag}`);
+  console.log(
+    'npm publish runs in GitHub Actions when the tag is pushed (requires NPM_TOKEN secret).',
+  );
 }
 
 try {
