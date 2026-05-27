@@ -3,7 +3,7 @@ import { readdir } from 'fs/promises';
 import { createInterface } from 'readline';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
-import type { DayMap } from '../types.js';
+import type { DayMap, TokenCounts } from '../types.js';
 import { getOrCreateDay, toLocalDateString } from '../dayMap.js';
 
 function getClaudePaths(): string[] {
@@ -81,6 +81,57 @@ export function estimateClaudeCostFromAggregateTokens(
   );
 }
 
+export function claudeCountsHaveCostBreakdown(counts: TokenCounts): boolean {
+  return (
+    counts.rawInputTokens !== undefined ||
+    counts.cachedInputTokens !== undefined ||
+    counts.cacheCreationInputTokens !== undefined
+  );
+}
+
+export function estimateClaudeCostFromStoredCounts(
+  model: string,
+  counts: TokenCounts,
+  usageDate?: string,
+): number | undefined {
+  if (!claudeCountsHaveCostBreakdown(counts)) return undefined;
+  const pricing = findClaudePricing(model, usageDate);
+  const cacheRead = counts.cachedInputTokens ?? 0;
+  const cacheCreate = counts.cacheCreationInputTokens ?? 0;
+  const raw = counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheCreate);
+  return (
+    (raw * pricing.inputPerMillion +
+      counts.outputTokens * pricing.outputPerMillion +
+      cacheRead * pricing.cacheReadPerMillion +
+      cacheCreate * pricing.cacheCreatePerMillion) /
+    1_000_000
+  );
+}
+
+function addClaudeUsageBreakdown(
+  rec: TokenCounts,
+  usage: NonNullable<NonNullable<ClaudeEntry['message']>['usage']>,
+): void {
+  const raw = usage.input_tokens ?? 0;
+  const cacheRead = usage.cache_read_input_tokens ?? 0;
+  const cacheCreate = usage.cache_creation_input_tokens ?? 0;
+  rec.rawInputTokens = (rec.rawInputTokens ?? 0) + raw;
+  rec.cachedInputTokens = (rec.cachedInputTokens ?? 0) + cacheRead;
+  rec.cacheCreationInputTokens = (rec.cacheCreationInputTokens ?? 0) + cacheCreate;
+}
+
+function mergeTokenBreakdown(dst: TokenCounts, src: TokenCounts): void {
+  if (src.rawInputTokens !== undefined) {
+    dst.rawInputTokens = (dst.rawInputTokens ?? 0) + src.rawInputTokens;
+  }
+  if (src.cachedInputTokens !== undefined) {
+    dst.cachedInputTokens = (dst.cachedInputTokens ?? 0) + src.cachedInputTokens;
+  }
+  if (src.cacheCreationInputTokens !== undefined) {
+    dst.cacheCreationInputTokens = (dst.cacheCreationInputTokens ?? 0) + src.cacheCreationInputTokens;
+  }
+}
+
 export async function parseJsonlFile(filePath: string, seen: Set<string>): Promise<DayMap> {
   const result: DayMap = new Map();
 
@@ -123,9 +174,11 @@ export async function parseJsonlFile(filePath: string, seen: Set<string>): Promi
     const rec = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
     rec.inputTokens += inputTokens;
     rec.outputTokens += outputTokens;
+    addClaudeUsageBreakdown(rec, usage);
     rec.costUSD = (rec.costUSD ?? 0) + costUSD;
     day.inputTokens += inputTokens;
     day.outputTokens += outputTokens;
+    addClaudeUsageBreakdown(day, usage);
     day.costUSD = (day.costUSD ?? 0) + costUSD;
   }
 
@@ -137,11 +190,13 @@ function mergeDayMaps(dst: DayMap, src: DayMap): void {
     const dstDay = getOrCreateDay(dst, date);
     dstDay.inputTokens += srcDay.inputTokens;
     dstDay.outputTokens += srcDay.outputTokens;
+    mergeTokenBreakdown(dstDay, srcDay);
     if (srcDay.costUSD !== undefined) dstDay.costUSD = (dstDay.costUSD ?? 0) + srcDay.costUSD;
     for (const [model, counts] of Object.entries(srcDay.byModel)) {
       const modelTotals = (dstDay.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
       modelTotals.inputTokens += counts.inputTokens;
       modelTotals.outputTokens += counts.outputTokens;
+      mergeTokenBreakdown(modelTotals, counts);
       if (counts.costUSD !== undefined) {
         modelTotals.costUSD = (modelTotals.costUSD ?? 0) + counts.costUSD;
       }

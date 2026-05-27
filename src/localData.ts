@@ -1,6 +1,19 @@
 import { readClaudeData } from './readers/claude.js';
 import { readCodexData } from './readers/codex.js';
-import type { DayMap, MachineFile } from './types.js';
+import type { DayMap, MachineFile, TokenCounts } from './types.js';
+
+function tokenCountFields(counts: TokenCounts): TokenCounts {
+  return {
+    inputTokens: counts.inputTokens,
+    outputTokens: counts.outputTokens,
+    ...(counts.rawInputTokens !== undefined ? { rawInputTokens: counts.rawInputTokens } : {}),
+    ...(counts.cachedInputTokens !== undefined ? { cachedInputTokens: counts.cachedInputTokens } : {}),
+    ...(counts.cacheCreationInputTokens !== undefined
+      ? { cacheCreationInputTokens: counts.cacheCreationInputTokens }
+      : {}),
+    ...(counts.costUSD !== undefined ? { costUSD: counts.costUSD } : {}),
+  };
+}
 
 export function buildMachineData(
   machineId: string,
@@ -10,16 +23,13 @@ export function buildMachineData(
   for (const [providerKey, dayMap] of Object.entries(allProviders)) {
     for (const [date, day] of dayMap) {
       days[date] ??= {};
+      const byModel: Record<string, TokenCounts> = {};
+      for (const [model, counts] of Object.entries(day.byModel)) {
+        byModel[model] = tokenCountFields(counts);
+      }
       days[date][providerKey] = {
-        byModel: day.byModel,
-        totals: {
-          inputTokens: day.inputTokens,
-          outputTokens: day.outputTokens,
-          ...(day.cachedInputTokens !== undefined
-            ? { cachedInputTokens: day.cachedInputTokens }
-            : {}),
-          ...(day.costUSD !== undefined ? { costUSD: day.costUSD } : {}),
-        },
+        byModel,
+        totals: tokenCountFields(day),
       };
     }
   }

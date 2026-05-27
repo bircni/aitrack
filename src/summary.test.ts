@@ -1,61 +1,59 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  loadConfig: vi.fn(),
+  loadMergedProviderData: vi.fn(),
+  tryLoadConfig: vi.fn(),
   isCloned: vi.fn(),
-  pull: vi.fn(),
-  tryPull: vi.fn(),
-  listDataFiles: vi.fn(),
-  readDataFile: vi.fn(),
-  readCursorData: vi.fn(),
 }));
 
-vi.mock('./config.js', () => ({ loadConfig: mocks.loadConfig }));
-vi.mock('./git.js', () => ({
-  isCloned: mocks.isCloned,
-  pull: mocks.pull,
-  tryPull: mocks.tryPull,
-  listDataFiles: mocks.listDataFiles,
-  readDataFile: mocks.readDataFile,
+vi.mock('./show.js', () => ({
+  loadMergedProviderData: mocks.loadMergedProviderData,
+  emptyUsageMessage: (warned?: boolean) =>
+    warned ? 'No local usage data found.' : 'No usage data found.',
 }));
-vi.mock('./readers/cursor.js', () => ({ readCursorData: mocks.readCursorData }));
+vi.mock('./config.js', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
+vi.mock('./git.js', () => ({ isCloned: mocks.isCloned }));
 
 import { summaryCommand } from './summary.js';
 
 describe('summaryCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
     mocks.isCloned.mockReturnValue(true);
-    mocks.listDataFiles.mockReturnValue([]);
-    mocks.readDataFile.mockReturnValue(null);
-    mocks.readCursorData.mockResolvedValue(new Map());
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
   });
 
-  it('throws when the repo has not been cloned', async () => {
-    mocks.isCloned.mockReturnValue(false);
-    await expect(summaryCommand()).rejects.toThrow('Repo not cloned');
-  });
-
-  it('prints monthly totals for synced providers', async () => {
-    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'host',
-      lastUpdated: 'now',
-      days: {
-        '2024-01-15': {
-          claude_code: {
-            byModel: { 'claude-sonnet-4': { inputTokens: 1000, outputTokens: 200, costUSD: 1.2 } },
-            totals: { inputTokens: 1000, outputTokens: 200, costUSD: 1.2 },
-          },
-        },
-        '2024-02-01': {
-          claude_code: {
-            byModel: { 'claude-sonnet-4': { inputTokens: 500, outputTokens: 100, costUSD: 0.6 } },
-            totals: { inputTokens: 500, outputTokens: 100, costUSD: 0.6 },
-          },
-        },
+  it('prints monthly totals for merged provider data', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([
+          [
+            '2024-01-15',
+            {
+              inputTokens: 1000,
+              outputTokens: 200,
+              costUSD: 1.2,
+              byModel: {
+                'claude-sonnet-4': { inputTokens: 1000, outputTokens: 200, costUSD: 1.2 },
+              },
+            },
+          ],
+          [
+            '2024-02-01',
+            {
+              inputTokens: 500,
+              outputTokens: 100,
+              costUSD: 0.6,
+              byModel: {
+                'claude-sonnet-4': { inputTokens: 500, outputTokens: 100, costUSD: 0.6 },
+              },
+            },
+          ],
+        ]),
       },
+      machineData: [],
+      fileCount: 1,
     });
 
     await summaryCommand({ noCursor: true });
@@ -70,34 +68,21 @@ describe('summaryCommand', () => {
     expect(output).toContain('TOTAL');
   });
 
-  it('respects year filter', async () => {
-    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'host',
-      lastUpdated: 'now',
-      days: {
-        '2024-01-15': {
-          claude_code: {
-            byModel: { 'claude-sonnet-4': { inputTokens: 1000, outputTokens: 200 } },
-            totals: { inputTokens: 1000, outputTokens: 200 },
-          },
-        },
-        '2025-01-15': {
-          claude_code: {
-            byModel: { 'claude-sonnet-4': { inputTokens: 9000, outputTokens: 800 } },
-            totals: { inputTokens: 9000, outputTokens: 800 },
-          },
-        },
-      },
-    });
+  it('passes year filter through to loadMergedProviderData', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue(null);
 
     await summaryCommand({ noCursor: true, year: 2024 });
 
-    const output = vi
-      .mocked(console.log)
-      .mock.calls.map((call) => String(call[0]))
-      .join('\n');
-    expect(output).toContain('2024-01');
-    expect(output).not.toContain('2025-01');
+    expect(mocks.loadMergedProviderData).toHaveBeenCalledWith({ noCursor: true, year: 2024 });
+  });
+
+  it('prints empty hint when no data is loaded', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue(null);
+    mocks.tryLoadConfig.mockReturnValue(null);
+    mocks.isCloned.mockReturnValue(false);
+
+    await summaryCommand({ noCursor: true });
+
+    expect(console.log).toHaveBeenCalledWith('No local usage data found.');
   });
 });
