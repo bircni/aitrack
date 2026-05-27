@@ -128,7 +128,8 @@ function mergeTokenBreakdown(dst: TokenCounts, src: TokenCounts): void {
     dst.cachedInputTokens = (dst.cachedInputTokens ?? 0) + src.cachedInputTokens;
   }
   if (src.cacheCreationInputTokens !== undefined) {
-    dst.cacheCreationInputTokens = (dst.cacheCreationInputTokens ?? 0) + src.cacheCreationInputTokens;
+    dst.cacheCreationInputTokens =
+      (dst.cacheCreationInputTokens ?? 0) + src.cacheCreationInputTokens;
   }
 }
 

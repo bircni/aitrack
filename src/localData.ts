@@ -7,7 +7,9 @@ function tokenCountFields(counts: TokenCounts): TokenCounts {
     inputTokens: counts.inputTokens,
     outputTokens: counts.outputTokens,
     ...(counts.rawInputTokens !== undefined ? { rawInputTokens: counts.rawInputTokens } : {}),
-    ...(counts.cachedInputTokens !== undefined ? { cachedInputTokens: counts.cachedInputTokens } : {}),
+    ...(counts.cachedInputTokens !== undefined
+      ? { cachedInputTokens: counts.cachedInputTokens }
+      : {}),
     ...(counts.cacheCreationInputTokens !== undefined
       ? { cacheCreationInputTokens: counts.cacheCreationInputTokens }
       : {}),

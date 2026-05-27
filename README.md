@@ -73,19 +73,19 @@ Each machine writes its own file (`data/{hostname}.json`) so there are no merge 
 
 ## Commands
 
-| Command                        | Description                                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------------------------- |
-| `npx aitrack init`             | Interactive setup — provide repo URL and clone it locally                                   |
-| `npx aitrack sync`             | Read local data, write to the cloned repo, and push                                         |
+| Command                        | Description                                                                                               |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `npx aitrack init`             | Interactive setup — provide repo URL and clone it locally                                                 |
+| `npx aitrack sync`             | Read local data, write to the cloned repo, and push                                                       |
 | `npx aitrack show`             | Merge synced data + fresh local Claude/Codex + local Cursor, render heatmap PNG (per provider by default) |
-| `npx aitrack show --all`       | Single merged heatmap across all providers                                                  |
-| `npx aitrack show --dark`      | Dark mode output                                                                            |
-| `npx aitrack show --no-cursor` | Skip local Cursor usage (offline, CI, or privacy)                                           |
-| `npx aitrack show --no-open`   | Don't auto-open the generated PNG (useful for scripts / CI)                                 |
-| `npx aitrack show -o path.png` | Write PNG to a custom path                                                                  |
-| `npx aitrack tui`              | Terminal stats table (same local-first merge as `show`, no PNG)                             |
-| `npx aitrack summary`          | Print per-provider monthly token + cost totals to stdout (no PNG)                           |
-| `npx aitrack recompute-costs`  | Refresh costs: local JSONL on this machine; reprice others from stored cache breakdown      |
+| `npx aitrack show --all`       | Single merged heatmap across all providers                                                                |
+| `npx aitrack show --dark`      | Dark mode output                                                                                          |
+| `npx aitrack show --no-cursor` | Skip local Cursor usage (offline, CI, or privacy)                                                         |
+| `npx aitrack show --no-open`   | Don't auto-open the generated PNG (useful for scripts / CI)                                               |
+| `npx aitrack show -o path.png` | Write PNG to a custom path                                                                                |
+| `npx aitrack tui`              | Terminal stats table (same local-first merge as `show`, no PNG)                                           |
+| `npx aitrack summary`          | Print per-provider monthly token + cost totals to stdout (no PNG)                                         |
+| `npx aitrack recompute-costs`  | Refresh costs: local JSONL on this machine; reprice others from stored cache breakdown                    |
 
 ---
 

@@ -26,10 +26,7 @@ vi.mock('./config.js', () => ({
 vi.mock('./readers/claude.js', () => ({ readClaudeData: mocks.readClaudeData }));
 vi.mock('./readers/codex.js', () => ({ readCodexData: mocks.readCodexData }));
 vi.mock('./localData.js', () => ({
-  buildMachineData: (
-    host: string,
-    providers: Record<string, DayMap>,
-  ) => {
+  buildMachineData: (host: string, providers: Record<string, DayMap>) => {
     const days: Record<string, Record<string, unknown>> = {};
     for (const [providerKey, dayMap] of Object.entries(providers)) {
       for (const [date, day] of dayMap) {
@@ -42,9 +39,9 @@ vi.mock('./localData.js', () => ({
     }
     return { hostname: host, lastUpdated: 'now', days };
   },
-  readLocalProviderMaps: async () => ({
-    claude_code: await mocks.readClaudeData(),
-    codex: await mocks.readCodexData(),
+  readLocalProviderMaps: async (): Promise<{ claude_code: DayMap; codex: DayMap }> => ({
+    claude_code: (await mocks.readClaudeData()) as DayMap,
+    codex: (await mocks.readCodexData()) as DayMap,
   }),
 }));
 vi.mock('./git.js', () => ({

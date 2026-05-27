@@ -14,10 +14,7 @@ import { buildLocalMachineFile, readLocalProviderMaps } from './localData.js';
 
 function dayMap(inputTokens: number, outputTokens: number): DayMap {
   return new Map([
-    [
-      '2024-01-01',
-      { inputTokens, outputTokens, byModel: { m: { inputTokens, outputTokens } } },
-    ],
+    ['2024-01-01', { inputTokens, outputTokens, byModel: { m: { inputTokens, outputTokens } } }],
   ]);
 }
 
@@ -36,9 +33,7 @@ describe('localData', () => {
   it('machineHasData is false for empty days', () => {
     expect(machineHasData({ hostname: 'host', lastUpdated: 'now', days: {} })).toBe(false);
     expect(
-      machineHasData(
-        buildMachineData('host', { claude_code: dayMap(1, 1), codex: new Map() }),
-      ),
+      machineHasData(buildMachineData('host', { claude_code: dayMap(1, 1), codex: new Map() })),
     ).toBe(true);
   });
 

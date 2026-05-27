@@ -5,9 +5,7 @@ import { loadConfig, resolveMachineId } from './config.js';
 import { isCloned, LOCAL_REPO, listDataFiles, tryPull } from './git.js';
 import { buildMachineData, machineHasData, readLocalProviderMaps } from './localData.js';
 import { parseMachineFile } from './validate.js';
-import {
-  estimateClaudeCostFromStoredCounts,
-} from './readers/claude.js';
+import { estimateClaudeCostFromStoredCounts } from './readers/claude.js';
 import { consumeClaudeFallbackHits } from './pricing/claude.js';
 import { consumeCodexFallbackHits, estimateCodexCostUSD } from './pricing/codex.js';
 
