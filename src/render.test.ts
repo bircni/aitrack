@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeModelStats,
+  currentStreak,
   displayModelName,
+  longestStreak,
   mergeAllProviderDayMaps,
+  peakMonth,
   percentile,
   renderToPng,
 } from './render.js';
+import { filterProviderDataByYear } from './dayMap.js';
 import type { DayEntry } from './types.js';
 
 function makeDay(input: number, output: number, costUSD?: number): DayEntry {
@@ -135,5 +139,46 @@ describe('renderToPng', () => {
     const buf = renderToPng({ claude_code: claudeMap, codex: codexMap }, [], { all: true });
     expect(buf[0]).toBe(0x89);
     expect(buf[1]).toBe(0x50);
+  });
+
+  it('longestStreak finds the longest consecutive active run', () => {
+    const dayMap = new Map([
+      ['2024-01-01', makeDay(1, 0)],
+      ['2024-01-02', makeDay(1, 0)],
+      ['2024-01-03', makeDay(1, 0)],
+      ['2024-01-10', makeDay(1, 0)],
+      ['2024-01-11', makeDay(1, 0)],
+    ]);
+    expect(longestStreak(dayMap)).toBe(3);
+    expect(currentStreak(dayMap)).toBe(0);
+  });
+
+  it('peakMonth returns the month with the highest token total', () => {
+    const dayMap = new Map([
+      ['2024-01-01', makeDay(100, 0)],
+      ['2024-02-01', makeDay(500, 0)],
+      ['2024-02-15', makeDay(200, 0)],
+    ]);
+    expect(peakMonth(dayMap)).toEqual({ month: '2024-02', tokens: 700 });
+  });
+
+  it('filterProviderDataByYear keeps only matching dates', () => {
+    const data = {
+      claude_code: new Map([
+        ['2024-01-01', makeDay(10, 5)],
+        ['2025-01-01', makeDay(20, 5)],
+      ]),
+    };
+    const filtered = filterProviderDataByYear(data, 2024);
+    expect([...filtered.claude_code!.keys()]).toEqual(['2024-01-01']);
+  });
+
+  it('renders with a year filter', () => {
+    const dayMap = new Map([
+      ['2024-06-01', makeDay(100, 50)],
+      ['2025-06-01', makeDay(200, 100)],
+    ]);
+    const buf = renderToPng({ claude_code: dayMap }, [], { year: 2024 });
+    expect(buf[0]).toBe(0x89);
   });
 });
