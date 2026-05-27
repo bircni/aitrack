@@ -1,11 +1,20 @@
 import { execSync } from 'child_process';
-import { existsSync, readdirSync, readFileSync, rmSync } from 'fs';
-import { join } from 'path';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'fs';
+import { basename, join } from 'path';
 import { homedir } from 'os';
 import type { MachineFile } from './types.js';
 import { parseMachineFile } from './validate.js';
 
 export const LOCAL_REPO = join(homedir(), '.config', 'aitrack', 'repo');
+export const PENDING_DATA_DIR = join(homedir(), '.config', 'aitrack', 'pending', 'data');
 
 function git(args: string, opts: Record<string, unknown> = {}): void {
   execSync(`git ${args}`, { cwd: LOCAL_REPO, stdio: 'inherit', ...opts });
@@ -31,6 +40,19 @@ export function pull(): void {
     .trim();
   if (!refs) return; // empty repo, nothing to pull yet
   git('pull --ff-only --quiet');
+}
+
+export function tryPull(): void {
+  try {
+    const refs = execSync('git ls-remote --heads origin', { cwd: LOCAL_REPO, stdio: 'pipe' })
+      .toString()
+      .trim();
+    if (!refs) return;
+    console.log('Pulling latest from remote...');
+    git('pull --ff-only --quiet');
+  } catch {
+    // Offline or unreachable — continue with the local clone.
+  }
 }
 
 export function commitAndPush(hostname: string): boolean {
@@ -61,4 +83,33 @@ export function listDataFiles(): string[] {
 export function readDataFile(filePath: string): MachineFile | null {
   const raw = readFileSync(filePath, 'utf8');
   return parseMachineFile(raw, filePath);
+}
+
+export function writePendingMachineFile(machine: MachineFile): void {
+  mkdirSync(PENDING_DATA_DIR, { recursive: true });
+  const filePath = join(PENDING_DATA_DIR, `${machine.hostname}.json`);
+  writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
+}
+
+export function listPendingDataFiles(): string[] {
+  if (!existsSync(PENDING_DATA_DIR)) return [];
+  return readdirSync(PENDING_DATA_DIR)
+    .filter((f: string) => f.endsWith('.json'))
+    .map((f: string) => join(PENDING_DATA_DIR, f));
+}
+
+export function adoptPendingDataFiles(targetDataDir: string): number {
+  const pending = listPendingDataFiles();
+  if (pending.length === 0) return 0;
+  mkdirSync(targetDataDir, { recursive: true });
+  for (const src of pending) {
+    copyFileSync(src, join(targetDataDir, basename(src)));
+  }
+  rmSync(PENDING_DATA_DIR, { recursive: true, force: true });
+  return pending.length;
+}
+
+export function removePendingMachineFile(machineId: string): void {
+  const filePath = join(PENDING_DATA_DIR, `${machineId}.json`);
+  if (existsSync(filePath)) rmSync(filePath);
 }

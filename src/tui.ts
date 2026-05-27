@@ -1,7 +1,9 @@
 import chalk from 'chalk';
 import type { DayMap, ProviderData } from './types.js';
 import { filterProviderDataByYear } from './dayMap.js';
-import { loadMergedProviderData } from './show.js';
+import { tryLoadConfig } from './config.js';
+import { isCloned } from './git.js';
+import { loadMergedProviderData, emptyUsageMessage } from './show.js';
 import {
   currentStreak,
   formatMonthLabel,
@@ -249,9 +251,7 @@ export async function tuiCommand(opts: TuiOptions = {}): Promise<void> {
   });
 
   if (!loaded) {
-    console.log(
-      'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
-    );
+    console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));
     return;
   }
 

@@ -7,11 +7,19 @@ const CONFIG_DIR = join(homedir(), '.config', 'aitrack');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 
 export function loadConfig(): Config {
+  const config = tryLoadConfig();
+  if (!config) {
+    throw new Error('No config found. Run: npx aitrack init');
+  }
+  return config;
+}
+
+export function tryLoadConfig(): Config | null {
   try {
     const raw = readFileSync(CONFIG_PATH, 'utf8');
     return JSON.parse(raw) as Config;
   } catch {
-    throw new Error('No config found. Run: npx aitrack init');
+    return null;
   }
 }
 

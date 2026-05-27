@@ -1,5 +1,5 @@
 import { loadConfig } from './config.js';
-import { isCloned, listDataFiles, pull, readDataFile } from './git.js';
+import { isCloned, listDataFiles, tryPull, readDataFile } from './git.js';
 import { readCursorData } from './readers/cursor.js';
 import type { DayMap, MachineFile, ProviderData } from './types.js';
 import { getOrCreateDay, filterProviderDataByYear } from './dayMap.js';
@@ -7,7 +7,6 @@ import { mergeProviderDay } from './show.js';
 
 interface SummaryOptions {
   noCursor?: boolean;
-  noPull?: boolean;
   year?: number;
 }
 
@@ -95,10 +94,7 @@ export async function summaryCommand(opts: SummaryOptions = {}): Promise<void> {
     throw new Error('Repo not cloned. Run: npx aitrack init');
   }
 
-  if (!opts.noPull) {
-    console.log('Pulling latest from remote...');
-    pull();
-  }
+  tryPull();
 
   const machineData = listDataFiles()
     .map(readDataFile)

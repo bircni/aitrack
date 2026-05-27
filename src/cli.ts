@@ -99,12 +99,10 @@ program
   .command('summary')
   .description('Print per-provider monthly token + cost totals to stdout (no PNG)')
   .option('--no-cursor', 'skip local Cursor usage')
-  .option('--no-pull', 'skip pulling latest from remote first')
   .option('--year <year>', 'only include days from this calendar year', parseInt)
-  .action((opts: { cursor?: boolean; pull?: boolean; year?: number }) =>
+  .action((opts: { cursor?: boolean; year?: number }) =>
     summaryCommand({
       noCursor: opts.cursor === false,
-      noPull: opts.pull === false,
       year: Number.isFinite(opts.year) ? opts.year : undefined,
     }).catch((err: unknown) => {
       console.error(errorMessage(err));

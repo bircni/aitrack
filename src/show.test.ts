@@ -1,25 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  loadConfig: vi.fn(),
+  tryLoadConfig: vi.fn(),
+  resolveMachineId: vi.fn(),
   isCloned: vi.fn(),
   pull: vi.fn(),
+  tryPull: vi.fn(),
   listDataFiles: vi.fn(),
   readDataFile: vi.fn(),
+  writePendingMachineFile: vi.fn(),
+  buildLocalMachineFile: vi.fn(),
   readCursorData: vi.fn(),
   renderToPng: vi.fn(),
   writeFileSync: vi.fn(),
   exec: vi.fn(),
+  hostname: vi.fn(),
 }));
 
 vi.mock('fs', () => ({ writeFileSync: mocks.writeFileSync }));
 vi.mock('child_process', () => ({ exec: mocks.exec }));
-vi.mock('./config.js', () => ({ loadConfig: mocks.loadConfig }));
+vi.mock('os', () => ({ hostname: mocks.hostname }));
+vi.mock('./config.js', () => ({
+  tryLoadConfig: mocks.tryLoadConfig,
+  resolveMachineId: mocks.resolveMachineId,
+}));
 vi.mock('./git.js', () => ({
   isCloned: mocks.isCloned,
   pull: mocks.pull,
+  tryPull: mocks.tryPull,
   listDataFiles: mocks.listDataFiles,
   readDataFile: mocks.readDataFile,
+  writePendingMachineFile: mocks.writePendingMachineFile,
+}));
+vi.mock('./localData.js', () => ({
+  buildLocalMachineFile: mocks.buildLocalMachineFile,
+  machineHasData: (machine: { days: Record<string, unknown> }) =>
+    Object.keys(machine.days).length > 0,
 }));
 vi.mock('./readers/cursor.js', () => ({ readCursorData: mocks.readCursorData }));
 vi.mock('./render.js', async (importOriginal) => {
@@ -30,11 +46,20 @@ vi.mock('./render.js', async (importOriginal) => {
   };
 });
 
-import { mergeProviderDay, showCommand } from './show.js';
+import {
+  emptyUsageMessage,
+  loadMergedProviderData,
+  mergeProviderDay,
+  showCommand,
+} from './show.js';
 import type { DayEntry, MachineFile, ProviderData, ProviderDay, RenderOptions } from './types.js';
 
 function emptyDay(): DayEntry {
   return { inputTokens: 0, outputTokens: 0, byModel: {} };
+}
+
+function emptyLocalMachine(host = 'host'): MachineFile {
+  return { hostname: host, lastUpdated: 'now', days: {} };
 }
 
 describe('mergeProviderDay', () => {
@@ -60,7 +85,6 @@ describe('mergeProviderDay', () => {
       totals: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
     };
     mergeProviderDay(rec, 'claude_code', pData);
-    // sonnet 4.6: 3 + 15 = 18
     expect(rec.costUSD).toBe(18);
   });
 
@@ -87,6 +111,82 @@ describe('mergeProviderDay', () => {
   });
 });
 
+describe('loadMergedProviderData', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.hostname.mockReturnValue('host');
+    mocks.tryLoadConfig.mockReturnValue(null);
+    mocks.isCloned.mockReturnValue(false);
+    mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
+    mocks.readCursorData.mockResolvedValue(new Map());
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+
+  it('renders local-only when config is missing', async () => {
+    mocks.buildLocalMachineFile.mockResolvedValue({
+      hostname: 'host',
+      lastUpdated: 'now',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { claude: { inputTokens: 10, outputTokens: 5 } },
+            totals: { inputTokens: 10, outputTokens: 5 },
+          },
+        },
+      },
+    });
+
+    const loaded = await loadMergedProviderData({ noCursor: true });
+
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(mocks.pull).not.toHaveBeenCalled();
+    expect(mocks.tryPull).not.toHaveBeenCalled();
+    expect(mocks.writePendingMachineFile).toHaveBeenCalled();
+    expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(10);
+    expect(loaded?.warnedNotConfigured).toBe(true);
+  });
+
+  it('merges git data from other machines and overlays fresh local read', async () => {
+    mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git', machineId: 'host' });
+    mocks.resolveMachineId.mockReturnValue('host');
+    mocks.isCloned.mockReturnValue(true);
+    mocks.listDataFiles.mockReturnValue(['/repo/data/other.json', '/repo/data/host.json']);
+    mocks.readDataFile.mockReturnValue({
+      hostname: 'other',
+      lastUpdated: 'now',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { claude: { inputTokens: 100, outputTokens: 50 } },
+            totals: { inputTokens: 100, outputTokens: 50 },
+          },
+        },
+      },
+    });
+    mocks.buildLocalMachineFile.mockResolvedValue({
+      hostname: 'host',
+      lastUpdated: 'now',
+      days: {
+        '2024-01-02': {
+          codex: {
+            byModel: { gpt: { inputTokens: 20, outputTokens: 10 } },
+            totals: { inputTokens: 20, outputTokens: 10 },
+          },
+        },
+      },
+    });
+
+    const loaded = await loadMergedProviderData({ noCursor: true });
+
+    expect(mocks.readDataFile).toHaveBeenCalledTimes(1);
+    expect(mocks.readDataFile.mock.calls[0]?.[0]).toBe('/repo/data/other.json');
+    expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(100);
+    expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
+    expect(loaded?.machineData).toHaveLength(2);
+  });
+});
+
 describe('showCommand', () => {
   function getRenderCall(): [ProviderData, MachineFile[], RenderOptions] {
     const call = mocks.renderToPng.mock.calls[0];
@@ -101,40 +201,46 @@ describe('showCommand', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.hostname.mockReturnValue('host');
+    mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
+    mocks.resolveMachineId.mockReturnValue('host');
     mocks.isCloned.mockReturnValue(true);
     mocks.listDataFiles.mockReturnValue([]);
+    mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
     mocks.readCursorData.mockResolvedValue(new Map());
     mocks.renderToPng.mockReturnValue(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
-  it('throws when the repo has not been cloned', async () => {
+  it('does not throw when the repo has not been cloned', async () => {
     mocks.isCloned.mockReturnValue(false);
 
-    await expect(showCommand()).rejects.toThrow('Repo not cloned');
+    await showCommand();
+
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(mocks.renderToPng).not.toHaveBeenCalled();
   });
 
-  it('prints the setup hint when no git data or cursor data exists', async () => {
+  it('prints the init hint when not configured and no local data exists', async () => {
+    mocks.tryLoadConfig.mockReturnValue(null);
+    mocks.isCloned.mockReturnValue(false);
+
     await showCommand();
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(console.log).toHaveBeenCalledWith(
-      'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
-    );
+    expect(console.log).toHaveBeenCalledWith(emptyUsageMessage(true));
   });
 
-  it('prints the setup hint when synced files contain no provider data', async () => {
-    mocks.listDataFiles.mockReturnValue(['/repo/data/empty.json']);
-    mocks.readDataFile.mockReturnValue({ hostname: 'host', lastUpdated: 'now', days: {} });
+  it('prints the sync hint when configured but no git or local data exists', async () => {
+    await showCommand();
 
-    await showCommand({ noCursor: true });
-
-    expect(console.log).toHaveBeenCalledWith(
-      'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
-    );
+    expect(console.log).toHaveBeenCalledWith(emptyUsageMessage(false));
   });
 
   it('renders cursor-only data when local cursor data is available', async () => {
+    mocks.tryLoadConfig.mockReturnValue(null);
+    mocks.isCloned.mockReturnValue(false);
     mocks.readCursorData.mockResolvedValue(
       new Map([
         [
@@ -153,7 +259,7 @@ describe('showCommand', () => {
     const [providerData, machineData, renderOptions] = getRenderCall();
     expect(providerData.all).toBeInstanceOf(Map);
     expect(machineData).toEqual([]);
-    expect(renderOptions).toEqual({ dark: true, all: true });
+    expect(renderOptions).toEqual({ dark: true, all: true, year: undefined });
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
       expect.stringContaining('out.png'),
       expect.any(Buffer),
@@ -164,7 +270,7 @@ describe('showCommand', () => {
   it('backfills cost for old synced Claude JSON missing costUSD', async () => {
     mocks.listDataFiles.mockReturnValue(['/repo/data/old.json']);
     mocks.readDataFile.mockReturnValue({
-      hostname: 'host',
+      hostname: 'other',
       lastUpdated: 'now',
       days: {
         '2024-01-01': {
@@ -180,9 +286,8 @@ describe('showCommand', () => {
 
     const providerData = getRenderedProviderData();
     const day = providerData.claude_code.get('2024-01-01');
-    // Sonnet input $3/M, output $15/M → 1M*3 + 0.1M*15 = 3 + 1.5 = 4.5
-    expect(day.costUSD).toBeCloseTo(4.5, 5);
-    expect(day.byModel['claude-sonnet-4'].costUSD).toBeCloseTo(4.5, 5);
+    expect(day?.costUSD).toBeCloseTo(4.5, 5);
+    expect(day?.byModel['claude-sonnet-4'].costUSD).toBeCloseTo(4.5, 5);
   });
 
   it('merges synced cost fields across machines and models', async () => {
@@ -217,7 +322,7 @@ describe('showCommand', () => {
 
     const providerData = getRenderedProviderData();
     const day = providerData.claude_code.get('2024-01-01');
-    expect(day.costUSD).toBeCloseTo(0.3);
-    expect(day.byModel.claude.costUSD).toBeCloseTo(0.3);
+    expect(day?.costUSD).toBeCloseTo(0.3);
+    expect(day?.byModel.claude.costUSD).toBeCloseTo(0.3);
   });
 });

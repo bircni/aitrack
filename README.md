@@ -17,6 +17,15 @@ Uses your locally installed `git` for all sync operations — no API tokens requ
 
 ## Quick start
 
+You can preview usage **before** running `init` or `sync`:
+
+```
+npx aitrack tui     # stats table from local Claude/Codex (+ Cursor if available)
+npx aitrack show    # heatmap PNG from the same local-first read
+```
+
+Local Claude/Codex data is staged at `~/.config/aitrack/pending/data/{machineId}.json` so a later `init`/`sync` can adopt it into your git repo.
+
 ### 1. Create an empty git repository
 
 Create a new **empty** repo on GitHub (or any git host). Do not initialize it with a README — it needs to be empty so the clone works cleanly.
@@ -45,7 +54,7 @@ Reads your local Claude Code and Codex session files and pushes a file named `da
 npx aitrack show
 ```
 
-Pulls the latest data from the repo, merges all machines, adds **local Cursor** usage if available, and renders a heatmap PNG with tokens and known USD cost where available (by default **one row per provider**; use `--all` for a single merged heatmap).
+Reads **fresh local** Claude/Codex session data on this machine, merges data from other machines in the repo (if initialized), adds **local Cursor** usage if available, and renders a heatmap PNG with tokens and known USD cost where available (by default **one row per provider**; use `--all` for a single merged heatmap). No `sync` push is required to see your latest local usage.
 
 ---
 
@@ -68,12 +77,13 @@ Each machine writes its own file (`data/{hostname}.json`) so there are no merge 
 | ------------------------------ | ------------------------------------------------------------------------------------------- |
 | `npx aitrack init`             | Interactive setup — provide repo URL and clone it locally                                   |
 | `npx aitrack sync`             | Read local data, write to the cloned repo, and push                                         |
-| `npx aitrack show`             | Pull latest, merge synced data + local Cursor, render heatmap PNG (per provider by default) |
+| `npx aitrack show`             | Merge synced data + fresh local Claude/Codex + local Cursor, render heatmap PNG (per provider by default) |
 | `npx aitrack show --all`       | Single merged heatmap across all providers                                                  |
 | `npx aitrack show --dark`      | Dark mode output                                                                            |
 | `npx aitrack show --no-cursor` | Skip local Cursor usage (offline, CI, or privacy)                                           |
 | `npx aitrack show --no-open`   | Don't auto-open the generated PNG (useful for scripts / CI)                                 |
 | `npx aitrack show -o path.png` | Write PNG to a custom path                                                                  |
+| `npx aitrack tui`              | Terminal stats table (same local-first merge as `show`, no PNG)                             |
 | `npx aitrack summary`          | Print per-provider monthly token + cost totals to stdout (no PNG)                           |
 | `npx aitrack recompute-costs`  | Recompute claude_code costs across all synced data using the current pricing table          |
 
@@ -81,9 +91,11 @@ Each machine writes its own file (`data/{hostname}.json`) so there are no merge 
 
 ## How it works
 
-`sync` and `show` both use a local git clone at `~/.config/aitrack/repo/` for **Claude Code** and **Codex** data: normal git pulls and pushes with your existing git credentials.
+`sync` and `show`/`tui` both use a local git clone at `~/.config/aitrack/repo/` for **Claude Code** and **Codex** data from other machines when initialized: normal git pulls and pushes with your existing git credentials. **`show` and `tui` always read fresh local Claude/Codex JSONL on this machine** — you do not need to run `sync` first to preview your latest usage.
 
-`show` also tries to load **Cursor** on the current machine: it reads `cursorAuth/accessToken` from Cursor’s SQLite `state.vscdb`, then requests Cursor’s CSV usage export over HTTPS. Use `npx aitrack show --no-cursor` to skip that step (offline, CI, or privacy).
+Before `init`, local usage is written to `~/.config/aitrack/pending/data/` and adopted into the repo on the next `init` or pushed on `sync`.
+
+`show`/`tui` also try to load **Cursor** on the current machine: it reads `cursorAuth/accessToken` from Cursor’s SQLite `state.vscdb`, then requests Cursor’s CSV usage export over HTTPS. Use `npx aitrack show --no-cursor` to skip that step (offline, CI, or privacy).
 By default you get **one heatmap row per provider** (Claude Code, Codex, Cursor, …). Use `npx aitrack show --all` for **one** combined heatmap across all providers.
 
 aitrack reads (and never transmits) your local Cursor access token solely to call Cursor's own usage export endpoint on your behalf. The token is not written to your data repo or sent anywhere else.
@@ -97,6 +109,9 @@ Heatmap intensity anchors on the 90th-percentile day rather than the absolute ma
 ```
 ~/.config/aitrack/
 ├── config.json          # repo URL
+├── pending/
+│   └── data/            # staged machine JSON before init/sync
+│       └── my-pc.json
 └── repo/                # local clone of your data repo
     └── data/
         ├── my-pc.json

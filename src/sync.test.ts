@@ -25,11 +25,34 @@ vi.mock('./config.js', () => ({
 }));
 vi.mock('./readers/claude.js', () => ({ readClaudeData: mocks.readClaudeData }));
 vi.mock('./readers/codex.js', () => ({ readCodexData: mocks.readCodexData }));
+vi.mock('./localData.js', () => ({
+  buildMachineData: (
+    host: string,
+    providers: Record<string, DayMap>,
+  ) => {
+    const days: Record<string, Record<string, unknown>> = {};
+    for (const [providerKey, dayMap] of Object.entries(providers)) {
+      for (const [date, day] of dayMap) {
+        days[date] ??= {};
+        days[date][providerKey] = {
+          byModel: day.byModel,
+          totals: { inputTokens: day.inputTokens, outputTokens: day.outputTokens },
+        };
+      }
+    }
+    return { hostname: host, lastUpdated: 'now', days };
+  },
+  readLocalProviderMaps: async () => ({
+    claude_code: await mocks.readClaudeData(),
+    codex: await mocks.readCodexData(),
+  }),
+}));
 vi.mock('./git.js', () => ({
   LOCAL_REPO: '/repo',
   isCloned: mocks.isCloned,
   pull: mocks.pull,
   commitAndPush: mocks.commitAndPush,
+  removePendingMachineFile: vi.fn(),
 }));
 
 import { syncCommand } from './sync.js';

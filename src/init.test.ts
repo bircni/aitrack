@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   cloneRepo: vi.fn(),
   removeLocalClone: vi.fn(),
   mkdirSync: vi.fn(),
+  adoptPendingDataFiles: vi.fn(),
 }));
 
 vi.mock('os', () => ({ hostname: () => 'test-host' }));
@@ -22,6 +23,7 @@ vi.mock('./git.js', () => ({
   isCloned: mocks.isCloned,
   cloneRepo: mocks.cloneRepo,
   removeLocalClone: mocks.removeLocalClone,
+  adoptPendingDataFiles: mocks.adoptPendingDataFiles,
 }));
 
 import { initCommand } from './init.js';
@@ -37,6 +39,10 @@ describe('initCommand', () => {
   });
 
   it('clones and saves a trimmed repo URL for a new config', async () => {
+    mocks.isCloned
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(false)
+      .mockReturnValue(true);
     mocks.prompts
       .mockResolvedValueOnce({ repoUrl: '  git@example.com:me/data.git  ' })
       .mockResolvedValueOnce({ machineId: 'work-laptop' });
@@ -51,6 +57,9 @@ describe('initCommand', () => {
       repoUrl: 'git@example.com:me/data.git',
       machineId: 'work-laptop',
     });
+    expect(mocks.adoptPendingDataFiles).toHaveBeenCalledWith(
+      '/home/test/.config/aitrack/repo/data',
+    );
   });
 
   it('aborts when an existing config is not overwritten', async () => {

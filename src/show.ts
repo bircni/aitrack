@@ -1,8 +1,16 @@
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { exec } from 'child_process';
-import { loadConfig } from './config.js';
-import { isCloned, pull, listDataFiles, readDataFile } from './git.js';
+import { hostname } from 'os';
+import { tryLoadConfig, resolveMachineId } from './config.js';
+import {
+  isCloned,
+  tryPull,
+  listDataFiles,
+  readDataFile,
+  writePendingMachineFile,
+} from './git.js';
+import { buildLocalMachineFile, machineHasData } from './localData.js';
 import { readCursorData } from './readers/cursor.js';
 import { estimateClaudeCostFromAggregateTokens } from './readers/claude.js';
 import { estimateCodexCostUSD } from './pricing/codex.js';
@@ -78,7 +86,6 @@ export function mergeProviderDay(
 
 export interface LoadUsageOptions {
   noCursor?: boolean;
-  noPull?: boolean;
   year?: number;
 }
 
@@ -86,25 +93,57 @@ export interface LoadedUsageData {
   providerData: ProviderData;
   machineData: MachineFile[];
   fileCount: number;
+  warnedNotConfigured?: boolean;
+}
+
+export function emptyUsageMessage(warnedNotConfigured?: boolean): string {
+  if (warnedNotConfigured) {
+    return 'No local usage data found (Claude Code or Codex). Run: npx aitrack init to sync across machines.';
+  }
+  return 'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.';
+}
+
+function overlayMachineFile(providerData: ProviderData, machine: MachineFile): void {
+  for (const [date, dayProviders] of Object.entries(machine.days)) {
+    for (const [providerKey, pData] of Object.entries(dayProviders)) {
+      if (providerKey === 'cursor') continue;
+      const dayMap = (providerData[providerKey] ??= new Map());
+      mergeProviderDay(getOrCreateDay(dayMap, date), providerKey, pData, date);
+    }
+  }
 }
 
 export async function loadMergedProviderData(
   opts: LoadUsageOptions = {},
 ): Promise<LoadedUsageData | null> {
-  loadConfig();
+  const config = tryLoadConfig();
+  const machineId = config ? resolveMachineId(config) : hostname();
+  const localMachine = await buildLocalMachineFile(machineId);
+  writePendingMachineFile(localMachine);
 
-  if (!isCloned()) {
-    throw new Error('Repo not cloned. Run: npx aitrack init');
+  const warnedNotConfigured = !config || !isCloned();
+
+  let machineData: MachineFile[] = [];
+  let providerData: ProviderData = {};
+  let fileCount = 0;
+
+  if (config && isCloned()) {
+    tryPull();
+
+    const files = listDataFiles();
+    fileCount = files.length;
+    const currentFile = `${machineId}.json`;
+    machineData = files
+      .filter((f) => !f.endsWith(currentFile))
+      .map(readDataFile)
+      .filter((data): data is MachineFile => data !== null);
+    providerData = splitByProvider(machineData);
   }
 
-  if (!opts.noPull) {
-    console.log('Pulling latest from remote...');
-    pull();
+  if (machineHasData(localMachine)) {
+    machineData.push(localMachine);
+    overlayMachineFile(providerData, localMachine);
   }
-
-  const files = listDataFiles();
-  const machineData = files.map(readDataFile).filter((data): data is MachineFile => data !== null);
-  const providerData = splitByProvider(machineData);
 
   if (!opts.noCursor) {
     const cursorMap = await readCursorData();
@@ -118,7 +157,7 @@ export async function loadMergedProviderData(
     return null;
   }
 
-  return { providerData: filtered, machineData, fileCount: files.length };
+  return { providerData: filtered, machineData, fileCount, warnedNotConfigured };
 }
 
 function splitByProvider(machineFiles: MachineFile[]): ProviderData {
@@ -166,9 +205,7 @@ export async function showCommand(opts: ShowOptions = {}): Promise<void> {
   });
 
   if (!loaded) {
-    console.log(
-      'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
-    );
+    console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));
     return;
   }
 
