@@ -170,7 +170,8 @@ describe('renderToPng', () => {
       ]),
     };
     const filtered = filterProviderDataByYear(data, 2024);
-    expect([...filtered.claude_code!.keys()]).toEqual(['2024-01-01']);
+    expect(filtered.claude_code).toBeDefined();
+    expect([...(filtered.claude_code?.keys() ?? [])]).toEqual(['2024-01-01']);
   });
 
   it('renders with a year filter', () => {

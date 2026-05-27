@@ -106,12 +106,10 @@ program
       noCursor: opts.cursor === false,
       noPull: opts.pull === false,
       year: Number.isFinite(opts.year) ? opts.year : undefined,
-    }).catch(
-      (err: unknown) => {
-        console.error(errorMessage(err));
-        process.exit(1);
-      },
-    ),
+    }).catch((err: unknown) => {
+      console.error(errorMessage(err));
+      process.exit(1);
+    }),
   );
 
 program

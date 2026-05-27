@@ -103,9 +103,7 @@ export async function loadMergedProviderData(
   }
 
   const files = listDataFiles();
-  const machineData = files
-    .map(readDataFile)
-    .filter((data): data is MachineFile => data !== null);
+  const machineData = files.map(readDataFile).filter((data): data is MachineFile => data !== null);
   const providerData = splitByProvider(machineData);
 
   if (!opts.noCursor) {
