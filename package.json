@@ -52,8 +52,7 @@
     "validate": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test",
     "changelog": "git-cliff --config .cliff.toml -o CHANGELOG.md",
     "release": "node scripts/release.mjs",
-    "release:dry-run": "node scripts/release.mjs patch --dry-run",
-    "release:publish": "node scripts/release.mjs patch --publish"
+    "release:dry-run": "node scripts/release.mjs patch --dry-run"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.0",
