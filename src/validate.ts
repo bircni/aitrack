@@ -1,4 +1,4 @@
-import type { MachineFile, ProviderDay, TokenCounts } from './types.js';
+import type { MachineFile, ProviderDay } from './types.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

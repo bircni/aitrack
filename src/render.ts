@@ -208,8 +208,7 @@ function buildYearGrid(year: number): Array<Array<string | null>> {
   const start = new Date(year, 0, 1);
   start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - start.getDay());
-  const end =
-    year === today.getFullYear() ? today : new Date(year, 11, 31);
+  const end = year === today.getFullYear() ? today : new Date(year, 11, 31);
   end.setHours(0, 0, 0, 0);
 
   const weeks: Array<Array<string | null>> = [];

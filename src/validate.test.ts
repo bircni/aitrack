@@ -25,9 +25,7 @@ describe('validateMachineFile', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const result = validateMachineFile({ ...validMachine, hostname: '' }, 'data/bad.json');
     expect(result).toBeNull();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('data/bad.json'),
-    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('data/bad.json'));
     warn.mockRestore();
   });
 

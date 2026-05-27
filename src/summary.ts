@@ -1,7 +1,7 @@
 import { loadConfig } from './config.js';
 import { isCloned, listDataFiles, pull, readDataFile } from './git.js';
 import { readCursorData } from './readers/cursor.js';
-import type { DayMap, ProviderData } from './types.js';
+import type { DayMap, MachineFile, ProviderData } from './types.js';
 import { getOrCreateDay, filterProviderDataByYear } from './dayMap.js';
 import { mergeProviderDay } from './show.js';
 
