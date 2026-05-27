@@ -133,6 +133,23 @@ function intensityLevel(tokens: number, max: number): 0 | 1 | 2 | 3 | 4 {
   return 4;
 }
 
+export function tokenIntensityLevel(tokens: number, max: number): 0 | 1 | 2 | 3 | 4 {
+  return intensityLevel(tokens, max);
+}
+
+export function buildHeatmapWeeks(year?: number): Array<Array<string | null>> {
+  return buildDateGrid(year);
+}
+
+export function getProviderTheme(
+  providerKey: string,
+  dark = false,
+): { name: string; cells: [string, string, string, string, string] } {
+  const providerThemes = THEMES[dark ? 'dark' : 'light'];
+  const theme = providerThemes[providerKey] ?? providerThemes._default;
+  return { name: theme.name === 'Unknown' ? providerKey : theme.name, cells: theme.cells };
+}
+
 function roundedRect(
   ctx: SKRSContext2D,
   x: number,
@@ -361,6 +378,8 @@ function formatMonthLabel(month: string): string {
   const monthIdx = parseInt(m, 10) - 1;
   return `${MONTH_SHORT[monthIdx] ?? m} ${y}`;
 }
+
+export { formatMonthLabel };
 
 // ── Drawing ────────────────────────────────────────────────────────────────
 
