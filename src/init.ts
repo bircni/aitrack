@@ -2,7 +2,7 @@ import prompts from 'prompts';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { loadConfig, saveConfig } from './config.js';
-import { isCloned, cloneRepo, LOCAL_REPO } from './git.js';
+import { isCloned, cloneRepo, removeLocalClone, LOCAL_REPO } from './git.js';
 
 async function promptOverwrite(): Promise<boolean | undefined> {
   const answers = await prompts<'overwrite'>({
@@ -13,6 +13,17 @@ async function promptOverwrite(): Promise<boolean | undefined> {
   });
   const overwrite: unknown = answers.overwrite;
   return typeof overwrite === 'boolean' ? overwrite : undefined;
+}
+
+async function promptReclone(): Promise<boolean | undefined> {
+  const answers = await prompts<'reclone'>({
+    type: 'confirm',
+    name: 'reclone',
+    message: 'Repo URL changed. Remove local clone and re-clone from the new URL?',
+    initial: false,
+  });
+  const reclone: unknown = answers.reclone;
+  return typeof reclone === 'boolean' ? reclone : undefined;
 }
 
 async function promptRepoUrl(): Promise<string | undefined> {
@@ -54,7 +65,20 @@ export async function initCommand(): Promise<void> {
     return;
   }
 
-  if (isCloned()) {
+  const urlChanged = existing !== null && existing.repoUrl !== repoUrl;
+
+  if (isCloned() && urlChanged) {
+    const reclone = await promptReclone();
+    if (!reclone) {
+      console.log('Aborted.');
+      return;
+    }
+    console.log(`Removing existing clone at ${LOCAL_REPO}...`);
+    removeLocalClone();
+    console.log(`Cloning ${repoUrl} into ${LOCAL_REPO}...`);
+    mkdirSync(dirname(LOCAL_REPO), { recursive: true });
+    cloneRepo(repoUrl);
+  } else if (isCloned()) {
     console.log(`Repo already cloned at ${LOCAL_REPO}. Skipping clone.`);
   } else {
     console.log(`Cloning ${repoUrl} into ${LOCAL_REPO}...`);
