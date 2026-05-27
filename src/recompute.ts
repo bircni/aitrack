@@ -2,10 +2,10 @@ import { readFileSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { loadConfig } from './config.js';
 import { isCloned, LOCAL_REPO, listDataFiles, pull } from './git.js';
+import { parseMachineFile } from './validate.js';
 import { estimateClaudeCostFromAggregateTokens } from './readers/claude.js';
 import { consumeClaudeFallbackHits } from './pricing/claude.js';
 import { consumeCodexFallbackHits, estimateCodexCostUSD } from './pricing/codex.js';
-import type { MachineFile } from './types.js';
 
 // Recompute claude_code costUSD for every synced day using the current
 // pricing table. Cache vs raw-input split is lost in aggregated synced data,
@@ -30,7 +30,8 @@ export function recomputeCostsCommand(): void {
   let changed = 0;
   for (const filePath of files) {
     const raw = readFileSync(filePath, 'utf8');
-    const machine = JSON.parse(raw) as MachineFile;
+    const machine = parseMachineFile(raw, filePath);
+    if (!machine) continue;
     let touched = false;
 
     for (const [date, providers] of Object.entries(machine.days)) {

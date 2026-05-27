@@ -99,7 +99,9 @@ export async function summaryCommand(opts: SummaryOptions = {}): Promise<void> {
     pull();
   }
 
-  const machineData = listDataFiles().map(readDataFile);
+  const machineData = listDataFiles()
+    .map(readDataFile)
+    .filter((data): data is MachineFile => data !== null);
   const providers: ProviderData = {};
   for (const data of machineData) {
     for (const [date, providerData] of Object.entries(data.days)) {

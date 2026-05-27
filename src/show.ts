@@ -123,7 +123,9 @@ export async function showCommand(opts: ShowOptions = {}): Promise<void> {
   pull();
 
   const files = listDataFiles();
-  const machineData = files.map(readDataFile);
+  const machineData = files
+    .map(readDataFile)
+    .filter((data): data is MachineFile => data !== null);
   const providerData = splitByProvider(machineData);
 
   if (!opts.noCursor) {

@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { MachineFile } from './types.js';
+import { parseMachineFile } from './validate.js';
 
 export const LOCAL_REPO = join(homedir(), '.config', 'aitrack', 'repo');
 
@@ -57,6 +58,7 @@ export function listDataFiles(): string[] {
     .map((f: string) => join(dataDir, f));
 }
 
-export function readDataFile(filePath: string): MachineFile {
-  return JSON.parse(readFileSync(filePath, 'utf8')) as MachineFile;
+export function readDataFile(filePath: string): MachineFile | null {
+  const raw = readFileSync(filePath, 'utf8');
+  return parseMachineFile(raw, filePath);
 }
