@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { MachineFile } from './types.js';
@@ -16,6 +16,12 @@ export function isCloned(): boolean {
 
 export function cloneRepo(url: string): void {
   execSync(`git clone "${url}" "${LOCAL_REPO}"`, { stdio: 'inherit' });
+}
+
+export function removeLocalClone(): void {
+  if (existsSync(LOCAL_REPO)) {
+    rmSync(LOCAL_REPO, { recursive: true, force: true });
+  }
 }
 
 export function pull(): void {

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   saveConfig: vi.fn(),
   isCloned: vi.fn(),
   cloneRepo: vi.fn(),
+  removeLocalClone: vi.fn(),
   mkdirSync: vi.fn(),
 }));
 
@@ -19,6 +20,7 @@ vi.mock('./git.js', () => ({
   LOCAL_REPO: '/home/test/.config/aitrack/repo',
   isCloned: mocks.isCloned,
   cloneRepo: mocks.cloneRepo,
+  removeLocalClone: mocks.removeLocalClone,
 }));
 
 import { initCommand } from './init.js';
@@ -56,17 +58,48 @@ describe('initCommand', () => {
     expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
 
-  it('overwrites an existing config and skips cloning when the repo exists', async () => {
-    mocks.loadConfig.mockReturnValue({ repoUrl: 'old' });
+  it('overwrites an existing config and skips cloning when the URL is unchanged', async () => {
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'same-url' });
     mocks.isCloned.mockReturnValue(true);
     mocks.prompts
       .mockResolvedValueOnce({ overwrite: true })
-      .mockResolvedValueOnce({ repoUrl: 'new-url' });
+      .mockResolvedValueOnce({ repoUrl: 'same-url' });
 
     await initCommand();
 
+    expect(mocks.removeLocalClone).not.toHaveBeenCalled();
     expect(mocks.cloneRepo).not.toHaveBeenCalled();
+    expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: 'same-url' });
+  });
+
+  it('re-clones when the repo URL changes and the user confirms', async () => {
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'old-url' });
+    mocks.isCloned.mockReturnValue(true);
+    mocks.prompts
+      .mockResolvedValueOnce({ overwrite: true })
+      .mockResolvedValueOnce({ repoUrl: 'new-url' })
+      .mockResolvedValueOnce({ reclone: true });
+
+    await initCommand();
+
+    expect(mocks.removeLocalClone).toHaveBeenCalled();
+    expect(mocks.cloneRepo).toHaveBeenCalledWith('new-url');
     expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: 'new-url' });
+  });
+
+  it('aborts when the repo URL changes and the user declines re-clone', async () => {
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'old-url' });
+    mocks.isCloned.mockReturnValue(true);
+    mocks.prompts
+      .mockResolvedValueOnce({ overwrite: true })
+      .mockResolvedValueOnce({ repoUrl: 'new-url' })
+      .mockResolvedValueOnce({ reclone: false });
+
+    await initCommand();
+
+    expect(mocks.removeLocalClone).not.toHaveBeenCalled();
+    expect(mocks.cloneRepo).not.toHaveBeenCalled();
+    expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
 
   it('aborts when no repo URL is entered', async () => {
