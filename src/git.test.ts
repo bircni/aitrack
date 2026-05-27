@@ -5,6 +5,10 @@ const mocks = vi.hoisted(() => ({
   existsSync: vi.fn(),
   readdirSync: vi.fn(),
   readFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  copyFileSync: vi.fn(),
+  rmSync: vi.fn(),
 }));
 
 vi.mock('child_process', () => ({ execSync: mocks.execSync }));
@@ -12,10 +16,24 @@ vi.mock('fs', () => ({
   existsSync: mocks.existsSync,
   readdirSync: mocks.readdirSync,
   readFileSync: mocks.readFileSync,
+  mkdirSync: mocks.mkdirSync,
+  writeFileSync: mocks.writeFileSync,
+  copyFileSync: mocks.copyFileSync,
+  rmSync: mocks.rmSync,
 }));
 vi.mock('os', () => ({ homedir: () => '/home/test' }));
 
-import { commitAndPush, listDataFiles, pull, readDataFile } from './git.js';
+import {
+  adoptPendingDataFiles,
+  commitAndPush,
+  listDataFiles,
+  listPendingDataFiles,
+  pull,
+  tryPull,
+  readDataFile,
+  removePendingMachineFile,
+  writePendingMachineFile,
+} from './git.js';
 
 describe('git helpers', () => {
   beforeEach(() => {
@@ -32,6 +50,18 @@ describe('git helpers', () => {
       'git ls-remote --heads origin',
       expect.objectContaining({ stdio: 'pipe' }),
     );
+  });
+
+  it('tryPull continues silently when pull fails', () => {
+    mocks.execSync.mockImplementation(() => {
+      throw new Error('network down');
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    tryPull();
+
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it('returns false when there are no staged data changes', () => {
@@ -93,5 +123,42 @@ describe('git helpers', () => {
     expect(file).toBeDefined();
     if (file === undefined) throw new Error('expected one data file');
     expect(readDataFile(file)).toEqual({ hostname: 'host', lastUpdated: 'now', days: {} });
+  });
+
+  it('writes and lists pending machine files', () => {
+    mocks.existsSync.mockReturnValue(true);
+    mocks.readdirSync.mockReturnValue(['host.json']);
+
+    writePendingMachineFile({ hostname: 'host', lastUpdated: 'now', days: {} });
+
+    expect(mocks.mkdirSync).toHaveBeenCalled();
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('pending/data/host.json'),
+      expect.any(String),
+      'utf8',
+    );
+    expect(listPendingDataFiles()).toHaveLength(1);
+  });
+
+  it('adopts pending files into the repo data directory', () => {
+    mocks.existsSync.mockReturnValue(true);
+    mocks.readdirSync.mockReturnValue(['host.json', 'other.json']);
+
+    const adopted = adoptPendingDataFiles('/home/test/.config/aitrack/repo/data');
+
+    expect(adopted).toBe(2);
+    expect(mocks.copyFileSync).toHaveBeenCalledTimes(2);
+    expect(mocks.rmSync).toHaveBeenCalledWith(
+      expect.stringContaining('pending/data'),
+      expect.objectContaining({ recursive: true }),
+    );
+  });
+
+  it('removes a pending file for a machine id', () => {
+    mocks.existsSync.mockReturnValue(true);
+
+    removePendingMachineFile('host');
+
+    expect(mocks.rmSync).toHaveBeenCalledWith(expect.stringContaining('host.json'));
   });
 });

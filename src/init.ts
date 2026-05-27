@@ -1,9 +1,15 @@
 import prompts from 'prompts';
 import { mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { dirname, join } from 'path';
 import { hostname } from 'os';
 import { loadConfig, saveConfig } from './config.js';
-import { isCloned, cloneRepo, removeLocalClone, LOCAL_REPO } from './git.js';
+import {
+  adoptPendingDataFiles,
+  isCloned,
+  cloneRepo,
+  removeLocalClone,
+  LOCAL_REPO,
+} from './git.js';
 
 async function promptOverwrite(): Promise<boolean | undefined> {
   const answers = await prompts<'overwrite'>({
@@ -107,6 +113,13 @@ export async function initCommand(): Promise<void> {
   }
 
   saveConfig({ repoUrl, machineId });
+
+  if (isCloned()) {
+    const adopted = adoptPendingDataFiles(join(LOCAL_REPO, 'data'));
+    if (adopted > 0) {
+      console.log(`Adopted ${adopted} pending data file(s) into the repo.`);
+    }
+  }
 
   console.log('');
   console.log('Done! Next steps:');

@@ -13,7 +13,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => TEST_HOME };
 });
 
-import { loadConfig, saveConfig, resolveMachineId } from './config.js';
+import { loadConfig, saveConfig, resolveMachineId, tryLoadConfig } from './config.js';
 
 describe('config', () => {
   beforeAll(() => mkdirSync(TEST_HOME, { recursive: true }));
@@ -57,5 +57,6 @@ describe('config', () => {
 
   it('throws when no config file exists', () => {
     expect(() => loadConfig()).toThrow('No config found');
+    expect(tryLoadConfig()).toBeNull();
   });
 });

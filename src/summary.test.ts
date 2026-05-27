@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   loadConfig: vi.fn(),
   isCloned: vi.fn(),
   pull: vi.fn(),
+  tryPull: vi.fn(),
   listDataFiles: vi.fn(),
   readDataFile: vi.fn(),
   readCursorData: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock('./config.js', () => ({ loadConfig: mocks.loadConfig }));
 vi.mock('./git.js', () => ({
   isCloned: mocks.isCloned,
   pull: mocks.pull,
+  tryPull: mocks.tryPull,
   listDataFiles: mocks.listDataFiles,
   readDataFile: mocks.readDataFile,
 }));
@@ -56,7 +58,7 @@ describe('summaryCommand', () => {
       },
     });
 
-    await summaryCommand({ noCursor: true, noPull: true });
+    await summaryCommand({ noCursor: true });
 
     const output = vi
       .mocked(console.log)
@@ -89,7 +91,7 @@ describe('summaryCommand', () => {
       },
     });
 
-    await summaryCommand({ noCursor: true, noPull: true, year: 2024 });
+    await summaryCommand({ noCursor: true, year: 2024 });
 
     const output = vi
       .mocked(console.log)
