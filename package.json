@@ -1,0 +1,82 @@
+{
+  "name": "aitrack",
+  "version": "0.1.0",
+  "description": "Sync AI coding assistant usage across machines via GitHub",
+  "author": "Nicolas <bircni@icloud.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bircni/aitrack.git"
+  },
+  "homepage": "https://github.com/bircni/aitrack#readme",
+  "bugs": {
+    "url": "https://github.com/bircni/aitrack/issues"
+  },
+  "keywords": [
+    "ai",
+    "claude",
+    "codex",
+    "cursor",
+    "usage",
+    "heatmap",
+    "git-sync",
+    "cli"
+  ],
+  "type": "module",
+  "packageManager": "pnpm@11.3.0+sha512.2c403d6594527287672b1f7056343a1f7c3634036a67ffabfcc2b3d7595d843768f8787148d1b57cf7956c90606bbd192857c363af19e96d2d0ec9ec5741d215",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "aitrack": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "!dist/**/*.test.js"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "pricing:check": "tsx scripts/update-pricing.ts",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "validate": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test",
+    "changelog": "git-cliff --config .cliff.toml -o CHANGELOG.md",
+    "release": "node scripts/release.mjs",
+    "release:dry-run": "node scripts/release.mjs patch --dry-run",
+    "release:publish": "node scripts/release.mjs patch --publish"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.0",
+    "better-sqlite3": "^12.10.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.1",
+    "@types/prompts": "^2.4.9",
+    "@vitest/coverage-v8": "^4.1.7",
+    "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.1.8",
+    "git-cliff": "^2.13.1",
+    "globals": "^17.6.0",
+    "jiti": "^2.7.0",
+    "prettier": "^3.8.3",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.4",
+    "vitest": "^4.1.7"
+  }
+}

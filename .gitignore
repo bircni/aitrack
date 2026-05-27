@@ -1,0 +1,5 @@
+node_modules/
+dist/
+aitrack*.png
+coverage/
+.DS_Store
