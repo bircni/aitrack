@@ -33,6 +33,8 @@ export interface MachineFile {
 
 export interface Config {
   repoUrl: string;
+  /** Stable machine identifier for data/{machineId}.json; defaults to os.hostname(). */
+  machineId?: string;
 }
 
 export interface RenderOptions {

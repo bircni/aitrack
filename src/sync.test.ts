@@ -19,7 +19,10 @@ vi.mock('fs', () => ({
   writeFileSync: mocks.writeFileSync,
   readFileSync: mocks.readFileSync,
 }));
-vi.mock('./config.js', () => ({ loadConfig: mocks.loadConfig }));
+vi.mock('./config.js', () => ({
+  loadConfig: mocks.loadConfig,
+  resolveMachineId: (config: { machineId?: string }) => config.machineId ?? 'host',
+}));
 vi.mock('./readers/claude.js', () => ({ readClaudeData: mocks.readClaudeData }));
 vi.mock('./readers/codex.js', () => ({ readCodexData: mocks.readCodexData }));
 vi.mock('./git.js', () => ({
@@ -45,6 +48,7 @@ describe('syncCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.isCloned.mockReturnValue(true);
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
     mocks.hostname.mockReturnValue('host');
     mocks.readClaudeData.mockResolvedValue(new Map());
     mocks.readCodexData.mockResolvedValue(new Map());
@@ -72,6 +76,23 @@ describe('syncCommand', () => {
       'utf8',
     );
     expect(mocks.commitAndPush).toHaveBeenCalledWith('host');
+  });
+
+  it('uses a configured machineId for the data filename', async () => {
+    mocks.loadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: 'work-laptop',
+    });
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+
+    await syncCommand();
+
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('work-laptop.json'),
+      expect.any(String),
+      'utf8',
+    );
+    expect(mocks.commitAndPush).toHaveBeenCalledWith('work-laptop');
   });
 
   it('does not write when persisted days already match fresh data', async () => {

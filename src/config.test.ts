@@ -13,7 +13,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => TEST_HOME };
 });
 
-import { loadConfig, saveConfig } from './config.js';
+import { loadConfig, saveConfig, resolveMachineId } from './config.js';
 
 describe('config', () => {
   beforeAll(() => mkdirSync(TEST_HOME, { recursive: true }));
@@ -37,6 +37,22 @@ describe('config', () => {
     saveConfig({ repoUrl: 'old' });
     saveConfig({ repoUrl: 'new' });
     expect(loadConfig()).toEqual({ repoUrl: 'new' });
+  });
+
+  it('round-trips a config with machineId through save and load', () => {
+    const cfg = { repoUrl: 'git@github.com:test/repo.git', machineId: 'work-laptop' };
+    saveConfig(cfg);
+    expect(loadConfig()).toEqual(cfg);
+  });
+
+  it('resolveMachineId falls back to hostname when machineId is unset', () => {
+    expect(resolveMachineId({ repoUrl: 'git@github.com:test/repo.git' })).toBeTruthy();
+  });
+
+  it('resolveMachineId uses configured machineId', () => {
+    expect(
+      resolveMachineId({ repoUrl: 'git@github.com:test/repo.git', machineId: 'work-laptop' }),
+    ).toBe('work-laptop');
   });
 
   it('throws when no config file exists', () => {
