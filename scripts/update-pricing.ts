@@ -62,22 +62,45 @@ function claudeHeading(modelId: string): string {
   return `Claude ${family} ${version}`;
 }
 
+// `Claude Opus 4.8` -> `claude-opus-4-8`
+function claudeModelId(family: string, version: string): string {
+  const dot = version.indexOf('.');
+  if (dot < 0) return `claude-${family.toLowerCase()}-${version}`;
+  return `claude-${family.toLowerCase()}-${version.slice(0, dot)}-${version.slice(dot + 1)}`;
+}
+
+// Scan the docs page for priced Claude models we don't track yet.
+function discoverClaudeModelsOnPage(html: string): string[] {
+  const re = /Claude (Opus|Sonnet|Haiku) (\d+(?:\.\d+)?)/g;
+  const found = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const after = html[m.index + m[0].length];
+    if (after && /[\d.]/.test(after)) continue;
+    const prices = pricesAt(html, [m.index], 800);
+    if (prices.length === 0) continue;
+    found.add(claudeModelId(m[1], m[2]));
+  }
+  return [...found].sort();
+}
+
 function claudeSummary(p: ClaudePricing): string {
   return `$${p.inputPerMillion}/${p.outputPerMillion}`;
 }
 
-async function checkClaude(): Promise<{ drift: number; unverified: number }> {
+async function checkClaude(): Promise<{ drift: number; unverified: number; missing: number }> {
   console.log(`\n── Claude (${CLAUDE_PRICING_URL}) ──`);
   let html: string;
   try {
     html = await fetchHtml(CLAUDE_PRICING_URL);
   } catch (err) {
     console.error('Fetch failed:', (err as Error).message);
-    return { drift: 1, unverified: 0 };
+    return { drift: 1, unverified: 0, missing: 0 };
   }
 
   let drift = 0;
   let unverified = 0;
+  let missing = 0;
   for (const [modelId, pricing] of Object.entries(CLAUDE_PRICING_BY_ID)) {
     const heading = claudeHeading(modelId);
     const hits = findHits(html, heading, (c) => !/[\d.]/.test(c));
@@ -98,7 +121,15 @@ async function checkClaude(): Promise<{ drift: number; unverified: number }> {
       drift++;
     }
   }
-  return { drift, unverified };
+
+  const known = new Set(Object.keys(CLAUDE_PRICING_BY_ID));
+  for (const modelId of discoverClaudeModelsOnPage(html)) {
+    if (known.has(modelId)) continue;
+    console.log(`+ ${modelId.padEnd(22)} — on docs page but missing from src/pricing/claude.ts`);
+    missing++;
+  }
+
+  return { drift, unverified, missing };
 }
 
 // ── Codex ─────────────────────────────────────────────────────────────────
@@ -154,17 +185,23 @@ async function main(): Promise<number> {
 
   const totalDrift = claude.drift + codex.drift;
   const totalUnverified = claude.unverified + codex.unverified;
+  const totalMissing = claude.missing;
 
   console.log('');
+  if (totalMissing > 0) {
+    console.log(
+      `${totalMissing} model(s) on docs page missing from src/pricing/claude.ts — add them and re-run`,
+    );
+  }
   if (totalDrift > 0) {
     console.log(`${totalDrift} model(s) drift from current docs — update src/pricing/*.ts`);
-  } else if (totalUnverified > 0) {
+  } else if (totalMissing === 0 && totalUnverified > 0) {
     console.log(`No drift, but ${totalUnverified} model(s) couldn't be found on the page.`);
-  } else {
+  } else if (totalMissing === 0 && totalDrift === 0) {
     console.log('All pricing matches docs.');
   }
 
-  return totalDrift > 0 ? 1 : 0;
+  return totalDrift > 0 || totalMissing > 0 ? 1 : 0;
 }
 
 main()
