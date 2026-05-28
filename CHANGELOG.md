@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.1.2] - 2026-05-28
+
+
+
+### Bug Fixes
+
+- **pricing:** Add Claude Opus 4.8 at $5/$25
+
+
+### CI
+
+- Fix drift check to detect new models on pricing page
+
+
 ## [v0.1.1] - 2026-05-27
 
 
