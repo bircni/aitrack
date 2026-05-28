@@ -21,6 +21,7 @@ function priceFromBase(input: number, output: number): ClaudePricing {
 
 export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
   // Current generation (Opus 4.5+ all share $5/$25)
+  'claude-opus-4-8': priceFromBase(5, 25),
   'claude-opus-4-7': priceFromBase(5, 25),
   'claude-opus-4-6': priceFromBase(5, 25),
   'claude-opus-4-5': priceFromBase(5, 25),
