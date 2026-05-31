@@ -1,115 +1,119 @@
+<div align="center">
+
 # aitrack
 
-Sync your AI coding assistant usage across multiple machines and visualize it as a combined heatmap, without being locked to one PC.
+**Track your AI coding-assistant usage across every machine — and own the data.**
 
-Each machine pushes a single JSON file to a git repository you own. Any machine can then pull all files and render a merged heatmap PNG.
+Each machine pushes a single JSON file to a git repo _you_ control. Pull from anywhere to see a merged heatmap, stats table, and cost breakdown across Claude Code, Codex, and Cursor.
 
-Uses your locally installed `git` for all sync operations — no API tokens required for git. Any auth that already works in your terminal (SSH keys, credential manager, etc.) will work here too.
+[![npm version](https://img.shields.io/npm/v/aitrack?color=cb3837&logo=npm)](https://www.npmjs.com/package/aitrack)
+[![CI](https://github.com/bircni/aitrack/actions/workflows/ci.yml/badge.svg)](https://github.com/bircni/aitrack/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/aitrack?logo=node.js&color=339933)](https://nodejs.org)
+[![license](https://img.shields.io/npm/l/aitrack?color=blue)](LICENSE)
 
-**Supported providers (synced via git):**
+</div>
 
-- Claude Code
-- Codex (OpenAI)
+---
 
-**Cursor** usage appears only in `aitrack show`, on the machine where you run it: it reads your local Cursor login from `state.vscdb` and fetches usage from Cursor’s dashboard CSV export. Cursor data is **never** written to your data repo.
+## Why aitrack?
+
+- 📊 **One picture of everything** — Claude Code + Codex + Cursor, merged across all your machines.
+- 🔒 **You own the data** — it lives in a git repo you create. No accounts, no telemetry, no third-party servers.
+- 🔑 **No API tokens for sync** — uses your local `git`, so whatever auth already works in your terminal (SSH keys, credential manager) just works.
+- ⚡ **Zero-setup preview** — run `npx aitrack tui` and see your local usage _before_ configuring anything.
+- 💰 **Real cost estimates** — per-model pricing applied to Claude Code token + cache usage.
+
+> **Synced via git:** Claude Code, Codex (OpenAI).
+> **Cursor** is read locally on demand and **never** written to your repo (see [Where data comes from](#where-data-comes-from)).
+
+---
+
+## See it
+
+A live terminal table (`aitrack tui`) — same data also renders to a PNG heatmap via `aitrack show`:
+
+```text
+┌─────────────┬──────┬────────┬────────┬────────┬───────────┬─────────┬────────────┐
+│ Provider    │ Days │  Input │ Output │  Total │ Est. cost │  Streak │ Peak month │
+├─────────────┼──────┼────────┼────────┼────────┼───────────┼─────────┼────────────┤
+│ Claude Code │   28 │ 184.2M │   1.4M │ 185.6M │   $142.80 │ 12 / 12 │ May 2026   │
+│ Codex       │   64 │ 612.0M │   3.1M │ 615.1M │   $318.40 │   0 / 9 │ Apr 2026   │
+├─────────────┼──────┼────────┼────────┼────────┼───────────┼─────────┼────────────┤
+│ TOTAL       │   92 │ 796.2M │   4.5M │ 800.7M │   $461.20 │       — │ —          │
+└─────────────┴──────┴────────┴────────┴────────┴───────────┴─────────┴────────────┘
+```
+
+Today at a glance (`aitrack today`):
+
+```text
+┌─────────────┬────────┬───────────────────┬────────┐
+│ Provider    │ Tokens │ Model             │  Price │
+├─────────────┼────────┼───────────────────┼────────┤
+│ Claude Code │  31.5M │ claude-opus-4-8   │ $25.38 │
+│ Claude Code │ 827.0K │ claude-sonnet-4-6 │  $0.47 │
+│ Codex       │  12.4M │ gpt-5-codex       │  $6.40 │
+├─────────────┼────────┼───────────────────┼────────┤
+│ TOTAL       │  44.7M │                   │ $32.25 │
+└─────────────┴────────┴───────────────────┴────────┘
+```
 
 ---
 
 ## Quick start
 
-You can preview usage **before** running `init` or `sync`:
+**Preview instantly — no setup required:**
 
+```sh
+npx aitrack tui      # stats table from local Claude/Codex (+ Cursor if available)
+npx aitrack today    # today's usage, per provider + model
+npx aitrack show     # heatmap PNG from the same local-first read
 ```
-npx aitrack tui     # stats table from local Claude/Codex (+ Cursor if available)
-npx aitrack show    # heatmap PNG from the same local-first read
-```
 
-Local Claude/Codex data is staged at `~/.config/aitrack/pending/data/{machineId}.json` so a later `init`/`sync` can adopt it into your git repo.
+Your local data is staged at `~/.config/aitrack/pending/data/` so a later `init`/`sync` can adopt it into your repo.
 
-### 1. Create an empty git repository
+**Then, to sync across machines:**
 
-Create a new **empty** repo on GitHub (or any git host). Do not initialize it with a README — it needs to be empty so the clone works cleanly.
-
-Example: go to https://github.com/new, name it `aitrack-data`, leave all checkboxes unchecked, click **Create repository**.
-
-### 2. Run the setup wizard
-
-```
+```sh
+# 1. Create an EMPTY git repo (no README/license) — e.g. github.com/new → "aitrack-data"
+# 2. Configure + clone it locally:
 npx aitrack init
-```
 
-This will ask for the remote URL of your repo (SSH or HTTPS — whichever you normally use with git) and clone it locally to `~/.config/aitrack/repo/`.
-
-### 3. Push your data
-
-```
+# 3. Push this machine's data:
 npx aitrack sync
-```
 
-Reads your local Claude Code and Codex session files and pushes a file named `data/{your-hostname}.json` to the repo.
-
-### 4. View the heatmap
-
-```
+# 4. View everything, from any machine:
 npx aitrack show
 ```
 
-Reads **fresh local** Claude/Codex session data on this machine, merges data from other machines in the repo (if initialized), adds **local Cursor** usage if available, and renders a heatmap PNG with tokens and known USD cost where available (by default **one row per provider**; use `--all` for a single merged heatmap). No `sync` push is required to see your latest local usage.
+`init` asks for your repo's remote URL (SSH or HTTPS — whatever you normally use) and clones it to `~/.config/aitrack/repo/`. `sync` writes `data/{your-hostname}.json` and pushes it. `show` always reads **fresh local** Claude/Codex data, so you never need to `sync` first just to preview.
 
----
+### Multiple machines
 
-## Multi-machine setup
-
-Run `npx aitrack init` once per machine using the same repo URL. From then on:
-
-```
-npx aitrack sync   # run on each machine to push its data
-npx aitrack show   # run anywhere to see all machines combined
-```
-
-Each machine writes its own file (`data/{hostname}.json`) so there are no merge conflicts.
+Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sync` on each. Every machine writes its own `data/{hostname}.json`, so there are **no merge conflicts**.
 
 ---
 
 ## Commands
 
-| Command                        | Description                                                                                               |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `npx aitrack init`             | Interactive setup — provide repo URL and clone it locally                                                 |
-| `npx aitrack sync`             | Read local data, write to the cloned repo, and push                                                       |
-| `npx aitrack show`             | Merge synced data + fresh local Claude/Codex + local Cursor, render heatmap PNG (per provider by default) |
-| `npx aitrack show --all`       | Single merged heatmap across all providers                                                                |
-| `npx aitrack show --dark`      | Dark mode output                                                                                          |
-| `npx aitrack show --no-cursor` | Skip local Cursor usage (offline, CI, or privacy)                                                         |
-| `npx aitrack show --no-open`   | Don't auto-open the generated PNG (useful for scripts / CI)                                               |
-| `npx aitrack show -o path.png` | Write PNG to a custom path                                                                                |
-| `npx aitrack tui`              | Terminal stats table (same local-first merge as `show`, no PNG)                                           |
-| `npx aitrack summary`          | Print per-provider monthly token + cost totals to stdout (no PNG)                                         |
-| `npx aitrack today`            | Print today's usage per provider/model (provider / tokens / model / price) to stdout                      |
-| `npx aitrack recompute-costs`  | Refresh costs: local JSONL on this machine; reprice others from stored cache breakdown                    |
+| Command                   | What it does                                                                 |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `aitrack init`            | Interactive setup — provide your repo URL and clone it locally               |
+| `aitrack sync`            | Read local data, write it to the cloned repo, and push                       |
+| `aitrack show`            | Merge all sources and render a heatmap PNG (one row per provider by default) |
+| `aitrack tui`             | Stats table in the terminal (same merge as `show`, no PNG)                   |
+| `aitrack today`           | Today's usage as a table: provider / tokens / model / price                  |
+| `aitrack summary`         | Per-provider **monthly** token + cost totals to stdout                       |
+| `aitrack recompute-costs` | Refresh costs: re-read local JSONL; reprice other machines from stored cache |
+
+**`show` flags:** `--all` (single merged heatmap), `--dark` (dark mode), `--no-cursor` (skip Cursor), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path). `--no-cursor` and `--year <year>` also work on `tui` and `summary`.
 
 ---
 
 ## How it works
 
-`sync` and `show`/`tui` both use a local git clone at `~/.config/aitrack/repo/` for **Claude Code** and **Codex** data from other machines when initialized: normal git pulls and pushes with your existing git credentials. **`show` and `tui` always read fresh local Claude/Codex JSONL on this machine** — you do not need to run `sync` first to preview your latest usage.
-
-Before `init`, local usage is written to `~/.config/aitrack/pending/data/` and adopted into the repo on the next `init` or pushed on `sync`.
-
-`show`/`tui` also try to load **Cursor** on the current machine: it reads `cursorAuth/accessToken` from Cursor’s SQLite `state.vscdb`, then requests Cursor’s CSV usage export over HTTPS. Use `npx aitrack show --no-cursor` to skip that step (offline, CI, or privacy).
-By default you get **one heatmap row per provider** (Claude Code, Codex, Cursor, …). Use `npx aitrack show --all` for **one** combined heatmap across all providers.
-
-aitrack reads (and never transmits) your local Cursor access token solely to call Cursor's own usage export endpoint on your behalf. The token is not written to your data repo or sent anywhere else.
-
-Cost handling follows OpenUsage-style semantics: Claude Code cost is an API-equivalent estimate from per-model pricing and token/cache usage. Pricing is keyed by Claude API model id (date suffix stripped) — see [`src/readers/claude.ts`](src/readers/claude.ts). Cursor and Codex local session cost are left unknown because their available local data does not expose a reliable all-history cost.
-
-If stored costs are missing or pricing changed, run `npx aitrack recompute-costs`. It re-reads local JSONL on this machine (same accuracy as `sync`) and reprices other machines from the cache breakdown stored at sync time. Legacy synced data without a breakdown is left unchanged — re-sync from that machine to upgrade it.
-
-Heatmap intensity anchors on the 90th-percentile day rather than the absolute maximum, so a single huge day doesn't flatten the rest of the year into the lightest shade.
-
-```
+```text
 ~/.config/aitrack/
-├── config.json          # repo URL
+├── config.json          # repo URL + optional machineId
 ├── pending/
 │   └── data/            # staged machine JSON before init/sync
 │       └── my-pc.json
@@ -119,11 +123,21 @@ Heatmap intensity anchors on the 90th-percentile day rather than the absolute ma
         └── work-laptop.json
 ```
 
+- **Sync** uses a local git clone at `~/.config/aitrack/repo/` with your existing git credentials — ordinary pulls and pushes.
+- **`show` / `tui` always read fresh local Claude/Codex JSONL** on the current machine and merge in other machines' synced files. No `sync` needed to preview.
+- Before `init`, local usage is staged in `~/.config/aitrack/pending/data/` and adopted on the next `init`/`sync`.
+- **Cursor** is loaded only on the current machine: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls Cursor's own CSV usage export over HTTPS. The token is used solely for that request — it is **never** written to your repo or sent anywhere else. Use `--no-cursor` to skip it.
+- **Heatmap intensity** anchors on the 90th-percentile day rather than the absolute max, so one huge day doesn't flatten the rest of the year.
+
+### Cost handling
+
+Claude Code cost is an API-equivalent estimate from per-model pricing and token/cache usage, keyed by Claude API model id with the date suffix stripped (see [`src/readers/claude.ts`](src/readers/claude.ts)). Cursor and Codex local-session cost are left unknown because their local data doesn't expose a reliable all-history cost. If stored costs are missing or pricing changed, run `aitrack recompute-costs`.
+
 ---
 
 ## Configuration
 
-Config is stored at `~/.config/aitrack/config.json`:
+Stored at `~/.config/aitrack/config.json`:
 
 ```json
 {
@@ -132,33 +146,31 @@ Config is stored at `~/.config/aitrack/config.json`:
 }
 ```
 
-`machineId` is optional — if omitted, `sync` uses your OS hostname as the filename (`data/{machineId}.json`). Set a stable name during `init` if your hostname might collide across machines or change after reinstall. Existing hostname-based files in the repo continue to work when reading; only new syncs use the configured ID.
+`machineId` is optional — without it, `sync` uses your OS hostname as the filename. Set a stable name during `init` if your hostname might collide across machines or change after a reinstall. Existing hostname-based files keep working when read.
 
 ---
 
 ## Where data comes from
 
-| Provider           | Source                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| Claude Code        | `~/.claude/projects/**/*.jsonl` or `$XDG_CONFIG_HOME/claude/projects/**/*.jsonl`      |
-| Codex              | `~/.codex/sessions/*.jsonl` or `$CODEX_HOME/sessions/*.jsonl`                         |
-| Cursor (show only) | `state.vscdb` under `User/globalStorage/` (see below), then Cursor’s HTTPS CSV export |
+| Provider             | Source                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| Claude Code          | `~/.claude/projects/**/*.jsonl` or `$XDG_CONFIG_HOME/claude/projects/**/*.jsonl`    |
+| Codex                | `~/.codex/sessions/*.jsonl` or `$CODEX_HOME/sessions/*.jsonl`                       |
+| Cursor _(show only)_ | local `state.vscdb`, then Cursor's HTTPS CSV export — **never synced to your repo** |
 
 Default `state.vscdb` locations (override with `CURSOR_STATE_DB_PATH` or `CURSOR_CONFIG_DIR`):
 
-- macOS: `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`
-- Windows: `%APPDATA%\Cursor\User\globalStorage\state.vscdb`
-- Linux: `~/.config/Cursor/User/globalStorage/state.vscdb`
+- **macOS:** `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`
+- **Windows:** `%APPDATA%\Cursor\User\globalStorage\state.vscdb`
+- **Linux:** `~/.config/Cursor/User/globalStorage/state.vscdb`
 
 Optional: `CURSOR_WEB_BASE_URL` (default `https://cursor.com`).
-
-Synced JSON in git never includes Cursor; only Claude Code and Codex are pushed.
 
 ---
 
 ## Data format
 
-Each machine's file in the repo looks like:
+Each machine's file in the repo:
 
 ```json
 {
@@ -173,9 +185,7 @@ Each machine's file in the repo looks like:
         "totals": { "inputTokens": 45000, "outputTokens": 3200, "costUSD": 0.183 }
       },
       "codex": {
-        "byModel": {
-          "codex-1": { "inputTokens": 12000, "outputTokens": 800 }
-        },
+        "byModel": { "codex-1": { "inputTokens": 12000, "outputTokens": 800 } },
         "totals": { "inputTokens": 12000, "outputTokens": 800 }
       }
     }
@@ -187,8 +197,14 @@ Each machine's file in the repo looks like:
 
 ## Requirements
 
-- Node.js 22 or later
-- `git` installed and accessible in your PATH
-- A GitHub account (or any git remote) with a repo you can push to
+- **Node.js 22+**
+- **git** installed and on your `PATH`
+- A git remote you can push to (GitHub or any host)
 
-Native dependencies (`better-sqlite3`, `@napi-rs/canvas`) are installed automatically; on some systems you may need build tools if prebuilt binaries are unavailable.
+Native dependencies (`better-sqlite3`, `@napi-rs/canvas`) install automatically; on some systems you may need build tools if prebuilt binaries aren't available.
+
+---
+
+## License
+
+[MIT](LICENSE)
