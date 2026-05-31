@@ -368,7 +368,7 @@ export function aggregateCursorCsvToDayMap(content: string): DayMap {
 export async function readCursorData(): Promise<DayMap> {
   const databasePath = getCursorStateDbPath();
   if (!databasePath) {
-    console.warn('aitrack: Cursor skipped — state.vscdb not found.');
+    // Cursor simply isn't installed on this machine — benign, stay quiet.
     return new Map();
   }
 
