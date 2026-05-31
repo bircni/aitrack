@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.1.3] - 2026-05-31
+
+
+
+### Documentation
+
+- Update project description and enhance usage details
+
+
+### Features
+
+- **cli:** Add `today` command and quiet benign Cursor warning
+
+
 ## [v0.1.2] - 2026-05-28
 
 
