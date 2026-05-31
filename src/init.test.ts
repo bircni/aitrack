@@ -1,3 +1,4 @@
+import { join } from 'path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -55,7 +56,7 @@ describe('initCommand', () => {
       machineId: 'work-laptop',
     });
     expect(mocks.adoptPendingDataFiles).toHaveBeenCalledWith(
-      '/home/test/.config/aitrack/repo/data',
+      join('/home/test/.config/aitrack/repo', 'data'),
     );
   });
 

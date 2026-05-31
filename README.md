@@ -85,6 +85,7 @@ Each machine writes its own file (`data/{hostname}.json`) so there are no merge 
 | `npx aitrack show -o path.png` | Write PNG to a custom path                                                                                |
 | `npx aitrack tui`              | Terminal stats table (same local-first merge as `show`, no PNG)                                           |
 | `npx aitrack summary`          | Print per-provider monthly token + cost totals to stdout (no PNG)                                         |
+| `npx aitrack today`            | Print today's usage per provider/model (provider / tokens / model / price) to stdout                      |
 | `npx aitrack recompute-costs`  | Refresh costs: local JSONL on this machine; reprice others from stored cache breakdown                    |
 
 ---

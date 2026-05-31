@@ -1,3 +1,4 @@
+import { join } from 'path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -133,7 +134,7 @@ describe('git helpers', () => {
 
     expect(mocks.mkdirSync).toHaveBeenCalled();
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining('pending/data/host.json'),
+      expect.stringContaining(join('pending', 'data', 'host.json')),
       expect.any(String),
       'utf8',
     );
@@ -149,7 +150,7 @@ describe('git helpers', () => {
     expect(adopted).toBe(2);
     expect(mocks.copyFileSync).toHaveBeenCalledTimes(2);
     expect(mocks.rmSync).toHaveBeenCalledWith(
-      expect.stringContaining('pending/data'),
+      expect.stringContaining(join('pending', 'data')),
       expect.objectContaining({ recursive: true }),
     );
   });

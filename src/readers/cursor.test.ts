@@ -173,11 +173,11 @@ describe('readCursorData', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('returns an empty map when no state database exists', async () => {
+  it('returns an empty map without warning when no state database exists', async () => {
     process.env.CURSOR_STATE_DB_PATH = join(tmpDir, 'missing.vscdb');
 
     await expect(readCursorData()).resolves.toEqual(new Map());
-    expect(console.warn).toHaveBeenCalledWith('aitrack: Cursor skipped — state.vscdb not found.');
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it('returns an empty map when the state database has no access token', async () => {

@@ -8,6 +8,7 @@ import { showCommand } from './show.js';
 import { initCommand } from './init.js';
 import { recomputeCostsCommand } from './recompute.js';
 import { summaryCommand } from './summary.js';
+import { todayCommand } from './today.js';
 import { tuiCommand } from './tui.js';
 
 function errorMessage(error: unknown): string {
@@ -105,6 +106,17 @@ program
       noCursor: opts.cursor === false,
       year: Number.isFinite(opts.year) ? opts.year : undefined,
     }).catch((err: unknown) => {
+      console.error(errorMessage(err));
+      process.exit(1);
+    }),
+  );
+
+program
+  .command('today')
+  .description("Show today's usage: provider / tokens / model / price")
+  .option('--no-cursor', 'skip local Cursor usage')
+  .action((opts: { cursor?: boolean }) =>
+    todayCommand({ noCursor: opts.cursor === false }).catch((err: unknown) => {
       console.error(errorMessage(err));
       process.exit(1);
     }),
