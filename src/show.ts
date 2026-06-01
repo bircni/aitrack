@@ -9,6 +9,7 @@ import { readCursorData } from './readers/cursor.js';
 import { estimateClaudeCostFromAggregateTokens } from './readers/claude.js';
 import { estimateCodexCostUSD } from './pricing/codex.js';
 import { mergeAllProviderDayMaps, renderToPng } from './render.js';
+import { renderTui } from './tui.js';
 import type { DayEntry, MachineFile, ProviderData, ProviderDay, TokenCounts } from './types.js';
 import { getOrCreateDay, filterProviderDataByYear } from './dayMap.js';
 
@@ -204,6 +205,8 @@ interface ShowOptions {
   open?: boolean;
   /** When set, only include days from this calendar year. */
   year?: number;
+  /** Render a terminal table instead of a PNG heatmap. */
+  tui?: boolean;
 }
 
 export async function showCommand(opts: ShowOptions = {}): Promise<void> {
@@ -214,6 +217,16 @@ export async function showCommand(opts: ShowOptions = {}): Promise<void> {
 
   if (!loaded) {
     console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));
+    return;
+  }
+
+  if (opts.tui) {
+    const output = renderTui(loaded.providerData, {
+      dark: opts.dark,
+      all: opts.all,
+      year: opts.year,
+    });
+    console.log(output || 'No usage data found.');
     return;
   }
 

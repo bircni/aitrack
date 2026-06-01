@@ -1,9 +1,6 @@
 import chalk from 'chalk';
 import type { DayMap, ProviderData } from './types.js';
 import { filterProviderDataByYear } from './dayMap.js';
-import { tryLoadConfig } from './config.js';
-import { isCloned } from './git.js';
-import { loadMergedProviderData, emptyUsageMessage } from './show.js';
 import {
   currentStreak,
   formatMonthLabel,
@@ -242,24 +239,4 @@ export function renderTui(providerData: ProviderData, opts: TuiOptions = {}): st
   const subtitle = chalk.dim('Streak = current / longest (days)');
 
   return [title, subtitle, '', renderTable(rows, Boolean(opts.dark))].join('\n');
-}
-
-export async function tuiCommand(opts: TuiOptions = {}): Promise<void> {
-  const loaded = await loadMergedProviderData({
-    noCursor: opts.noCursor,
-    year: opts.year,
-  });
-
-  if (!loaded) {
-    console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));
-    return;
-  }
-
-  const output = renderTui(loaded.providerData, opts);
-  if (!output) {
-    console.log('No usage data found.');
-    return;
-  }
-
-  console.log(output);
 }
