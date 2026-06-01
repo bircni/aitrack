@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.0] - 2026-06-01
+
+
+
+### Refactoring
+
+- **cli:** Consolidate commands into show --tui and usage group
+
+
+### Tests
+
+- **usage:** Add coverage for usage command and show --tui
+
+
 ## [v0.1.3] - 2026-05-31
 
 
