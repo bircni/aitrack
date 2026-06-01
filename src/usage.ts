@@ -5,7 +5,10 @@ import { isCloned } from './git.js';
 import { toLocalDateString } from './dayMap.js';
 import type { DayMap } from './types.js';
 
-interface TodayOptions {
+export type UsagePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
+
+interface UsageOptions {
+  period: UsagePeriod;
   noCursor?: boolean;
 }
 
@@ -103,7 +106,61 @@ function renderTable(rows: Row[]): string {
   return lines.join('\n');
 }
 
-export async function todayCommand(opts: TodayOptions = {}): Promise<void> {
+interface Window {
+  start: string;
+  end: string;
+  label: string;
+}
+
+function computeWindow(period: UsagePeriod): Window {
+  const today = new Date();
+  const end = toLocalDateString(today);
+  if (period === 'today') {
+    return { start: end, end, label: `today (${end})` };
+  }
+  if (period === 'all') {
+    return { start: '0000-01-01', end: '9999-12-31', label: 'all time' };
+  }
+  if (period === 'year') {
+    const year = today.getFullYear();
+    return { start: `${year}-01-01`, end: `${year}-12-31`, label: `${year}` };
+  }
+  const days = period === 'week' ? 7 : 30;
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - (days - 1));
+  const start = toLocalDateString(startDate);
+  return { start, end, label: `last ${days} days (${start} → ${end})` };
+}
+
+interface ModelAgg {
+  inputTokens: number;
+  outputTokens: number;
+  costUSD: number;
+  hasCost: boolean;
+}
+
+function aggregateProvider(dayMap: DayMap, window: Window): Map<string, ModelAgg> {
+  const byModel = new Map<string, ModelAgg>();
+  for (const [date, day] of dayMap) {
+    if (date < window.start || date > window.end) continue;
+    for (const [model, counts] of Object.entries(day.byModel)) {
+      let agg = byModel.get(model);
+      if (!agg) {
+        agg = { inputTokens: 0, outputTokens: 0, costUSD: 0, hasCost: false };
+        byModel.set(model, agg);
+      }
+      agg.inputTokens += counts.inputTokens;
+      agg.outputTokens += counts.outputTokens;
+      if (counts.costUSD !== undefined) {
+        agg.costUSD += counts.costUSD;
+        agg.hasCost = true;
+      }
+    }
+  }
+  return byModel;
+}
+
+export async function usageCommand(opts: UsageOptions): Promise<void> {
   const loaded = await loadMergedProviderData({ noCursor: opts.noCursor });
 
   if (!loaded) {
@@ -112,7 +169,7 @@ export async function todayCommand(opts: TodayOptions = {}): Promise<void> {
   }
 
   const reportData = loaded.providerData;
-  const today = toLocalDateString(new Date());
+  const window = computeWindow(opts.period);
 
   const ordered = [
     ...PROVIDER_ORDER.filter((k) => reportData[k]),
@@ -125,29 +182,36 @@ export async function todayCommand(opts: TodayOptions = {}): Promise<void> {
   let anyCost = false;
 
   for (const key of ordered) {
-    const dayMap: DayMap | undefined = reportData[key];
-    const day = dayMap?.get(today);
-    if (!day) continue;
+    const dayMap = reportData[key];
+    if (!dayMap) continue;
     const label = PROVIDER_LABELS[key] ?? key;
-    for (const [model, counts] of Object.entries(day.byModel)) {
-      const tokens = counts.inputTokens + counts.outputTokens;
-      const hasCost = counts.costUSD !== undefined;
-      rows.push({
+    const byModel = aggregateProvider(dayMap, window);
+    const providerRows: Array<Row & { sortCost: number; sortTokens: number }> = [];
+    for (const [model, agg] of byModel) {
+      const tokens = agg.inputTokens + agg.outputTokens;
+      if (tokens === 0 && !agg.hasCost) continue;
+      providerRows.push({
         provider: label,
         tokens: fmt(tokens),
         model,
-        price: hasCost ? fmtUSD(counts.costUSD ?? 0) : '—',
+        price: agg.hasCost ? fmtUSD(agg.costUSD) : '—',
+        sortCost: agg.hasCost ? agg.costUSD : 0,
+        sortTokens: tokens,
       });
       totTokens += tokens;
-      if (hasCost) {
-        totCost += counts.costUSD ?? 0;
+      if (agg.hasCost) {
+        totCost += agg.costUSD;
         anyCost = true;
       }
+    }
+    providerRows.sort((a, b) => b.sortCost - a.sortCost || b.sortTokens - a.sortTokens);
+    for (const row of providerRows) {
+      rows.push({ provider: row.provider, tokens: row.tokens, model: row.model, price: row.price });
     }
   }
 
   if (rows.length === 0) {
-    console.log(`No usage recorded today (${today}).`);
+    console.log(`No usage recorded for ${window.label}.`);
     return;
   }
 
@@ -159,6 +223,6 @@ export async function todayCommand(opts: TodayOptions = {}): Promise<void> {
     isTotal: true,
   });
 
-  console.log(chalk.bold(`aitrack today (${today})`));
+  console.log(chalk.bold(`aitrack usage ${window.label}`));
   console.log(renderTable(rows));
 }

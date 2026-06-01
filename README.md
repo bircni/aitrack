@@ -20,7 +20,7 @@ Each machine pushes a single JSON file to a git repo _you_ control. Pull from an
 - 📊 **One picture of everything** — Claude Code + Codex + Cursor, merged across all your machines.
 - 🔒 **You own the data** — it lives in a git repo you create. No accounts, no telemetry, no third-party servers.
 - 🔑 **No API tokens for sync** — uses your local `git`, so whatever auth already works in your terminal (SSH keys, credential manager) just works.
-- ⚡ **Zero-setup preview** — run `npx aitrack tui` and see your local usage _before_ configuring anything.
+- ⚡ **Zero-setup preview** — run `npx aitrack show --tui` and see your local usage _before_ configuring anything.
 - 💰 **Real cost estimates** — per-model pricing applied to Claude Code token + cache usage.
 
 > **Synced via git:** Claude Code, Codex (OpenAI).
@@ -30,7 +30,7 @@ Each machine pushes a single JSON file to a git repo _you_ control. Pull from an
 
 ## See it
 
-A live terminal table (`aitrack tui`) — same data also renders to a PNG heatmap via `aitrack show`:
+A live terminal table (`aitrack show --tui`) — same data also renders to a PNG heatmap via `aitrack show`:
 
 ```text
 ┌─────────────┬──────┬────────┬────────┬────────┬───────────┬─────────┬────────────┐
@@ -43,7 +43,7 @@ A live terminal table (`aitrack tui`) — same data also renders to a PNG heatma
 └─────────────┴──────┴────────┴────────┴────────┴───────────┴─────────┴────────────┘
 ```
 
-Today at a glance (`aitrack today`):
+Today at a glance (`aitrack usage today`):
 
 ```text
 ┌─────────────┬────────┬───────────────────┬────────┐
@@ -64,9 +64,9 @@ Today at a glance (`aitrack today`):
 **Preview instantly — no setup required:**
 
 ```sh
-npx aitrack tui      # stats table from local Claude/Codex (+ Cursor if available)
-npx aitrack today    # today's usage, per provider + model
-npx aitrack show     # heatmap PNG from the same local-first read
+npx aitrack show --tui     # stats table from local Claude/Codex (+ Cursor if available)
+npx aitrack usage today    # today's usage, per provider + model
+npx aitrack show           # heatmap PNG from the same local-first read
 ```
 
 Your local data is staged at `~/.config/aitrack/pending/data/` so a later `init`/`sync` can adopt it into your repo.
@@ -95,17 +95,19 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 
 ## Commands
 
-| Command                   | What it does                                                                 |
-| ------------------------- | ---------------------------------------------------------------------------- |
-| `aitrack init`            | Interactive setup — provide your repo URL and clone it locally               |
-| `aitrack sync`            | Read local data, write it to the cloned repo, and push                       |
-| `aitrack show`            | Merge all sources and render a heatmap PNG (one row per provider by default) |
-| `aitrack tui`             | Stats table in the terminal (same merge as `show`, no PNG)                   |
-| `aitrack today`           | Today's usage as a table: provider / tokens / model / price                  |
-| `aitrack summary`         | Per-provider **monthly** token + cost totals to stdout                       |
-| `aitrack recompute-costs` | Refresh costs: re-read local JSONL; reprice other machines from stored cache |
+| Command                   | What it does                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `aitrack init`            | Interactive setup — provide your repo URL and clone it locally                |
+| `aitrack sync`            | Read local data, write it to the cloned repo, and push                        |
+| `aitrack show`            | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table) |
+| `aitrack usage today`     | Today's usage as a table: provider / tokens / model / price                   |
+| `aitrack usage week`      | Rolling 7-day usage table                                                     |
+| `aitrack usage month`     | Rolling 30-day usage table                                                    |
+| `aitrack usage year`      | Current calendar-year usage table                                             |
+| `aitrack usage all`       | All-time usage table                                                          |
+| `aitrack recompute-costs` | Refresh costs: re-read local JSONL; reprice other machines from stored cache  |
 
-**`show` flags:** `--all` (single merged heatmap), `--dark` (dark mode), `--no-cursor` (skip Cursor), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path). `--no-cursor` and `--year <year>` also work on `tui` and `summary`.
+**`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--no-cursor` (skip Cursor), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year). `--no-cursor` also works on every `usage` subcommand.
 
 ---
 
@@ -124,7 +126,7 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 ```
 
 - **Sync** uses a local git clone at `~/.config/aitrack/repo/` with your existing git credentials — ordinary pulls and pushes.
-- **`show` / `tui` always read fresh local Claude/Codex JSONL** on the current machine and merge in other machines' synced files. No `sync` needed to preview.
+- **`show` (PNG or `--tui`) always reads fresh local Claude/Codex JSONL** on the current machine and merges in other machines' synced files. No `sync` needed to preview.
 - Before `init`, local usage is staged in `~/.config/aitrack/pending/data/` and adopted on the next `init`/`sync`.
 - **Cursor** is loaded only on the current machine: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls Cursor's own CSV usage export over HTTPS. The token is used solely for that request — it is **never** written to your repo or sent anywhere else. Use `--no-cursor` to skip it.
 - **Heatmap intensity** anchors on the 90th-percentile day rather than the absolute max, so one huge day doesn't flatten the rest of the year.
