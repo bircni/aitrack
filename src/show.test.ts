@@ -293,6 +293,34 @@ describe('showCommand', () => {
     expect(day?.byModel['claude-sonnet-4'].costUSD).toBeCloseTo(4.5, 5);
   });
 
+  it('renders a terminal table and skips PNG generation when --tui is set', async () => {
+    mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
+    mocks.readDataFile.mockReturnValue({
+      hostname: 'other',
+      lastUpdated: 'now',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { 'claude-sonnet-4': { inputTokens: 1000, outputTokens: 500, costUSD: 1.5 } },
+            totals: { inputTokens: 1000, outputTokens: 500, costUSD: 1.5 },
+          },
+        },
+      },
+    });
+
+    await showCommand({ tui: true, noCursor: true });
+
+    expect(mocks.renderToPng).not.toHaveBeenCalled();
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.exec).not.toHaveBeenCalled();
+    const out = vi
+      .mocked(console.log)
+      .mock.calls.map((call) => String(call[0]))
+      .join('\n');
+    expect(out).toContain('aitrack stats');
+    expect(out).toContain('Claude Code');
+  });
+
   it('merges synced cost fields across machines and models', async () => {
     mocks.listDataFiles.mockReturnValue(['/repo/data/a.json', '/repo/data/b.json']);
     mocks.readDataFile
