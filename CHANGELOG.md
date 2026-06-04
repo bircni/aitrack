@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.0] - 2026-06-04
+
+
+
+### Chores
+
+- **deps:** Update dependencies
+
+
+### Features
+
+- **usage:** Add flexible time filters to the usage command
+
+
 ## [v0.2.0] - 2026-06-01
 
 
