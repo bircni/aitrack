@@ -23,7 +23,7 @@
     "cli"
   ],
   "type": "module",
-  "packageManager": "pnpm@11.3.0+sha512.2c403d6594527287672b1f7056343a1f7c3634036a67ffabfcc2b3d7595d843768f8787148d1b57cf7956c90606bbd192857c363af19e96d2d0ec9ec5741d215",
+  "packageManager": "pnpm@11.5.1+sha512.2c403d6594527287672b1f7056343a1f7c3634036a67ffabfcc2b3d7595d843768f8787148d1b57cf7956c90606bbd192857c363af19e96d2d0ec9ec5741d215",
   "engines": {
     "node": ">=22"
   },
@@ -58,7 +58,7 @@
     "@napi-rs/canvas": "^1.0.0",
     "better-sqlite3": "^12.10.0",
     "chalk": "^5.6.2",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "prompts": "^2.4.2"
   },
   "devDependencies": {
@@ -66,16 +66,16 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",
     "@types/prompts": "^2.4.9",
-    "@vitest/coverage-v8": "^4.1.7",
-    "eslint": "^10.4.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "^10.4.1",
     "eslint-config-prettier": "^10.1.8",
     "git-cliff": "^2.13.1",
     "globals": "^17.6.0",
     "jiti": "^2.7.0",
     "prettier": "^3.8.3",
-    "tsx": "^4.22.3",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.4",
-    "vitest": "^4.1.7"
+    "typescript-eslint": "^8.60.1",
+    "vitest": "^4.1.8"
   }
 }
