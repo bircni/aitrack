@@ -5,11 +5,30 @@ import { isCloned } from './git.js';
 import { toLocalDateString } from './dayMap.js';
 import type { DayMap } from './types.js';
 
-export type UsagePeriod = 'today' | 'week' | 'month' | 'year' | 'all';
+export type UsagePeriod =
+  | 'today'
+  | 'yesterday'
+  | 'week'
+  | 'month'
+  | 'year'
+  | 'all'
+  | 'thisweek'
+  | 'lastweek'
+  | 'thismonth'
+  | 'lastmonth'
+  | 'date'
+  | 'range'
+  | 'last';
 
-interface UsageOptions {
+export interface UsageOptions {
   period: UsagePeriod;
   noCursor?: boolean;
+  /** ISO date (YYYY-MM-DD) for 'date' period, or range start for 'range' */
+  from?: string;
+  /** ISO date (YYYY-MM-DD) range end for 'range' */
+  to?: string;
+  /** Number of days for 'last' period */
+  n?: number;
 }
 
 function fmt(n: number): string {
@@ -112,24 +131,97 @@ interface Window {
   label: string;
 }
 
-function computeWindow(period: UsagePeriod): Window {
+function computeWindow(opts: UsageOptions): Window {
   const today = new Date();
-  const end = toLocalDateString(today);
-  if (period === 'today') {
-    return { start: end, end, label: `today (${end})` };
+  const todayStr = toLocalDateString(today);
+
+  switch (opts.period) {
+    case 'today':
+      return { start: todayStr, end: todayStr, label: `today (${todayStr})` };
+
+    case 'yesterday': {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 1);
+      const s = toLocalDateString(d);
+      return { start: s, end: s, label: `yesterday (${s})` };
+    }
+
+    case 'date': {
+      if (!opts.from) throw new Error('from is required for date period');
+      return { start: opts.from, end: opts.from, label: opts.from };
+    }
+
+    case 'range': {
+      if (!opts.from || !opts.to) throw new Error('from and to are required for range period');
+      return { start: opts.from, end: opts.to, label: `${opts.from} → ${opts.to}` };
+    }
+
+    case 'thisweek': {
+      const daysFromMon = (today.getDay() + 6) % 7;
+      const mon = new Date(today);
+      mon.setDate(today.getDate() - daysFromMon);
+      const start = toLocalDateString(mon);
+      return { start, end: todayStr, label: `this week (${start} → ${todayStr})` };
+    }
+
+    case 'lastweek': {
+      const daysFromMon = (today.getDay() + 6) % 7;
+      const thisMon = new Date(today);
+      thisMon.setDate(today.getDate() - daysFromMon);
+      const lastSun = new Date(thisMon);
+      lastSun.setDate(thisMon.getDate() - 1);
+      const lastMon = new Date(thisMon);
+      lastMon.setDate(thisMon.getDate() - 7);
+      const start = toLocalDateString(lastMon);
+      const end = toLocalDateString(lastSun);
+      return { start, end, label: `last week (${start} → ${end})` };
+    }
+
+    case 'thismonth': {
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, '0');
+      const start = `${y}-${m}-01`;
+      return { start, end: todayStr, label: `this month (${start} → ${todayStr})` };
+    }
+
+    case 'lastmonth': {
+      const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
+      const start = toLocalDateString(firstDay);
+      const end = toLocalDateString(lastDay);
+      return { start, end, label: `last month (${start} → ${end})` };
+    }
+
+    case 'last': {
+      if (!opts.n) throw new Error('n is required for last period');
+      const d = new Date(today);
+      d.setDate(today.getDate() - (opts.n - 1));
+      const start = toLocalDateString(d);
+      return { start, end: todayStr, label: `last ${opts.n} days (${start} → ${todayStr})` };
+    }
+
+    case 'week': {
+      const d = new Date(today);
+      d.setDate(today.getDate() - 6);
+      const start = toLocalDateString(d);
+      return { start, end: todayStr, label: `last 7 days (${start} → ${todayStr})` };
+    }
+
+    case 'month': {
+      const d = new Date(today);
+      d.setDate(today.getDate() - 29);
+      const start = toLocalDateString(d);
+      return { start, end: todayStr, label: `last 30 days (${start} → ${todayStr})` };
+    }
+
+    case 'year': {
+      const year = today.getFullYear();
+      return { start: `${year}-01-01`, end: `${year}-12-31`, label: `${year}` };
+    }
+
+    case 'all':
+      return { start: '0000-01-01', end: '9999-12-31', label: 'all time' };
   }
-  if (period === 'all') {
-    return { start: '0000-01-01', end: '9999-12-31', label: 'all time' };
-  }
-  if (period === 'year') {
-    const year = today.getFullYear();
-    return { start: `${year}-01-01`, end: `${year}-12-31`, label: `${year}` };
-  }
-  const days = period === 'week' ? 7 : 30;
-  const startDate = new Date(today);
-  startDate.setDate(today.getDate() - (days - 1));
-  const start = toLocalDateString(startDate);
-  return { start, end, label: `last ${days} days (${start} → ${end})` };
 }
 
 interface ModelAgg {
@@ -169,7 +261,7 @@ export async function usageCommand(opts: UsageOptions): Promise<void> {
   }
 
   const reportData = loaded.providerData;
-  const window = computeWindow(opts.period);
+  const window = computeWindow(opts);
 
   const ordered = [
     ...PROVIDER_ORDER.filter((k) => reportData[k]),
