@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { parseMachineFile, validateMachineFile } from './validate.js';
 
 const validMachine = {

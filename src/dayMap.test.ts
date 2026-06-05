@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { DayEntry, DayMap } from './types.js';
+
 import {
   filterDayMapByYear,
   filterProviderDataByYear,
   getOrCreateDay,
   toLocalDateString,
 } from './dayMap.js';
+import type { DayEntry, DayMap } from './types.js';
 
 function emptyDay(): DayEntry {
   return { inputTokens: 0, outputTokens: 0, byModel: {} };

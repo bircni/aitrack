@@ -1,17 +1,18 @@
-import { writeFileSync } from 'fs';
-import { resolve } from 'path';
 import { exec } from 'child_process';
+import { writeFileSync } from 'fs';
 import { hostname } from 'os';
-import { tryLoadConfig, resolveMachineId } from './config.js';
-import { isCloned, tryPull, listDataFiles, readDataFile, writePendingMachineFile } from './git.js';
+import { resolve } from 'path';
+
+import { resolveMachineId, tryLoadConfig } from './config.js';
+import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
+import { isCloned, listDataFiles, readDataFile, tryPull, writePendingMachineFile } from './git.js';
 import { buildLocalMachineFile, machineHasData } from './localData.js';
-import { readCursorData } from './readers/cursor.js';
-import { estimateClaudeCostFromAggregateTokens } from './readers/claude.js';
 import { estimateCodexCostUSD } from './pricing/codex.js';
+import { estimateClaudeCostFromAggregateTokens } from './readers/claude.js';
+import { readCursorData } from './readers/cursor.js';
 import { mergeAllProviderDayMaps, renderToPng } from './render.js';
 import { renderTui } from './tui.js';
 import type { DayEntry, MachineFile, ProviderData, ProviderDay, TokenCounts } from './types.js';
-import { getOrCreateDay, filterProviderDataByYear } from './dayMap.js';
 
 // Resolve the per-model cost for one provider-day, backfilling claude_code rows
 // from aggregate token counts when sync wrote no costUSD (older data).

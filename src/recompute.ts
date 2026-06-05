@@ -1,13 +1,14 @@
-import { basename } from 'path';
-import { readFileSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
+import { readFileSync, writeFileSync } from 'fs';
+import { basename } from 'path';
+
 import { loadConfig, resolveMachineId } from './config.js';
-import { isCloned, LOCAL_REPO, listDataFiles, tryPull } from './git.js';
+import { isCloned, listDataFiles, LOCAL_REPO, tryPull } from './git.js';
 import { buildMachineData, machineHasData, readLocalProviderMaps } from './localData.js';
-import { parseMachineFile } from './validate.js';
-import { estimateClaudeCostFromStoredCounts } from './readers/claude.js';
 import { consumeClaudeFallbackHits } from './pricing/claude.js';
 import { consumeCodexFallbackHits, estimateCodexCostUSD } from './pricing/codex.js';
+import { estimateClaudeCostFromStoredCounts } from './readers/claude.js';
+import { parseMachineFile } from './validate.js';
 
 // Refresh costs using cache-aware token breakdown stored at sync time.
 // For this machine, re-reads local JSONL (same accuracy as sync). For other

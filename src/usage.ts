@@ -1,8 +1,9 @@
 import chalk from 'chalk';
-import { loadMergedProviderData, emptyUsageMessage } from './show.js';
+
 import { tryLoadConfig } from './config.js';
-import { isCloned } from './git.js';
 import { toLocalDateString } from './dayMap.js';
+import { isCloned } from './git.js';
+import { emptyUsageMessage, loadMergedProviderData } from './show.js';
 import type { DayMap } from './types.js';
 
 export type UsagePeriod =

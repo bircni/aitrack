@@ -30,9 +30,9 @@ import {
   listDataFiles,
   listPendingDataFiles,
   pull,
-  tryPull,
   readDataFile,
   removePendingMachineFile,
+  tryPull,
   writePendingMachineFile,
 } from './git.js';
 

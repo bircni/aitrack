@@ -1,9 +1,10 @@
-import prompts from 'prompts';
 import { mkdirSync } from 'fs';
-import { dirname, join } from 'path';
 import { hostname } from 'os';
+import { dirname, join } from 'path';
+import prompts from 'prompts';
+
 import { loadConfig, saveConfig } from './config.js';
-import { adoptPendingDataFiles, isCloned, cloneRepo, removeLocalClone, LOCAL_REPO } from './git.js';
+import { adoptPendingDataFiles, cloneRepo, isCloned, LOCAL_REPO, removeLocalClone } from './git.js';
 
 async function promptOverwrite(): Promise<boolean | undefined> {
   const answers = await prompts<'overwrite'>({

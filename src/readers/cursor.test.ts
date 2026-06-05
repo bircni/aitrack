@@ -1,8 +1,10 @@
-import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   aggregateCursorCsvToDayMap,
   getCursorStateDbPath,

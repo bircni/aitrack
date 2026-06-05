@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { buildMachineData, machineHasData } from './localData.js';
 import type { DayMap } from './types.js';
 

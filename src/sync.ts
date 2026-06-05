@@ -1,7 +1,8 @@
-import { mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+
 import { loadConfig, resolveMachineId } from './config.js';
-import { isCloned, LOCAL_REPO, pull, commitAndPush, removePendingMachineFile } from './git.js';
+import { commitAndPush, isCloned, LOCAL_REPO, pull, removePendingMachineFile } from './git.js';
 import { buildMachineData, readLocalProviderMaps } from './localData.js';
 import { consumeClaudeFallbackHits } from './pricing/claude.js';
 import { consumeCodexFallbackHits } from './pricing/codex.js';

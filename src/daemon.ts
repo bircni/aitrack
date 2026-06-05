@@ -1,9 +1,10 @@
 import { createServer, type Server } from 'node:http';
+
 import { tryLoadConfig } from './config.js';
 import { isCloned, tryPull } from './git.js';
-import { syncData } from './sync.js';
-import { emptyUsageMessage, loadMergedProviderData } from './show.js';
 import { renderToHtml } from './html.js';
+import { emptyUsageMessage, loadMergedProviderData } from './show.js';
+import { syncData } from './sync.js';
 
 const DEFAULT_PORT = 9089;
 const DEFAULT_INTERVAL = 120;

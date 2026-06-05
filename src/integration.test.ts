@@ -1,8 +1,9 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { hostname } from 'node:os';
 import { execSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { hostname } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted runs before module loading, so TEST_HOME is available in vi.mock factories below
 const TEST_HOME = vi.hoisted(() => {
@@ -24,10 +25,10 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...actual, exec: vi.fn() };
 });
 
-import { syncCommand } from './sync.js';
-import { showCommand } from './show.js';
 import { saveConfig } from './config.js';
 import { LOCAL_REPO } from './git.js';
+import { showCommand } from './show.js';
+import { syncCommand } from './sync.js';
 import type { MachineFile } from './types.js';
 
 // ── helpers ─────────────────────────────────────────────────────────────────

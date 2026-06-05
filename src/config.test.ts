@@ -1,6 +1,7 @@
-import { vi, describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted runs before any module is loaded, so its value is available in vi.mock factories
 const TEST_HOME = vi.hoisted(() => {
@@ -13,7 +14,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => TEST_HOME };
 });
 
-import { loadConfig, saveConfig, resolveMachineId, tryLoadConfig } from './config.js';
+import { loadConfig, resolveMachineId, saveConfig, tryLoadConfig } from './config.js';
 
 describe('config', () => {
   beforeAll(() => mkdirSync(TEST_HOME, { recursive: true }));

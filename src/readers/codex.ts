@@ -1,11 +1,12 @@
 import { createReadStream, existsSync } from 'fs';
 import { readdir } from 'fs/promises';
-import { createInterface } from 'readline';
-import { join, resolve } from 'path';
 import { homedir } from 'os';
-import type { DayMap } from '../types.js';
+import { join, resolve } from 'path';
+import { createInterface } from 'readline';
+
 import { getOrCreateDay, toLocalDateString } from '../dayMap.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
+import type { DayMap } from '../types.js';
 
 function getCodexPaths(): string[] {
   const paths = new Set<string>();
