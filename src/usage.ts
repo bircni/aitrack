@@ -136,8 +136,11 @@ function computeWindow(opts: UsageOptions): Window {
   const todayStr = toLocalDateString(today);
 
   switch (opts.period) {
-    case 'today':
-      return { start: todayStr, end: todayStr, label: `today (${todayStr})` };
+    case 'today': {
+      const localDate = today.toLocaleDateString();
+      const localTime = today.toLocaleTimeString();
+      return { start: todayStr, end: todayStr, label: `today (${localDate} ${localTime})` };
+    }
 
     case 'yesterday': {
       const d = new Date(today);
