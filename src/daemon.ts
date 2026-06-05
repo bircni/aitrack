@@ -46,11 +46,15 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
     noCursor: opts.noCursor,
   };
 
-  let cachedHtml = renderToHtml({}, [], {
-    dark: renderOpts.dark,
-    year: renderOpts.year,
-    emptyMessage: 'Loading...',
-  });
+  let cachedHtml = renderToHtml(
+    {},
+    {
+      dark: renderOpts.dark,
+      year: renderOpts.year,
+      emptyMessage: 'Loading...',
+    },
+  );
+  let hasRendered = false;
 
   const refresh = async (): Promise<void> => {
     try {
@@ -70,22 +74,29 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
 
       const lastUpdated = new Date();
       if (!loaded) {
+        // Don't overwrite a previously-good render with the empty state — a
+        // transient miss after we've shown real data shouldn't blank the page.
+        if (hasRendered) return;
         const config = tryLoadConfig();
-        cachedHtml = renderToHtml({}, [], {
-          dark: renderOpts.dark,
-          year: renderOpts.year,
-          lastUpdated,
-          emptyMessage: emptyUsageMessage(!config || !isCloned()),
-        });
+        cachedHtml = renderToHtml(
+          {},
+          {
+            dark: renderOpts.dark,
+            year: renderOpts.year,
+            lastUpdated,
+            emptyMessage: emptyUsageMessage(!config || !isCloned()),
+          },
+        );
         return;
       }
 
-      cachedHtml = renderToHtml(loaded.providerData, loaded.machineData, {
+      cachedHtml = renderToHtml(loaded.providerData, {
         dark: renderOpts.dark,
         all: renderOpts.all,
         year: renderOpts.year,
         lastUpdated,
       });
+      hasRendered = true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`aitrack daemon refresh failed: ${message}`);
@@ -96,7 +107,10 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
 
   const server: Server = createServer((req, res) => {
     if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
       res.end(cachedHtml);
       return;
     }
@@ -120,8 +134,9 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
 
   const shutdown = (): void => {
     clearInterval(refreshTimer);
-    server.close();
-    process.exit(0);
+    server.close(() => {
+      process.exit(0);
+    });
   };
 
   process.on('SIGINT', shutdown);

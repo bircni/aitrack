@@ -112,6 +112,7 @@ describe('daemonCommand', () => {
 
     expect(res.writeHead).toHaveBeenCalledWith(200, {
       'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
     });
     expect(chunks[0]).toContain('dashboard');
     expect(mocks.loadMergedProviderData).toHaveBeenCalled();

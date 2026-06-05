@@ -1,22 +1,23 @@
 import { filterProviderDataByYear } from './dayMap.js';
-import type { DayMap, MachineFile, ProviderData, RenderOptions } from './types.js';
+import type { DayMap, ProviderData, RenderOptions } from './types.js';
 import {
   buildHeatmapWeeks,
   computeModelStats,
   currentStreak,
   displayModelName,
+  fmt,
+  fmtUSD,
   formatMonthLabel,
+  formatPeakDate,
   getProviderTheme,
   longestStreak,
   mergeAllProviderDayMaps,
+  MONTHS,
   peakMonth,
   percentile,
+  PROVIDER_ORDER,
   tokenIntensityLevel,
 } from './render.js';
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-const PROVIDER_ORDER = ['claude_code', 'codex', 'cursor', 'gemini', 'opencode'];
 
 export interface HtmlRenderOptions extends RenderOptions {
   lastUpdated?: Date;
@@ -28,42 +29,8 @@ function escapeHtml(value: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function fmt(n: number): string {
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return String(n);
-}
-
-function fmtUSD(n: number): string {
-  if (n > 0 && n < 0.01) return '<$0.01';
-  return `$${n.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function formatPeakDate(date: string): string {
-  const [y, m, d] = date.split('-');
-  const monthIdx = parseInt(m, 10) - 1;
-  const monthShort = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return `${monthShort[monthIdx] ?? m} ${parseInt(d, 10)}, ${y}`;
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function activeProviders(layoutData: ProviderData, all: boolean): string[] {
@@ -124,6 +91,70 @@ function renderLegend(providerKey: string, dark: boolean): string {
   return theme.cells
     .map((color) => `<span class="legend-cell" style="background:${color}"></span>`)
     .join('');
+}
+
+interface ModelAgg {
+  inputTokens: number;
+  outputTokens: number;
+  costUSD: number;
+  hasCost: boolean;
+}
+
+function aggregateByModel(dayMap: DayMap): Map<string, ModelAgg> {
+  const byModel = new Map<string, ModelAgg>();
+  for (const day of dayMap.values()) {
+    for (const [model, counts] of Object.entries(day.byModel)) {
+      let agg = byModel.get(model);
+      if (!agg) {
+        agg = { inputTokens: 0, outputTokens: 0, costUSD: 0, hasCost: false };
+        byModel.set(model, agg);
+      }
+      agg.inputTokens += counts.inputTokens;
+      agg.outputTokens += counts.outputTokens;
+      if (counts.costUSD !== undefined) {
+        agg.costUSD += counts.costUSD;
+        agg.hasCost = true;
+      }
+    }
+  }
+  return byModel;
+}
+
+function renderUsageTable(providerKey: string, dayMap: DayMap): string {
+  const byModel = aggregateByModel(dayMap);
+  const rows = [...byModel.entries()]
+    .map(([model, agg]) => ({
+      model,
+      tokens: agg.inputTokens + agg.outputTokens,
+      cost: agg.costUSD,
+      hasCost: agg.hasCost,
+    }))
+    .filter((r) => r.tokens > 0 || r.hasCost)
+    .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens);
+
+  if (rows.length === 0) return '';
+
+  const anyCost = rows.some((r) => r.hasCost);
+  const totalTokens = rows.reduce((s, r) => s + r.tokens, 0);
+  const totalCost = rows.reduce((s, r) => s + r.cost, 0);
+
+  const bodyRows = rows
+    .map(
+      (r) =>
+        `<tr><td>${escapeHtml(displayModelName(r.model))}</td><td class="num">${escapeHtml(fmt(r.tokens))}</td><td class="num">${escapeHtml(r.hasCost ? fmtUSD(r.cost) : '—')}</td></tr>`,
+    )
+    .join('');
+
+  const costLabel = providerKey === 'cursor' ? 'Cost' : 'Est. cost';
+
+  return `<details class="usage-table" open>
+  <summary>Usage by model</summary>
+  <table>
+    <thead><tr><th>Model</th><th class="num">Tokens</th><th class="num">${escapeHtml(costLabel)}</th></tr></thead>
+    <tbody>${bodyRows}</tbody>
+    <tfoot><tr><td>Total</td><td class="num">${escapeHtml(fmt(totalTokens))}</td><td class="num">${escapeHtml(anyCost ? fmtUSD(totalCost) : '—')}</td></tr></tfoot>
+  </table>
+</details>`;
 }
 
 function renderProviderSection(
@@ -208,9 +239,9 @@ function renderProviderSection(
   </div>
   <div class="heatmap-wrap">
     <div class="day-labels">
-      <span>Mon</span>
-      <span>Wed</span>
-      <span>Fri</span>
+      <span style="grid-row:2">Mon</span>
+      <span style="grid-row:4">Wed</span>
+      <span style="grid-row:6">Fri</span>
     </div>
     <div class="heatmap-area">
       <div class="month-row">${renderMonthLabels(weeks)}</div>
@@ -223,6 +254,7 @@ function renderProviderSection(
     </div>
   </div>
   <div class="bottom-stats">${bottomHtml}</div>
+  ${renderUsageTable(providerKey, dayMap)}
 </section>`;
 }
 
@@ -234,6 +266,8 @@ function pageStyles(dark: boolean): string {
         muted: '#7d8590',
         divider: '#30363d',
         sectionBg: '#161b22',
+        tableHeaderBg: '#1f2630',
+        tableRowAlt: '#1a2027',
       }
     : {
         bg: '#ffffff',
@@ -241,6 +275,8 @@ function pageStyles(dark: boolean): string {
         muted: '#888888',
         divider: '#e0e0e0',
         sectionBg: '#fafafa',
+        tableHeaderBg: '#f0f0f0',
+        tableRowAlt: '#f6f6f6',
       };
 
   return `:root {
@@ -249,6 +285,8 @@ function pageStyles(dark: boolean): string {
   --muted: ${palette.muted};
   --divider: ${palette.divider};
   --section-bg: ${palette.sectionBg};
+  --table-header-bg: ${palette.tableHeaderBg};
+  --table-row-alt: ${palette.tableRowAlt};
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -296,15 +334,15 @@ body {
 .stat-value-sm { font-size: 13px; font-weight: 700; margin-top: 4px; }
 .heatmap-wrap { display: flex; gap: 8px; overflow-x: auto; }
 .day-labels {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-around;
+  display: grid;
+  grid-template-rows: repeat(7, 12px);
+  row-gap: 3px;
   font-size: 10px;
   color: var(--muted);
   padding-top: 28px;
-  height: calc(28px + 7 * 15px);
   width: 28px;
   text-align: right;
+  align-items: center;
 }
 .heatmap-area { flex: 1; min-width: 0; }
 .month-row {
@@ -342,50 +380,48 @@ body {
   padding-top: 16px;
   border-top: 1px solid var(--divider);
 }
-.bottom-stat .stat-label { margin-bottom: 4px; }`;
+.bottom-stat .stat-label { margin-bottom: 4px; }
+.usage-table {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+.usage-table summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.usage-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.usage-table th, .usage-table td {
+  padding: 6px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--divider);
+}
+.usage-table th {
+  background: var(--table-header-bg);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.usage-table tbody tr:nth-child(even) { background: var(--table-row-alt); }
+.usage-table tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--divider);
+  border-bottom: none;
+}
+.usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }`;
 }
 
-export function renderToHtml(
-  providerData: ProviderData,
-  _machineData: MachineFile[],
-  { dark = false, all = false, year, lastUpdated, emptyMessage }: HtmlRenderOptions = {},
-): string {
-  const filtered = year !== undefined ? filterProviderDataByYear(providerData, year) : providerData;
-  const weeks = buildHeatmapWeeks(year);
-  const layoutData: ProviderData = all ? { all: mergeAllProviderDayMaps(filtered) } : filtered;
-  const providers = activeProviders(layoutData, all);
-
-  const title = year !== undefined ? `aitrack (${String(year)})` : 'aitrack';
-  const updatedLine = lastUpdated ? `Last updated: ${lastUpdated.toLocaleString()}` : '';
-
-  if (providers.length === 0) {
-    const message = emptyMessage ?? 'No usage data found.';
-    return `<!DOCTYPE html>
-<html lang="en"${dark ? ' class="dark"' : ''}>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title>
-<style>${pageStyles(dark)}</style>
-</head>
-<body>
-<header class="page-header">
-  <h1>${escapeHtml(title)}</h1>
-  ${updatedLine ? `<p class="page-meta">${escapeHtml(updatedLine)}</p>` : ''}
-</header>
-<div class="empty-state">${escapeHtml(message)}</div>
-</body>
-</html>`;
-  }
-
-  const sections = providers
-    .map((key) => {
-      const dayMap = layoutData[key];
-      if (dayMap === undefined) return '';
-      return renderProviderSection(key, dayMap, weeks, dark);
-    })
-    .join('');
-
+function pageShell(title: string, dark: boolean, updatedLine: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="en"${dark ? ' class="dark"' : ''}>
 <head>
@@ -399,7 +435,40 @@ export function renderToHtml(
   <h1>${escapeHtml(title)}</h1>
   ${updatedLine ? `<p class="page-meta">${escapeHtml(updatedLine)}</p>` : ''}
 </header>
-${sections}
+${body}
 </body>
 </html>`;
+}
+
+export function renderToHtml(
+  providerData: ProviderData,
+  { dark = false, all = false, year, lastUpdated, emptyMessage }: HtmlRenderOptions = {},
+): string {
+  const filtered = year !== undefined ? filterProviderDataByYear(providerData, year) : providerData;
+  const weeks = buildHeatmapWeeks(year);
+  const layoutData: ProviderData = all ? { all: mergeAllProviderDayMaps(filtered) } : filtered;
+  const providers = activeProviders(layoutData, all);
+
+  const title = year !== undefined ? `aitrack (${String(year)})` : 'aitrack';
+  const updatedLine = lastUpdated ? `Last updated: ${lastUpdated.toLocaleString()}` : '';
+
+  if (providers.length === 0) {
+    const message = emptyMessage ?? 'No usage data found.';
+    return pageShell(
+      title,
+      dark,
+      updatedLine,
+      `<div class="empty-state">${escapeHtml(message)}</div>`,
+    );
+  }
+
+  const sections = providers
+    .map((key) => {
+      const dayMap = layoutData[key];
+      if (dayMap === undefined) return '';
+      return renderProviderSection(key, dayMap, weeks, dark);
+    })
+    .join('');
+
+  return pageShell(title, dark, updatedLine, sections);
 }

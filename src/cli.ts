@@ -213,42 +213,46 @@ usage
     runUsage({ period: 'all', noCursor: opts.cursor === false });
   });
 
+const parseIntArg = (value: string): number => {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) throw new Error(`Expected an integer, got: ${value}`);
+  return n;
+};
+
 program
   .command('daemon')
   .description('Run a local HTTP dashboard that refreshes usage data on an interval')
-  .option('--port <port>', 'HTTP listen port', parseInt)
-  .option('--interval <seconds>', 'seconds between data refresh ticks', parseInt)
+  .option('--port <port>', 'HTTP listen port', parseIntArg)
+  .option('--interval <seconds>', 'seconds between data refresh ticks', parseIntArg)
   .option('--host <host>', 'bind address', '127.0.0.1')
   .option('--sync', 'pull and push local data on each refresh tick')
   .option('--no-sync', 'only pull remote data on each refresh tick')
   .option('--dark', 'dark mode dashboard')
   .option('--no-cursor', 'skip local Cursor usage (no state.vscdb / CSV export)')
   .option('--all', 'single merged heatmap across all providers instead of one row per provider')
-  .option('--year <year>', 'only include days from this calendar year', parseInt)
+  .option('--year <year>', 'only include days from this calendar year', parseIntArg)
   .action(
     (opts: {
       port?: number;
       interval?: number;
       host?: string;
       sync?: boolean;
-      noSync?: boolean;
       dark?: boolean;
       cursor?: boolean;
       all?: boolean;
       year?: number;
     }) => {
-      let sync: boolean | undefined;
-      if (opts.sync) sync = true;
-      else if (opts.noSync) sync = false;
+      // Commander collapses --sync/--no-sync into a single opts.sync tri-state
+      // (true | false | undefined). undefined means "fall back to config default".
       daemonCommand({
-        port: Number.isFinite(opts.port) ? opts.port : undefined,
-        interval: Number.isFinite(opts.interval) ? opts.interval : undefined,
+        port: opts.port,
+        interval: opts.interval,
         host: opts.host,
-        sync,
+        sync: opts.sync,
         dark: opts.dark,
         all: opts.all,
         noCursor: opts.cursor === false,
-        year: Number.isFinite(opts.year) ? opts.year : undefined,
+        year: opts.year,
       }).catch((err: unknown) => {
         console.error(errorMessage(err));
         process.exit(1);

@@ -24,6 +24,7 @@ export async function syncData(opts: SyncDataOptions = {}): Promise<void> {
   }
   pull();
 
+  // Cursor usage is merged at `show` time only (local CSV export); it is never written to git.
   if (!quiet) {
     console.log('Reading local data...');
   }
@@ -52,6 +53,8 @@ export async function syncData(opts: SyncDataOptions = {}): Promise<void> {
   const freshData = buildMachineData(host, { claude_code: claudeData, codex: codexData });
   const dataFilePath = join(dataDir, `${host}.json`);
 
+  // Only write if the usage data changed — avoids a spurious commit on every run
+  // (lastUpdated would otherwise always make the file dirty).
   let existingDays: MachineFile['days'] | null = null;
   try {
     const raw = readFileSync(dataFilePath, 'utf8');

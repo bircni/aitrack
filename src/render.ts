@@ -24,7 +24,22 @@ const SEC_PAD_BOT = 28;
 const SECTION_H =
   SEC_PAD_TOP + HEADER_H + DIVIDER_H + MONTH_H + GRID_H + LEGEND_H + STATS_H + SEC_PAD_BOT;
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const PROVIDER_ORDER = ['claude_code', 'codex', 'cursor', 'gemini', 'opencode'];
+
+export const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 // ── Themes ────────────────────────────────────────────────────────────────
 
@@ -91,7 +106,7 @@ const PALETTE: Record<'light' | 'dark', Palette> = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function fmt(n: number): string {
+export function fmt(n: number): string {
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
@@ -116,7 +131,7 @@ export function displayModelName(model: string): string {
   return cleaned;
 }
 
-function fmtUSD(n: number): string {
+export function fmtUSD(n: number): string {
   if (n > 0 && n < 0.01) return '<$0.01';
   return `$${n.toLocaleString('en-US', {
     minimumFractionDigits: 2,
@@ -350,35 +365,18 @@ function since30Days(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-const MONTH_SHORT = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-function formatPeakDate(date: string): string {
+export function formatPeakDate(date: string): string {
   // "2026-05-17" -> "May 17, 2026"
   const [y, m, d] = date.split('-');
   const monthIdx = parseInt(m, 10) - 1;
-  return `${MONTH_SHORT[monthIdx] ?? m} ${parseInt(d, 10)}, ${y}`;
+  return `${MONTHS[monthIdx] ?? m} ${parseInt(d, 10)}, ${y}`;
 }
 
-function formatMonthLabel(month: string): string {
+export function formatMonthLabel(month: string): string {
   const [y, m] = month.split('-');
   const monthIdx = parseInt(m, 10) - 1;
-  return `${MONTH_SHORT[monthIdx] ?? m} ${y}`;
+  return `${MONTHS[monthIdx] ?? m} ${y}`;
 }
-
-export { formatMonthLabel };
 
 // ── Drawing ────────────────────────────────────────────────────────────────
 
@@ -589,12 +587,11 @@ export function renderToPng(
     ? { all: mergeAllProviderDayMaps(providerData) }
     : providerData;
 
-  const providerOrder = ['claude_code', 'codex', 'cursor', 'gemini', 'opencode'];
   let activeProviders: string[];
   if (all) {
     activeProviders = (layoutData.all?.size ?? 0) > 0 ? ['all'] : [];
   } else {
-    activeProviders = providerOrder.filter((k) => (layoutData[k]?.size ?? 0) > 0);
+    activeProviders = PROVIDER_ORDER.filter((k) => (layoutData[k]?.size ?? 0) > 0);
     for (const k of Object.keys(layoutData)) {
       if (!activeProviders.includes(k) && (layoutData[k]?.size ?? 0) > 0) activeProviders.push(k);
     }
