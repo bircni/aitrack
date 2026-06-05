@@ -53,6 +53,17 @@ describe('git helpers', () => {
     );
   });
 
+  it('tryPull with quiet does not log when pulling', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    mocks.execSync
+      .mockReturnValueOnce(Buffer.from('refs/heads/main'))
+      .mockReturnValueOnce(Buffer.from(''));
+
+    tryPull({ quiet: true });
+
+    expect(console.log).not.toHaveBeenCalled();
+  });
+
   it('tryPull continues silently when pull fails', () => {
     mocks.execSync.mockImplementation(() => {
       throw new Error('network down');

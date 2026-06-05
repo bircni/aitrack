@@ -42,13 +42,15 @@ export function pull(): void {
   git('pull --ff-only --quiet');
 }
 
-export function tryPull(): void {
+export function tryPull(opts?: { quiet?: boolean }): void {
   try {
     const refs = execSync('git ls-remote --heads origin', { cwd: LOCAL_REPO, stdio: 'pipe' })
       .toString()
       .trim();
     if (!refs) return;
-    console.log('Pulling latest from remote...');
+    if (!opts?.quiet) {
+      console.log('Pulling latest from remote...');
+    }
     git('pull --ff-only --quiet');
   } catch {
     // Offline or unreachable — continue with the local clone.

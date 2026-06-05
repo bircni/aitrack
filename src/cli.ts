@@ -8,6 +8,7 @@ import { showCommand } from './show.js';
 import { initCommand } from './init.js';
 import { recomputeCostsCommand } from './recompute.js';
 import { usageCommand, type UsageOptions } from './usage.js';
+import { daemonCommand } from './daemon.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -211,6 +212,49 @@ usage
   .action((opts: { cursor?: boolean }) => {
     runUsage({ period: 'all', noCursor: opts.cursor === false });
   });
+
+program
+  .command('daemon')
+  .description('Run a local HTTP dashboard that refreshes usage data on an interval')
+  .option('--port <port>', 'HTTP listen port', parseInt)
+  .option('--interval <seconds>', 'seconds between data refresh ticks', parseInt)
+  .option('--host <host>', 'bind address', '127.0.0.1')
+  .option('--sync', 'pull and push local data on each refresh tick')
+  .option('--no-sync', 'only pull remote data on each refresh tick')
+  .option('--dark', 'dark mode dashboard')
+  .option('--no-cursor', 'skip local Cursor usage (no state.vscdb / CSV export)')
+  .option('--all', 'single merged heatmap across all providers instead of one row per provider')
+  .option('--year <year>', 'only include days from this calendar year', parseInt)
+  .action(
+    (opts: {
+      port?: number;
+      interval?: number;
+      host?: string;
+      sync?: boolean;
+      noSync?: boolean;
+      dark?: boolean;
+      cursor?: boolean;
+      all?: boolean;
+      year?: number;
+    }) => {
+      let sync: boolean | undefined;
+      if (opts.sync) sync = true;
+      else if (opts.noSync) sync = false;
+      daemonCommand({
+        port: Number.isFinite(opts.port) ? opts.port : undefined,
+        interval: Number.isFinite(opts.interval) ? opts.interval : undefined,
+        host: opts.host,
+        sync,
+        dark: opts.dark,
+        all: opts.all,
+        noCursor: opts.cursor === false,
+        year: Number.isFinite(opts.year) ? opts.year : undefined,
+      }).catch((err: unknown) => {
+        console.error(errorMessage(err));
+        process.exit(1);
+      });
+    },
+  );
 
 program
   .command('recompute-costs')

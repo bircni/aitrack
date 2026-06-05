@@ -35,10 +35,20 @@ export interface MachineFile {
   days: Record<string, Record<string, ProviderDay>>;
 }
 
+export interface DaemonConfig {
+  /** When true, run sync (pull + push) on each daemon refresh tick. */
+  sync?: boolean;
+  /** HTTP listen port for the daemon dashboard. */
+  port?: number;
+  /** Seconds between data refresh ticks. */
+  interval?: number;
+}
+
 export interface Config {
   repoUrl: string;
   /** Stable machine identifier for data/{machineId}.json; defaults to os.hostname(). */
   machineId?: string;
+  daemon?: DaemonConfig;
 }
 
 export interface RenderOptions {
