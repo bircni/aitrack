@@ -1,8 +1,8 @@
-import { createReadStream, existsSync } from 'fs';
-import { readdir } from 'fs/promises';
-import { homedir } from 'os';
-import { join, resolve } from 'path';
-import { createInterface } from 'readline';
+import { createReadStream, existsSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { createInterface } from 'node:readline';
 
 import { getOrCreateDay, toLocalDateString } from '../dayMap.js';
 import type { DayMap, TokenCounts } from '../types.js';
@@ -50,7 +50,6 @@ interface ClaudeEntry {
 import { findClaudePricing } from '../pricing/claude.js';
 
 // Re-export for backwards compatibility with existing test imports.
-export const findPricing = findClaudePricing;
 
 export function estimateClaudeCostUSD(
   model: string,
@@ -225,3 +224,5 @@ export async function readClaudeData(): Promise<DayMap> {
 
   return allDays;
 }
+
+export { findClaudePricing as findPricing } from '../pricing/claude.js';

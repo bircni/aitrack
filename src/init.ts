@@ -1,6 +1,7 @@
-import { mkdirSync } from 'fs';
-import { hostname } from 'os';
-import { dirname, join } from 'path';
+import { mkdirSync } from 'node:fs';
+import { hostname } from 'node:os';
+import { dirname, join } from 'node:path';
+
 import prompts from 'prompts';
 
 import { loadConfig, saveConfig } from './config.js';

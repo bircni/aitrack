@@ -214,7 +214,7 @@ function activeProviderKeys(providerData: ProviderData): string[] {
 
 export function renderTui(providerData: ProviderData, opts: TuiOptions = {}): string {
   const filtered =
-    opts.year !== undefined ? filterProviderDataByYear(providerData, opts.year) : providerData;
+    opts.year === undefined ? providerData : filterProviderDataByYear(providerData, opts.year);
 
   let rows: StatsRow[];
   if (opts.all) {
@@ -234,9 +234,9 @@ export function renderTui(providerData: ProviderData, opts: TuiOptions = {}): st
   if (rows.length === 0) return '';
 
   const title =
-    opts.year !== undefined
-      ? chalk.bold(`aitrack stats (${opts.year})`)
-      : chalk.bold('aitrack stats');
+    opts.year === undefined
+      ? chalk.bold('aitrack stats')
+      : chalk.bold(`aitrack stats (${opts.year})`);
   const subtitle = chalk.dim('Streak = current / longest (days)');
 
   return [title, subtitle, '', renderTable(rows, Boolean(opts.dark))].join('\n');

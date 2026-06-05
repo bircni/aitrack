@@ -25,8 +25,8 @@ function packageVersion(): string {
 }
 
 function runUsage(opts: UsageOptions): void {
-  usageCommand(opts).catch((err: unknown) => {
-    console.error(errorMessage(err));
+  usageCommand(opts).catch((error: unknown) => {
+    console.error(errorMessage(error));
     process.exit(1);
   });
 }
@@ -47,8 +47,8 @@ program
   .command('init')
   .description('Interactive setup: configure git remote and clone repo')
   .action(() =>
-    initCommand().catch((err: unknown) => {
-      console.error(errorMessage(err));
+    initCommand().catch((error: unknown) => {
+      console.error(errorMessage(error));
       process.exit(1);
     }),
   );
@@ -57,8 +57,8 @@ program
   .command('sync')
   .description('Read local AI usage data and push to git repo')
   .action(() =>
-    syncCommand().catch((err: unknown) => {
-      console.error(errorMessage(err));
+    syncCommand().catch((error: unknown) => {
+      console.error(errorMessage(error));
       process.exit(1);
     }),
   );
@@ -91,8 +91,8 @@ program
         noCursor: opts.cursor === false,
         year: Number.isFinite(opts.year) ? opts.year : undefined,
         tui: opts.tui,
-      }).catch((err: unknown) => {
-        console.error(errorMessage(err));
+      }).catch((error: unknown) => {
+        console.error(errorMessage(error));
         process.exit(1);
       }),
   );
@@ -239,8 +239,8 @@ program
         all: opts.all,
         noCursor: opts.cursor === false,
         year: opts.year,
-      }).catch((err: unknown) => {
-        console.error(errorMessage(err));
+      }).catch((error: unknown) => {
+        console.error(errorMessage(error));
         process.exit(1);
       });
     },
@@ -285,8 +285,8 @@ program
         sort,
         noCursor: opts.cursor === false,
         year: opts.year,
-      }).catch((err: unknown) => {
-        console.error(errorMessage(err));
+      }).catch((error: unknown) => {
+        console.error(errorMessage(error));
         process.exit(1);
       });
     },
@@ -296,8 +296,8 @@ program
   .command('machines')
   .description('List all machines synced to the repo with totals, last sync, and active providers')
   .action(() =>
-    machinesCommand().catch((err: unknown) => {
-      console.error(errorMessage(err));
+    machinesCommand().catch((error: unknown) => {
+      console.error(errorMessage(error));
       process.exit(1);
     }),
   );
@@ -308,8 +308,8 @@ program
     'Refresh costs: re-read local JSONL on this machine; reprice other machines from stored cache breakdown',
   )
   .action(() =>
-    recomputeCostsCommand().catch((err: unknown) => {
-      console.error(errorMessage(err));
+    recomputeCostsCommand().catch((error: unknown) => {
+      console.error(errorMessage(error));
       process.exit(1);
     }),
   );

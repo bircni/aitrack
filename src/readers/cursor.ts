@@ -159,7 +159,7 @@ async function readCursorAuthState(databasePath: string): Promise<CursorAuthStat
 function decodeJwtPayload(token: string): { sub?: string } | null {
   const encodedPayload = token.split('.')[1];
   if (!encodedPayload) return null;
-  const base64 = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
+  const base64 = encodedPayload.replaceAll('-', '+').replaceAll('_', '/');
   const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
   try {
     return JSON.parse(Buffer.from(padded, 'base64').toString('utf8')) as { sub?: string };
@@ -280,9 +280,9 @@ function parseCsvLine(line: string): string[] {
 
 function createCursorCsvRow(headers: string[], values: string[]): CursorCsvRow {
   const row: Record<string, string> = {};
-  headers.forEach((header, index) => {
+  for (const [index, header] of headers.entries()) {
     row[header] = values[index] ?? '';
-  });
+  }
   return row;
 }
 
@@ -377,8 +377,10 @@ export async function readCursorData(): Promise<DayMap> {
   let authState: CursorAuthState;
   try {
     authState = await readCursorAuthState(databasePath);
-  } catch (e) {
-    console.warn(`aitrack: Cursor skipped — could not read ${databasePath}: ${errorMessage(e)}`);
+  } catch (error) {
+    console.warn(
+      `aitrack: Cursor skipped — could not read ${databasePath}: ${errorMessage(error)}`,
+    );
     return new Map();
   }
 
@@ -390,8 +392,8 @@ export async function readCursorData(): Promise<DayMap> {
   let response: Response;
   try {
     response = await fetchCursorUsageCsv(authState.accessToken);
-  } catch (e) {
-    console.warn(`aitrack: Cursor skipped — ${errorMessage(e)}`);
+  } catch (error) {
+    console.warn(`aitrack: Cursor skipped — ${errorMessage(error)}`);
     return new Map();
   }
 

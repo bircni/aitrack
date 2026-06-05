@@ -118,14 +118,14 @@ export function fmt(n: number): string {
 export function displayModelName(model: string): string {
   const cleaned = model.replace(/-\d{8}$/, '').replace(/^claude-/, '');
   for (const family of ['opus', 'sonnet', 'haiku']) {
-    const re = new RegExp(`^${family}-(\\d+)-(\\d+)$`);
+    const re = new RegExp(String.raw`^${family}-(\d+)-(\d+)$`);
     const m = re.exec(cleaned);
     if (m) return `${family[0].toUpperCase()}${family.slice(1)} ${m[1]}.${m[2]}`;
   }
   const gpt = /^gpt-([\d.]+)(?:-(.+))?$/.exec(cleaned);
   if (gpt) {
     const suffix = gpt[2]
-      ? ' ' + gpt[2].replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      ? ' ' + gpt[2].replaceAll('-', ' ').replaceAll(/\b\w/g, (c) => c.toUpperCase())
       : '';
     return `GPT-${gpt[1]}${suffix}`;
   }
@@ -435,7 +435,7 @@ function drawSection(
   ];
   const colW = 112;
   const statsRight = LEFT + GRID_W;
-  statCols.forEach((col, i) => {
+  for (const [i, col] of statCols.entries()) {
     const cx = statsRight - (statCols.length - 1 - i) * colW;
     ctx.fillStyle = C.label;
     ctx.font = '9px Arial';
@@ -445,7 +445,7 @@ function drawSection(
     ctx.font = 'bold 16px Arial';
     ctx.fillText(col.value, cx, y + 22);
     ctx.textAlign = 'left';
-  });
+  }
 
   y += HEADER_H;
 
@@ -458,8 +458,8 @@ function drawSection(
   ctx.fillStyle = C.muted;
   ctx.font = '11px Arial';
   let lastMonth = -1;
-  for (let w = 0; w < weeks.length; w++) {
-    const first = weeks[w].find((d) => d !== null);
+  for (const [w, week] of weeks.entries()) {
+    const first = week.find((d) => d !== null);
     if (!first) continue;
     const month = parseInt(first.slice(5, 7)) - 1;
     if (month !== lastMonth) {
@@ -480,9 +480,9 @@ function drawSection(
   ctx.textAlign = 'left';
 
   // Grid
-  for (let w = 0; w < weeks.length; w++) {
+  for (const [w, week] of weeks.entries()) {
     for (let d = 0; d < 7; d++) {
-      const dateStr = weeks[w][d] ?? null;
+      const dateStr = week[d] ?? null;
       const x = LEFT + w * STEP;
       const cellY = y + d * STEP;
       const rec = dateStr ? dayMap.get(dateStr) : null;
@@ -535,12 +535,12 @@ function drawSection(
       label: 'PEAK MONTH',
       value: peakMo ? `${formatMonthLabel(peakMo.month)} (${fmt(peakMo.tokens)})` : '—',
     },
-    { label: 'CURRENT STREAK', value: `${cs} day${cs !== 1 ? 's' : ''}` },
-    { label: 'LONGEST STREAK', value: `${ls} day${ls !== 1 ? 's' : ''}` },
+    { label: 'CURRENT STREAK', value: `${cs} day${cs === 1 ? '' : 's'}` },
+    { label: 'LONGEST STREAK', value: `${ls} day${ls === 1 ? '' : 's'}` },
   ];
 
   const bColW = GRID_W / bottomStats.length;
-  bottomStats.forEach((stat, i) => {
+  for (const [i, stat] of bottomStats.entries()) {
     const bx = LEFT + i * bColW;
     ctx.fillStyle = C.label;
     ctx.font = '9px Arial';
@@ -548,7 +548,7 @@ function drawSection(
     ctx.fillStyle = C.value;
     ctx.font = 'bold 13px Arial';
     ctx.fillText(stat.value, bx, y + 28);
-  });
+  }
 }
 
 // ── Entry point ────────────────────────────────────────────────────────────
@@ -607,12 +607,12 @@ export function renderToPng(
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, TOTAL_W, totalH);
 
-  activeProviders.forEach((key, i) => {
+  for (const [i, key] of activeProviders.entries()) {
     const dayMap = layoutData[key];
     if (dayMap !== undefined) {
       drawSection(ctx, key, dayMap, weeks, CANVAS_PAD + i * SECTION_H, mode, C);
     }
-  });
+  }
 
   return canvas.toBuffer('image/png');
 }

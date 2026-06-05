@@ -223,7 +223,7 @@ export async function topCommand(opts: TopOptions): Promise<void> {
         cost: fmtUSD(d.cost),
       };
     });
-    const yearSuffix = opts.year !== undefined ? ` (${String(opts.year)})` : '';
+    const yearSuffix = opts.year === undefined ? '' : ` (${String(opts.year)})`;
     console.log(chalk.bold(`Top ${String(opts.limit)} days by ${opts.sort}${yearSuffix}`));
     console.log(renderTable(rows, { label: 'Date', sub: 'Top provider' }));
     return;
@@ -242,7 +242,7 @@ export async function topCommand(opts: TopOptions): Promise<void> {
     tokens: fmt(m.tokens),
     cost: fmtUSD(m.cost),
   }));
-  const yearSuffix = opts.year !== undefined ? ` (${String(opts.year)})` : '';
+  const yearSuffix = opts.year === undefined ? '' : ` (${String(opts.year)})`;
   console.log(chalk.bold(`Top ${String(opts.limit)} models by ${opts.sort}${yearSuffix}`));
   console.log(renderTable(rows, { label: 'Model', sub: 'Provider' }));
 }

@@ -44,13 +44,13 @@ function makeMachine(
           m: {
             inputTokens: item.input,
             outputTokens: item.output,
-            ...(item.cost !== undefined ? { costUSD: item.cost } : {}),
+            ...(item.cost === undefined ? {} : { costUSD: item.cost }),
           },
         },
         totals: {
           inputTokens: item.input,
           outputTokens: item.output,
-          ...(item.cost !== undefined ? { costUSD: item.cost } : {}),
+          ...(item.cost === undefined ? {} : { costUSD: item.cost }),
         },
       };
     }

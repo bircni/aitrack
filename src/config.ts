@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { homedir, hostname } from 'os';
-import { join } from 'path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir, hostname } from 'node:os';
+import { join } from 'node:path';
 
 import type { Config } from './types.js';
 

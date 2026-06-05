@@ -9,7 +9,7 @@ const TEST_HOME = vi.hoisted(() => {
 });
 
 vi.mock('os', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('os')>();
+  const actual = await importOriginal<typeof import('node:os')>();
   return { ...actual, homedir: () => TEST_HOME };
 });
 
@@ -59,8 +59,8 @@ describe('readClaudeData', () => {
       outputTokens: 13,
       byModel: { claude: { inputTokens: 30, outputTokens: 13 } },
     });
-    expect(result.get('2024-01-15')?.costUSD).toBeCloseTo(0.000285);
-    expect(result.get('2024-01-15')?.byModel.claude?.costUSD).toBeCloseTo(0.000285);
+    expect(result.get('2024-01-15')?.costUSD).toBeCloseTo(0.000_285);
+    expect(result.get('2024-01-15')?.byModel.claude?.costUSD).toBeCloseTo(0.000_285);
   });
 
   it('deduplicates messages across multiple discovered roots', async () => {

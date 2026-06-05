@@ -6,14 +6,14 @@ function tokenCountFields(counts: TokenCounts): TokenCounts {
   return {
     inputTokens: counts.inputTokens,
     outputTokens: counts.outputTokens,
-    ...(counts.rawInputTokens !== undefined ? { rawInputTokens: counts.rawInputTokens } : {}),
-    ...(counts.cachedInputTokens !== undefined
-      ? { cachedInputTokens: counts.cachedInputTokens }
-      : {}),
-    ...(counts.cacheCreationInputTokens !== undefined
-      ? { cacheCreationInputTokens: counts.cacheCreationInputTokens }
-      : {}),
-    ...(counts.costUSD !== undefined ? { costUSD: counts.costUSD } : {}),
+    ...(counts.rawInputTokens === undefined ? {} : { rawInputTokens: counts.rawInputTokens }),
+    ...(counts.cachedInputTokens === undefined
+      ? {}
+      : { cachedInputTokens: counts.cachedInputTokens }),
+    ...(counts.cacheCreationInputTokens === undefined
+      ? {}
+      : { cacheCreationInputTokens: counts.cacheCreationInputTokens }),
+    ...(counts.costUSD === undefined ? {} : { costUSD: counts.costUSD }),
   };
 }
 

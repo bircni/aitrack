@@ -15,23 +15,23 @@ export interface CodexPricing {
 // Models currently listed on developers.openai.com/api/docs/pricing.
 // Verified by `pnpm run pricing:check`.
 export const CODEX_PRICING_CURRENT: Record<string, CodexPricing> = {
-  'gpt-5.5': { inputPerMillion: 5.0, outputPerMillion: 30.0 },
-  'gpt-5.4': { inputPerMillion: 2.5, outputPerMillion: 15.0 },
+  'gpt-5.5': { inputPerMillion: 5, outputPerMillion: 30 },
+  'gpt-5.4': { inputPerMillion: 2.5, outputPerMillion: 15 },
   'gpt-5.4-mini': { inputPerMillion: 0.75, outputPerMillion: 4.5 },
   'gpt-5.4-nano': { inputPerMillion: 0.2, outputPerMillion: 1.25 },
-  'gpt-5.3-codex': { inputPerMillion: 1.75, outputPerMillion: 14.0 },
+  'gpt-5.3-codex': { inputPerMillion: 1.75, outputPerMillion: 14 },
 };
 
 // Models we've seen in synced session data but that OpenAI no longer lists
 // publicly. Kept here so historical sessions still cost-resolve. Not checked
 // by the drift script.
 export const CODEX_PRICING_HISTORICAL: Record<string, CodexPricing> = {
-  'gpt-5.2-codex': { inputPerMillion: 1.75, outputPerMillion: 14.0 },
-  'gpt-5.1-codex': { inputPerMillion: 1.25, outputPerMillion: 10.0 },
-  'gpt-5.1-codex-max': { inputPerMillion: 1.25, outputPerMillion: 10.0 },
-  'gpt-5.1-codex-mini': { inputPerMillion: 0.25, outputPerMillion: 2.0 },
-  'gpt-5': { inputPerMillion: 1.25, outputPerMillion: 10.0 },
-  'gpt-5.1': { inputPerMillion: 1.25, outputPerMillion: 10.0 },
+  'gpt-5.2-codex': { inputPerMillion: 1.75, outputPerMillion: 14 },
+  'gpt-5.1-codex': { inputPerMillion: 1.25, outputPerMillion: 10 },
+  'gpt-5.1-codex-max': { inputPerMillion: 1.25, outputPerMillion: 10 },
+  'gpt-5.1-codex-mini': { inputPerMillion: 0.25, outputPerMillion: 2 },
+  'gpt-5': { inputPerMillion: 1.25, outputPerMillion: 10 },
+  'gpt-5.1': { inputPerMillion: 1.25, outputPerMillion: 10 },
 };
 
 export const CODEX_PRICING_BY_ID: Record<string, CodexPricing> = {
@@ -48,8 +48,8 @@ export const CODEX_PRICING_OVERRIDES: Record<
 // Fallback by family slug — keeps cost reasonable for unknown future model ids.
 const FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> = [
   { match: /-nano$/, pricing: { inputPerMillion: 0.2, outputPerMillion: 1.25 } },
-  { match: /-mini$/, pricing: { inputPerMillion: 0.25, outputPerMillion: 2.0 } },
-  { match: /-codex(-max)?$/, pricing: { inputPerMillion: 1.25, outputPerMillion: 10.0 } },
+  { match: /-mini$/, pricing: { inputPerMillion: 0.25, outputPerMillion: 2 } },
+  { match: /-codex(-max)?$/, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
 ];
 
 const fallbackHits = new Set<string>();
@@ -79,7 +79,7 @@ export function findCodexPricing(model: string, usageDate?: string): CodexPricin
   }
   if (id.startsWith('gpt-5')) {
     fallbackHits.add(id);
-    return { inputPerMillion: 1.25, outputPerMillion: 10.0 };
+    return { inputPerMillion: 1.25, outputPerMillion: 10 };
   }
   return undefined;
 }
