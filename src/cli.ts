@@ -10,6 +10,7 @@ import { recomputeCostsCommand } from './recompute.js';
 import { usageCommand, type UsageOptions } from './usage.js';
 import { daemonCommand } from './daemon.js';
 import { topCommand, type TopKind } from './top.js';
+import { machinesCommand } from './machines.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -287,6 +288,16 @@ program
         process.exit(1);
       });
     },
+  );
+
+program
+  .command('machines')
+  .description('List all machines synced to the repo with totals, last sync, and active providers')
+  .action(() =>
+    machinesCommand().catch((err: unknown) => {
+      console.error(errorMessage(err));
+      process.exit(1);
+    }),
   );
 
 program
