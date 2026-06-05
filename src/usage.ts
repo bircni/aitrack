@@ -6,7 +6,7 @@ import { isCloned } from './git.js';
 import { emptyUsageMessage, loadMergedProviderData } from './show.js';
 import type { DayMap } from './types.js';
 
-export type UsagePeriod =
+type UsagePeriod =
   | 'today'
   | 'yesterday'
   | 'week'
