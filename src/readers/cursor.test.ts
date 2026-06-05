@@ -198,7 +198,7 @@ describe('readCursorData', () => {
     createStateDb(dbPath, { 'cursorAuth/accessToken': Buffer.from(' access-token ') });
     process.env.CURSOR_STATE_DB_PATH = dbPath;
     process.env.CURSOR_WEB_BASE_URL = 'https://cursor.test/';
-    setFetchMock(async (input) => {
+    setFetchMock((input) => {
       const url = toUrl(input);
       if (url.hostname === 'api2.cursor.sh') {
         return Promise.resolve(new Response('{}', { status: 200 }));
@@ -250,7 +250,7 @@ describe('readCursorData', () => {
     const dbPath = join(tmpDir, 'state.vscdb');
     createStateDb(dbPath, { 'cursorAuth/accessToken': 'access-token' });
     process.env.CURSOR_STATE_DB_PATH = dbPath;
-    setFetchMock(async () =>
+    setFetchMock(() =>
       Promise.resolve(new Response('nope', { status: 401, statusText: 'Unauthorized' })),
     );
 
@@ -264,7 +264,7 @@ describe('readCursorData', () => {
     const dbPath = join(tmpDir, 'state.vscdb');
     createStateDb(dbPath, { 'cursorAuth/accessToken': 'access-token' });
     process.env.CURSOR_STATE_DB_PATH = dbPath;
-    setFetchMock(async (input) => {
+    setFetchMock((input) => {
       const url = toUrl(input);
       if (url.hostname === 'api2.cursor.sh') {
         return Promise.resolve(new Response('{}', { status: 200 }));

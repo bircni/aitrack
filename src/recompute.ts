@@ -1,6 +1,6 @@
-import { execSync } from 'child_process';
-import { readFileSync, writeFileSync } from 'fs';
-import { basename } from 'path';
+import { execSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { basename } from 'node:path';
 
 import { loadConfig, resolveMachineId } from './config.js';
 import { isCloned, listDataFiles, LOCAL_REPO, tryPull } from './git.js';

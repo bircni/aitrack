@@ -98,8 +98,8 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
         lastUpdated,
       });
       hasRendered = true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error(`aitrack daemon refresh failed: ${message}`);
     }
   };

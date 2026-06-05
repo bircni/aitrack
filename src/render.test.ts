@@ -17,12 +17,12 @@ function makeDay(input: number, output: number, costUSD?: number): DayEntry {
   return {
     inputTokens: input,
     outputTokens: output,
-    ...(costUSD !== undefined ? { costUSD } : {}),
+    ...(costUSD === undefined ? {} : { costUSD }),
     byModel: {
       'test-model': {
         inputTokens: input,
         outputTokens: output,
-        ...(costUSD !== undefined ? { costUSD } : {}),
+        ...(costUSD === undefined ? {} : { costUSD }),
       },
     },
   };

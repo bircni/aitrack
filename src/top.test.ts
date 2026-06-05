@@ -21,12 +21,12 @@ function makeDay(input: number, output: number, cost: number | undefined, model:
   return {
     inputTokens: input,
     outputTokens: output,
-    ...(cost !== undefined ? { costUSD: cost } : {}),
+    ...(cost === undefined ? {} : { costUSD: cost }),
     byModel: {
       [model]: {
         inputTokens: input,
         outputTokens: output,
-        ...(cost !== undefined ? { costUSD: cost } : {}),
+        ...(cost === undefined ? {} : { costUSD: cost }),
       },
     },
   };

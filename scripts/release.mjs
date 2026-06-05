@@ -47,9 +47,7 @@ function getPackageVersion() {
 function parseArgs(argv) {
   const bumpArg = argv.find((arg) => !arg.startsWith('--')) || 'patch';
   if (!ALLOWED_BUMPS.has(bumpArg)) {
-    throw new Error(
-      `Invalid bump type: ${bumpArg}. Use one of: ${Array.from(ALLOWED_BUMPS).join(', ')}`,
-    );
+    throw new Error(`Invalid bump type: ${bumpArg}. Use one of: ${[...ALLOWED_BUMPS].join(', ')}`);
   }
 
   return {

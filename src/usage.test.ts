@@ -28,13 +28,13 @@ function makeDay(input: number, output: number, costUSD?: number, model = 'm1'):
     [model]: {
       inputTokens: input,
       outputTokens: output,
-      ...(costUSD !== undefined ? { costUSD } : {}),
+      ...(costUSD === undefined ? {} : { costUSD }),
     },
   };
   return {
     inputTokens: input,
     outputTokens: output,
-    ...(costUSD !== undefined ? { costUSD } : {}),
+    ...(costUSD === undefined ? {} : { costUSD }),
     byModel: counts,
   };
 }
@@ -71,7 +71,7 @@ describe('usageCommand', () => {
               outputTokens: 200,
               costUSD: 1.2,
               byModel: {
-                'claude-opus-4-8': { inputTokens: 800, outputTokens: 100, costUSD: 1.0 },
+                'claude-opus-4-8': { inputTokens: 800, outputTokens: 100, costUSD: 1 },
                 'claude-sonnet-4-6': { inputTokens: 200, outputTokens: 100, costUSD: 0.2 },
               },
             },

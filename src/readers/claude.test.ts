@@ -44,12 +44,12 @@ describe('parseJsonlFile', () => {
     const day = result.get('2024-01-15');
     expect(day?.inputTokens).toBe(100);
     expect(day?.outputTokens).toBe(50);
-    expect(day?.costUSD).toBeCloseTo(0.00105);
+    expect(day?.costUSD).toBeCloseTo(0.001_05);
     expect(day?.byModel['claude-3-5-sonnet-20241022']).toMatchObject({
       inputTokens: 100,
       outputTokens: 50,
     });
-    expect(day?.byModel['claude-3-5-sonnet-20241022']?.costUSD).toBeCloseTo(0.00105);
+    expect(day?.byModel['claude-3-5-sonnet-20241022']?.costUSD).toBeCloseTo(0.001_05);
   });
 
   it('strips -latest suffix from model names', async () => {
@@ -121,7 +121,7 @@ describe('parseJsonlFile', () => {
     expect(day?.rawInputTokens).toBe(100);
     expect(day?.cachedInputTokens).toBe(50);
     expect(day?.cacheCreationInputTokens).toBe(10);
-    expect(day?.costUSD).toBeCloseTo(0.0007275);
+    expect(day?.costUSD).toBeCloseTo(0.000_727_5);
   });
 
   it('estimates Claude API-equivalent costs by exact model id', () => {

@@ -18,7 +18,7 @@ function findHits(html: string, needle: string, isBoundary: (c: string) => boole
   let start = 0;
   for (;;) {
     const at = html.indexOf(needle, start);
-    if (at < 0) break;
+    if (at === -1) break;
     const after = html[at + needle.length];
     if (!after || isBoundary(after)) hits.push(at);
     start = at + needle.length;
@@ -65,7 +65,7 @@ function claudeHeading(modelId: string): string {
 // `Claude Opus 4.8` -> `claude-opus-4-8`
 function claudeModelId(family: string, version: string): string {
   const dot = version.indexOf('.');
-  if (dot < 0) return `claude-${family.toLowerCase()}-${version}`;
+  if (dot === -1) return `claude-${family.toLowerCase()}-${version}`;
   return `claude-${family.toLowerCase()}-${version.slice(0, dot)}-${version.slice(dot + 1)}`;
 }
 
@@ -93,8 +93,8 @@ async function checkClaude(): Promise<{ drift: number; unverified: number; missi
   let html: string;
   try {
     html = await fetchHtml(CLAUDE_PRICING_URL);
-  } catch (err) {
-    console.error('Fetch failed:', (err as Error).message);
+  } catch (error) {
+    console.error('Fetch failed:', (error as Error).message);
     return { drift: 1, unverified: 0, missing: 0 };
   }
 
@@ -143,8 +143,8 @@ async function checkCodex(): Promise<{ drift: number; unverified: number }> {
   let html: string;
   try {
     html = await fetchHtml(CODEX_PRICING_URL);
-  } catch (err) {
-    console.error('Fetch failed:', (err as Error).message);
+  } catch (error) {
+    console.error('Fetch failed:', (error as Error).message);
     return { drift: 1, unverified: 0 };
   }
 
@@ -208,7 +208,7 @@ main()
   .then((code) => {
     process.exit(code);
   })
-  .catch((err: unknown) => {
-    console.error(err);
+  .catch((error: unknown) => {
+    console.error(error);
     process.exit(1);
   });

@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { loadConfig, resolveMachineId } from './config.js';
 import { commitAndPush, isCloned, LOCAL_REPO, pull, removePendingMachineFile } from './git.js';

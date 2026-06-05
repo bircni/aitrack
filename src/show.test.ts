@@ -68,7 +68,7 @@ describe('mergeProviderDay', () => {
     const pData: ProviderDay = {
       byModel: {
         m1: { inputTokens: 10, outputTokens: 5, costUSD: 0.5 },
-        m2: { inputTokens: 20, outputTokens: 7, costUSD: 1.0 },
+        m2: { inputTokens: 20, outputTokens: 7, costUSD: 1 },
       },
       totals: { inputTokens: 30, outputTokens: 12, costUSD: 1.7 },
     };

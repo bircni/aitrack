@@ -7,12 +7,12 @@ function makeDay(input: number, output: number, costUSD?: number): DayEntry {
   return {
     inputTokens: input,
     outputTokens: output,
-    ...(costUSD !== undefined ? { costUSD } : {}),
+    ...(costUSD === undefined ? {} : { costUSD }),
     byModel: {
       model: {
         inputTokens: input,
         outputTokens: output,
-        ...(costUSD !== undefined ? { costUSD } : {}),
+        ...(costUSD === undefined ? {} : { costUSD }),
       },
     },
   };
@@ -99,8 +99,8 @@ describe('renderToHtml', () => {
 
   it('renders a usage-by-model table with totals', () => {
     const dayMap = new Map([
-      ['2024-06-01', makeDay(1_000, 500, 1.5)],
-      ['2024-06-02', makeDay(2_000, 1_000, 3.0)],
+      ['2024-06-01', makeDay(1000, 500, 1.5)],
+      ['2024-06-02', makeDay(2000, 1000, 3)],
     ]);
     const html = renderToHtml({ claude_code: dayMap }, { year: 2024 });
     expect(html).toContain('Usage by model');
@@ -110,7 +110,7 @@ describe('renderToHtml', () => {
   });
 
   it('shows "Cost" (not "Est. cost") for cursor', () => {
-    const dayMap = new Map([['2024-06-01', makeDay(1_000, 500, 2.0)]]);
+    const dayMap = new Map([['2024-06-01', makeDay(1000, 500, 2)]]);
     const html = renderToHtml({ cursor: dayMap }, { year: 2024 });
     expect(html).toContain('>Cost</th>');
     expect(html).not.toContain('>Est. cost</th>');

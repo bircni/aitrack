@@ -1,8 +1,8 @@
-import { createReadStream, existsSync } from 'fs';
-import { readdir } from 'fs/promises';
-import { homedir } from 'os';
-import { join, resolve } from 'path';
-import { createInterface } from 'readline';
+import { createReadStream, existsSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { createInterface } from 'node:readline';
 
 import { getOrCreateDay, toLocalDateString } from '../dayMap.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';

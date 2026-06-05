@@ -26,11 +26,11 @@ export interface HtmlRenderOptions extends RenderOptions {
 
 function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function activeProviders(layoutData: ProviderData, all: boolean): string[] {
@@ -47,8 +47,8 @@ function activeProviders(layoutData: ProviderData, all: boolean): string[] {
 function renderMonthLabels(weeks: Array<Array<string | null>>): string {
   let lastMonth = -1;
   const labels: string[] = [];
-  for (let w = 0; w < weeks.length; w++) {
-    const first = weeks[w].find((d) => d !== null);
+  for (const [w, week] of weeks.entries()) {
+    const first = week.find((d) => d !== null);
     if (!first) continue;
     const month = parseInt(first.slice(5, 7), 10) - 1;
     if (month !== lastMonth) {
@@ -70,9 +70,9 @@ function renderHeatmapCells(
 ): string {
   const theme = getProviderTheme(providerKey, dark);
   const cells: string[] = [];
-  for (let w = 0; w < weeks.length; w++) {
+  for (const [w, week] of weeks.entries()) {
     for (let d = 0; d < 7; d++) {
-      const dateStr = weeks[w][d] ?? null;
+      const dateStr = week[d] ?? null;
       const rec = dateStr ? dayMap.get(dateStr) : null;
       const tokens = rec ? rec.inputTokens + rec.outputTokens : 0;
       const level = dateStr ? tokenIntensityLevel(tokens, maxTokens) : 0;
@@ -264,8 +264,8 @@ function renderProviderSection(
       label: 'PEAK MONTH',
       value: peakMo ? `${formatMonthLabel(peakMo.month)} (${fmt(peakMo.tokens)})` : '—',
     },
-    { label: 'CURRENT STREAK', value: `${String(cs)} day${cs !== 1 ? 's' : ''}` },
-    { label: 'LONGEST STREAK', value: `${String(ls)} day${ls !== 1 ? 's' : ''}` },
+    { label: 'CURRENT STREAK', value: `${String(cs)} day${cs === 1 ? '' : 's'}` },
+    { label: 'LONGEST STREAK', value: `${String(ls)} day${ls === 1 ? '' : 's'}` },
   ];
 
   const statCols = [
@@ -565,12 +565,12 @@ export function renderToHtml(
   providerData: ProviderData,
   { dark = false, all = false, year, lastUpdated, emptyMessage }: HtmlRenderOptions = {},
 ): string {
-  const filtered = year !== undefined ? filterProviderDataByYear(providerData, year) : providerData;
+  const filtered = year === undefined ? providerData : filterProviderDataByYear(providerData, year);
   const weeks = buildHeatmapWeeks(year);
   const layoutData: ProviderData = all ? { all: mergeAllProviderDayMaps(filtered) } : filtered;
   const providers = activeProviders(layoutData, all);
 
-  const title = year !== undefined ? `aitrack (${String(year)})` : 'aitrack';
+  const title = year === undefined ? 'aitrack' : `aitrack (${String(year)})`;
   const updatedLine = lastUpdated ? `Last updated: ${lastUpdated.toLocaleString()}` : '';
 
   if (providers.length === 0) {

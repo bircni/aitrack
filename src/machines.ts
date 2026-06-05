@@ -86,7 +86,7 @@ function summarizeMachine(file: MachineFile): MachineSummary {
       return ai - bi;
     }),
     firstDay: dayKeys[0] ?? null,
-    lastDay: dayKeys[dayKeys.length - 1] ?? null,
+    lastDay: dayKeys.at(-1) ?? null,
   };
 }
 

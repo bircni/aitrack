@@ -20,7 +20,7 @@ describe('codex pricing', () => {
     // unknown -mini -> mini fallback ($0.25/$2)
     const mini = findCodexPricing('gpt-5.9-codex-mini');
     expect(mini?.inputPerMillion).toBe(0.25);
-    expect(mini?.outputPerMillion).toBe(2.0);
+    expect(mini?.outputPerMillion).toBe(2);
     // unknown -codex -> codex fallback
     const codex = findCodexPricing('gpt-5.9-codex');
     expect(codex?.inputPerMillion).toBe(1.25);

@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -7,9 +7,9 @@ import {
   readFileSync,
   rmSync,
   writeFileSync,
-} from 'fs';
-import { homedir } from 'os';
-import { basename, join } from 'path';
+} from 'node:fs';
+import { homedir } from 'node:os';
+import { basename, join } from 'node:path';
 
 import type { MachineFile } from './types.js';
 import { parseMachineFile } from './validate.js';

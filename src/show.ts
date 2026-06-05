@@ -1,7 +1,7 @@
-import { exec } from 'child_process';
-import { writeFileSync } from 'fs';
-import { hostname } from 'os';
-import { resolve } from 'path';
+import { exec } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { hostname } from 'node:os';
+import { resolve } from 'node:path';
 
 import { resolveMachineId, tryLoadConfig } from './config.js';
 import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
@@ -161,7 +161,7 @@ export async function loadMergedProviderData(
   }
 
   const filtered =
-    opts.year !== undefined ? filterProviderDataByYear(providerData, opts.year) : providerData;
+    opts.year === undefined ? providerData : filterProviderDataByYear(providerData, opts.year);
 
   if (Object.keys(filtered).length === 0) {
     return null;
