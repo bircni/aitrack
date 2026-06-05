@@ -91,7 +91,8 @@ function renderTable(rows: Row[]): string {
     border('│') +
     cells
       .map((cell, i) => {
-        const padded = pad(cell, widths[i], COLUMNS[i].align);
+        // i is always within bounds — cells.length === COLUMNS.length by construction.
+        const padded = pad(cell, widths[i] ?? 0, COLUMNS[i]?.align ?? 'left');
         return ` ${style ? style(padded) : padded} `;
       })
       .join(border('│')) +

@@ -159,8 +159,7 @@ function renderTable(rows: StatsRow[], dark: boolean): string {
     color.border('│') +
     cells
       .map((cell, i) => {
-        const col = columns[i];
-        const padded = pad(cell, widths[i], col.align);
+        const padded = pad(cell, widths[i] ?? 0, columns[i]?.align ?? 'left');
         const text = style && i === 0 ? style(padded) : padded;
         return ` ${text} `;
       })
