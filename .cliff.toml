@@ -10,12 +10,10 @@ body = """
 {% else %}
 ## [unreleased]
 {% endif %}
-
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | upper_first }}
 {% for commit in commits %}
-- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}
-{% endfor %}
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}{% endfor %}
 {% endfor %}
 """
 trim = true
@@ -34,8 +32,8 @@ commit_parsers = [
   { message = "^build", group = "Build" },
   { message = "^ci", group = "CI" },
   { message = "^chore\\(release\\):", skip = true },
-  { message = "^chore", group = "Chores" },
-  { message = "^revert", group = "Reverts" }
+  { message = "^chore", skip = true },
+  { message = "^revert", skip = true },
 ]
 protect_breaking_commits = false
 filter_commits = true
