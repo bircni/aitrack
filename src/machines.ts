@@ -121,7 +121,7 @@ function renderTable(rows: MachineSummary[]): string {
   ]);
 
   const widths = headers.map((h, i) =>
-    Math.max(h.value.length, ...dataRows.map((row) => row[i].value.length)),
+    Math.max(h.value.length, ...dataRows.map((row) => row[i]?.value.length ?? 0)),
   );
 
   const hLine = (left: string, mid: string, right: string) =>
@@ -131,7 +131,7 @@ function renderTable(rows: MachineSummary[]): string {
     border('│') +
     cells
       .map((cell, i) => {
-        const padded = pad(cell.value, widths[i], cell.align);
+        const padded = pad(cell.value, widths[i] ?? 0, cell.align);
         return ` ${style ? style(padded) : padded} `;
       })
       .join(border('│')) +

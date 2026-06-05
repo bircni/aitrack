@@ -78,7 +78,7 @@ function renderTable(rows: Row[], headers: { label: string; sub: string }): stri
     border('│') +
     cells
       .map((cell, i) => {
-        const padded = pad(cell, widths[i], columns[i].align);
+        const padded = pad(cell, widths[i] ?? 0, columns[i]?.align ?? 'left');
         return ` ${style ? style(padded) : padded} `;
       })
       .join(border('│')) +

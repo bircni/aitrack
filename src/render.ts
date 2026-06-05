@@ -48,7 +48,7 @@ interface ProviderTheme {
   name: string;
   cells: [string, string, string, string, string];
 }
-type ThemeSet = Record<string, ProviderTheme>;
+type ThemeSet = Record<string, ProviderTheme> & { _default: ProviderTheme };
 
 const THEMES: Record<'light' | 'dark', ThemeSet> = {
   light: {
@@ -120,7 +120,9 @@ export function displayModelName(model: string): string {
   for (const family of ['opus', 'sonnet', 'haiku']) {
     const re = new RegExp(String.raw`^${family}-(\d+)-(\d+)$`);
     const m = re.exec(cleaned);
-    if (m) return `${family[0].toUpperCase()}${family.slice(1)} ${m[1]}.${m[2]}`;
+    if (m?.[1] !== undefined && m[2] !== undefined) {
+      return `${(family[0] ?? '').toUpperCase()}${family.slice(1)} ${m[1]}.${m[2]}`;
+    }
   }
   const gpt = /^gpt-([\d.]+)(?:-(.+))?$/.exec(cleaned);
   if (gpt) {
@@ -368,13 +370,13 @@ function since30Days(): string {
 
 export function formatPeakDate(date: string): string {
   // "2026-05-17" -> "May 17, 2026"
-  const [y, m, d] = date.split('-');
+  const [y = '', m = '', d = ''] = date.split('-');
   const monthIdx = parseInt(m, 10) - 1;
   return `${MONTHS[monthIdx] ?? m} ${parseInt(d, 10)}, ${y}`;
 }
 
 export function formatMonthLabel(month: string): string {
-  const [y, m] = month.split('-');
+  const [y = '', m = ''] = month.split('-');
   const monthIdx = parseInt(m, 10) - 1;
   return `${MONTHS[monthIdx] ?? m} ${y}`;
 }
@@ -463,7 +465,7 @@ function drawSection(
     if (!first) continue;
     const month = parseInt(first.slice(5, 7)) - 1;
     if (month !== lastMonth) {
-      ctx.fillText(MONTHS[month], LEFT + w * STEP, y + 14);
+      ctx.fillText(MONTHS[month] ?? '', LEFT + w * STEP, y + 14);
       lastMonth = month;
     }
   }
@@ -500,7 +502,7 @@ function drawSection(
   ctx.fillText('LESS', LEFT, y + CELL);
   const lx = LEFT + 38;
   for (let level = 0; level <= 4; level++) {
-    ctx.fillStyle = theme.cells[level];
+    ctx.fillStyle = theme.cells[level] ?? theme.cells[0];
     roundedRect(ctx, lx + level * (CELL + 3), y, CELL, CELL, 2);
     ctx.fill();
   }
