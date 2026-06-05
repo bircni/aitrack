@@ -103,7 +103,7 @@ describe('integration', () => {
 
     const data = readMachineFile(dataFile);
     expect(data.hostname).toBe(host);
-    expect(Object.keys(data.days).length).toBe(2);
+    expect(Object.keys(data.days)).toHaveLength(2);
     expect(data.days['2024-06-01'].claude_code.totals.inputTokens).toBe(1000);
     expect(data.days['2024-06-02'].claude_code.totals.inputTokens).toBe(2000);
 

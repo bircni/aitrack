@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import vitest from '@vitest/eslint-plugin';
 import { defineConfig } from 'eslint/config';
 import prettier from 'eslint-config-prettier/flat';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
@@ -76,8 +77,19 @@ export default defineConfig(
   },
   {
     files: ['**/*.test.ts'],
+    plugins: { vitest },
     languageOptions: {
       globals: globals.vitest,
+    },
+    rules: {
+      'vitest/no-focused-tests': 'error',
+      'vitest/no-disabled-tests': 'warn',
+      'vitest/no-conditional-tests': 'error',
+      'vitest/no-identical-title': 'error',
+      'vitest/expect-expect': 'error',
+      'vitest/valid-expect': 'error',
+      'vitest/no-standalone-expect': 'error',
+      'vitest/prefer-to-have-length': 'warn',
     },
   },
   prettier,
