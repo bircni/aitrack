@@ -52,7 +52,7 @@ vi.mock('./git.js', () => ({
   removePendingMachineFile: vi.fn(),
 }));
 
-import { syncCommand } from './sync.js';
+import { syncCommand, syncData } from './sync.js';
 import type { DayMap } from './types.js';
 
 function dayMap(inputTokens: number, outputTokens: number, model = 'model'): DayMap {
@@ -113,6 +113,16 @@ describe('syncCommand', () => {
       'utf8',
     );
     expect(mocks.commitAndPush).toHaveBeenCalledWith('work-laptop');
+  });
+
+  it('syncData with quiet suppresses progress logs', async () => {
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+
+    await syncData({ quiet: true });
+
+    expect(console.log).not.toHaveBeenCalled();
+    expect(mocks.writeFileSync).toHaveBeenCalled();
+    expect(mocks.commitAndPush).toHaveBeenCalledWith('host');
   });
 
   it('does not write when persisted days already match fresh data', async () => {

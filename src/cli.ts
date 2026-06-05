@@ -8,6 +8,7 @@ import { showCommand } from './show.js';
 import { initCommand } from './init.js';
 import { recomputeCostsCommand } from './recompute.js';
 import { usageCommand, type UsageOptions } from './usage.js';
+import { daemonCommand } from './daemon.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -211,6 +212,53 @@ usage
   .action((opts: { cursor?: boolean }) => {
     runUsage({ period: 'all', noCursor: opts.cursor === false });
   });
+
+const parseIntArg = (value: string): number => {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) throw new Error(`Expected an integer, got: ${value}`);
+  return n;
+};
+
+program
+  .command('daemon')
+  .description('Run a local HTTP dashboard that refreshes usage data on an interval')
+  .option('--port <port>', 'HTTP listen port', parseIntArg)
+  .option('--interval <seconds>', 'seconds between data refresh ticks', parseIntArg)
+  .option('--host <host>', 'bind address', '127.0.0.1')
+  .option('--sync', 'pull and push local data on each refresh tick')
+  .option('--no-sync', 'only pull remote data on each refresh tick')
+  .option('--dark', 'dark mode dashboard')
+  .option('--no-cursor', 'skip local Cursor usage (no state.vscdb / CSV export)')
+  .option('--all', 'single merged heatmap across all providers instead of one row per provider')
+  .option('--year <year>', 'only include days from this calendar year', parseIntArg)
+  .action(
+    (opts: {
+      port?: number;
+      interval?: number;
+      host?: string;
+      sync?: boolean;
+      dark?: boolean;
+      cursor?: boolean;
+      all?: boolean;
+      year?: number;
+    }) => {
+      // Commander collapses --sync/--no-sync into a single opts.sync tri-state
+      // (true | false | undefined). undefined means "fall back to config default".
+      daemonCommand({
+        port: opts.port,
+        interval: opts.interval,
+        host: opts.host,
+        sync: opts.sync,
+        dark: opts.dark,
+        all: opts.all,
+        noCursor: opts.cursor === false,
+        year: opts.year,
+      }).catch((err: unknown) => {
+        console.error(errorMessage(err));
+        process.exit(1);
+      });
+    },
+  );
 
 program
   .command('recompute-costs')
