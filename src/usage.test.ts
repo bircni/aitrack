@@ -20,6 +20,7 @@ import { usageCommand } from './usage.js';
 // Fix "today" so window math is deterministic. Mid-month avoids month-boundary edge cases.
 const NOW = new Date('2026-06-15T10:00:00');
 const TODAY = '2026-06-15';
+const TODAY_LOCALE = `${NOW.toLocaleDateString()} ${NOW.toLocaleTimeString()}`;
 
 function makeDay(input: number, output: number, costUSD?: number, model = 'm1'): DayEntry {
   const counts: Record<string, { inputTokens: number; outputTokens: number; costUSD?: number }> = {
@@ -83,7 +84,7 @@ describe('usageCommand', () => {
     await usageCommand({ period: 'today', noCursor: true });
 
     const out = output();
-    expect(out).toContain(`today (${TODAY})`);
+    expect(out).toContain(`today (${TODAY_LOCALE})`);
     expect(out).toContain('Claude Code');
     expect(out).toContain('claude-opus-4-8');
     expect(out).toContain('claude-sonnet-4-6');
@@ -102,7 +103,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'today', noCursor: true });
 
-    expect(output()).toContain(`No usage recorded for today (${TODAY}).`);
+    expect(output()).toContain(`No usage recorded for today (${TODAY_LOCALE}).`);
   });
 
   it('week: aggregates rolling 7-day window ending today', async () => {
