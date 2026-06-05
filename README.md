@@ -95,19 +95,23 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 
 ## Commands
 
-| Command                   | What it does                                                                  |
-| ------------------------- | ----------------------------------------------------------------------------- |
-| `aitrack init`            | Interactive setup — provide your repo URL and clone it locally                |
-| `aitrack sync`            | Read local data, write it to the cloned repo, and push                        |
-| `aitrack show`            | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table) |
-| `aitrack usage today`     | Today's usage as a table: provider / tokens / model / price                   |
-| `aitrack usage week`      | Rolling 7-day usage table                                                     |
-| `aitrack usage month`     | Rolling 30-day usage table                                                    |
-| `aitrack usage year`      | Current calendar-year usage table                                             |
-| `aitrack usage all`       | All-time usage table                                                          |
-| `aitrack recompute-costs` | Refresh costs: re-read local JSONL; reprice other machines from stored cache  |
+| Command                      | What it does                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| `aitrack init`               | Interactive setup — provide your repo URL and clone it locally                |
+| `aitrack sync`               | Read local data, write it to the cloned repo, and push                        |
+| `aitrack show`               | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table) |
+| `aitrack usage today`        | Today's usage as a table: provider / tokens / model / price                   |
+| `aitrack usage week`         | Rolling 7-day usage table                                                     |
+| `aitrack usage month`        | Rolling 30-day usage table                                                    |
+| `aitrack usage year`         | Current calendar-year usage table                                             |
+| `aitrack usage all`          | All-time usage table                                                          |
+| `aitrack top [days\|models]` | Rank busiest days or most-used models by cost (or `--sort tokens`)            |
+| `aitrack machines`           | Per-machine totals + last sync time (helpful for spotting stale machines)     |
+| `aitrack recompute-costs`    | Refresh costs: re-read local JSONL; reprice other machines from stored cache  |
 
 **`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--no-cursor` (skip Cursor), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year). `--no-cursor` also works on every `usage` subcommand.
+
+**`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), and `--year <year>`.
 
 ---
 
