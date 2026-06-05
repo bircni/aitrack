@@ -2,15 +2,17 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { program } from 'commander';
-import { syncCommand } from './sync.js';
-import { showCommand } from './show.js';
-import { initCommand } from './init.js';
-import { recomputeCostsCommand } from './recompute.js';
-import { usageCommand, type UsageOptions } from './usage.js';
+
 import { daemonCommand } from './daemon.js';
-import { topCommand, type TopKind } from './top.js';
+import { initCommand } from './init.js';
 import { machinesCommand } from './machines.js';
+import { recomputeCostsCommand } from './recompute.js';
+import { showCommand } from './show.js';
+import { syncCommand } from './sync.js';
+import { topCommand, type TopKind } from './top.js';
+import { usageCommand, type UsageOptions } from './usage.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

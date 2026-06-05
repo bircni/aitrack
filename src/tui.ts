@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import type { DayMap, ProviderData } from './types.js';
+
 import { filterProviderDataByYear } from './dayMap.js';
 import {
   currentStreak,
@@ -8,6 +8,7 @@ import {
   mergeAllProviderDayMaps,
   peakMonth,
 } from './render.js';
+import type { DayMap, ProviderData } from './types.js';
 
 const PROVIDER_ORDER = ['claude_code', 'codex', 'cursor', 'gemini', 'opencode'];
 

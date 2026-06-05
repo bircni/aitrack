@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
+import { filterProviderDataByYear } from './dayMap.js';
 import {
   computeModelStats,
   currentStreak,
@@ -9,7 +11,6 @@ import {
   percentile,
   renderToPng,
 } from './render.js';
-import { filterProviderDataByYear } from './dayMap.js';
 import type { DayEntry } from './types.js';
 
 function makeDay(input: number, output: number, costUSD?: number): DayEntry {

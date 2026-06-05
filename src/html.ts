@@ -1,5 +1,4 @@
 import { filterProviderDataByYear, toLocalDateString } from './dayMap.js';
-import type { DayMap, ProviderData, RenderOptions } from './types.js';
 import {
   buildHeatmapWeeks,
   computeModelStats,
@@ -18,6 +17,7 @@ import {
   PROVIDER_ORDER,
   tokenIntensityLevel,
 } from './render.js';
+import type { DayMap, ProviderData, RenderOptions } from './types.js';
 
 export interface HtmlRenderOptions extends RenderOptions {
   lastUpdated?: Date;

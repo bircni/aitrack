@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { renderToHtml } from './html.js';
 import type { DayEntry } from './types.js';
 

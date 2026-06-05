@@ -1,7 +1,8 @@
 import chalk from 'chalk';
-import { loadMergedProviderData, emptyUsageMessage } from './show.js';
+
 import { tryLoadConfig } from './config.js';
 import { isCloned } from './git.js';
+import { emptyUsageMessage, loadMergedProviderData } from './show.js';
 import type { DayMap, ProviderData } from './types.js';
 
 const PROVIDER_LABELS = new Map<string, string>([

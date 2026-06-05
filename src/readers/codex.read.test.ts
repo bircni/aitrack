@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const TEST_HOME = vi.hoisted(() => {
   const tmp = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';

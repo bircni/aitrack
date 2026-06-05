@@ -8,8 +8,9 @@ import {
   rmSync,
   writeFileSync,
 } from 'fs';
-import { basename, join } from 'path';
 import { homedir } from 'os';
+import { basename, join } from 'path';
+
 import type { MachineFile } from './types.js';
 import { parseMachineFile } from './validate.js';
 

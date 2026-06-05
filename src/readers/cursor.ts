@@ -5,7 +5,9 @@ import { existsSync } from 'node:fs';
 import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
 import Database from 'better-sqlite3';
+
 import type { DayEntry, DayMap } from '../types.js';
 
 const CURSOR_CONFIG_DIR_ENV = 'CURSOR_CONFIG_DIR';

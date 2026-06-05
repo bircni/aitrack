@@ -1,6 +1,7 @@
 import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
-import type { DayMap, MachineFile, ProviderData, RenderOptions } from './types.js';
+
 import { getOrCreateDay } from './dayMap.js';
+import type { DayMap, MachineFile, ProviderData, RenderOptions } from './types.js';
 
 // ── Layout ────────────────────────────────────────────────────────────────
 

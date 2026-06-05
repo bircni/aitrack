@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { renderTui } from './tui.js';
 import type { DayEntry } from './types.js';
 
