@@ -22,7 +22,7 @@ function run(command, args, options = {}) {
 
   const result = spawnSync(command, args, {
     stdio: 'inherit',
-    shell: false,
+    shell: true,
     ...options,
   });
 
