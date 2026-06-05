@@ -35,7 +35,7 @@ export interface MachineFile {
   days: Record<string, Record<string, ProviderDay>>;
 }
 
-export interface DaemonConfig {
+interface DaemonConfig {
   /** When true, run sync (pull + push) on each daemon refresh tick. */
   sync?: boolean;
   /** HTTP listen port for the daemon dashboard. */

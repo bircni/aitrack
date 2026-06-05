@@ -18,7 +18,7 @@ function providerLabel(providerKey: string): string {
 }
 
 export type TopKind = 'days' | 'models';
-export type TopSort = 'tokens' | 'cost';
+type TopSort = 'tokens' | 'cost';
 
 export interface TopOptions {
   kind: TopKind;
