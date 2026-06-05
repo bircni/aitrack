@@ -272,7 +272,8 @@ export async function usageCommand(opts: UsageOptions): Promise<void> {
   ];
 
   const rows: Row[] = [];
-  let totTokens = 0;
+  let totInput = 0;
+  let totOutput = 0;
   let totCost = 0;
   let anyCost = false;
 
@@ -293,7 +294,8 @@ export async function usageCommand(opts: UsageOptions): Promise<void> {
         sortCost: agg.hasCost ? agg.costUSD : 0,
         sortTokens: tokens,
       });
-      totTokens += tokens;
+      totInput += agg.inputTokens;
+      totOutput += agg.outputTokens;
       if (agg.hasCost) {
         totCost += agg.costUSD;
         anyCost = true;
@@ -312,7 +314,7 @@ export async function usageCommand(opts: UsageOptions): Promise<void> {
 
   rows.push({
     provider: 'TOTAL',
-    tokens: fmt(totTokens),
+    tokens: fmt(totInput + totOutput),
     model: '',
     price: anyCost ? fmtUSD(totCost) : '—',
     isTotal: true,
