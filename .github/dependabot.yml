@@ -1,0 +1,47 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    groups:
+      typescript-eslint:
+        patterns:
+          - 'typescript-eslint'
+          - '@typescript-eslint/*'
+      vitest:
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
+      types:
+        patterns:
+          - '@types/*'
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+        exclude-patterns:
+          - 'typescript-eslint'
+          - '@typescript-eslint/*'
+          - 'vitest'
+          - '@vitest/*'
+          - '@types/*'
+    commit-message:
+      prefix: 'chore(deps)'
+      include: 'scope'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - '*'
+    commit-message:
+      prefix: 'chore(ci)'
+      include: 'scope'
