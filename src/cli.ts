@@ -9,6 +9,7 @@ import { initCommand } from './init.js';
 import { recomputeCostsCommand } from './recompute.js';
 import { usageCommand, type UsageOptions } from './usage.js';
 import { daemonCommand } from './daemon.js';
+import { topCommand, type TopKind } from './top.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -233,6 +234,52 @@ program
         sync: opts.sync,
         dark: opts.dark,
         all: opts.all,
+        noCursor: opts.cursor === false,
+        year: opts.year,
+      }).catch((err: unknown) => {
+        console.error(errorMessage(err));
+        process.exit(1);
+      });
+    },
+  );
+
+program
+  .command('top [kind]')
+  .description(
+    'Show top items by tokens or cost. kind: "days" (default) or "models". Pulls from all configured machines.',
+  )
+  .option('-n, --limit <n>', 'number of items to show', parseIntArg, 10)
+  .option('--sort <field>', 'sort by "tokens" or "cost"', 'cost')
+  .option('--no-cursor', 'skip local Cursor usage')
+  .option('--year <year>', 'only include days from this calendar year', parseIntArg)
+  .action(
+    (
+      kind: string | undefined,
+      opts: {
+        limit: number;
+        sort: string;
+        cursor?: boolean;
+        year?: number;
+      },
+    ) => {
+      const k: TopKind = kind === 'models' ? 'models' : 'days';
+      if (kind !== undefined && kind !== 'days' && kind !== 'models') {
+        console.error(`Invalid kind: "${kind}". Expected "days" or "models".`);
+        process.exit(1);
+      }
+      if (opts.sort !== 'tokens' && opts.sort !== 'cost') {
+        console.error(`Invalid --sort value: "${opts.sort}". Expected "tokens" or "cost".`);
+        process.exit(1);
+      }
+      const sort = opts.sort;
+      if (!Number.isInteger(opts.limit) || opts.limit < 1) {
+        console.error(`Invalid --limit: "${String(opts.limit)}". Expected a positive integer.`);
+        process.exit(1);
+      }
+      topCommand({
+        kind: k,
+        limit: opts.limit,
+        sort,
         noCursor: opts.cursor === false,
         year: opts.year,
       }).catch((err: unknown) => {
