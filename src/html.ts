@@ -1,4 +1,4 @@
-import { filterProviderDataByYear } from './dayMap.js';
+import { filterProviderDataByYear, toLocalDateString } from './dayMap.js';
 import type { DayMap, ProviderData, RenderOptions } from './types.js';
 import {
   buildHeatmapWeeks,
@@ -118,6 +118,63 @@ function aggregateByModel(dayMap: DayMap): Map<string, ModelAgg> {
     }
   }
   return byModel;
+}
+
+function renderTodaySection(providerData: ProviderData, dark: boolean): string {
+  const today = toLocalDateString(new Date());
+  interface TodayRow {
+    key: string;
+    name: string;
+    inputTokens: number;
+    outputTokens: number;
+    cost: number;
+    hasCost: boolean;
+  }
+
+  const rows: TodayRow[] = [];
+  for (const [key, dayMap] of Object.entries(providerData)) {
+    const day = dayMap.get(today);
+    if (!day) continue;
+    rows.push({
+      key,
+      name: getProviderTheme(key, dark).name,
+      inputTokens: day.inputTokens,
+      outputTokens: day.outputTokens,
+      cost: day.costUSD ?? 0,
+      hasCost: day.costUSD !== undefined,
+    });
+  }
+
+  if (rows.length === 0) {
+    return `<section class="today-section">
+  <div class="today-header"><h2>Today</h2><span class="today-date">${escapeHtml(today)}</span></div>
+  <p class="today-empty">No usage recorded yet today.</p>
+</section>`;
+  }
+
+  rows.sort(
+    (a, b) => b.cost - a.cost || b.inputTokens + b.outputTokens - (a.inputTokens + a.outputTokens),
+  );
+
+  const totalIn = rows.reduce((s, r) => s + r.inputTokens, 0);
+  const totalOut = rows.reduce((s, r) => s + r.outputTokens, 0);
+  const totalCost = rows.reduce((s, r) => s + r.cost, 0);
+  const anyCost = rows.some((r) => r.hasCost);
+
+  const cards = rows
+    .map(
+      (r) =>
+        `<div class="today-card"><div class="today-card-name">${escapeHtml(r.name)}</div><div class="today-card-tokens">${escapeHtml(fmt(r.inputTokens + r.outputTokens))}<span class="today-card-unit"> tokens</span></div><div class="today-card-cost">${escapeHtml(r.hasCost ? fmtUSD(r.cost) : '—')}</div></div>`,
+    )
+    .join('');
+
+  const totalLine = `<div class="today-totals"><span><strong>${escapeHtml(fmt(totalIn + totalOut))}</strong> tokens total</span><span><strong>${escapeHtml(fmt(totalIn))}</strong> in / <strong>${escapeHtml(fmt(totalOut))}</strong> out</span>${anyCost ? `<span><strong>${escapeHtml(fmtUSD(totalCost))}</strong> est. cost</span>` : ''}</div>`;
+
+  return `<section class="today-section">
+  <div class="today-header"><h2>Today</h2><span class="today-date">${escapeHtml(today)}</span></div>
+  <div class="today-cards">${cards}</div>
+  ${totalLine}
+</section>`;
 }
 
 function renderUsageTable(providerKey: string, dayMap: DayMap): string {
@@ -293,8 +350,12 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
-  padding: 24px;
   line-height: 1.4;
+}
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
 }
 .page-header {
   margin-bottom: 24px;
@@ -395,10 +456,11 @@ body {
   margin-bottom: 12px;
 }
 .usage-table table {
-  width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
+.usage-table th, .usage-table td { white-space: nowrap; }
+.usage-table th:first-child, .usage-table td:first-child { padding-right: 48px; }
 .usage-table th, .usage-table td {
   padding: 6px 12px;
   text-align: left;
@@ -418,7 +480,64 @@ body {
   border-top: 2px solid var(--divider);
   border-bottom: none;
 }
-.usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }`;
+.usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.today-section {
+  background: var(--section-bg);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+.today-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.today-header h2 { font-size: 18px; font-weight: 700; }
+.today-date { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.today-empty { color: var(--muted); font-size: 14px; }
+.today-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.today-card {
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: var(--bg);
+}
+.today-card-name {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.today-card-tokens {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.today-card-unit { font-size: 11px; font-weight: 400; color: var(--muted); }
+.today-card-cost {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.today-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+  font-size: 13px;
+  color: var(--muted);
+}
+.today-totals strong { color: var(--text); font-variant-numeric: tabular-nums; }`;
 }
 
 function pageShell(title: string, dark: boolean, updatedLine: string, body: string): string {
@@ -431,11 +550,13 @@ function pageShell(title: string, dark: boolean, updatedLine: string, body: stri
 <style>${pageStyles(dark)}</style>
 </head>
 <body>
+<div class="page">
 <header class="page-header">
   <h1>${escapeHtml(title)}</h1>
   ${updatedLine ? `<p class="page-meta">${escapeHtml(updatedLine)}</p>` : ''}
 </header>
 ${body}
+</div>
 </body>
 </html>`;
 }
@@ -462,6 +583,10 @@ export function renderToHtml(
     );
   }
 
+  // Today panel always reflects unfiltered providerData (today is today,
+  // regardless of any year filter applied to the heatmap below).
+  const todayHtml = renderTodaySection(providerData, dark);
+
   const sections = providers
     .map((key) => {
       const dayMap = layoutData[key];
@@ -470,5 +595,5 @@ export function renderToHtml(
     })
     .join('');
 
-  return pageShell(title, dark, updatedLine, sections);
+  return pageShell(title, dark, updatedLine, todayHtml + sections);
 }

@@ -20,9 +20,12 @@ function makeDay(input: number, output: number, costUSD?: number): DayEntry {
 describe('renderToHtml', () => {
   it('renders provider sections with heatmap cells and stats', () => {
     const dayMap = new Map([['2024-06-01', makeDay(1000, 500, 1.5)]]);
-    const html = renderToHtml({ claude_code: dayMap }, {
-      lastUpdated: new Date('2024-06-01T12:00:00Z'),
-    });
+    const html = renderToHtml(
+      { claude_code: dayMap },
+      {
+        lastUpdated: new Date('2024-06-01T12:00:00Z'),
+      },
+    );
 
     expect(html).toContain('<!DOCTYPE html>');
     expect(html).toContain('Claude Code');
