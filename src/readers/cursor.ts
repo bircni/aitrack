@@ -157,7 +157,7 @@ async function readCursorAuthState(databasePath: string): Promise<CursorAuthStat
 }
 
 function decodeJwtPayload(token: string): { sub?: string } | null {
-  const encodedPayload = token.split('.')[1];
+  const encodedPayload = token.split('.', 2)[1];
   if (!encodedPayload) return null;
   const base64 = encodedPayload.replaceAll('-', '+').replaceAll('_', '/');
   const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');

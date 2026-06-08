@@ -59,8 +59,8 @@ describe('readClaudeData', () => {
       outputTokens: 13,
       byModel: { claude: { inputTokens: 30, outputTokens: 13 } },
     });
-    expect(result.get('2024-01-15')?.costUSD).toBeCloseTo(0.000_285);
-    expect(result.get('2024-01-15')?.byModel.claude?.costUSD).toBeCloseTo(0.000_285);
+    expect(result.get('2024-01-15')?.costUSD).toBeCloseTo(0.000285);
+    expect(result.get('2024-01-15')?.byModel.claude?.costUSD).toBeCloseTo(0.000285);
   });
 
   it('deduplicates messages across multiple discovered roots', async () => {
