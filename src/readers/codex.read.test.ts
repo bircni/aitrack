@@ -54,7 +54,7 @@ describe('readCodexData', () => {
     expect(day?.byModel['gpt-5']?.inputTokens).toBe(20);
     expect(day?.byModel['gpt-5']?.outputTokens).toBe(8);
     // gpt-5: 20 * $1.25/M + 8 * $10/M = 0.000105
-    expect(day?.costUSD).toBeCloseTo(0.000_105);
+    expect(day?.costUSD).toBeCloseTo(0.000105);
   });
 
   it('deduplicates the same resolved CODEX_HOME and homedir session root', async () => {
