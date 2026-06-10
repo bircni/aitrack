@@ -14,21 +14,42 @@ node dist/cli.js show
 
 Use `pnpm run dev -- init` (or `sync`, `show`) to run from TypeScript without building.
 
+## Project layout
+
+```
+src/
+  cli.ts              Commander entrypoint
+  config.ts           Local config (~/.config/aitrack)
+  git.ts              Clone, pull, push data repo
+  commands/           CLI command handlers (show, sync, usage, …)
+  data/               Types, validation, aggregation, usage loading
+  display/            TUI, PNG heatmap, HTML dashboard
+    heatmap/          Shared heatmap stats, themes, view models
+    html/             HTML render pipeline
+  readers/            Provider-specific ingestion (Claude, Codex, Cursor)
+  pricing/            Model pricing tables and cost resolution
+  cli/                Pure CLI parsing/validation helpers
+  **/__tests__/       Tests colocated per module (one __tests__ folder each)
+```
+
+Imports use `.js` extensions (Node ESM). Run `pnpm run validate` before opening a PR.
+
 ## Commit messages
 
 Commits **must** follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `build:`). The changelog and version bumps are generated from commit messages, so non-conforming commits will be invisible in release notes.
 
 ## Scripts
 
-| Script                  | Description                             |
-| ----------------------- | --------------------------------------- |
-| `pnpm run validate`     | Lint, format check, typecheck, and test |
-| `pnpm run test`         | Run tests                               |
-| `pnpm run coverage`     | Run tests with coverage                 |
-| `pnpm run build`        | Compile TypeScript to `dist/`           |
-| `pnpm run lint`         | ESLint                                  |
-| `pnpm run format`       | Prettier write                          |
-| `pnpm run format:check` | Prettier check                          |
+| Script                  | Description                                            |
+| ----------------------- | ------------------------------------------------------ |
+| `pnpm run validate`     | Lint, format, typecheck, test, and unused-export check |
+| `pnpm run check:unused` | Knip — unused files, exports, dependencies             |
+| `pnpm run test`         | Run tests                                              |
+| `pnpm run coverage`     | Run tests with coverage                                |
+| `pnpm run build`        | Compile TypeScript to `dist/`                          |
+| `pnpm run lint`         | ESLint                                                 |
+| `pnpm run format`       | Prettier write                                         |
+| `pnpm run format:check` | Prettier check                                         |
 
 ## Releasing
 
