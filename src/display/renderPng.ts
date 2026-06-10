@@ -185,20 +185,3 @@ export function renderToPng(
 
   return canvas.toBuffer('image/png');
 }
-
-export { fmt, fmtUSD, fmtUSDCost } from './format.js';
-export { percentile, tokenIntensityLevel } from './heatmap/intensity.js';
-export { mergeAllProviderDayMaps } from './heatmap/merge.js';
-export { displayModelName } from './heatmap/modelNames.js';
-export {
-  buildDateGrid,
-  buildHeatmapWeeks,
-  computeModelStats,
-  currentStreak,
-  formatMonthLabel,
-  formatPeakDate,
-  longestStreak,
-  MONTHS,
-  peakMonth,
-} from './heatmap/stats.js';
-export { getProviderTheme } from './heatmap/themes.js';

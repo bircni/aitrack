@@ -60,11 +60,3 @@ export async function showCommand(opts: ShowOptions = {}): Promise<void> {
   console.log(`Saved: ${outputPath}`);
   if (opts.open !== false) openFile(outputPath);
 }
-
-export {
-  emptyUsageMessage,
-  type LoadedUsageData,
-  loadMergedProviderData,
-  type LoadUsageOptions,
-  mergeProviderDay,
-} from '../data/usageData.js';

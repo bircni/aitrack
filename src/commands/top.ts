@@ -10,7 +10,7 @@ import { defaultTableStyle, renderTerminalTable } from '../display/terminalTable
 import { isCloned } from '../git.js';
 
 export type TopKind = 'days' | 'models';
-type TopSort = 'tokens' | 'cost';
+export type TopSort = 'tokens' | 'cost';
 
 export interface TopOptions {
   kind: TopKind;
