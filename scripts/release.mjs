@@ -1,6 +1,15 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { platform } from 'node:os';
+
+const IS_WIN = platform() === 'win32';
+
+/** Quote args for cmd.exe when shell mode joins them into one command string. */
+function quoteShellArg(arg) {
+  if (!/[\s()&|<>^"'%!]/.test(arg)) return arg;
+  return `"${arg.replace(/"/g, '\\"')}"`;
+}
 
 const ALLOWED_BUMPS = new Set([
   'none',
@@ -20,11 +29,10 @@ function run(command, args, options = {}) {
     return;
   }
 
-  const result = spawnSync(command, args, {
-    stdio: 'inherit',
-    shell: true,
-    ...options,
-  });
+  const spawnOptions = { stdio: 'inherit', ...options };
+  const result = IS_WIN
+    ? spawnSync([command, ...args.map(quoteShellArg)].join(' '), { ...spawnOptions, shell: true })
+    : spawnSync(command, args, spawnOptions);
 
   if (result.status !== 0) {
     throw new Error(`Command failed: ${pretty}`);
