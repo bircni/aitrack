@@ -8,7 +8,7 @@ const IS_WIN = platform() === 'win32';
 /** Quote args for cmd.exe when shell mode joins them into one command string. */
 function quoteShellArg(arg) {
   if (!/[\s()&|<>^"'%!]/.test(arg)) return arg;
-  return `"${arg.replace(/"/g, '\\"')}"`;
+  return `"${arg.replaceAll('"', String.raw`\"`)}"`;
 }
 
 const ALLOWED_BUMPS = new Set([
