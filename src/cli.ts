@@ -5,18 +5,32 @@ import { fileURLToPath } from 'node:url';
 
 import { program } from 'commander';
 
+import {
+  cliErrorMessage,
+  dateRangeValidationError,
+  invalidDateMessage,
+  isValidDateString,
+  parseIntArg,
+  parsePositiveInt,
+  parseTopKind,
+  parseTopSort,
+  topKindValidationError,
+  topLimitValidationError,
+  topSortValidationError,
+  usageLastDaysValidationError,
+} from './cli/parse.js';
 import { daemonCommand } from './commands/daemon.js';
 import { initCommand } from './commands/init.js';
 import { machinesCommand } from './commands/machines.js';
 import { recomputeCostsCommand } from './commands/recompute.js';
 import { showCommand } from './commands/show.js';
 import { syncCommand } from './commands/sync.js';
-import { topCommand, type TopKind } from './commands/top.js';
+import { topCommand } from './commands/top.js';
 import { usageCommand, type UsageOptions } from './commands/usage.js';
 import { type UsagePeriod } from './display/usagePeriods.js';
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return cliErrorMessage(error);
 }
 
 function packageVersion(): string {
@@ -33,17 +47,11 @@ function runUsage(opts: UsageOptions): void {
 }
 
 function validateDate(date: string): void {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    console.error(`Invalid date: "${date}". Expected YYYY-MM-DD.`);
+  if (!isValidDateString(date)) {
+    console.error(invalidDateMessage(date));
     process.exit(1);
   }
 }
-
-const parseIntArg = (value: string): number => {
-  const n = parseInt(value, 10);
-  if (!Number.isFinite(n)) throw new Error(`Expected an integer, got: ${value}`);
-  return n;
-};
 
 program
   .name('aitrack')
@@ -179,8 +187,9 @@ for (const def of USAGE_PERIODS) {
     cmd.action((from: string, to: string, opts: UsageCommonOpts) => {
       validateDate(from);
       validateDate(to);
-      if (from > to) {
-        console.error(`Start date "${from}" must not be after end date "${to}".`);
+      const rangeError = dateRangeValidationError(from, to);
+      if (rangeError) {
+        console.error(rangeError);
         process.exit(1);
       }
       runUsage({ period: 'range', from, to, noCursor: opts.cursor === false });
@@ -190,12 +199,16 @@ for (const def of USAGE_PERIODS) {
 
   if (def.period === 'last') {
     cmd.action((n: string, opts: UsageCommonOpts) => {
-      const days = parseInt(n, 10);
-      if (!Number.isInteger(days) || days < 1) {
-        console.error(`Invalid number of days: "${n}". Expected a positive integer.`);
+      const lastError = usageLastDaysValidationError(n);
+      if (lastError) {
+        console.error(lastError);
         process.exit(1);
       }
-      runUsage({ period: 'last', n: days, noCursor: opts.cursor === false });
+      runUsage({
+        period: 'last',
+        n: parsePositiveInt(n) ?? 1,
+        noCursor: opts.cursor === false,
+      });
     });
     continue;
   }
@@ -265,24 +278,25 @@ program
         year?: number;
       },
     ) => {
-      const k: TopKind = kind === 'models' ? 'models' : 'days';
-      if (kind !== undefined && kind !== 'days' && kind !== 'models') {
-        console.error(`Invalid kind: "${kind}". Expected "days" or "models".`);
+      const kindError = topKindValidationError(kind);
+      if (kindError) {
+        console.error(kindError);
         process.exit(1);
       }
-      if (opts.sort !== 'tokens' && opts.sort !== 'cost') {
-        console.error(`Invalid --sort value: "${opts.sort}". Expected "tokens" or "cost".`);
+      const sortError = topSortValidationError(opts.sort);
+      if (sortError) {
+        console.error(sortError);
         process.exit(1);
       }
-      const sort = opts.sort;
-      if (!Number.isInteger(opts.limit) || opts.limit < 1) {
-        console.error(`Invalid --limit: "${String(opts.limit)}". Expected a positive integer.`);
+      const limitError = topLimitValidationError(opts.limit);
+      if (limitError) {
+        console.error(limitError);
         process.exit(1);
       }
       topCommand({
-        kind: k,
+        kind: parseTopKind(kind),
         limit: opts.limit,
-        sort,
+        sort: parseTopSort(opts.sort),
         noCursor: opts.cursor === false,
         year: opts.year,
       }).catch((error: unknown) => {

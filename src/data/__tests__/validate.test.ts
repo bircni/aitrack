@@ -89,6 +89,58 @@ describe('validateMachineFile', () => {
     );
     warn.mockRestore();
   });
+
+  it('warns and returns null when root is not an object', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(validateMachineFile(null, 'data/bad.json')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('root must be an object'));
+    warn.mockRestore();
+  });
+
+  it('warns and returns null when lastUpdated is missing', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const invalid = { ...validMachine, lastUpdated: '' };
+    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('lastUpdated'));
+    warn.mockRestore();
+  });
+
+  it('warns and returns null when days is not an object', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const invalid = { ...validMachine, days: [] };
+    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('days must be an object'));
+    warn.mockRestore();
+  });
+
+  it('warns and returns null when a day entry is not an object', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const invalid = { ...validMachine, days: { '2026-01-15': 'nope' } };
+    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('days.2026-01-15'));
+    warn.mockRestore();
+  });
+
+  it('warns and returns null when byModel is not an object', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const invalid = structuredClone(validMachine);
+    invalid.days['2026-01-15'].claude_code.byModel = [] as unknown as Record<string, unknown>;
+    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('byModel must be an object'));
+    warn.mockRestore();
+  });
+
+  it('warns and returns null for invalid cachedInputTokens on totals', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const invalid = structuredClone(validMachine);
+    (invalid.days['2026-01-15'].claude_code.totals as Record<string, unknown>).cachedInputTokens =
+      'bad';
+    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('days.2026-01-15.claude_code.totals.cachedInputTokens'),
+    );
+    warn.mockRestore();
+  });
 });
 
 describe('parseMachineFile', () => {

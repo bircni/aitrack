@@ -59,6 +59,7 @@ describe('daemonCommand', () => {
     }),
     close: vi.fn((cb?: () => void) => cb?.()),
     on: vi.fn(),
+    address: vi.fn(() => ({ port: 9089, address: '127.0.0.1' })),
   };
 
   beforeEach(() => {
@@ -176,6 +177,101 @@ describe('daemonCommand', () => {
       expect(mocks.tryPull).toHaveBeenCalledWith({ quiet: true });
     });
     expect(mocks.syncData).not.toHaveBeenCalled();
+
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
+  it('returns 404 for unknown routes', async () => {
+    const daemonPromise = daemonCommand({ port: 9089, interval: 120 });
+
+    await vi.waitFor(() => {
+      expect(requestHandler).toBeDefined();
+    });
+
+    const res = {
+      writeHead: vi.fn(),
+      end: vi.fn(),
+    };
+    if (!requestHandler) throw new Error('expected request handler');
+    requestHandler(
+      { method: 'GET', url: '/api/status' } as IncomingMessage,
+      res as unknown as ServerResponse,
+    );
+
+    expect(res.writeHead).toHaveBeenCalledWith(404, {
+      'Content-Type': 'text/plain; charset=utf-8',
+    });
+    expect(res.end).toHaveBeenCalledWith('Not found');
+
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
+  it('uses daemon defaults from config when options are omitted', async () => {
+    mocks.tryLoadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      daemon: { port: 9091, interval: 45, sync: true },
+    });
+    mocks.isCloned.mockReturnValue(true);
+
+    const daemonPromise = daemonCommand({});
+
+    fakeServer.address.mockReturnValue({ port: 9091, address: '127.0.0.1' });
+    await vi.waitFor(() => {
+      expect(fakeServer.listen).toHaveBeenCalledWith(9091, '127.0.0.1', expect.any(Function));
+    });
+    expect(mocks.syncData).toHaveBeenCalledWith({ quiet: true });
+
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
+  it('logs refresh failures without crashing the server', async () => {
+    mocks.loadMergedProviderData.mockRejectedValueOnce(new Error('refresh blew up'));
+
+    const daemonPromise = daemonCommand({ port: 9089, interval: 120 });
+
+    await vi.waitFor(() => {
+      expect(console.error).toHaveBeenCalledWith('aitrack daemon refresh failed: refresh blew up');
+    });
+
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
+  it('keeps the last good render when a later refresh returns no data', async () => {
+    mocks.loadMergedProviderData
+      .mockResolvedValueOnce({
+        providerData: { claude_code: new Map([['2024-06-01', makeDay(100, 50)]]) },
+        machineData: [],
+        fileCount: 0,
+      })
+      .mockResolvedValueOnce(null);
+
+    const daemonPromise = daemonCommand({ port: 9089, interval: 60 });
+
+    await vi.waitFor(() => {
+      expect(mocks.loadMergedProviderData).toHaveBeenCalledTimes(1);
+    });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.waitFor(() => {
+      expect(mocks.loadMergedProviderData).toHaveBeenCalledTimes(2);
+    });
+
+    const chunks: string[] = [];
+    const res = {
+      writeHead: vi.fn(),
+      end: vi.fn((body: string) => chunks.push(body)),
+    };
+    if (!requestHandler) throw new Error('expected request handler');
+    requestHandler(
+      { method: 'GET', url: '/' } as IncomingMessage,
+      res as unknown as ServerResponse,
+    );
+
+    expect(chunks[0]).toContain('dashboard');
 
     process.emit('SIGTERM');
     await daemonPromise.catch(() => undefined);

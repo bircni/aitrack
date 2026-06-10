@@ -121,8 +121,10 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     server.listen(settings.port, settings.host, () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address !== null ? address.port : settings.port;
       console.log(
-        `aitrack daemon listening on http://${settings.host}:${String(settings.port)} (refresh every ${String(settings.interval)}s)`,
+        `aitrack daemon listening on http://${settings.host}:${String(port)} (refresh every ${String(settings.interval)}s)`,
       );
       resolve();
     });
