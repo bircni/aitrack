@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
 
-import type { Config } from './types.js';
+import type { Config } from './data/types.js';
 
 const CONFIG_DIR = join(homedir(), '.config', 'aitrack');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');

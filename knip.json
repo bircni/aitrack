@@ -5,7 +5,7 @@
   "ignoreExportsUsedInFile": true,
   "vitest": {
     "config": "vitest.config.ts",
-    "entry": ["src/**/*.test.ts"]
+    "entry": ["src/**/__tests__/**/*.test.ts"]
   },
   "rules": {
     "exports": "warn",

@@ -4,9 +4,9 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
-import { getOrCreateDay, toLocalDateString } from '../dayMap.js';
+import { getOrCreateDay, toLocalDateString } from '../data/dayMap.js';
+import type { DayMap } from '../data/types.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
-import type { DayMap } from '../types.js';
 
 function getCodexPaths(): string[] {
   const paths = new Set<string>();
