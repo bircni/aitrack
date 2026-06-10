@@ -1,13 +1,11 @@
 import type { ProviderData } from '../data/types.js';
 
-export const PROVIDER_ORDER = ['claude_code', 'codex', 'cursor', 'gemini', 'opencode'] as const;
+export const PROVIDER_ORDER = ['claude_code', 'codex', 'cursor'] as const;
 
 export const PROVIDER_LABELS: Record<string, string> = {
   claude_code: 'Claude Code',
   codex: 'Codex',
   cursor: 'Cursor',
-  gemini: 'Gemini',
-  opencode: 'Open Code',
   all: 'All providers',
 };
 

@@ -57,6 +57,9 @@ jobs:
       - name: Coverage
         run: pnpm run coverage
 
+      - name: Unused exports
+        run: pnpm run check:unused
+
       - name: Build
         run: pnpm run build
 
