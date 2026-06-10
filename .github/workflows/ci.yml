@@ -42,26 +42,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Format check
-        run: pnpm run format:check
-
-      - name: Typecheck
-        run: pnpm run typecheck
-
-      - name: Test
-        run: pnpm run test
+      - name: Validate
+        run: pnpm run validate
 
       - name: Coverage
         run: pnpm run coverage
 
-      - name: Unused exports
-        run: pnpm run check:unused
-
       - name: Build
         run: pnpm run build
+
+      - name: CLI smoke tests
+        run: SMOKE_CLI=dist/cli.js pnpm run test:smoke
 
       - name: Verify publish tarball
         run: npm pack --dry-run

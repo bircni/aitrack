@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { DayEntry } from '../../../data/types.js';
 import { renderToHtml } from '../render.js';
@@ -114,5 +114,33 @@ describe('renderToHtml', () => {
     const html = renderToHtml({ cursor: dayMap }, { year: 2024 });
     expect(html).toContain('>Cost</th>');
     expect(html).not.toContain('>Est. cost</th>');
+  });
+
+  it('adds refresh meta and page hint when refreshIntervalSeconds is set', () => {
+    const dayMap = new Map([['2024-06-01', makeDay(100, 50)]]);
+    const html = renderToHtml(
+      { claude_code: dayMap },
+      { refreshIntervalSeconds: 120, lastUpdated: new Date('2024-06-01T12:00:00Z') },
+    );
+    expect(html).toContain('<meta http-equiv="refresh" content="120">');
+    expect(html).toContain('Auto-refreshes every 2 minutes');
+    expect(html).toContain('Showing 1 provider');
+  });
+
+  it('uses year-filtered data for the today section', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-06-01T12:00:00Z'));
+    try {
+      const dayMap = new Map([
+        ['2024-06-01', makeDay(100, 50)],
+        ['2025-06-01', makeDay(9000, 4500)],
+      ]);
+      const html = renderToHtml({ claude_code: dayMap }, { year: 2024 });
+      expect(html).toContain('today-section');
+      expect(html).toContain('150');
+      expect(html).not.toContain('13.5K');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

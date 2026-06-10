@@ -93,6 +93,22 @@ describe('daemonCommand', () => {
     vi.restoreAllMocks();
   });
 
+  it('passes refresh interval to renderToHtml', async () => {
+    const daemonPromise = daemonCommand({ port: 9089, interval: 45 });
+
+    await vi.waitFor(() => {
+      expect(mocks.renderToHtml).toHaveBeenCalled();
+    });
+
+    expect(mocks.renderToHtml).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ refreshIntervalSeconds: 45 }),
+    );
+
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
   it('serves cached HTML on GET /', async () => {
     const daemonPromise = daemonCommand({ port: 9089, interval: 120 });
 

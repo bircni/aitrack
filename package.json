@@ -46,6 +46,7 @@
     "format:check": "prettier . --check",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:smoke": "vitest run src/cli/__tests__/smoke.test.ts",
     "pricing:check": "tsx scripts/update-pricing.ts",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

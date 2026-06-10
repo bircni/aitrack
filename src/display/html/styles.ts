@@ -36,7 +36,11 @@ body {
   text-align: center;
   color: var(--muted);
   font-size: 15px;
+  background: var(--section-bg);
+  border: 1px dashed var(--divider);
+  border-radius: 8px;
 }
+.empty-state p { max-width: 36em; margin: 0 auto; }
 .provider-section {
   background: var(--section-bg);
   border: 1px solid var(--divider);

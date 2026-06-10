@@ -46,12 +46,17 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
     year: opts.year,
     noCursor: opts.noCursor,
   };
+  const htmlOpts = {
+    dark: renderOpts.dark,
+    all: renderOpts.all,
+    year: renderOpts.year,
+    refreshIntervalSeconds: settings.interval,
+  };
 
   let cachedHtml = renderToHtml(
     {},
     {
-      dark: renderOpts.dark,
-      year: renderOpts.year,
+      ...htmlOpts,
       emptyMessage: 'Loading...',
     },
   );
@@ -82,8 +87,7 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
         cachedHtml = renderToHtml(
           {},
           {
-            dark: renderOpts.dark,
-            year: renderOpts.year,
+            ...htmlOpts,
             lastUpdated,
             emptyMessage: emptyUsageMessage(!config || !isCloned()),
           },
@@ -92,9 +96,7 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
       }
 
       cachedHtml = renderToHtml(loaded.providerData, {
-        dark: renderOpts.dark,
-        all: renderOpts.all,
-        year: renderOpts.year,
+        ...htmlOpts,
         lastUpdated,
       });
       hasRendered = true;
