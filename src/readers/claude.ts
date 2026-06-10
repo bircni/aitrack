@@ -4,8 +4,9 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
-import { getOrCreateDay, toLocalDateString } from '../dayMap.js';
-import type { DayMap, TokenCounts } from '../types.js';
+import { getOrCreateDay, toLocalDateString } from '../data/dayMap.js';
+import type { DayMap, TokenCounts } from '../data/types.js';
+import { findClaudePricing } from '../pricing/claude.js';
 
 function getClaudePaths(): string[] {
   const paths = new Set<string>();
@@ -46,10 +47,6 @@ interface ClaudeEntry {
     };
   };
 }
-
-import { findClaudePricing } from '../pricing/claude.js';
-
-// Re-export for backwards compatibility with existing test imports.
 
 export function estimateClaudeCostUSD(
   model: string,

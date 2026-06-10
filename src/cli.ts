@@ -5,14 +5,15 @@ import { fileURLToPath } from 'node:url';
 
 import { program } from 'commander';
 
-import { daemonCommand } from './daemon.js';
-import { initCommand } from './init.js';
-import { machinesCommand } from './machines.js';
-import { recomputeCostsCommand } from './recompute.js';
-import { showCommand } from './show.js';
-import { syncCommand } from './sync.js';
-import { topCommand, type TopKind } from './top.js';
-import { usageCommand, type UsageOptions } from './usage.js';
+import { daemonCommand } from './commands/daemon.js';
+import { initCommand } from './commands/init.js';
+import { machinesCommand } from './commands/machines.js';
+import { recomputeCostsCommand } from './commands/recompute.js';
+import { showCommand } from './commands/show.js';
+import { syncCommand } from './commands/sync.js';
+import { topCommand, type TopKind } from './commands/top.js';
+import { usageCommand, type UsageOptions } from './commands/usage.js';
+import { type UsagePeriod } from './display/usagePeriods.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -37,6 +38,12 @@ function validateDate(date: string): void {
     process.exit(1);
   }
 }
+
+const parseIntArg = (value: string): number => {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) throw new Error(`Expected an integer, got: ${value}`);
+  return n;
+};
 
 program
   .name('aitrack')
@@ -104,106 +111,99 @@ const usage = program
 interface UsageCommonOpts {
   cursor?: boolean;
 }
-const usageCommonOpts = (cmd: ReturnType<typeof usage.command>) =>
-  cmd.option('--no-cursor', 'skip local Cursor usage');
 
-usageCommonOpts(
-  usage.command('today').description("Today's usage: provider / tokens / model / price"),
-).action((opts: UsageCommonOpts) => {
-  runUsage({ period: 'today', noCursor: opts.cursor === false });
-});
+type UsagePeriodDef =
+  | { name: string; period: UsagePeriod; description: string }
+  | { name: string; period: 'date'; description: string; arg: 'date' }
+  | { name: string; period: 'range'; description: string; args: ['from', 'to'] }
+  | { name: string; period: 'last'; description: string; arg: 'n' };
 
-usageCommonOpts(usage.command('yesterday').description("Yesterday's usage")).action(
-  (opts: UsageCommonOpts) => {
-    runUsage({ period: 'yesterday', noCursor: opts.cursor === false });
+const USAGE_PERIODS: UsagePeriodDef[] = [
+  {
+    name: 'today',
+    period: 'today',
+    description: "Today's usage: provider / tokens / model / price",
   },
-);
+  { name: 'yesterday', period: 'yesterday', description: "Yesterday's usage" },
+  {
+    name: 'date <date>',
+    period: 'date',
+    description: 'Usage for a specific date (YYYY-MM-DD)',
+    arg: 'date',
+  },
+  {
+    name: 'range <from> <to>',
+    period: 'range',
+    description: 'Usage for a custom date range (YYYY-MM-DD YYYY-MM-DD)',
+    args: ['from', 'to'],
+  },
+  {
+    name: 'thisweek',
+    period: 'thisweek',
+    description: 'Usage for the current calendar week (Mon–Sun)',
+  },
+  {
+    name: 'lastweek',
+    period: 'lastweek',
+    description: 'Usage for the previous calendar week (Mon–Sun)',
+  },
+  { name: 'week', period: 'week', description: 'Rolling 7-day usage ending today' },
+  { name: 'thismonth', period: 'thismonth', description: 'Usage for the current calendar month' },
+  { name: 'lastmonth', period: 'lastmonth', description: 'Usage for the previous calendar month' },
+  { name: 'month', period: 'month', description: 'Rolling 30-day usage ending today' },
+  {
+    name: 'last <n>',
+    period: 'last',
+    description: 'Rolling N-day usage ending today, e.g. last 14',
+    arg: 'n',
+  },
+  { name: 'year', period: 'year', description: 'Usage for the current calendar year' },
+  { name: 'all', period: 'all', description: 'All-time usage across every recorded day' },
+];
 
-usageCommonOpts(
-  usage.command('date <date>').description('Usage for a specific date (YYYY-MM-DD)'),
-).action((date: string, opts: UsageCommonOpts) => {
-  validateDate(date);
-  runUsage({ period: 'date', from: date, noCursor: opts.cursor === false });
-});
+for (const def of USAGE_PERIODS) {
+  const cmd = usage
+    .command(def.name)
+    .description(def.description)
+    .option('--no-cursor', 'skip local Cursor usage');
 
-usageCommonOpts(
-  usage
-    .command('range <from> <to>')
-    .description('Usage for a custom date range (YYYY-MM-DD YYYY-MM-DD)'),
-).action((from: string, to: string, opts: UsageCommonOpts) => {
-  validateDate(from);
-  validateDate(to);
-  if (from > to) {
-    console.error(`Start date "${from}" must not be after end date "${to}".`);
-    process.exit(1);
+  if (def.period === 'date') {
+    cmd.action((date: string, opts: UsageCommonOpts) => {
+      validateDate(date);
+      runUsage({ period: 'date', from: date, noCursor: opts.cursor === false });
+    });
+    continue;
   }
-  runUsage({ period: 'range', from, to, noCursor: opts.cursor === false });
-});
 
-usageCommonOpts(
-  usage.command('thisweek').description('Usage for the current calendar week (Mon–Sun)'),
-).action((opts: UsageCommonOpts) => {
-  runUsage({ period: 'thisweek', noCursor: opts.cursor === false });
-});
-
-usageCommonOpts(
-  usage.command('lastweek').description('Usage for the previous calendar week (Mon–Sun)'),
-).action((opts: UsageCommonOpts) => {
-  runUsage({ period: 'lastweek', noCursor: opts.cursor === false });
-});
-
-usageCommonOpts(usage.command('week').description('Rolling 7-day usage ending today')).action(
-  (opts: UsageCommonOpts) => {
-    runUsage({ period: 'week', noCursor: opts.cursor === false });
-  },
-);
-
-usageCommonOpts(
-  usage.command('thismonth').description('Usage for the current calendar month'),
-).action((opts: UsageCommonOpts) => {
-  runUsage({ period: 'thismonth', noCursor: opts.cursor === false });
-});
-
-usageCommonOpts(
-  usage.command('lastmonth').description('Usage for the previous calendar month'),
-).action((opts: UsageCommonOpts) => {
-  runUsage({ period: 'lastmonth', noCursor: opts.cursor === false });
-});
-
-usageCommonOpts(usage.command('month').description('Rolling 30-day usage ending today')).action(
-  (opts: UsageCommonOpts) => {
-    runUsage({ period: 'month', noCursor: opts.cursor === false });
-  },
-);
-
-usageCommonOpts(
-  usage.command('last <n>').description('Rolling N-day usage ending today, e.g. last 14'),
-).action((n: string, opts: UsageCommonOpts) => {
-  const days = parseInt(n, 10);
-  if (!Number.isInteger(days) || days < 1) {
-    console.error(`Invalid number of days: "${n}". Expected a positive integer.`);
-    process.exit(1);
+  if (def.period === 'range') {
+    cmd.action((from: string, to: string, opts: UsageCommonOpts) => {
+      validateDate(from);
+      validateDate(to);
+      if (from > to) {
+        console.error(`Start date "${from}" must not be after end date "${to}".`);
+        process.exit(1);
+      }
+      runUsage({ period: 'range', from, to, noCursor: opts.cursor === false });
+    });
+    continue;
   }
-  runUsage({ period: 'last', n: days, noCursor: opts.cursor === false });
-});
 
-usageCommonOpts(usage.command('year').description('Usage for the current calendar year')).action(
-  (opts: UsageCommonOpts) => {
-    runUsage({ period: 'year', noCursor: opts.cursor === false });
-  },
-);
+  if (def.period === 'last') {
+    cmd.action((n: string, opts: UsageCommonOpts) => {
+      const days = parseInt(n, 10);
+      if (!Number.isInteger(days) || days < 1) {
+        console.error(`Invalid number of days: "${n}". Expected a positive integer.`);
+        process.exit(1);
+      }
+      runUsage({ period: 'last', n: days, noCursor: opts.cursor === false });
+    });
+    continue;
+  }
 
-usageCommonOpts(
-  usage.command('all').description('All-time usage across every recorded day'),
-).action((opts: UsageCommonOpts) => {
-  runUsage({ period: 'all', noCursor: opts.cursor === false });
-});
-
-const parseIntArg = (value: string): number => {
-  const n = parseInt(value, 10);
-  if (!Number.isFinite(n)) throw new Error(`Expected an integer, got: ${value}`);
-  return n;
-};
+  cmd.action((opts: UsageCommonOpts) => {
+    runUsage({ period: def.period, noCursor: opts.cursor === false });
+  });
+}
 
 program
   .command('daemon')

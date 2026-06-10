@@ -11,8 +11,8 @@ import {
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 
-import type { MachineFile } from './types.js';
-import { parseMachineFile } from './validate.js';
+import type { MachineFile } from './data/types.js';
+import { parseMachineFile } from './data/validate.js';
 
 export const LOCAL_REPO = join(homedir(), '.config', 'aitrack', 'repo');
 export const PENDING_DATA_DIR = join(homedir(), '.config', 'aitrack', 'pending', 'data');
@@ -58,21 +58,25 @@ export function tryPull(opts?: { quiet?: boolean }): void {
   }
 }
 
-export function commitAndPush(hostname: string): boolean {
+export function commitDataChanges(message: string): boolean {
   git('add data/');
   const staged = execSync('git status --porcelain -- data/', { cwd: LOCAL_REPO, stdio: 'pipe' })
     .toString()
     .trim();
   if (!staged) {
-    return false; // nothing to commit
+    return false;
   }
-  git(`commit -m "sync: ${hostname} at ${new Date().toISOString()}"`, { stdio: 'pipe' });
+  git(`commit -m "${message}"`, { stdio: 'pipe' });
   try {
     git('push');
   } catch {
-    git('push -u origin HEAD'); // first push to empty repo
+    git('push -u origin HEAD');
   }
   return true;
+}
+
+export function commitAndPush(hostname: string): boolean {
+  return commitDataChanges(`sync: ${hostname} at ${new Date().toISOString()}`);
 }
 
 export function listDataFiles(): string[] {
