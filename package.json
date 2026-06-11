@@ -1,6 +1,6 @@
 {
   "name": "aitrack",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Sync AI coding assistant usage across machines via GitHub",
   "author": "Nicolas <bircni@icloud.com>",
   "license": "MIT",

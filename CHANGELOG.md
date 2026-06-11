@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.3] - 2026-06-11
+
+
+### Bug Fixes
+
+- Add new claude model pricings
+
 ## [v0.3.2] - 2026-06-10
 
 
