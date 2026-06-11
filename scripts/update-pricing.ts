@@ -71,7 +71,7 @@ function claudeModelId(family: string, version: string): string {
 
 // Scan the docs page for priced Claude models we don't track yet.
 function discoverClaudeModelsOnPage(html: string): string[] {
-  const re = /Claude (Opus|Sonnet|Haiku) (\d+(?:\.\d+)?)/g;
+  const re = /Claude (Opus|Sonnet|Haiku|Fable|Mythos) (\d+(?:\.\d+)?)/g;
   const found = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
@@ -145,7 +145,7 @@ async function checkCodex(): Promise<{ drift: number; unverified: number }> {
     html = await fetchHtml(CODEX_PRICING_URL);
   } catch (error) {
     console.error('Fetch failed:', (error as Error).message);
-    return { drift: 1, unverified: 0 };
+    return { drift: 1, unverified: 0, missing: 0 };
   }
 
   let drift = 0;
