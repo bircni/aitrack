@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   execSync: vi.fn(),
+  spawnSync: vi.fn(),
   existsSync: vi.fn(),
   readdirSync: vi.fn(),
   readFileSync: vi.fn(),
@@ -13,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   rmSync: vi.fn(),
 }));
 
-vi.mock('child_process', () => ({ execSync: mocks.execSync }));
+vi.mock('child_process', () => ({ execSync: mocks.execSync, spawnSync: mocks.spawnSync }));
 vi.mock('fs', () => ({
   existsSync: mocks.existsSync,
   readdirSync: mocks.readdirSync,
@@ -87,26 +88,23 @@ describe('git helpers', () => {
   });
 
   it('surfaces commit failures when there are staged data changes', () => {
-    const commitError = new Error('missing git identity');
     mocks.execSync
       .mockReturnValueOnce(Buffer.from('added'))
-      .mockReturnValueOnce(Buffer.from('A  data/host.json\n'))
-      .mockImplementationOnce(() => {
-        throw commitError;
-      });
+      .mockReturnValueOnce(Buffer.from('A  data/host.json\n'));
+    mocks.spawnSync.mockReturnValueOnce({ status: 1 });
 
-    expect(() => commitAndPush('host')).toThrow(commitError);
+    expect(() => commitAndPush('host')).toThrow('git commit failed');
   });
 
   it('sets upstream when a normal push fails', () => {
     mocks.execSync
       .mockReturnValueOnce(Buffer.from('added'))
       .mockReturnValueOnce(Buffer.from('A  data/host.json\n'))
-      .mockReturnValueOnce(Buffer.from('committed'))
       .mockImplementationOnce(() => {
         throw new Error('no upstream');
       })
       .mockReturnValueOnce(Buffer.from('pushed'));
+    mocks.spawnSync.mockReturnValueOnce({ status: 0 });
 
     expect(commitAndPush('host')).toBe(true);
     expect(mocks.execSync).toHaveBeenLastCalledWith(

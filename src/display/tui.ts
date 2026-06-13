@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 
+import { sumDayMap } from '../data/aggregate.js';
 import { filterProviderDataByYear } from '../data/dayMap.js';
 import type { DayMap, ProviderData } from '../data/types.js';
 import { fmt, fmtUSD } from './format.js';
@@ -30,22 +31,7 @@ interface StatsRow {
 }
 
 function summarizeDayMap(dayMap: DayMap, providerKey: string): StatsRow {
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let costUSD = 0;
-  let hasCost = false;
-  let days = 0;
-
-  for (const day of dayMap.values()) {
-    const total = day.inputTokens + day.outputTokens;
-    if (total > 0) days++;
-    inputTokens += day.inputTokens;
-    outputTokens += day.outputTokens;
-    if (day.costUSD !== undefined) {
-      costUSD += day.costUSD;
-      hasCost = true;
-    }
-  }
+  const { inputTokens, outputTokens, costUSD, hasCost, days } = sumDayMap(dayMap);
 
   const cs = currentStreak(dayMap);
   const ls = longestStreak(dayMap);
