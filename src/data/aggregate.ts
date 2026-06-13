@@ -1,5 +1,33 @@
 import type { DayMap } from './types.js';
 
+export interface TokenTotals {
+  inputTokens: number;
+  outputTokens: number;
+  costUSD: number;
+  hasCost: boolean;
+  days: number;
+}
+
+export function sumDayMap(dayMap: DayMap): TokenTotals {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let costUSD = 0;
+  let hasCost = false;
+  let days = 0;
+
+  for (const day of dayMap.values()) {
+    if (day.inputTokens + day.outputTokens > 0) days++;
+    inputTokens += day.inputTokens;
+    outputTokens += day.outputTokens;
+    if (day.costUSD !== undefined) {
+      costUSD += day.costUSD;
+      hasCost = true;
+    }
+  }
+
+  return { inputTokens, outputTokens, costUSD, hasCost, days };
+}
+
 export interface ModelAgg {
   inputTokens: number;
   outputTokens: number;

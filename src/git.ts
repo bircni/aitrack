@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -26,7 +26,10 @@ export function isCloned(): boolean {
 }
 
 export function cloneRepo(url: string): void {
-  execSync(`git clone "${url}" "${LOCAL_REPO}"`, { stdio: 'inherit' });
+  const result = spawnSync('git', ['clone', url, LOCAL_REPO], { stdio: 'inherit' });
+  if (result.status !== 0) {
+    throw new Error(`git clone failed with exit code ${String(result.status)}`);
+  }
 }
 
 export function removeLocalClone(): void {
@@ -66,7 +69,13 @@ export function commitDataChanges(message: string): boolean {
   if (!staged) {
     return false;
   }
-  git(`commit -m "${message}"`, { stdio: 'pipe' });
+  const result = spawnSync('git', ['commit', '-m', message], {
+    cwd: LOCAL_REPO,
+    stdio: 'pipe',
+  });
+  if (result.status !== 0) {
+    throw new Error(`git commit failed with exit code ${String(result.status)}`);
+  }
   try {
     git('push');
   } catch {
