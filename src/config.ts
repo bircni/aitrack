@@ -16,12 +16,21 @@ export function loadConfig(): Config {
 }
 
 export function tryLoadConfig(): Config | null {
+  let parsed: unknown;
   try {
-    const raw = readFileSync(CONFIG_PATH, 'utf8');
-    return JSON.parse(raw) as Config;
+    parsed = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
   } catch {
     return null;
   }
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !('repoUrl' in parsed) ||
+    typeof parsed.repoUrl !== 'string'
+  ) {
+    return null;
+  }
+  return parsed as Config;
 }
 
 export function saveConfig(config: Config): void {

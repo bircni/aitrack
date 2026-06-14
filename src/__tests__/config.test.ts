@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -58,6 +58,29 @@ describe('config', () => {
 
   it('throws when no config file exists', () => {
     expect(() => loadConfig()).toThrow('No config found');
+    expect(tryLoadConfig()).toBeNull();
+  });
+
+  function writeRawConfig(raw: string): void {
+    const dir = join(TEST_HOME, '.config', 'aitrack');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'config.json'), raw, 'utf8');
+  }
+
+  it('returns null for malformed JSON', () => {
+    writeRawConfig('{ not valid json');
+    expect(tryLoadConfig()).toBeNull();
+  });
+
+  it('returns null when repoUrl is missing or not a string', () => {
+    writeRawConfig(JSON.stringify({ machineId: 'work-laptop' }));
+    expect(tryLoadConfig()).toBeNull();
+    writeRawConfig(JSON.stringify({ repoUrl: 123 }));
+    expect(tryLoadConfig()).toBeNull();
+  });
+
+  it('returns null when the JSON root is not an object', () => {
+    writeRawConfig(JSON.stringify('a string'));
     expect(tryLoadConfig()).toBeNull();
   });
 });
