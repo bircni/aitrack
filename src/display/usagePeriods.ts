@@ -15,6 +15,29 @@ export type UsagePeriod =
   | 'range'
   | 'last';
 
+/**
+ * Periods that need no extra arguments (unlike `date`/`range`/`last`). These are
+ * the only periods the `export` command accepts.
+ */
+export const NO_ARG_PERIODS = [
+  'today',
+  'yesterday',
+  'thisweek',
+  'lastweek',
+  'week',
+  'thismonth',
+  'lastmonth',
+  'month',
+  'year',
+  'all',
+] as const satisfies readonly UsagePeriod[];
+
+export type NoArgPeriod = (typeof NO_ARG_PERIODS)[number];
+
+export function isNoArgPeriod(value: string): value is NoArgPeriod {
+  return (NO_ARG_PERIODS as readonly string[]).includes(value);
+}
+
 export interface UsageWindowOptions {
   period: UsagePeriod;
   from?: string;
