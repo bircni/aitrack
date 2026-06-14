@@ -1,6 +1,7 @@
 import type { DayMap } from '../../data/types.js';
 import { fmt, fmtUSDCost } from '../format.js';
 import { costColumnLabel } from '../providers.js';
+import { INTENSITY_PERCENTILE } from './constants.js';
 import { percentile } from './intensity.js';
 import { displayModelName } from './modelNames.js';
 import {
@@ -54,7 +55,7 @@ export function buildProviderSectionViewModel(
     }
   }
 
-  const maxTokens = percentile(dayTotals, 0.9) || 1;
+  const maxTokens = percentile(dayTotals, INTENSITY_PERCENTILE) || 1;
   const costLabel = costColumnLabel(providerKey, true);
   const costValue = hasCost ? fmtUSDCost(totalCost) : '—';
 
