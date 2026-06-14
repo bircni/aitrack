@@ -1,21 +1,14 @@
 import chalk from 'chalk';
 
-import { tryLoadConfig } from '../config.js';
-import { aggregateModelsByDayMap } from '../data/aggregate.js';
-import { emptyUsageMessage, loadMergedProviderData } from '../data/usageData.js';
+import {
+  buildUsageReport,
+  emptyReportMessage,
+  type UsageReportOptions,
+} from '../data/usageReport.js';
 import { fmt, fmtUSD } from '../display/format.js';
-import { orderedProviderKeys, providerLabel } from '../display/providers.js';
 import { defaultTableStyle, renderTerminalTable } from '../display/terminalTable.js';
-import { computeUsageWindow, type UsagePeriod } from '../display/usagePeriods.js';
-import { isCloned } from '../git.js';
 
-export interface UsageOptions {
-  period: UsagePeriod;
-  noCursor?: boolean;
-  from?: string;
-  to?: string;
-  n?: number;
-}
+export type UsageOptions = UsageReportOptions;
 
 interface Row {
   provider: string;
@@ -26,67 +19,34 @@ interface Row {
 }
 
 export async function usageCommand(opts: UsageOptions): Promise<void> {
-  const loaded = await loadMergedProviderData({ noCursor: opts.noCursor });
+  const report = await buildUsageReport(opts);
 
-  if (!loaded) {
-    console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));
+  if (!report || report.rowCount === 0) {
+    console.log(emptyReportMessage(report));
     return;
   }
-
-  const reportData = loaded.providerData;
-  const window = computeUsageWindow(opts);
-  const ordered = orderedProviderKeys(reportData);
 
   const rows: Row[] = [];
-  let totInput = 0;
-  let totOutput = 0;
-  let totCost = 0;
-  let anyCost = false;
-
-  for (const key of ordered) {
-    const dayMap = reportData[key];
-    if (!dayMap) continue;
-    const label = providerLabel(key);
-    const byModel = aggregateModelsByDayMap(dayMap, { start: window.start, end: window.end });
-    const providerRows: Array<Row & { sortCost: number; sortTokens: number }> = [];
-    for (const [model, agg] of byModel) {
-      const tokens = agg.inputTokens + agg.outputTokens;
-      if (tokens === 0 && !agg.hasCost) continue;
-      providerRows.push({
-        provider: label,
-        tokens: fmt(tokens),
-        model,
-        price: agg.hasCost ? fmtUSD(agg.costUSD) : '—',
-        sortCost: agg.hasCost ? agg.costUSD : 0,
-        sortTokens: tokens,
+  for (const provider of report.providers) {
+    for (const row of provider.rows) {
+      rows.push({
+        provider: provider.label,
+        tokens: fmt(row.tokens),
+        model: row.model,
+        price: row.hasCost ? fmtUSD(row.costUSD) : '—',
       });
-      totInput += agg.inputTokens;
-      totOutput += agg.outputTokens;
-      if (agg.hasCost) {
-        totCost += agg.costUSD;
-        anyCost = true;
-      }
     }
-    providerRows.sort((a, b) => b.sortCost - a.sortCost || b.sortTokens - a.sortTokens);
-    for (const row of providerRows) {
-      rows.push({ provider: row.provider, tokens: row.tokens, model: row.model, price: row.price });
-    }
-  }
-
-  if (rows.length === 0) {
-    console.log(`No usage recorded for ${window.label}.`);
-    return;
   }
 
   const totalRow: Row = {
     provider: 'TOTAL',
-    tokens: fmt(totInput + totOutput),
+    tokens: fmt(report.totals.tokens),
     model: '',
-    price: anyCost ? fmtUSD(totCost) : '—',
+    price: report.totals.hasCost ? fmtUSD(report.totals.costUSD) : '—',
     isTotal: true,
   };
 
-  console.log(chalk.bold(`aitrack usage ${window.label}`));
+  console.log(chalk.bold(`aitrack usage ${report.windowLabel}`));
   console.log(
     renderTerminalTable(
       [...rows, totalRow],
