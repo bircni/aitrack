@@ -1,5 +1,6 @@
 import { toLocalDateString } from '../../data/dayMap.js';
 import type { DayMap } from '../../data/types.js';
+import { HEATMAP_WEEKS, MS_PER_DAY, RECENT_WINDOW_DAYS } from './constants.js';
 
 export const MONTHS = [
   'Jan',
@@ -50,7 +51,7 @@ export function longestStreak(dayMap: DayMap): number {
   for (let i = 1; i < activeDates.length; i++) {
     const prev = new Date(`${activeDates[i - 1]}T12:00:00`);
     const cur = new Date(`${activeDates[i]}T12:00:00`);
-    const diffDays = Math.round((cur.getTime() - prev.getTime()) / 86_400_000);
+    const diffDays = Math.round((cur.getTime() - prev.getTime()) / MS_PER_DAY);
     if (diffDays === 1) {
       current++;
       longest = Math.max(longest, current);
@@ -90,14 +91,14 @@ export interface ModelStats {
   peak: PeakDay | null;
 }
 
-function since30Days(): string {
+function recentWindowStart(): string {
   const d = new Date();
-  d.setDate(d.getDate() - 30);
+  d.setDate(d.getDate() - RECENT_WINDOW_DAYS);
   return toLocalDateString(d);
 }
 
 export function computeModelStats(dayMap: DayMap): ModelStats {
-  const since = since30Days();
+  const since = recentWindowStart();
   const allTime = new Map<string, number>();
   const recent = new Map<string, number>();
   let topAll: ModelTop | null = null;
@@ -158,7 +159,7 @@ export function buildDateGrid(year?: number): Array<Array<string | null>> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const start = new Date(today);
-  start.setDate(start.getDate() - today.getDay() - 52 * 7);
+  start.setDate(start.getDate() - today.getDay() - HEATMAP_WEEKS * 7);
   const weeks: Array<Array<string | null>> = [];
   const cur = new Date(start);
   while (cur <= today) {
