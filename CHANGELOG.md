@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.4.0] - 2026-06-15
+
+
+### Bug Fixes
+
+- **config:** Validate config JSON before trusting it
+
+### Features
+
+- **export:** Add itemized PDF usage receipt
+- **config:** Add config get/set/list command
+
+### Refactoring
+
+- Project hygiene — shell injection fix, sumDayMap utility, new unit tests
+- **heatmap:** Name magic-number constants
+- **cli:** Extract buildProgram and DRY error handling
+
 ## [v0.3.3] - 2026-06-11
 
 
