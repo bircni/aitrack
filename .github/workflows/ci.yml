@@ -42,8 +42,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate
-        run: pnpm run validate
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Format check
+        run: pnpm run format:check
+
+      - name: Check unused dependencies
+        run: pnpm run check:unused
+
+      - name: Type check
+        run: pnpm run typecheck
+
+      - name: Test
+        run: pnpm run test
 
       - name: Coverage
         run: pnpm run coverage
