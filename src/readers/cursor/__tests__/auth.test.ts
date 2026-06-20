@@ -1,8 +1,8 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
-import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -29,7 +29,7 @@ function resetCursorEnv(): void {
 
 function createStateDb(path: string, rows: Record<string, string | Buffer> = {}): void {
   mkdirSync(join(path, '..'), { recursive: true });
-  const db = new Database(path);
+  const db = new DatabaseSync(path);
   db.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
   const insert = db.prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(rows)) insert.run(key, value);

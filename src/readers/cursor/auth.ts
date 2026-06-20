@@ -2,8 +2,7 @@ import { existsSync } from 'node:fs';
 import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 
 const CURSOR_CONFIG_DIR_ENV = 'CURSOR_CONFIG_DIR';
 const CURSOR_STATE_DB_PATH_ENV = 'CURSOR_STATE_DB_PATH';
@@ -71,15 +70,15 @@ function normalizeCursorDbValue(value: unknown): string | undefined {
     const trimmed = value.trim();
     return trimmed === '' ? undefined : trimmed;
   }
-  if (Buffer.isBuffer(value)) {
-    const trimmed = value.toString('utf8').trim();
+  if (value instanceof Uint8Array) {
+    const trimmed = Buffer.from(value).toString('utf8').trim();
     return trimmed === '' ? undefined : trimmed;
   }
   return undefined;
 }
 
 function readCursorAuthStateFromDatabase(databasePath: string): CursorAuthState {
-  const database = new Database(databasePath, { readonly: true, fileMustExist: true });
+  const database = new DatabaseSync(databasePath, { readOnly: true });
   try {
     const query = database.prepare('SELECT value FROM ItemTable WHERE key = ? LIMIT 1');
     const accessRow = query.get('cursorAuth/accessToken') as { value?: unknown } | undefined;
