@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.4.1] - 2026-06-22
+
+
+### CI
+
+- Enhance CI output
+
+### Features
+
+- Disable auto pulling on usage computation (#26)
+
+### Refactoring
+
+- **deps:** Replace better-sqlite3 with node:sqlite
+
 ## [v0.4.0] - 2026-06-15
 
 
