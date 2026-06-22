@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { tryLoadConfig } from '../config.js';
 import { emptyUsageMessage, loadMergedProviderData } from '../data/usageData.js';
 import { renderToHtml } from '../display/html/render.js';
-import { isCloned, tryPull } from '../git.js';
+import { isCloned } from '../git.js';
 import { syncData } from './sync.js';
 
 const DEFAULT_PORT = 9089;
@@ -69,8 +69,6 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
           throw new Error('Sync enabled but repo not cloned. Run: npx aitrack init');
         }
         await syncData({ quiet: true });
-      } else if (isCloned()) {
-        tryPull({ quiet: true });
       }
 
       const loaded = await loadMergedProviderData({

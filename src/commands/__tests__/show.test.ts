@@ -4,8 +4,6 @@ const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   resolveMachineId: vi.fn(),
   isCloned: vi.fn(),
-  pull: vi.fn(),
-  tryPull: vi.fn(),
   listDataFiles: vi.fn(),
   readDataFile: vi.fn(),
   writePendingMachineFile: vi.fn(),
@@ -26,8 +24,6 @@ vi.mock('../../config.js', () => ({
 }));
 vi.mock('../../git.js', () => ({
   isCloned: mocks.isCloned,
-  pull: mocks.pull,
-  tryPull: mocks.tryPull,
   listDataFiles: mocks.listDataFiles,
   readDataFile: mocks.readDataFile,
   writePendingMachineFile: mocks.writePendingMachineFile,

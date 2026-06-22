@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } fr
 const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   isCloned: vi.fn(),
-  tryPull: vi.fn(),
   syncData: vi.fn(),
   loadMergedProviderData: vi.fn(),
   renderToHtml: vi.fn(),
@@ -14,7 +13,6 @@ vi.mock('../../config.js', () => ({
 }));
 vi.mock('../../git.js', () => ({
   isCloned: mocks.isCloned,
-  tryPull: mocks.tryPull,
 }));
 vi.mock('../sync.js', () => ({
   syncData: mocks.syncData,
