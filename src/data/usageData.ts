@@ -1,7 +1,7 @@
 import { hostname } from 'node:os';
 
 import { resolveMachineId, tryLoadConfig } from '../config.js';
-import { isCloned, listDataFiles, readDataFile, tryPull, writePendingMachineFile } from '../git.js';
+import { isCloned, listDataFiles, readDataFile, writePendingMachineFile } from '../git.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { readCursorData } from '../readers/cursor/index.js';
 import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
@@ -122,8 +122,6 @@ export async function loadMergedProviderData(
   let fileCount = 0;
 
   if (config && isCloned()) {
-    tryPull();
-
     const files = listDataFiles();
     fileCount = files.length;
     const currentFile = `${machineId}.json`;

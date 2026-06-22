@@ -4,8 +4,6 @@ const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   resolveMachineId: vi.fn(),
   isCloned: vi.fn(),
-  pull: vi.fn(),
-  tryPull: vi.fn(),
   listDataFiles: vi.fn(),
   readDataFile: vi.fn(),
   writePendingMachineFile: vi.fn(),
@@ -20,8 +18,6 @@ vi.mock('../../config.js', () => ({
 }));
 vi.mock('../../git.js', () => ({
   isCloned: mocks.isCloned,
-  pull: mocks.pull,
-  tryPull: mocks.tryPull,
   listDataFiles: mocks.listDataFiles,
   readDataFile: mocks.readDataFile,
   writePendingMachineFile: mocks.writePendingMachineFile,
@@ -120,8 +116,6 @@ describe('loadMergedProviderData', () => {
     const loaded = await loadMergedProviderData({ noCursor: true });
 
     expect(console.warn).not.toHaveBeenCalled();
-    expect(mocks.pull).not.toHaveBeenCalled();
-    expect(mocks.tryPull).not.toHaveBeenCalled();
     expect(mocks.writePendingMachineFile).toHaveBeenCalled();
     expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(10);
     expect(loaded?.warnedNotConfigured).toBe(true);

@@ -4,7 +4,7 @@ import { basename } from 'node:path';
 import { loadConfig, resolveMachineId } from '../config.js';
 import { buildMachineData, machineHasData, readLocalProviderMaps } from '../data/localData.js';
 import { parseMachineFile } from '../data/validate.js';
-import { commitDataChanges, isCloned, listDataFiles, tryPull } from '../git.js';
+import { commitDataChanges, isCloned, listDataFiles } from '../git.js';
 import { consumeClaudeFallbackHits } from '../pricing/claude.js';
 import { consumeCodexFallbackHits } from '../pricing/codex.js';
 import { resolveModelCost } from '../pricing/resolve.js';
@@ -16,8 +16,6 @@ export async function recomputeCostsCommand(): Promise<void> {
   if (!isCloned()) {
     throw new Error('Repo not cloned. Run: npx aitrack init');
   }
-
-  tryPull();
 
   const files = listDataFiles();
   if (files.length === 0) {

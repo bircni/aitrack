@@ -261,7 +261,6 @@ export function buildProgram(): Command {
     .option('--interval <seconds>', 'seconds between data refresh ticks', parseIntArg)
     .option('--host <host>', 'bind address', '127.0.0.1')
     .option('--sync', 'pull and push local data on each refresh tick')
-    .option('--no-sync', 'only pull remote data on each refresh tick')
     .option('--dark', 'dark mode dashboard')
     .option('--no-cursor', 'skip local Cursor usage (no state.vscdb / CSV export)')
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
@@ -277,8 +276,6 @@ export function buildProgram(): Command {
         all?: boolean;
         year?: number;
       }) => {
-        // Commander collapses --sync/--no-sync into a single opts.sync tri-state
-        // (true | false | undefined). undefined means "fall back to config default".
         runAsync(() =>
           daemonCommand({
             port: opts.port,
@@ -297,7 +294,7 @@ export function buildProgram(): Command {
   program
     .command('top [kind]')
     .description(
-      'Show top items by tokens or cost. kind: "days" (default) or "models". Pulls from all configured machines.',
+      'Show top items by tokens or cost. kind: "days" (default) or "models". Uses already-local synced machine data.',
     )
     .option('-n, --limit <n>', 'number of items to show', parseIntArg, 10)
     .option('--sort <field>', 'sort by "tokens" or "cost"', 'cost')

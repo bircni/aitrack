@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   isCloned: vi.fn(),
-  tryPull: vi.fn(),
   syncData: vi.fn(),
   loadMergedProviderData: vi.fn(),
   renderToHtml: vi.fn(),
@@ -17,7 +16,6 @@ vi.mock('../../config.js', () => ({
 }));
 vi.mock('../../git.js', () => ({
   isCloned: mocks.isCloned,
-  tryPull: mocks.tryPull,
 }));
 vi.mock('../sync.js', () => ({
   syncData: mocks.syncData,
@@ -178,19 +176,18 @@ describe('daemonCommand', () => {
     await vi.waitFor(() => {
       expect(mocks.syncData).toHaveBeenCalledWith({ quiet: true });
     });
-    expect(mocks.tryPull).not.toHaveBeenCalled();
 
     process.emit('SIGTERM');
     await daemonPromise.catch(() => undefined);
   });
 
-  it('pulls quietly when sync is disabled and repo is cloned', async () => {
+  it('does not pull or push when sync is disabled and repo is cloned', async () => {
     mocks.isCloned.mockReturnValue(true);
 
     const daemonPromise = daemonCommand({ port: 9089, interval: 120, sync: false });
 
     await vi.waitFor(() => {
-      expect(mocks.tryPull).toHaveBeenCalledWith({ quiet: true });
+      expect(mocks.loadMergedProviderData).toHaveBeenCalled();
     });
     expect(mocks.syncData).not.toHaveBeenCalled();
 
