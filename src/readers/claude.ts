@@ -117,16 +117,16 @@ function addClaudeUsageBreakdown(
   rec.cacheCreationInputTokens = (rec.cacheCreationInputTokens ?? 0) + cacheCreate;
 }
 
-function mergeTokenBreakdown(dst: TokenCounts, src: TokenCounts): void {
-  if (src.rawInputTokens !== undefined) {
-    dst.rawInputTokens = (dst.rawInputTokens ?? 0) + src.rawInputTokens;
+function mergeTokenBreakdown(dst: TokenCounts, source: TokenCounts): void {
+  if (source.rawInputTokens !== undefined) {
+    dst.rawInputTokens = (dst.rawInputTokens ?? 0) + source.rawInputTokens;
   }
-  if (src.cachedInputTokens !== undefined) {
-    dst.cachedInputTokens = (dst.cachedInputTokens ?? 0) + src.cachedInputTokens;
+  if (source.cachedInputTokens !== undefined) {
+    dst.cachedInputTokens = (dst.cachedInputTokens ?? 0) + source.cachedInputTokens;
   }
-  if (src.cacheCreationInputTokens !== undefined) {
+  if (source.cacheCreationInputTokens !== undefined) {
     dst.cacheCreationInputTokens =
-      (dst.cacheCreationInputTokens ?? 0) + src.cacheCreationInputTokens;
+      (dst.cacheCreationInputTokens ?? 0) + source.cacheCreationInputTokens;
   }
 }
 
@@ -158,7 +158,7 @@ export async function parseJsonlFile(filePath: string, seen: Set<string>): Promi
 
     const ts = entry.timestamp;
     if (!ts) continue;
-    const dateStr = toLocalDateString(ts);
+    const dateString = toLocalDateString(ts);
     const model = (entry.message?.model ?? 'unknown').replace(/-latest$/, '');
 
     const inputTokens =
@@ -166,9 +166,9 @@ export async function parseJsonlFile(filePath: string, seen: Set<string>): Promi
       (usage.cache_read_input_tokens ?? 0) +
       (usage.cache_creation_input_tokens ?? 0);
     const outputTokens = usage.output_tokens ?? 0;
-    const costUSD = estimateClaudeCostUSD(model, usage, dateStr);
+    const costUSD = estimateClaudeCostUSD(model, usage, dateString);
 
-    const day = getOrCreateDay(result, dateStr);
+    const day = getOrCreateDay(result, dateString);
     const rec = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
     rec.inputTokens += inputTokens;
     rec.outputTokens += outputTokens;
@@ -183,14 +183,14 @@ export async function parseJsonlFile(filePath: string, seen: Set<string>): Promi
   return result;
 }
 
-function mergeDayMaps(dst: DayMap, src: DayMap): void {
-  for (const [date, srcDay] of src) {
+function mergeDayMaps(dst: DayMap, source: DayMap): void {
+  for (const [date, sourceDay] of source) {
     const dstDay = getOrCreateDay(dst, date);
-    dstDay.inputTokens += srcDay.inputTokens;
-    dstDay.outputTokens += srcDay.outputTokens;
-    mergeTokenBreakdown(dstDay, srcDay);
-    if (srcDay.costUSD !== undefined) dstDay.costUSD = (dstDay.costUSD ?? 0) + srcDay.costUSD;
-    for (const [model, counts] of Object.entries(srcDay.byModel)) {
+    dstDay.inputTokens += sourceDay.inputTokens;
+    dstDay.outputTokens += sourceDay.outputTokens;
+    mergeTokenBreakdown(dstDay, sourceDay);
+    if (sourceDay.costUSD !== undefined) dstDay.costUSD = (dstDay.costUSD ?? 0) + sourceDay.costUSD;
+    for (const [model, counts] of Object.entries(sourceDay.byModel)) {
       const modelTotals = (dstDay.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
       modelTotals.inputTokens += counts.inputTokens;
       modelTotals.outputTokens += counts.outputTokens;

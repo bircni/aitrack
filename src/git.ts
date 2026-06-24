@@ -17,8 +17,8 @@ import { parseMachineFile } from './data/validate.js';
 export const LOCAL_REPO = join(homedir(), '.config', 'aitrack', 'repo');
 export const PENDING_DATA_DIR = join(homedir(), '.config', 'aitrack', 'pending', 'data');
 
-function git(args: string, opts: Record<string, unknown> = {}): void {
-  execSync(`git ${args}`, { cwd: LOCAL_REPO, stdio: 'inherit', ...opts });
+function git(arguments_: string, options: Record<string, unknown> = {}): void {
+  execSync(`git ${arguments_}`, { cwd: LOCAL_REPO, stdio: 'inherit', ...options });
 }
 
 export function isCloned(): boolean {
@@ -39,20 +39,20 @@ export function removeLocalClone(): void {
 }
 
 export function pull(): void {
-  const refs = execSync('git ls-remote --heads origin', { cwd: LOCAL_REPO, stdio: 'pipe' })
+  const references = execSync('git ls-remote --heads origin', { cwd: LOCAL_REPO, stdio: 'pipe' })
     .toString()
     .trim();
-  if (!refs) return; // empty repo, nothing to pull yet
+  if (!references) return; // empty repo, nothing to pull yet
   git('pull --ff-only --quiet');
 }
 
-export function tryPull(opts?: { quiet?: boolean }): void {
+export function tryPull(options?: { quiet?: boolean }): void {
   try {
-    const refs = execSync('git ls-remote --heads origin', { cwd: LOCAL_REPO, stdio: 'pipe' })
+    const references = execSync('git ls-remote --heads origin', { cwd: LOCAL_REPO, stdio: 'pipe' })
       .toString()
       .trim();
-    if (!refs) return;
-    if (!opts?.quiet) {
+    if (!references) return;
+    if (!options?.quiet) {
       console.log('Pulling latest from remote...');
     }
     git('pull --ff-only --quiet');
@@ -118,8 +118,8 @@ export function adoptPendingDataFiles(targetDataDir: string): number {
   const pending = listPendingDataFiles();
   if (pending.length === 0) return 0;
   mkdirSync(targetDataDir, { recursive: true });
-  for (const src of pending) {
-    copyFileSync(src, join(targetDataDir, basename(src)));
+  for (const source of pending) {
+    copyFileSync(source, join(targetDataDir, basename(source)));
   }
   rmSync(PENDING_DATA_DIR, { recursive: true, force: true });
   return pending.length;

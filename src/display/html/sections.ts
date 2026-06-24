@@ -38,15 +38,16 @@ function renderHeatmapCells(
   const cells: string[] = [];
   for (const [w, week] of weeks.entries()) {
     for (let d = 0; d < 7; d++) {
-      const dateStr = week[d] ?? null;
-      const rec = dateStr ? dayMap.get(dateStr) : null;
+      const dateString = week[d] ?? null;
+      const rec = dateString ? dayMap.get(dateString) : null;
       const tokens = rec ? rec.inputTokens + rec.outputTokens : 0;
-      const level = dateStr ? tokenIntensityLevel(tokens, maxTokens) : 0;
+      const level = dateString ? tokenIntensityLevel(tokens, maxTokens) : 0;
       const color = theme.cells[level];
-      const title = dateStr && tokens > 0 ? `${dateStr} — ${fmt(tokens)} tokens` : (dateStr ?? '');
+      const title =
+        dateString && tokens > 0 ? `${dateString} — ${fmt(tokens)} tokens` : (dateString ?? '');
       const style = `grid-column:${String(w + 1)};grid-row:${String(d + 1)};background:${color}`;
-      const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
-      cells.push(`<div class="cell"${titleAttr} style="${style}"></div>`);
+      const titleAttribute = title ? ` title="${escapeHtml(title)}"` : '';
+      cells.push(`<div class="cell"${titleAttribute} style="${style}"></div>`);
     }
   }
   return cells.join('');
@@ -96,7 +97,7 @@ export function renderTodaySection(providerData: ProviderData, dark: boolean): s
   const totalIn = rows.reduce((s, r) => s + r.inputTokens, 0);
   const totalOut = rows.reduce((s, r) => s + r.outputTokens, 0);
   const totalCost = rows.reduce((s, r) => s + r.cost, 0);
-  const anyCost = rows.some((r) => r.hasCost);
+  const isAnyCost = rows.some((r) => r.hasCost);
 
   const cards = rows
     .map(
@@ -105,7 +106,7 @@ export function renderTodaySection(providerData: ProviderData, dark: boolean): s
     )
     .join('');
 
-  const totalLine = `<div class="today-totals"><span><strong>${escapeHtml(fmt(totalIn + totalOut))}</strong> tokens total</span><span><strong>${escapeHtml(fmt(totalIn))}</strong> in / <strong>${escapeHtml(fmt(totalOut))}</strong> out</span>${anyCost ? `<span><strong>${escapeHtml(fmtUSDCost(totalCost))}</strong> est. cost</span>` : ''}</div>`;
+  const totalLine = `<div class="today-totals"><span><strong>${escapeHtml(fmt(totalIn + totalOut))}</strong> tokens total</span><span><strong>${escapeHtml(fmt(totalIn))}</strong> in / <strong>${escapeHtml(fmt(totalOut))}</strong> out</span>${isAnyCost ? `<span><strong>${escapeHtml(fmtUSDCost(totalCost))}</strong> est. cost</span>` : ''}</div>`;
 
   return `<section class="today-section">
   <div class="today-header"><h2>Today</h2><span class="today-date">${escapeHtml(today)}</span></div>
@@ -116,7 +117,7 @@ export function renderTodaySection(providerData: ProviderData, dark: boolean): s
 
 function renderUsageTable(providerKey: string, dayMap: DayMap): string {
   const byModel = aggregateModelsByDayMap(dayMap);
-  const rows = [...byModel.entries()]
+  const rows = [...byModel]
     .map(([model, agg]) => ({
       model,
       tokens: agg.inputTokens + agg.outputTokens,
@@ -128,7 +129,7 @@ function renderUsageTable(providerKey: string, dayMap: DayMap): string {
 
   if (rows.length === 0) return '';
 
-  const anyCost = rows.some((r) => r.hasCost);
+  const isAnyCost = rows.some((r) => r.hasCost);
   const totalTokens = rows.reduce((s, r) => s + r.tokens, 0);
   const totalCost = rows.reduce((s, r) => s + r.cost, 0);
   const costLabel = costColumnLabel(providerKey);
@@ -145,7 +146,7 @@ function renderUsageTable(providerKey: string, dayMap: DayMap): string {
   <table>
     <thead><tr><th>Model</th><th class="num">Tokens</th><th class="num">${escapeHtml(costLabel)}</th></tr></thead>
     <tbody>${bodyRows}</tbody>
-    <tfoot><tr><td>Total</td><td class="num">${escapeHtml(fmt(totalTokens))}</td><td class="num">${escapeHtml(anyCost ? fmtUSD(totalCost) : '—')}</td></tr></tfoot>
+    <tfoot><tr><td>Total</td><td class="num">${escapeHtml(fmt(totalTokens))}</td><td class="num">${escapeHtml(isAnyCost ? fmtUSD(totalCost) : '—')}</td></tr></tfoot>
   </table>
 </details>`;
 }

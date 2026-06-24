@@ -40,34 +40,34 @@ function sampleReport(): UsageReport {
 
 describe('renderReceiptPdf', () => {
   it('produces a non-empty PDF buffer', async () => {
-    const buf = await renderReceiptPdf(sampleReport(), new Date('2026-06-15T10:00:00Z'));
-    expect(buf.length).toBeGreaterThan(0);
-    expect(buf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    const buffer = await renderReceiptPdf(sampleReport(), new Date('2026-06-15T10:00:00Z'));
+    expect(buffer.length).toBeGreaterThan(0);
+    expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 
   it('renders a report with no priced rows without throwing', async () => {
     const report = sampleReport();
     report.totals.hasCost = false;
     for (const provider of report.providers) provider.subtotalHasCost = false;
-    const buf = await renderReceiptPdf(report);
-    expect(buf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    const buffer = await renderReceiptPdf(report);
+    expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
 
   it('fits on a single page even with many rows', async () => {
     const report = sampleReport();
     const provider = report.providers[0];
     if (!provider) throw new Error('expected a provider');
-    provider.rows = Array.from({ length: 60 }, (_, i) => ({
-      model: `model-${String(i)}`,
+    provider.rows = Array.from({ length: 60 }, (_, index) => ({
+      model: `model-${String(index)}`,
       inputTokens: 10,
       outputTokens: 5,
       tokens: 15,
       costUSD: 0.01,
       hasCost: true,
     }));
-    const buf = await renderReceiptPdf(report);
+    const buffer = await renderReceiptPdf(report);
     // PDFKit emits one "/Type /Page" object per page; sizing to content keeps it to one.
-    const pageCount = buf.toString('latin1').match(/\/Type\s*\/Page[^s]/g)?.length ?? 0;
+    const pageCount = buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g)?.length ?? 0;
     expect(pageCount).toBe(1);
   });
 });

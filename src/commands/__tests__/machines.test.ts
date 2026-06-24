@@ -44,13 +44,13 @@ function makeMachine(
           m: {
             inputTokens: item.input,
             outputTokens: item.output,
-            ...(item.cost === undefined ? {} : { costUSD: item.cost }),
+            ...(item.cost !== undefined && { costUSD: item.cost }),
           },
         },
         totals: {
           inputTokens: item.input,
           outputTokens: item.output,
-          ...(item.cost === undefined ? {} : { costUSD: item.cost }),
+          ...(item.cost !== undefined && { costUSD: item.cost }),
         },
       };
     }
@@ -84,10 +84,10 @@ describe('machinesCommand', () => {
 
     const out = captured();
     expect(out).toContain('aitrack machines (2)');
-    const bigIdx = out.indexOf('big');
-    const smallIdx = out.indexOf('small');
-    expect(bigIdx).toBeGreaterThan(-1);
-    expect(smallIdx).toBeGreaterThan(bigIdx);
+    const bigIndex = out.indexOf('big');
+    const smallIndex = out.indexOf('small');
+    expect(bigIndex).toBeGreaterThan(-1);
+    expect(smallIndex).toBeGreaterThan(bigIndex);
     expect(out).toContain('Claude Code');
     expect(out).toContain('Codex');
   });

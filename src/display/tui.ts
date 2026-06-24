@@ -82,12 +82,14 @@ function totalRow(rows: StatsRow[]): StatsRow {
   };
 }
 
-export function renderTui(providerData: ProviderData, opts: TuiOptions = {}): string {
+export function renderTui(providerData: ProviderData, options: TuiOptions = {}): string {
   const filtered =
-    opts.year === undefined ? providerData : filterProviderDataByYear(providerData, opts.year);
+    options.year === undefined
+      ? providerData
+      : filterProviderDataByYear(providerData, options.year);
 
   let rows: StatsRow[];
-  if (opts.all) {
+  if (options.all) {
     const merged = mergeAllProviderDayMaps(filtered);
     rows = merged.size > 0 ? [summarizeDayMap(merged, 'all')] : [];
   } else {
@@ -103,11 +105,11 @@ export function renderTui(providerData: ProviderData, opts: TuiOptions = {}): st
 
   if (rows.length === 0) return '';
 
-  const dark = Boolean(opts.dark);
+  const isDark = Boolean(options.dark);
   const title =
-    opts.year === undefined
+    options.year === undefined
       ? chalk.bold('aitrack stats')
-      : chalk.bold(`aitrack stats (${opts.year})`);
+      : chalk.bold(`aitrack stats (${options.year})`);
   const subtitle = chalk.dim('Streak = current / longest (days)');
 
   const bodyRows = rows.filter((r) => r.provider !== 'TOTAL');
@@ -126,10 +128,10 @@ export function renderTui(providerData: ProviderData, opts: TuiOptions = {}): st
       { header: 'Peak month', align: 'left', cell: (r) => r.peak },
     ],
     {
-      style: defaultTableStyle(dark),
+      style: defaultTableStyle(isDark),
       bodyRows,
       footerRow: footer,
-      firstColumnStyle: defaultTableStyle(dark).header,
+      firstColumnStyle: defaultTableStyle(isDark).header,
     },
   );
 

@@ -5,7 +5,7 @@ export function displayModelName(model: string): string {
     const re = new RegExp(String.raw`^${family}-(\d+)-(\d+)$`);
     const m = re.exec(cleaned);
     if (m?.[1] !== undefined && m[2] !== undefined) {
-      return `${(family[0] ?? '').toUpperCase()}${family.slice(1)} ${m[1]}.${m[2]}`;
+      return `${(family.at(0) ?? '').toUpperCase()}${family.slice(1)} ${m[1]}.${m[2]}`;
     }
   }
   const gpt = /^gpt-([\d.]+)(?:-(.+))?$/.exec(cleaned);

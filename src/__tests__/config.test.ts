@@ -5,8 +5,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 // vi.hoisted runs before any module is loaded, so its value is available in vi.mock factories
 const TEST_HOME = vi.hoisted(() => {
-  const tmp = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
-  return `${tmp}/aitrack-config-test`;
+  const temporary = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
+  return `${temporary}/aitrack-config-test`;
 });
 
 vi.mock('node:os', async (importOriginal) => {
@@ -29,9 +29,9 @@ describe('config', () => {
   });
 
   it('round-trips a config through save and load', () => {
-    const cfg = { repoUrl: 'git@github.com:test/repo.git' };
-    saveConfig(cfg);
-    expect(loadConfig()).toEqual(cfg);
+    const config = { repoUrl: 'git@github.com:test/repo.git' };
+    saveConfig(config);
+    expect(loadConfig()).toEqual(config);
   });
 
   it('overwrites existing config on second save', () => {
@@ -41,9 +41,9 @@ describe('config', () => {
   });
 
   it('round-trips a config with machineId through save and load', () => {
-    const cfg = { repoUrl: 'git@github.com:test/repo.git', machineId: 'work-laptop' };
-    saveConfig(cfg);
-    expect(loadConfig()).toEqual(cfg);
+    const config = { repoUrl: 'git@github.com:test/repo.git', machineId: 'work-laptop' };
+    saveConfig(config);
+    expect(loadConfig()).toEqual(config);
   });
 
   it('resolveMachineId falls back to hostname when machineId is unset', () => {

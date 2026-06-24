@@ -28,9 +28,9 @@ function resolveCliEntry(): { command: string; prefixArgs: string[] } {
   return { command: 'pnpm', prefixArgs: ['exec', 'tsx', 'src/cli.ts'] };
 }
 
-function runCli(args: string[]): CliRun {
+function runCli(arguments_: string[]): CliRun {
   const { command, prefixArgs } = resolveCliEntry();
-  const result = spawnSync(command, [...prefixArgs, ...args], {
+  const result = spawnSync(command, [...prefixArgs, ...arguments_], {
     cwd: repoRoot,
     encoding: 'utf8',
     env: { ...process.env, FORCE_COLOR: '0' },

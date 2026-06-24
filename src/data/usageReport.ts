@@ -55,11 +55,11 @@ export interface UsageReport {
  * Shared by the `usage` (terminal table) and `export` (PDF receipt) commands so
  * both render from a single source of truth.
  */
-export async function buildUsageReport(opts: UsageReportOptions): Promise<UsageReport | null> {
-  const loaded = await loadMergedProviderData({ noCursor: opts.noCursor });
+export async function buildUsageReport(options: UsageReportOptions): Promise<UsageReport | null> {
+  const loaded = await loadMergedProviderData({ noCursor: options.noCursor });
   if (!loaded) return null;
 
-  const window = computeUsageWindow(opts);
+  const window = computeUsageWindow(options);
   const ordered = orderedProviderKeys(loaded.providerData);
 
   const providers: UsageReportProvider[] = [];
@@ -80,7 +80,7 @@ export async function buildUsageReport(opts: UsageReportOptions): Promise<UsageR
     const rows: UsageReportRow[] = [];
     let subtotalTokens = 0;
     let subtotalCostUSD = 0;
-    let subtotalHasCost = false;
+    let isSubtotalHasCost = false;
 
     for (const [model, agg] of byModel) {
       const tokens = agg.inputTokens + agg.outputTokens;
@@ -98,7 +98,7 @@ export async function buildUsageReport(opts: UsageReportOptions): Promise<UsageR
       totals.outputTokens += agg.outputTokens;
       if (agg.hasCost) {
         subtotalCostUSD += agg.costUSD;
-        subtotalHasCost = true;
+        isSubtotalHasCost = true;
         totals.costUSD += agg.costUSD;
         totals.hasCost = true;
       }
@@ -113,7 +113,7 @@ export async function buildUsageReport(opts: UsageReportOptions): Promise<UsageR
       rows,
       subtotalTokens,
       subtotalCostUSD,
-      subtotalHasCost,
+      subtotalHasCost: isSubtotalHasCost,
     });
   }
 

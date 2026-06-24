@@ -50,11 +50,11 @@ describe('daemon HTTP integration', () => {
       fileCount: 0,
     });
     mocks.renderToHtml.mockImplementation(
-      (_data: unknown, opts?: { emptyMessage?: string }) =>
-        `<html>${opts?.emptyMessage ?? 'live-dashboard'}</html>`,
+      (_data: unknown, options?: { emptyMessage?: string }) =>
+        `<html>${options?.emptyMessage ?? 'live-dashboard'}</html>`,
     );
-    vi.spyOn(console, 'log').mockImplementation((msg) => {
-      logs.push(String(msg));
+    vi.spyOn(console, 'log').mockImplementation((message) => {
+      logs.push(String(message));
     });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);

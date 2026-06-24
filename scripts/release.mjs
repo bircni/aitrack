@@ -6,9 +6,9 @@ import { platform } from 'node:os';
 const IS_WIN = platform() === 'win32';
 
 /** Quote args for cmd.exe when shell mode joins them into one command string. */
-function quoteShellArg(arg) {
-  if (!/[\s()&|<>^"'%!]/.test(arg)) return arg;
-  return `"${arg.replaceAll('"', String.raw`\"`)}"`;
+function quoteShellArgument(argument) {
+  if (!/[\s()&|<>^"'%!]/.test(argument)) return argument;
+  return `"${argument.replaceAll('"', String.raw`\"`)}"`;
 }
 
 const ALLOWED_BUMPS = new Set([
@@ -22,8 +22,8 @@ const ALLOWED_BUMPS = new Set([
   'prerelease',
 ]);
 
-function run(command, args, options = {}) {
-  const pretty = [command, ...args].join(' ');
+function run(command, arguments_, options = {}) {
+  const pretty = [command, ...arguments_].join(' ');
   if (options.dryRun) {
     console.log(`[dry-run] ${pretty}`);
     return;
@@ -31,35 +31,40 @@ function run(command, args, options = {}) {
 
   const spawnOptions = { stdio: 'inherit', ...options };
   const result = IS_WIN
-    ? spawnSync([command, ...args.map(quoteShellArg)].join(' '), { ...spawnOptions, shell: true })
-    : spawnSync(command, args, spawnOptions);
+    ? spawnSync([command, ...arguments_.map(quoteShellArgument)].join(' '), {
+        ...spawnOptions,
+        shell: true,
+      })
+    : spawnSync(command, arguments_, spawnOptions);
 
   if (result.status !== 0) {
     throw new Error(`Command failed: ${pretty}`);
   }
 }
 
-function output(command, args) {
-  const result = spawnSync(command, args, { encoding: 'utf8' });
+function output(command, arguments_) {
+  const result = spawnSync(command, arguments_, { encoding: 'utf8' });
   if (result.status !== 0) {
-    throw new Error(`Command failed: ${[command, ...args].join(' ')}`);
+    throw new Error(`Command failed: ${[command, ...arguments_].join(' ')}`);
   }
   return result.stdout.trim();
 }
 
 function getPackageVersion() {
-  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  return pkg.version;
+  const package_ = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  return package_.version;
 }
 
-function parseArgs(argv) {
-  const bumpArg = argv.find((arg) => !arg.startsWith('--')) || 'patch';
-  if (!ALLOWED_BUMPS.has(bumpArg)) {
-    throw new Error(`Invalid bump type: ${bumpArg}. Use one of: ${[...ALLOWED_BUMPS].join(', ')}`);
+function parseArguments(argv) {
+  const bumpArgument = argv.find((argument) => !argument.startsWith('--')) || 'patch';
+  if (!ALLOWED_BUMPS.has(bumpArgument)) {
+    throw new Error(
+      `Invalid bump type: ${bumpArgument}. Use one of: ${[...ALLOWED_BUMPS].join(', ')}`,
+    );
   }
 
   return {
-    bump: bumpArg,
+    bump: bumpArgument,
     dryRun: argv.includes('--dry-run'),
   };
 }
@@ -76,28 +81,28 @@ function ensureCleanGitTree(dryRun) {
 }
 
 function main() {
-  const { bump, dryRun } = parseArgs(process.argv.slice(2));
-  const opts = { dryRun };
+  const { bump, dryRun } = parseArguments(process.argv.slice(2));
+  const options = { dryRun };
 
   ensureCleanGitTree(dryRun);
 
-  run('pnpm', ['run', 'validate'], opts);
-  run('pnpm', ['run', 'build'], opts);
+  run('pnpm', ['run', 'validate'], options);
+  run('pnpm', ['run', 'build'], options);
 
   if (bump !== 'none') {
-    run('pnpm', ['version', bump, '--no-git-tag-version'], opts);
+    run('pnpm', ['version', bump, '--no-git-tag-version'], options);
   }
   const version = getPackageVersion();
   const tag = `v${version}`;
 
-  run('git-cliff', ['--config', '.cliff.toml', '--tag', tag, '-o', 'CHANGELOG.md'], opts);
+  run('git-cliff', ['--config', '.cliff.toml', '--tag', tag, '-o', 'CHANGELOG.md'], options);
 
-  run('git', ['add', 'package.json', 'pnpm-lock.yaml', 'CHANGELOG.md'], opts);
-  run('git', ['commit', '-m', `chore(release): ${tag}`], opts);
-  run('git', ['tag', tag], opts);
+  run('git', ['add', 'package.json', 'pnpm-lock.yaml', 'CHANGELOG.md'], options);
+  run('git', ['commit', '-m', `chore(release): ${tag}`], options);
+  run('git', ['tag', tag], options);
 
-  run('git', ['push'], opts);
-  run('git', ['push', '--tags'], opts);
+  run('git', ['push'], options);
+  run('git', ['push', '--tags'], options);
 
   console.log(`Release complete: ${tag}`);
   console.log(

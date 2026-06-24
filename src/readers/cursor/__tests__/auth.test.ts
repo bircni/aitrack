@@ -8,32 +8,32 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   errorMessage,
   fetchCursorUsageCsv,
-  getCursorStateDbPath,
+  getCursorStateDbPath as getCursorStateDatabasePath,
   readCursorAuthState,
 } from '../auth.js';
 
 let tmpDir: string;
-const originalFetch = globalThis.fetch;
+const originalFetch = fetch;
 
 function setFetchMock(
-  implementation: (...args: Parameters<typeof fetch>) => Response | Promise<Response>,
+  implementation: (...arguments_: Parameters<typeof fetch>) => Response | Promise<Response>,
 ): void {
-  globalThis.fetch = (...args) => Promise.resolve(implementation(...args));
+  globalThis.fetch = (...arguments_) => Promise.resolve(implementation(...arguments_));
 }
 
-function resetCursorEnv(): void {
+function resetCursorEnvironment(): void {
   delete process.env.CURSOR_CONFIG_DIR;
   delete process.env.CURSOR_STATE_DB_PATH;
   delete process.env.CURSOR_WEB_BASE_URL;
 }
 
-function createStateDb(path: string, rows: Record<string, string | Buffer> = {}): void {
+function createStateDatabase(path: string, rows: Record<string, string | Buffer> = {}): void {
   mkdirSync(join(path, '..'), { recursive: true });
-  const db = new DatabaseSync(path);
-  db.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
-  const insert = db.prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)');
+  const database = new DatabaseSync(path);
+  database.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
+  const insert = database.prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(rows)) insert.run(key, value);
-  db.close();
+  database.close();
 }
 
 function jwtWithSub(sub: string): string {
@@ -46,51 +46,51 @@ describe('cursor auth', () => {
   beforeEach(() => {
     tmpDir = join(tmpdir(), `cursor-auth-${Date.now()}-${Math.random()}`);
     mkdirSync(tmpDir, { recursive: true });
-    resetCursorEnv();
+    resetCursorEnvironment();
   });
 
   afterEach(() => {
-    resetCursorEnv();
+    resetCursorEnvironment();
     globalThis.fetch = originalFetch;
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it('resolves explicit .vscdb paths and deduplicates config dirs', () => {
-    const dbPath = join(tmpDir, 'state.vscdb');
-    createStateDb(dbPath);
-    process.env.CURSOR_STATE_DB_PATH = dbPath;
+    const databasePath = join(tmpDir, 'state.vscdb');
+    createStateDatabase(databasePath);
+    process.env.CURSOR_STATE_DB_PATH = databasePath;
 
-    expect(getCursorStateDbPath()).toBe(dbPath);
+    expect(getCursorStateDatabasePath()).toBe(databasePath);
 
     const nested = join(tmpDir, 'profile', 'User', 'globalStorage', 'state.vscdb');
-    createStateDb(nested);
+    createStateDatabase(nested);
     process.env.CURSOR_STATE_DB_PATH = '';
     process.env.CURSOR_CONFIG_DIR = `${join(tmpDir, 'profile')}, ${join(tmpDir, 'profile')}`;
 
-    expect(getCursorStateDbPath()).toBe(nested);
+    expect(getCursorStateDatabasePath()).toBe(nested);
   });
 
   it('reads trimmed string and buffer tokens from sqlite', async () => {
-    const dbPath = join(tmpDir, 'state.vscdb');
-    createStateDb(dbPath, {
+    const databasePath = join(tmpDir, 'state.vscdb');
+    createStateDatabase(databasePath, {
       'cursorAuth/accessToken': Buffer.from(' token-a '),
       'cursorAuth/refreshToken': 'token-r',
     });
 
-    await expect(readCursorAuthState(dbPath)).resolves.toEqual({
+    await expect(readCursorAuthState(databasePath)).resolves.toEqual({
       accessToken: 'token-a',
       refreshToken: 'token-r',
     });
   });
 
   it('returns undefined tokens for blank values', async () => {
-    const dbPath = join(tmpDir, 'state.vscdb');
-    createStateDb(dbPath, {
+    const databasePath = join(tmpDir, 'state.vscdb');
+    createStateDatabase(databasePath, {
       'cursorAuth/accessToken': ' '.repeat(3),
       'cursorAuth/refreshToken': '',
     });
 
-    await expect(readCursorAuthState(dbPath)).resolves.toEqual({
+    await expect(readCursorAuthState(databasePath)).resolves.toEqual({
       accessToken: undefined,
       refreshToken: undefined,
     });

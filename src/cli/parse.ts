@@ -21,7 +21,7 @@ export function parseIntArg(value: string): number {
 export function parsePositiveInt(value: string): number | undefined {
   if (!/^\d+$/.test(value)) return undefined;
   const n = Number(value);
-  if (!Number.isInteger(n) || n < 1) return undefined;
+  if (!Number.isSafeInteger(n) || n < 1) return undefined;
   return n;
 }
 
@@ -49,7 +49,7 @@ export function parseTopSort(sort: string): TopSort {
 }
 
 export function topLimitValidationError(limit: number): string | null {
-  if (!Number.isInteger(limit) || limit < 1) {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
     return `Invalid --limit: "${String(limit)}". Expected a positive integer.`;
   }
   return null;

@@ -35,10 +35,10 @@ export interface TerminalTableOptions<Row> {
 export function renderTerminalTable<Row>(
   rows: Row[],
   columns: Array<TerminalTableColumn<Row>>,
-  opts: TerminalTableOptions<Row> = {},
+  options: TerminalTableOptions<Row> = {},
 ): string {
-  const style = opts.style ?? defaultTableStyle();
-  const bodyRows = opts.bodyRows ?? rows;
+  const style = options.style ?? defaultTableStyle();
+  const bodyRows = options.bodyRows ?? rows;
   const widths = columns.map((col) =>
     Math.max(col.header.length, ...rows.map((row) => col.cell(row).length)),
   );
@@ -52,9 +52,9 @@ export function renderTerminalTable<Row>(
   ): string =>
     style.border('│') +
     cells
-      .map((cell, i) => {
-        const padded = pad(cell, widths[i] ?? 0, columns[i]?.align ?? 'left');
-        const styled = rowStyle ? rowStyle(padded, i) : padded;
+      .map((cell, index) => {
+        const padded = pad(cell, widths[index] ?? 0, columns[index]?.align ?? 'left');
+        const styled = rowStyle ? rowStyle(padded, index) : padded;
         return ` ${styled} `;
       })
       .join(style.border('│')) +
@@ -74,17 +74,18 @@ export function renderTerminalTable<Row>(
     lines.push(
       renderRow(
         columns.map((col) => col.cell(row)),
-        opts.firstColumnStyle
-          ? (text, i) => (i === 0 && opts.firstColumnStyle ? opts.firstColumnStyle(text) : text)
+        options.firstColumnStyle
+          ? (text, index) =>
+              index === 0 && options.firstColumnStyle ? options.firstColumnStyle(text) : text
           : undefined,
       ),
     );
   }
 
-  const footerRow = opts.footerRow;
+  const footerRow = options.footerRow;
   if (footerRow) {
     lines.push(hLine('├', '┼', '┤'));
-    const footerStyle = opts.footerStyle ?? style.total ?? style.header;
+    const footerStyle = options.footerStyle ?? style.total ?? style.header;
     lines.push(
       renderRow(
         columns.map((col) => col.cell(footerRow)),

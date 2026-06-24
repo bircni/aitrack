@@ -57,6 +57,30 @@ export default defineConfig(
       'unicorn/prefer-top-level-await': 'off',
       // Minor; `(await x).foo` is clearer than two-line splits in our reader code.
       'unicorn/no-await-expression-member': 'off',
+      // Abbreviations like dir, res, tmpDir, dst are standard Node/TS idioms.
+      'unicorn/name-replacements': 'off',
+      // Booleans without is/has prefixes (dark, bold, warned) are clear in context.
+      'unicorn/consistent-boolean-name': 'off',
+      // CLI entrypoints and scripts use .catch() for fire-and-forget error handling.
+      'unicorn/prefer-await': 'off',
+      // continue in nested loops is the right tool for skipping bad records in readers.
+      'unicorn/no-break-in-nested-loop': 'off',
+      // Vitest suites assign tmpDir in beforeEach; module-level let is intentional.
+      'unicorn/no-top-level-assignment-in-function': 'off',
+      // Tests stub globalThis.fetch and similar globals.
+      'unicorn/no-global-object-property-assignment': 'off',
+      // parseInt(x, 10) is explicit and correct for CLI integer parsing.
+      'unicorn/prefer-number-coercion': 'off',
+      // Hoisted declarations after guard clauses are fine and often clearer.
+      'unicorn/no-declarations-before-early-exit': 'off',
+      // [...iterator] is fine; Iterator#toArray() is ES2025 and less familiar.
+      'unicorn/prefer-iterator-to-array': 'off',
+      // Test helpers and builder patterns legitimately nest calls.
+      'unicorn/max-nested-calls': 'off',
+      // Ternary shape is a readability preference, not a correctness issue.
+      'unicorn/prefer-minimal-ternary': 'off',
+      // Buffer base64 helpers are still the Node norm in auth code paths.
+      'unicorn/prefer-uint8array-base64': 'off',
     },
   },
   {

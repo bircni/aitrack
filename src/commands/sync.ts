@@ -12,21 +12,21 @@ export interface SyncDataOptions {
   quiet?: boolean;
 }
 
-export async function syncData(opts: SyncDataOptions = {}): Promise<void> {
+export async function syncData(options: SyncDataOptions = {}): Promise<void> {
   const config = loadConfig();
-  const quiet = Boolean(opts.quiet);
+  const isQuiet = Boolean(options.quiet);
 
   if (!isCloned()) {
     throw new Error('Repo not cloned. Run: npx aitrack init');
   }
 
-  if (!quiet) {
+  if (!isQuiet) {
     console.log('Pulling latest from remote...');
   }
   pull();
 
   // Cursor usage is merged at `show` time only (local CSV export); it is never written to git.
-  if (!quiet) {
+  if (!isQuiet) {
     console.log('Reading local data...');
   }
   const { claude_code: claudeData, codex: codexData } = await readLocalProviderMaps();
@@ -34,13 +34,13 @@ export async function syncData(opts: SyncDataOptions = {}): Promise<void> {
   const totalDays = new Set([...claudeData.keys(), ...codexData.keys()]).size;
 
   if (totalDays === 0) {
-    if (!quiet) {
+    if (!isQuiet) {
       console.log('No local data found (Claude Code or Codex).');
     }
     return;
   }
 
-  if (!quiet) {
+  if (!isQuiet) {
     const sources: string[] = [];
     if (claudeData.size > 0) sources.push(`Claude Code (${claudeData.size} days)`);
     if (codexData.size > 0) sources.push(`Codex (${codexData.size} days)`);
@@ -65,7 +65,7 @@ export async function syncData(opts: SyncDataOptions = {}): Promise<void> {
   }
 
   if (JSON.stringify(existingDays) === JSON.stringify(freshData.days)) {
-    if (!quiet) {
+    if (!isQuiet) {
       console.log('No changes to push — data is already up to date.');
     }
     removePendingMachineFile(host);
@@ -75,14 +75,14 @@ export async function syncData(opts: SyncDataOptions = {}): Promise<void> {
   writeFileSync(dataFilePath, JSON.stringify(freshData, null, 2), 'utf8');
   removePendingMachineFile(host);
 
-  const pushed = commitAndPush(host);
-  if (!pushed) {
-    if (!quiet) {
+  const isPushed = commitAndPush(host);
+  if (!isPushed) {
+    if (!isQuiet) {
       console.log('No changes to push — data is already up to date.');
     }
     return;
   }
-  if (!quiet) {
+  if (!isQuiet) {
     console.log(`Done! Pushed data/${host}.json (${totalDays} days)`);
   }
 

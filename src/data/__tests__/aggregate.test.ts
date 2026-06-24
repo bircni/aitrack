@@ -12,7 +12,7 @@ function day(
   return {
     inputTokens,
     outputTokens,
-    ...(totals?.costUSD === undefined ? {} : { costUSD: totals.costUSD }),
+    ...(totals?.costUSD !== undefined && { costUSD: totals.costUSD }),
     byModel,
   };
 }

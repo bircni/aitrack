@@ -15,21 +15,21 @@ export interface CursorCsvRow {
 function parseCsvLine(line: string): string[] {
   const values: string[] = [];
   let current = '';
-  let inQuotes = false;
+  let isInQuotes = false;
   for (let index = 0; index < line.length; index += 1) {
     const char = line[index];
     if (char === undefined) continue;
 
     if (char === '"') {
-      if (inQuotes && line[index + 1] === '"') {
+      if (isInQuotes && line[index + 1] === '"') {
         current += '"';
         index += 1;
         continue;
       }
-      inQuotes = !inQuotes;
+      isInQuotes = !isInQuotes;
       continue;
     }
-    if (char === ',' && !inQuotes) {
+    if (char === ',' && !isInQuotes) {
       values.push(current);
       current = '';
       continue;
@@ -105,16 +105,16 @@ export function aggregateCursorCsvToDayMap(content: string): DayMap {
   const result: DayMap = new Map();
 
   processCursorCsvLines(content.split(/\r?\n/), (row) => {
-    const dateStr = parseCursorDateString(row.Date);
+    const dateString = parseCursorDateString(row.Date);
     const rawModel = row.Model?.trim();
     const tokenTotals = createCursorTokenTotals(row);
-    if (!dateStr || !rawModel || !tokenTotals) return;
+    if (!dateString || !rawModel || !tokenTotals) return;
 
     const model = normalizeModelName(rawModel);
     const inputTokens = tokenTotals.input;
     const outputTokens = tokenTotals.output;
 
-    const day = getOrCreateDay(result, dateStr);
+    const day = getOrCreateDay(result, dateString);
     const rec = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
     rec.inputTokens += inputTokens;
     rec.outputTokens += outputTokens;

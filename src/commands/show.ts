@@ -9,13 +9,13 @@ import { renderTui } from '../display/tui.js';
 import { isCloned } from '../git.js';
 
 function openFile(filePath: string): void {
-  const cmd =
+  const command =
     process.platform === 'win32'
       ? `start "" "${filePath}"`
       : process.platform === 'darwin'
         ? `open "${filePath}"`
         : `xdg-open "${filePath}"`;
-  exec(cmd);
+  exec(command);
 }
 
 interface ShowOptions {
@@ -28,10 +28,10 @@ interface ShowOptions {
   tui?: boolean;
 }
 
-export async function showCommand(opts: ShowOptions = {}): Promise<void> {
+export async function showCommand(options: ShowOptions = {}): Promise<void> {
   const loaded = await loadMergedProviderData({
-    noCursor: opts.noCursor,
-    year: opts.year,
+    noCursor: options.noCursor,
+    year: options.year,
   });
 
   if (!loaded) {
@@ -39,24 +39,24 @@ export async function showCommand(opts: ShowOptions = {}): Promise<void> {
     return;
   }
 
-  if (opts.tui) {
+  if (options.tui) {
     const output = renderTui(loaded.providerData, {
-      dark: opts.dark,
-      all: opts.all,
-      year: opts.year,
+      dark: options.dark,
+      all: options.all,
+      year: options.year,
     });
     console.log(output || 'No usage data found.');
     return;
   }
 
-  const outputPath = resolve(opts.output ?? 'aitrack.png');
+  const outputPath = resolve(options.output ?? 'aitrack.png');
   const png = renderToPng(loaded.providerData, loaded.machineData, {
-    dark: Boolean(opts.dark),
-    all: Boolean(opts.all),
-    year: opts.year,
+    dark: Boolean(options.dark),
+    all: Boolean(options.all),
+    year: options.year,
   });
   writeFileSync(outputPath, png);
 
   console.log(`Saved: ${outputPath}`);
-  if (opts.open !== false) openFile(outputPath);
+  if (options.open !== false) openFile(outputPath);
 }
