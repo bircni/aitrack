@@ -20,6 +20,6 @@ export function fmtUSDCost(n: number): string {
 
 export function pad(value: string, width: number, align: 'left' | 'right'): string {
   if (value.length >= width) return value;
-  const padStr = ' '.repeat(width - value.length);
-  return align === 'left' ? value + padStr : padStr + value;
+  const padString = ' '.repeat(width - value.length);
+  return align === 'left' ? value + padString : padString + value;
 }

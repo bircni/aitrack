@@ -31,8 +31,8 @@ function findHits(html: string, needle: string, isBoundary: (c: string) => boole
 // in a tool-pricing aside before its main row), so we union across all hits.
 function pricesAt(html: string, hits: number[], windowSize: number): number[] {
   const found: number[] = [];
-  for (const idx of hits) {
-    const window = html.slice(idx, idx + windowSize);
+  for (const index of hits) {
+    const window = html.slice(index, index + windowSize);
     const re = /\$([\d.]+)/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(window)) !== null) {
@@ -81,7 +81,7 @@ function discoverClaudeModelsOnPage(html: string): string[] {
     if (prices.length === 0) continue;
     found.add(claudeModelId(m[1], m[2]));
   }
-  return [...found].sort();
+  return [...found].sort((a, b) => a.localeCompare(b));
 }
 
 function claudeSummary(p: ClaudePricing): string {
@@ -110,13 +110,13 @@ async function checkClaude(): Promise<{ drift: number; unverified: number; missi
       unverified++;
       continue;
     }
-    const inOk = found.includes(pricing.inputPerMillion);
-    const outOk = found.includes(pricing.outputPerMillion);
-    if (inOk && outOk) {
+    const isInOk = found.includes(pricing.inputPerMillion);
+    const isOutOk = found.includes(pricing.outputPerMillion);
+    if (isInOk && isOutOk) {
       console.log(`✓ ${modelId.padEnd(22)} ${claudeSummary(pricing)}`);
     } else {
       console.log(
-        `✗ ${modelId.padEnd(22)} ${claudeSummary(pricing)}  — input=${inOk ? 'ok' : 'MISS'} output=${outOk ? 'ok' : 'MISS'}  (saw: ${found.slice(0, 6).join(', ')})`,
+        `✗ ${modelId.padEnd(22)} ${claudeSummary(pricing)}  — input=${isInOk ? 'ok' : 'MISS'} output=${isOutOk ? 'ok' : 'MISS'}  (saw: ${found.slice(0, 6).join(', ')})`,
       );
       drift++;
     }
@@ -163,13 +163,13 @@ async function checkCodex(): Promise<{ drift: number; unverified: number }> {
       unverified++;
       continue;
     }
-    const inOk = found.includes(pricing.inputPerMillion);
-    const outOk = found.includes(pricing.outputPerMillion);
-    if (inOk && outOk) {
+    const isInOk = found.includes(pricing.inputPerMillion);
+    const isOutOk = found.includes(pricing.outputPerMillion);
+    if (isInOk && isOutOk) {
       console.log(`✓ ${modelId.padEnd(22)} ${codexSummary(pricing)}`);
     } else {
       console.log(
-        `✗ ${modelId.padEnd(22)} ${codexSummary(pricing)}  — input=${inOk ? 'ok' : 'MISS'} output=${outOk ? 'ok' : 'MISS'}  (saw: ${found.slice(0, 6).join(', ')})`,
+        `✗ ${modelId.padEnd(22)} ${codexSummary(pricing)}  — input=${isInOk ? 'ok' : 'MISS'} output=${isOutOk ? 'ok' : 'MISS'}  (saw: ${found.slice(0, 6).join(', ')})`,
       );
       drift++;
     }

@@ -32,7 +32,7 @@ export function mergeProviderDay(
   }
 
   let summedModelCost = 0;
-  let anyModelHadCost = false;
+  let isAnyModelHadCost = false;
   for (const [model, counts] of Object.entries(pData.byModel)) {
     const m = (rec.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
     m.inputTokens += counts.inputTokens;
@@ -51,11 +51,11 @@ export function mergeProviderDay(
     if (cost !== undefined) {
       m.costUSD = (m.costUSD ?? 0) + cost;
       summedModelCost += cost;
-      anyModelHadCost = true;
+      isAnyModelHadCost = true;
     }
   }
 
-  const dayCost = pData.totals.costUSD ?? (anyModelHadCost ? summedModelCost : undefined);
+  const dayCost = pData.totals.costUSD ?? (isAnyModelHadCost ? summedModelCost : undefined);
   if (dayCost !== undefined) rec.costUSD = (rec.costUSD ?? 0) + dayCost;
 }
 
@@ -105,17 +105,17 @@ function splitByProvider(machineFiles: MachineFile[]): ProviderData {
 }
 
 export async function loadMergedProviderData(
-  opts: LoadUsageOptions = {},
+  options: LoadUsageOptions = {},
 ): Promise<LoadedUsageData | null> {
   const config = tryLoadConfig();
   const machineId = config ? resolveMachineId(config) : hostname();
   const localMachine = await buildLocalMachineFile(machineId);
 
-  if (opts.stagePending !== false) {
+  if (options.stagePending !== false) {
     writePendingMachineFile(localMachine);
   }
 
-  const warnedNotConfigured = !config || !isCloned();
+  const isWarnedNotConfigured = !config || !isCloned();
 
   let machineData: MachineFile[] = [];
   let providerData: ProviderData = {};
@@ -137,17 +137,24 @@ export async function loadMergedProviderData(
     overlayMachineFile(providerData, localMachine);
   }
 
-  if (!opts.noCursor) {
+  if (!options.noCursor) {
     const cursorMap = await readCursorData();
     if (cursorMap.size > 0) providerData.cursor = cursorMap;
   }
 
   const filtered =
-    opts.year === undefined ? providerData : filterProviderDataByYear(providerData, opts.year);
+    options.year === undefined
+      ? providerData
+      : filterProviderDataByYear(providerData, options.year);
 
   if (Object.keys(filtered).length === 0) {
     return null;
   }
 
-  return { providerData: filtered, machineData, fileCount, warnedNotConfigured };
+  return {
+    providerData: filtered,
+    machineData,
+    fileCount,
+    warnedNotConfigured: isWarnedNotConfigured,
+  };
 }

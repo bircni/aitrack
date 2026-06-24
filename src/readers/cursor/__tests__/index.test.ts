@@ -7,13 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   aggregateCursorCsvToDayMap,
-  getCursorStateDbPath,
+  getCursorStateDbPath as getCursorStateDatabasePath,
   parseCursorDateString,
   readCursorData,
 } from '../index.js';
 
 let tmpDir: string;
-const originalFetch = globalThis.fetch;
+const originalFetch = fetch;
 let fetchCalls: Array<Parameters<typeof fetch>> = [];
 
 function toUrl(input: Parameters<typeof fetch>[0]): URL {
@@ -23,27 +23,27 @@ function toUrl(input: Parameters<typeof fetch>[0]): URL {
 }
 
 function setFetchMock(
-  implementation: (...args: Parameters<typeof fetch>) => Promise<Response>,
+  implementation: (...arguments_: Parameters<typeof fetch>) => Promise<Response>,
 ): void {
-  globalThis.fetch = async (...args) => {
-    fetchCalls.push(args);
-    return implementation(...args);
+  globalThis.fetch = async (...arguments_) => {
+    fetchCalls.push(arguments_);
+    return implementation(...arguments_);
   };
 }
 
-function resetCursorEnv(): void {
+function resetCursorEnvironment(): void {
   delete process.env.CURSOR_CONFIG_DIR;
   delete process.env.CURSOR_STATE_DB_PATH;
   delete process.env.CURSOR_WEB_BASE_URL;
 }
 
-function createStateDb(path: string, rows: Record<string, string | Buffer> = {}): void {
+function createStateDatabase(path: string, rows: Record<string, string | Buffer> = {}): void {
   mkdirSync(join(path, '..'), { recursive: true });
-  const db = new DatabaseSync(path);
-  db.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
-  const insert = db.prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)');
+  const database = new DatabaseSync(path);
+  database.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
+  const insert = database.prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(rows)) insert.run(key, value);
-  db.close();
+  database.close();
 }
 
 describe('parseCursorDateString', () => {
@@ -51,12 +51,12 @@ describe('parseCursorDateString', () => {
     tmpDir = join(tmpdir(), `cursor-test-${Date.now()}-${Math.random()}`);
     mkdirSync(tmpDir, { recursive: true });
     fetchCalls = [];
-    resetCursorEnv();
+    resetCursorEnvironment();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    resetCursorEnv();
+    resetCursorEnvironment();
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
     rmSync(tmpDir, { recursive: true, force: true });
@@ -133,29 +133,29 @@ describe('getCursorStateDbPath', () => {
   beforeEach(() => {
     tmpDir = join(tmpdir(), `cursor-test-${Date.now()}-${Math.random()}`);
     mkdirSync(tmpDir, { recursive: true });
-    resetCursorEnv();
+    resetCursorEnvironment();
   });
 
   afterEach(() => {
-    resetCursorEnv();
+    resetCursorEnvironment();
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it('uses an explicit state DB path when it exists', () => {
-    const dbPath = join(tmpDir, 'state.vscdb');
-    createStateDb(dbPath);
-    process.env.CURSOR_STATE_DB_PATH = dbPath;
+    const databasePath = join(tmpDir, 'state.vscdb');
+    createStateDatabase(databasePath);
+    process.env.CURSOR_STATE_DB_PATH = databasePath;
 
-    expect(getCursorStateDbPath()).toBe(dbPath);
+    expect(getCursorStateDatabasePath()).toBe(databasePath);
   });
 
   it('resolves configured Cursor directories and skips missing candidates', () => {
     const configDir = join(tmpDir, 'cursor-config');
-    const dbPath = join(configDir, 'User', 'globalStorage', 'state.vscdb');
-    createStateDb(dbPath);
+    const databasePath = join(configDir, 'User', 'globalStorage', 'state.vscdb');
+    createStateDatabase(databasePath);
     process.env.CURSOR_CONFIG_DIR = `${join(tmpDir, 'missing')}, ${configDir}`;
 
-    expect(getCursorStateDbPath()).toBe(dbPath);
+    expect(getCursorStateDatabasePath()).toBe(databasePath);
   });
 });
 
@@ -164,12 +164,12 @@ describe('readCursorData', () => {
     tmpDir = join(tmpdir(), `cursor-test-${Date.now()}-${Math.random()}`);
     mkdirSync(tmpDir, { recursive: true });
     fetchCalls = [];
-    resetCursorEnv();
+    resetCursorEnvironment();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    resetCursorEnv();
+    resetCursorEnvironment();
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
     rmSync(tmpDir, { recursive: true, force: true });
@@ -183,9 +183,9 @@ describe('readCursorData', () => {
   });
 
   it('returns an empty map when the state database has no access token', async () => {
-    const dbPath = join(tmpDir, 'state.vscdb');
-    createStateDb(dbPath, { 'cursorAuth/refreshToken': 'refresh' });
-    process.env.CURSOR_STATE_DB_PATH = dbPath;
+    const databasePath = join(tmpDir, 'state.vscdb');
+    createStateDatabase(databasePath, { 'cursorAuth/refreshToken': 'refresh' });
+    process.env.CURSOR_STATE_DB_PATH = databasePath;
 
     await expect(readCursorData()).resolves.toEqual(new Map());
     expect(console.warn).toHaveBeenCalledWith(
@@ -194,9 +194,9 @@ describe('readCursorData', () => {
   });
 
   it('fetches usage CSV with the local access token and aggregates it', async () => {
-    const dbPath = join(tmpDir, 'state.vscdb');
-    createStateDb(dbPath, { 'cursorAuth/accessToken': Buffer.from(' access-token ') });
-    process.env.CURSOR_STATE_DB_PATH = dbPath;
+    const databasePath = join(tmpDir, 'state.vscdb');
+    createStateDatabase(databasePath, { 'cursorAuth/accessToken': Buffer.from(' access-token ') });
+    process.env.CURSOR_STATE_DB_PATH = databasePath;
     process.env.CURSOR_WEB_BASE_URL = 'https://cursor.test/';
     setFetchMock((input) => {
       const url = toUrl(input);
@@ -219,7 +219,7 @@ describe('readCursorData', () => {
     const authCall = fetchCalls.find(([input]) => toUrl(input).hostname === 'cursor.test');
     expect(authCall).toBeDefined();
     if (authCall === undefined) throw new Error('expected Cursor CSV export request');
-    expect(toUrl(authCall[0]).toString()).toBe(
+    expect(toUrl(authCall[0]).href).toBe(
       'https://cursor.test/api/dashboard/export-usage-events-csv?strategy=tokens',
     );
     expect(new Headers(authCall[1]?.headers).get('Authorization')).toBe('Bearer access-token');
@@ -247,9 +247,9 @@ describe('readCursorData', () => {
   });
 
   it('returns an empty map when authentication attempts fail', async () => {
-    const dbPath = join(tmpDir, 'state.vscdb');
-    createStateDb(dbPath, { 'cursorAuth/accessToken': 'access-token' });
-    process.env.CURSOR_STATE_DB_PATH = dbPath;
+    const databasePath = join(tmpDir, 'state.vscdb');
+    createStateDatabase(databasePath, { 'cursorAuth/accessToken': 'access-token' });
+    process.env.CURSOR_STATE_DB_PATH = databasePath;
     setFetchMock(() =>
       Promise.resolve(new Response('nope', { status: 401, statusText: 'Unauthorized' })),
     );
@@ -261,9 +261,9 @@ describe('readCursorData', () => {
   });
 
   it('warns when the CSV export contains no usage rows', async () => {
-    const dbPath = join(tmpDir, 'state.vscdb');
-    createStateDb(dbPath, { 'cursorAuth/accessToken': 'access-token' });
-    process.env.CURSOR_STATE_DB_PATH = dbPath;
+    const databasePath = join(tmpDir, 'state.vscdb');
+    createStateDatabase(databasePath, { 'cursorAuth/accessToken': 'access-token' });
+    process.env.CURSOR_STATE_DB_PATH = databasePath;
     setFetchMock((input) => {
       const url = toUrl(input);
       if (url.hostname === 'api2.cursor.sh') {

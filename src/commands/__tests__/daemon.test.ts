@@ -45,17 +45,17 @@ function makeDay(input: number, output: number) {
   };
 }
 
-type RequestHandler = (req: IncomingMessage, res: ServerResponse) => void;
+type RequestHandler = (request: IncomingMessage, res: ServerResponse) => void;
 
 describe('daemonCommand', () => {
   let requestHandler: RequestHandler | undefined;
   let listenCallback: (() => void) | undefined;
   const fakeServer = {
-    listen: vi.fn((port: number, _host: string, cb: () => void) => {
-      listenCallback = cb;
-      cb();
+    listen: vi.fn((port: number, _host: string, callback: () => void) => {
+      listenCallback = callback;
+      callback();
     }),
-    close: vi.fn((cb?: () => void) => cb?.()),
+    close: vi.fn((callback?: () => void) => callback?.()),
     on: vi.fn(),
     address: vi.fn(() => ({ port: 9089, address: '127.0.0.1' })),
   };
@@ -74,8 +74,8 @@ describe('daemonCommand', () => {
       fileCount: 0,
     });
     mocks.renderToHtml.mockImplementation(
-      (_data: unknown, _machines: unknown, opts?: { emptyMessage?: string }) =>
-        `<html>${opts?.emptyMessage ?? 'dashboard'}</html>`,
+      (_data: unknown, _machines: unknown, options?: { emptyMessage?: string }) =>
+        `<html>${options?.emptyMessage ?? 'dashboard'}</html>`,
     );
     mocks.createServer.mockImplementation((handler: RequestHandler) => {
       requestHandler = handler;
@@ -118,7 +118,9 @@ describe('daemonCommand', () => {
     const chunks: string[] = [];
     const res = {
       writeHead: vi.fn(),
-      end: vi.fn((body: string) => chunks.push(body)),
+      end: vi.fn((body: string) => {
+        chunks.push(body);
+      }),
     };
     if (!requestHandler) throw new Error('expected request handler');
     requestHandler(
@@ -154,7 +156,9 @@ describe('daemonCommand', () => {
     const chunks: string[] = [];
     const res = {
       writeHead: vi.fn(),
-      end: vi.fn((body: string) => chunks.push(body)),
+      end: vi.fn((body: string) => {
+        chunks.push(body);
+      }),
     };
     if (!requestHandler) throw new Error('expected request handler');
     requestHandler(
@@ -276,7 +280,9 @@ describe('daemonCommand', () => {
     const chunks: string[] = [];
     const res = {
       writeHead: vi.fn(),
-      end: vi.fn((body: string) => chunks.push(body)),
+      end: vi.fn((body: string) => {
+        chunks.push(body);
+      }),
     };
     if (!requestHandler) throw new Error('expected request handler');
     requestHandler(

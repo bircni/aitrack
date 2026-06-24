@@ -18,8 +18,8 @@ interface Row {
   isTotal?: boolean;
 }
 
-export async function usageCommand(opts: UsageOptions): Promise<void> {
-  const report = await buildUsageReport(opts);
+export async function usageCommand(options: UsageOptions): Promise<void> {
+  const report = await buildUsageReport(options);
 
   if (!report || report.rowCount === 0) {
     console.log(emptyReportMessage(report));

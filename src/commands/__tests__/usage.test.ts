@@ -28,13 +28,13 @@ function makeDay(input: number, output: number, costUSD?: number, model = 'm1'):
     [model]: {
       inputTokens: input,
       outputTokens: output,
-      ...(costUSD === undefined ? {} : { costUSD }),
+      ...(costUSD !== undefined && { costUSD }),
     },
   };
   return {
     inputTokens: input,
     outputTokens: output,
-    ...(costUSD === undefined ? {} : { costUSD }),
+    ...(costUSD !== undefined && { costUSD }),
     byModel: counts,
   };
 }
@@ -220,11 +220,11 @@ describe('usageCommand', () => {
 
     const out = output();
     const lines = out.split('\n');
-    const priceyIdx = lines.findIndex((l) => l.includes('pricey'));
-    const middleIdx = lines.findIndex((l) => l.includes('middle'));
-    const cheapIdx = lines.findIndex((l) => l.includes('cheap'));
-    expect(priceyIdx).toBeLessThan(middleIdx);
-    expect(middleIdx).toBeLessThan(cheapIdx);
+    const priceyIndex = lines.findIndex((l) => l.includes('pricey'));
+    const middleIndex = lines.findIndex((l) => l.includes('middle'));
+    const cheapIndex = lines.findIndex((l) => l.includes('cheap'));
+    expect(priceyIndex).toBeLessThan(middleIndex);
+    expect(middleIndex).toBeLessThan(cheapIndex);
   });
 
   it('falls back to token sort when no model has a cost', async () => {
@@ -252,9 +252,9 @@ describe('usageCommand', () => {
 
     const out = output();
     const lines = out.split('\n');
-    const bigIdx = lines.findIndex((l) => l.includes('big'));
-    const smallIdx = lines.findIndex((l) => l.includes('small'));
-    expect(bigIdx).toBeLessThan(smallIdx);
+    const bigIndex = lines.findIndex((l) => l.includes('big'));
+    const smallIndex = lines.findIndex((l) => l.includes('small'));
+    expect(bigIndex).toBeLessThan(smallIndex);
   });
 
   it('yesterday: returns data for yesterday only', async () => {

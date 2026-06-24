@@ -21,7 +21,7 @@ export interface DaemonOptions {
   year?: number;
 }
 
-function resolveDaemonSettings(opts: DaemonOptions): {
+function resolveDaemonSettings(options: DaemonOptions): {
   port: number;
   interval: number;
   host: string;
@@ -31,32 +31,32 @@ function resolveDaemonSettings(opts: DaemonOptions): {
   const daemon = config?.daemon;
 
   return {
-    port: opts.port ?? daemon?.port ?? DEFAULT_PORT,
-    interval: opts.interval ?? daemon?.interval ?? DEFAULT_INTERVAL,
-    host: opts.host ?? DEFAULT_HOST,
-    sync: opts.sync ?? daemon?.sync ?? false,
+    port: options.port ?? daemon?.port ?? DEFAULT_PORT,
+    interval: options.interval ?? daemon?.interval ?? DEFAULT_INTERVAL,
+    host: options.host ?? DEFAULT_HOST,
+    sync: options.sync ?? daemon?.sync ?? false,
   };
 }
 
-export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
-  const settings = resolveDaemonSettings(opts);
-  const renderOpts = {
-    dark: Boolean(opts.dark),
-    all: Boolean(opts.all),
-    year: opts.year,
-    noCursor: opts.noCursor,
+export async function daemonCommand(options: DaemonOptions = {}): Promise<void> {
+  const settings = resolveDaemonSettings(options);
+  const renderOptions = {
+    dark: Boolean(options.dark),
+    all: Boolean(options.all),
+    year: options.year,
+    noCursor: options.noCursor,
   };
-  const htmlOpts = {
-    dark: renderOpts.dark,
-    all: renderOpts.all,
-    year: renderOpts.year,
+  const htmlOptions = {
+    dark: renderOptions.dark,
+    all: renderOptions.all,
+    year: renderOptions.year,
     refreshIntervalSeconds: settings.interval,
   };
 
   let cachedHtml = renderToHtml(
     {},
     {
-      ...htmlOpts,
+      ...htmlOptions,
       emptyMessage: 'Loading...',
     },
   );
@@ -72,8 +72,8 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
       }
 
       const loaded = await loadMergedProviderData({
-        noCursor: renderOpts.noCursor,
-        year: renderOpts.year,
+        noCursor: renderOptions.noCursor,
+        year: renderOptions.year,
       });
 
       const lastUpdated = new Date();
@@ -85,7 +85,7 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
         cachedHtml = renderToHtml(
           {},
           {
-            ...htmlOpts,
+            ...htmlOptions,
             lastUpdated,
             emptyMessage: emptyUsageMessage(!config || !isCloned()),
           },
@@ -94,7 +94,7 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
       }
 
       cachedHtml = renderToHtml(loaded.providerData, {
-        ...htmlOpts,
+        ...htmlOptions,
         lastUpdated,
       });
       hasRendered = true;
@@ -106,8 +106,8 @@ export async function daemonCommand(opts: DaemonOptions = {}): Promise<void> {
 
   await refresh();
 
-  const server: Server = createServer((req, res) => {
-    if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
+  const server: Server = createServer((request, res) => {
+    if (request.method === 'GET' && (request.url === '/' || request.url === '/index.html')) {
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',

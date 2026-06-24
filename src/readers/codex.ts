@@ -67,7 +67,7 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult 
 
   let sessionDate: string | null = null;
   let model = 'unknown';
-  let prevTotal = { input_tokens: 0, output_tokens: 0, cached_input_tokens: 0 };
+  let previousTotal = { input_tokens: 0, output_tokens: 0, cached_input_tokens: 0 };
   const accumulated = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 };
 
   for await (const line of rl) {
@@ -93,34 +93,35 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult 
     if (!info) continue;
 
     if (info.total_token_usage) {
-      const cur = info.total_token_usage;
-      const rolledBack =
-        (cur.input_tokens ?? 0) < prevTotal.input_tokens ||
-        (cur.output_tokens ?? 0) < prevTotal.output_tokens;
+      const current = info.total_token_usage;
+      const isRolledBack =
+        (current.input_tokens ?? 0) < previousTotal.input_tokens ||
+        (current.output_tokens ?? 0) < previousTotal.output_tokens;
 
-      if (rolledBack && info.last_token_usage) {
+      if (isRolledBack && info.last_token_usage) {
         const last = info.last_token_usage;
         accumulated.inputTokens += last.input_tokens ?? 0;
         accumulated.outputTokens += last.output_tokens ?? 0;
         accumulated.cachedInputTokens += last.cached_input_tokens ?? 0;
-        prevTotal = {
-          input_tokens: cur.input_tokens ?? 0,
-          output_tokens: cur.output_tokens ?? 0,
-          cached_input_tokens: cur.cached_input_tokens ?? 0,
-        };
       } else {
-        accumulated.inputTokens += Math.max(0, (cur.input_tokens ?? 0) - prevTotal.input_tokens);
-        accumulated.outputTokens += Math.max(0, (cur.output_tokens ?? 0) - prevTotal.output_tokens);
+        accumulated.inputTokens += Math.max(
+          0,
+          (current.input_tokens ?? 0) - previousTotal.input_tokens,
+        );
+        accumulated.outputTokens += Math.max(
+          0,
+          (current.output_tokens ?? 0) - previousTotal.output_tokens,
+        );
         accumulated.cachedInputTokens += Math.max(
           0,
-          (cur.cached_input_tokens ?? 0) - prevTotal.cached_input_tokens,
+          (current.cached_input_tokens ?? 0) - previousTotal.cached_input_tokens,
         );
-        prevTotal = {
-          input_tokens: cur.input_tokens ?? 0,
-          output_tokens: cur.output_tokens ?? 0,
-          cached_input_tokens: cur.cached_input_tokens ?? 0,
-        };
       }
+      previousTotal = {
+        input_tokens: current.input_tokens ?? 0,
+        output_tokens: current.output_tokens ?? 0,
+        cached_input_tokens: current.cached_input_tokens ?? 0,
+      };
     } else if (info.last_token_usage) {
       const last = info.last_token_usage;
       accumulated.inputTokens += last.input_tokens ?? 0;

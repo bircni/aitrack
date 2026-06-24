@@ -20,8 +20,8 @@ export function costColumnLabel(providerKey: string, uppercase = false): string 
 
 export function activeProviderKeys(providerData: ProviderData): string[] {
   const active: string[] = PROVIDER_ORDER.filter((k) => (providerData[k]?.size ?? 0) > 0);
-  for (const k of Object.keys(providerData)) {
-    if (!active.includes(k) && (providerData[k]?.size ?? 0) > 0) active.push(k);
+  for (const [k, data] of Object.entries(providerData)) {
+    if (!active.includes(k) && data.size > 0) active.push(k);
   }
   return active;
 }

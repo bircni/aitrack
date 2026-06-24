@@ -28,7 +28,7 @@ interface Row {
   cost: string;
 }
 
-interface DayEntryAcc {
+interface DayEntryAccumulator {
   date: string;
   tokens: number;
   cost: number | null;
@@ -40,21 +40,21 @@ function topDays(
   limit: number,
   sort: TopSort,
   year?: number,
-): DayEntryAcc[] {
-  const byDate = new Map<string, DayEntryAcc>();
+): DayEntryAccumulator[] {
+  const byDate = new Map<string, DayEntryAccumulator>();
   for (const [providerKey, dayMap] of Object.entries(providerData)) {
     for (const [date, day] of dayMap) {
       if (year !== undefined && !date.startsWith(`${String(year)}-`)) continue;
-      let acc = byDate.get(date);
-      if (!acc) {
-        acc = { date, tokens: 0, cost: null, byProvider: {} };
-        byDate.set(date, acc);
+      let accumulator = byDate.get(date);
+      if (!accumulator) {
+        accumulator = { date, tokens: 0, cost: null, byProvider: {} };
+        byDate.set(date, accumulator);
       }
       const dayTokens = day.inputTokens + day.outputTokens;
-      acc.tokens += dayTokens;
-      acc.byProvider[providerKey] = (acc.byProvider[providerKey] ?? 0) + dayTokens;
+      accumulator.tokens += dayTokens;
+      accumulator.byProvider[providerKey] = (accumulator.byProvider[providerKey] ?? 0) + dayTokens;
       if (day.costUSD !== undefined) {
-        acc.cost = (acc.cost ?? 0) + day.costUSD;
+        accumulator.cost = (accumulator.cost ?? 0) + day.costUSD;
       }
     }
   }
@@ -67,7 +67,7 @@ function topDays(
   return all.slice(0, limit);
 }
 
-interface ModelAcc {
+interface ModelAccumulator {
   providerKey: string;
   provider: string;
   model: string;
@@ -76,9 +76,9 @@ interface ModelAcc {
   days: number;
 }
 
-function aggregateModels(dayMap: DayMap, providerKey: string, year?: number): ModelAcc[] {
+function aggregateModels(dayMap: DayMap, providerKey: string, year?: number): ModelAccumulator[] {
   const byModel = aggregateModelsByDayMap(dayMap, { year });
-  return [...byModel.entries()]
+  return [...byModel]
     .filter(([, agg]) => agg.inputTokens + agg.outputTokens > 0 || agg.hasCost)
     .map(([model, agg]) => ({
       providerKey,
@@ -95,8 +95,8 @@ function topModels(
   limit: number,
   sort: TopSort,
   year?: number,
-): ModelAcc[] {
-  const all: ModelAcc[] = [];
+): ModelAccumulator[] {
+  const all: ModelAccumulator[] = [];
   for (const [providerKey, dayMap] of Object.entries(providerData)) {
     all.push(...aggregateModels(dayMap, providerKey, year));
   }
@@ -108,10 +108,10 @@ function topModels(
   return all.slice(0, limit);
 }
 
-export async function topCommand(opts: TopOptions): Promise<void> {
+export async function topCommand(options: TopOptions): Promise<void> {
   const loaded = await loadMergedProviderData({
-    noCursor: opts.noCursor,
-    year: opts.year,
+    noCursor: options.noCursor,
+    year: options.year,
   });
 
   if (!loaded) {
@@ -119,25 +119,25 @@ export async function topCommand(opts: TopOptions): Promise<void> {
     return;
   }
 
-  const yearSuffix = opts.year === undefined ? '' : ` (${String(opts.year)})`;
+  const yearSuffix = options.year === undefined ? '' : ` (${String(options.year)})`;
 
-  if (opts.kind === 'days') {
-    const items = topDays(loaded.providerData, opts.limit, opts.sort, opts.year);
+  if (options.kind === 'days') {
+    const items = topDays(loaded.providerData, options.limit, options.sort, options.year);
     if (items.length === 0) {
       console.log('No usage recorded.');
       return;
     }
-    const rows: Row[] = items.map((d, i) => {
+    const rows: Row[] = items.map((d, index) => {
       const topProvider = Object.entries(d.byProvider).sort((a, b) => b[1] - a[1])[0];
       return {
-        rank: String(i + 1),
+        rank: String(index + 1),
         label: d.date,
         sub: topProvider ? providerLabel(topProvider[0]) : '',
         tokens: fmt(d.tokens),
         cost: fmtUSD(d.cost),
       };
     });
-    console.log(chalk.bold(`Top ${String(opts.limit)} days by ${opts.sort}${yearSuffix}`));
+    console.log(chalk.bold(`Top ${String(options.limit)} days by ${options.sort}${yearSuffix}`));
     console.log(
       renderTerminalTable(
         rows,
@@ -154,19 +154,19 @@ export async function topCommand(opts: TopOptions): Promise<void> {
     return;
   }
 
-  const items = topModels(loaded.providerData, opts.limit, opts.sort, opts.year);
+  const items = topModels(loaded.providerData, options.limit, options.sort, options.year);
   if (items.length === 0) {
     console.log('No usage recorded.');
     return;
   }
-  const rows: Row[] = items.map((m, i) => ({
-    rank: String(i + 1),
+  const rows: Row[] = items.map((m, index) => ({
+    rank: String(index + 1),
     label: m.model,
     sub: m.provider,
     tokens: fmt(m.tokens),
     cost: fmtUSD(m.cost),
   }));
-  console.log(chalk.bold(`Top ${String(opts.limit)} models by ${opts.sort}${yearSuffix}`));
+  console.log(chalk.bold(`Top ${String(options.limit)} models by ${options.sort}${yearSuffix}`));
   console.log(
     renderTerminalTable(
       rows,

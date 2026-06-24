@@ -29,14 +29,14 @@ vi.mock('../../commands/config.js', () => ({ configCommand: mocks.configCommand 
 import { buildProgram, runAsync } from '../program.js';
 
 /** Parse user-level args (no node/script prefix) through a fresh program. */
-async function run(...args: string[]): Promise<void> {
-  await buildProgram().parseAsync(args, { from: 'user' });
+async function run(...arguments_: string[]): Promise<void> {
+  await buildProgram().parseAsync(arguments_, { from: 'user' });
 }
 
 describe('buildProgram', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    for (const fn of Object.values(mocks)) fn.mockResolvedValue(undefined);
+    for (const function_ of Object.values(mocks)) function_.mockResolvedValue(undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 

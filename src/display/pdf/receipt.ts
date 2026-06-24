@@ -45,83 +45,83 @@ function priceCell(hasCost: boolean, costUSD: number): string {
   return hasCost ? fmtUSD(costUSD) : '-';
 }
 
-function divider(doc: PDFKit.PDFDocument): void {
-  const y = doc.y + 2;
-  doc
+function divider(document: PDFKit.PDFDocument): void {
+  const y = document.y + 2;
+  document
     .moveTo(MARGIN, y)
     .lineTo(MARGIN + CONTENT_WIDTH, y)
     .lineWidth(0.5)
     .stroke();
-  doc.y = y + 4;
+  document.y = y + 4;
 }
 
 /** Draw one model/tokens/price row on a single line, never wrapping. */
 function row(
-  doc: PDFKit.PDFDocument,
+  document: PDFKit.PDFDocument,
   left: string,
   tokens: string,
   price: string,
   bold = false,
 ): void {
-  const y = doc.y;
-  doc.font(bold ? FONT_BOLD : FONT).fontSize(9);
-  doc.text(asciiSafe(left), MARGIN, y, { width: LEFT_W, ellipsis: true, lineBreak: false });
-  doc.text(tokens, MARGIN + LEFT_W, y, { width: TOKENS_W, align: 'right', lineBreak: false });
-  doc.text(price, MARGIN + LEFT_W + TOKENS_W, y, {
+  const y = document.y;
+  document.font(bold ? FONT_BOLD : FONT).fontSize(9);
+  document.text(asciiSafe(left), MARGIN, y, { width: LEFT_W, ellipsis: true, lineBreak: false });
+  document.text(tokens, MARGIN + LEFT_W, y, { width: TOKENS_W, align: 'right', lineBreak: false });
+  document.text(price, MARGIN + LEFT_W + TOKENS_W, y, {
     width: PRICE_W,
     align: 'right',
     lineBreak: false,
   });
-  doc.y = y + ROW_HEIGHT;
+  document.y = y + ROW_HEIGHT;
 }
 
 /** Draw the full receipt onto an already-created document. */
-function drawReceipt(doc: PDFKit.PDFDocument, report: UsageReport, generatedAt: Date): void {
+function drawReceipt(document: PDFKit.PDFDocument, report: UsageReport, generatedAt: Date): void {
   // Header
-  doc.font(FONT_BOLD).fontSize(16).text('aitrack', { align: 'center' });
-  doc.font(FONT).fontSize(9).text('AI USAGE RECEIPT', { align: 'center' });
-  doc.moveDown(0.5);
-  doc.fontSize(8).text(asciiSafe(report.windowLabel), { align: 'center' });
-  doc.text(localTimestamp(generatedAt), { align: 'center' });
-  doc.moveDown(0.5);
-  divider(doc);
-  doc.moveDown(0.3);
+  document.font(FONT_BOLD).fontSize(16).text('aitrack', { align: 'center' });
+  document.font(FONT).fontSize(9).text('AI USAGE RECEIPT', { align: 'center' });
+  document.moveDown(0.5);
+  document.fontSize(8).text(asciiSafe(report.windowLabel), { align: 'center' });
+  document.text(localTimestamp(generatedAt), { align: 'center' });
+  document.moveDown(0.5);
+  divider(document);
+  document.moveDown(0.3);
 
   // Line items grouped by provider
   for (const provider of report.providers) {
-    doc
+    document
       .font(FONT_BOLD)
       .fontSize(9)
-      .text(asciiSafe(provider.label), MARGIN, doc.y, { width: CONTENT_WIDTH });
+      .text(asciiSafe(provider.label), MARGIN, document.y, { width: CONTENT_WIDTH });
     for (const item of provider.rows) {
-      row(doc, `  ${item.model}`, fmt(item.tokens), priceCell(item.hasCost, item.costUSD));
+      row(document, `  ${item.model}`, fmt(item.tokens), priceCell(item.hasCost, item.costUSD));
     }
     row(
-      doc,
+      document,
       '  subtotal',
       fmt(provider.subtotalTokens),
       priceCell(provider.subtotalHasCost, provider.subtotalCostUSD),
       true,
     );
-    doc.moveDown(0.4);
+    document.moveDown(0.4);
   }
 
-  divider(doc);
-  doc.moveDown(0.2);
+  divider(document);
+  document.moveDown(0.2);
   row(
-    doc,
+    document,
     'TOTAL',
     fmt(report.totals.tokens),
     priceCell(report.totals.hasCost, report.totals.costUSD),
     true,
   );
-  divider(doc);
+  divider(document);
 
-  doc.moveDown(1);
-  doc
+  document.moveDown(1);
+  document
     .font(FONT)
     .fontSize(7)
-    .text('Costs are API-equivalent estimates. Thank you for shipping!', MARGIN, doc.y, {
+    .text('Costs are API-equivalent estimates. Thank you for shipping!', MARGIN, document.y, {
       width: CONTENT_WIDTH,
       align: 'center',
     });
@@ -145,7 +145,7 @@ export function renderReceiptPdf(
   report: UsageReport,
   generatedAt: Date = new Date(),
 ): Promise<Buffer> {
-  const doc = new PDFDocument({
+  const document = new PDFDocument({
     size: [PAGE_WIDTH, contentHeight(report, generatedAt)],
     margin: MARGIN,
     info: { Title: `aitrack usage receipt - ${asciiSafe(report.windowLabel)}` },
@@ -153,15 +153,17 @@ export function renderReceiptPdf(
 
   const chunks: Buffer[] = [];
   const done = new Promise<Buffer>((resolve, reject) => {
-    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-    doc.on('end', () => {
+    document.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+    document.on('end', () => {
       resolve(Buffer.concat(chunks));
     });
-    doc.on('error', reject);
+    document.on('error', reject);
   });
 
-  drawReceipt(doc, report, generatedAt);
+  drawReceipt(document, report, generatedAt);
 
-  doc.end();
+  document.end();
   return done;
 }

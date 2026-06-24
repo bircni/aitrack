@@ -54,7 +54,7 @@ const FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> = [
 
 const fallbackHits = new Set<string>();
 export function consumeCodexFallbackHits(): string[] {
-  const xs = [...fallbackHits].sort();
+  const xs = [...fallbackHits].sort((a, b) => a.localeCompare(b));
   fallbackHits.clear();
   return xs;
 }
@@ -72,10 +72,12 @@ export function findCodexPricing(model: string, usageDate?: string): CodexPricin
   const exact = CODEX_PRICING_BY_ID[id];
   if (exact) return exact;
   for (const { match, pricing } of FAMILY_FALLBACK) {
-    if (match.test(id)) {
-      fallbackHits.add(id);
-      return pricing;
+    if (!match.test(id)) {
+      continue;
     }
+
+    fallbackHits.add(id);
+    return pricing;
   }
   if (id.startsWith('gpt-5')) {
     fallbackHits.add(id);

@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted runs before module loading, so TEST_HOME is available in vi.mock factories below
 const TEST_HOME = vi.hoisted(() => {
-  const tmp = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
-  return `${tmp}/aitrack-int-test`;
+  const temporary = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
+  return `${temporary}/aitrack-int-test`;
 });
 
 // Redirect homedir() so LOCAL_REPO and config paths land in our temp dir.
@@ -150,12 +150,12 @@ describe('integration', () => {
     await showCommand({ output: outputPath, noCursor: true });
 
     expect(existsSync(outputPath)).toBe(true);
-    const buf = readFileSync(outputPath);
+    const buffer = readFileSync(outputPath);
     // PNG magic bytes: 89 50 4E 47
-    expect(buf[0]).toBe(0x89);
-    expect(buf[1]).toBe(0x50);
-    expect(buf[2]).toBe(0x4e);
-    expect(buf[3]).toBe(0x47);
+    expect(buffer[0]).toBe(0x89);
+    expect(buffer[1]).toBe(0x50);
+    expect(buffer[2]).toBe(0x4e);
+    expect(buffer[3]).toBe(0x47);
   });
 
   it('show merges data from multiple machines into a single heatmap', async () => {
@@ -189,7 +189,7 @@ describe('integration', () => {
     await showCommand({ output: outputPath, noCursor: true });
 
     expect(existsSync(outputPath)).toBe(true);
-    const buf = readFileSync(outputPath);
-    expect(buf[0]).toBe(0x89); // valid PNG
+    const buffer = readFileSync(outputPath);
+    expect(buffer[0]).toBe(0x89); // valid PNG
   });
 });

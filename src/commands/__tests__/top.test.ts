@@ -21,12 +21,12 @@ function makeDay(input: number, output: number, cost: number | undefined, model:
   return {
     inputTokens: input,
     outputTokens: output,
-    ...(cost === undefined ? {} : { costUSD: cost }),
+    ...(cost !== undefined && { costUSD: cost }),
     byModel: {
       [model]: {
         inputTokens: input,
         outputTokens: output,
-        ...(cost === undefined ? {} : { costUSD: cost }),
+        ...(cost !== undefined && { costUSD: cost }),
       },
     },
   };
@@ -64,10 +64,10 @@ describe('topCommand', () => {
 
     const out = captured();
     expect(out).toContain('Top 2 days by cost');
-    const jan1Idx = out.indexOf('2026-01-01');
-    const jan2Idx = out.indexOf('2026-01-02');
-    expect(jan1Idx).toBeGreaterThan(-1);
-    expect(jan2Idx).toBeGreaterThan(jan1Idx);
+    const jan1Index = out.indexOf('2026-01-01');
+    const jan2Index = out.indexOf('2026-01-02');
+    expect(jan1Index).toBeGreaterThan(-1);
+    expect(jan2Index).toBeGreaterThan(jan1Index);
   });
 
   it('models: ranks top models by tokens', async () => {
@@ -86,10 +86,10 @@ describe('topCommand', () => {
 
     const out = captured();
     expect(out).toContain('Top 5 models by tokens');
-    const opusIdx = out.indexOf('opus');
-    const sonnetIdx = out.indexOf('sonnet');
-    expect(opusIdx).toBeGreaterThan(-1);
-    expect(sonnetIdx).toBeGreaterThan(opusIdx);
+    const opusIndex = out.indexOf('opus');
+    const sonnetIndex = out.indexOf('sonnet');
+    expect(opusIndex).toBeGreaterThan(-1);
+    expect(sonnetIndex).toBeGreaterThan(opusIndex);
   });
 
   it('respects year filter', async () => {

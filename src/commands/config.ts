@@ -23,19 +23,19 @@ export interface ConfigCommandOptions {
 
 // Async so any validation error surfaces as a rejected promise that the CLI's
 // runAsync() wrapper can catch (a sync throw would escape it).
-export async function configCommand(opts: ConfigCommandOptions): Promise<void> {
+export async function configCommand(options: ConfigCommandOptions): Promise<void> {
   await Promise.resolve();
-  switch (opts.action) {
+  switch (options.action) {
     case 'list': {
       listConfig();
       break;
     }
     case 'get': {
-      getConfig(opts.key);
+      getConfig(options.key);
       break;
     }
     case 'set': {
-      setConfig(opts.key, opts.value);
+      setConfig(options.key, options.value);
       break;
     }
   }

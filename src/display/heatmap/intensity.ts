@@ -3,8 +3,8 @@ import { INTENSITY_THRESHOLDS } from './constants.js';
 export function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const sortedAsc = [...sorted].sort((a, b) => a - b);
-  const idx = Math.min(sortedAsc.length - 1, Math.floor(p * (sortedAsc.length - 1)));
-  return sortedAsc[idx] ?? 0;
+  const index = Math.min(sortedAsc.length - 1, Math.floor(p * (sortedAsc.length - 1)));
+  return sortedAsc[index] ?? 0;
 }
 
 function intensityLevel(tokens: number, max: number): 0 | 1 | 2 | 3 | 4 {

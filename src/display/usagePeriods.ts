@@ -51,15 +51,15 @@ export interface UsageWindow {
   label: string;
 }
 
-export function computeUsageWindow(opts: UsageWindowOptions): UsageWindow {
+export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
   const today = new Date();
-  const todayStr = toLocalDateString(today);
+  const todayString = toLocalDateString(today);
 
-  switch (opts.period) {
+  switch (options.period) {
     case 'today': {
       const localDate = today.toLocaleDateString();
       const localTime = today.toLocaleTimeString();
-      return { start: todayStr, end: todayStr, label: `today (${localDate} ${localTime})` };
+      return { start: todayString, end: todayString, label: `today (${localDate} ${localTime})` };
     }
 
     case 'yesterday': {
@@ -70,13 +70,14 @@ export function computeUsageWindow(opts: UsageWindowOptions): UsageWindow {
     }
 
     case 'date': {
-      if (!opts.from) throw new Error('from is required for date period');
-      return { start: opts.from, end: opts.from, label: opts.from };
+      if (!options.from) throw new Error('from is required for date period');
+      return { start: options.from, end: options.from, label: options.from };
     }
 
     case 'range': {
-      if (!opts.from || !opts.to) throw new Error('from and to are required for range period');
-      return { start: opts.from, end: opts.to, label: `${opts.from} → ${opts.to}` };
+      if (!options.from || !options.to)
+        throw new Error('from and to are required for range period');
+      return { start: options.from, end: options.to, label: `${options.from} → ${options.to}` };
     }
 
     case 'thisweek': {
@@ -84,7 +85,7 @@ export function computeUsageWindow(opts: UsageWindowOptions): UsageWindow {
       const mon = new Date(today);
       mon.setDate(today.getDate() - daysFromMon);
       const start = toLocalDateString(mon);
-      return { start, end: todayStr, label: `this week (${start} → ${todayStr})` };
+      return { start, end: todayString, label: `this week (${start} → ${todayString})` };
     }
 
     case 'lastweek': {
@@ -104,7 +105,7 @@ export function computeUsageWindow(opts: UsageWindowOptions): UsageWindow {
       const y = today.getFullYear();
       const m = String(today.getMonth() + 1).padStart(2, '0');
       const start = `${y}-${m}-01`;
-      return { start, end: todayStr, label: `this month (${start} → ${todayStr})` };
+      return { start, end: todayString, label: `this month (${start} → ${todayString})` };
     }
 
     case 'lastmonth': {
@@ -116,30 +117,34 @@ export function computeUsageWindow(opts: UsageWindowOptions): UsageWindow {
     }
 
     case 'last': {
-      if (!opts.n) throw new Error('n is required for last period');
+      if (!options.n) throw new Error('n is required for last period');
       const d = new Date(today);
-      d.setDate(today.getDate() - (opts.n - 1));
+      d.setDate(today.getDate() - (options.n - 1));
       const start = toLocalDateString(d);
-      return { start, end: todayStr, label: `last ${opts.n} days (${start} → ${todayStr})` };
+      return {
+        start,
+        end: todayString,
+        label: `last ${options.n} days (${start} → ${todayString})`,
+      };
     }
 
     case 'week': {
       const d = new Date(today);
       d.setDate(today.getDate() - 6);
       const start = toLocalDateString(d);
-      return { start, end: todayStr, label: `last 7 days (${start} → ${todayStr})` };
+      return { start, end: todayString, label: `last 7 days (${start} → ${todayString})` };
     }
 
     case 'month': {
       const d = new Date(today);
       d.setDate(today.getDate() - 29);
       const start = toLocalDateString(d);
-      return { start, end: todayStr, label: `last 30 days (${start} → ${todayStr})` };
+      return { start, end: todayString, label: `last 30 days (${start} → ${todayString})` };
     }
 
     case 'year': {
       const year = today.getFullYear();
-      return { start: `${year}-01-01`, end: `${year}-12-31`, label: `${year}` };
+      return { start: `${year}-01-01`, end: `${year}-12-31`, label: String(year) };
     }
 
     case 'all':

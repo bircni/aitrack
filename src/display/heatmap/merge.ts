@@ -5,12 +5,13 @@ import type { DayMap, ProviderData } from '../../data/types.js';
 export function mergeAllProviderDayMaps(providerData: ProviderData): DayMap {
   const result: DayMap = new Map();
   for (const dayMap of Object.values(providerData)) {
-    for (const [date, srcDay] of dayMap) {
+    for (const [date, sourceDay] of dayMap) {
       const dstDay = getOrCreateDay(result, date);
-      dstDay.inputTokens += srcDay.inputTokens;
-      dstDay.outputTokens += srcDay.outputTokens;
-      if (srcDay.costUSD !== undefined) dstDay.costUSD = (dstDay.costUSD ?? 0) + srcDay.costUSD;
-      for (const [model, counts] of Object.entries(srcDay.byModel)) {
+      dstDay.inputTokens += sourceDay.inputTokens;
+      dstDay.outputTokens += sourceDay.outputTokens;
+      if (sourceDay.costUSD !== undefined)
+        dstDay.costUSD = (dstDay.costUSD ?? 0) + sourceDay.costUSD;
+      for (const [model, counts] of Object.entries(sourceDay.byModel)) {
         const modelTotals = (dstDay.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
         modelTotals.inputTokens += counts.inputTokens;
         modelTotals.outputTokens += counts.outputTokens;

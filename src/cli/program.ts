@@ -20,7 +20,7 @@ import {
   dateRangeValidationError,
   invalidDateMessage,
   isValidDateString,
-  parseIntArg,
+  parseIntArg as parseIntArgument,
   parsePositiveInt,
   parseTopKind,
   parseTopSort,
@@ -35,17 +35,17 @@ import {
  * non-zero status if it rejects. Centralises the catch/exit boilerplate shared
  * by every CLI action.
  */
-export function runAsync(fn: () => Promise<void>): void {
-  fn().catch((error: unknown) => {
+export function runAsync(function_: () => Promise<void>): void {
+  function_().catch((error: unknown) => {
     console.error(cliErrorMessage(error));
     process.exit(1);
   });
 }
 
 function packageVersion(): string {
-  const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '../../package.json');
+  const packagePath = join(dirname(fileURLToPath(import.meta.url)), '../../package.json');
   try {
-    const parsed: unknown = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    const parsed: unknown = JSON.parse(readFileSync(packagePath, 'utf8'));
     if (
       typeof parsed === 'object' &&
       parsed !== null &&
@@ -61,18 +61,20 @@ function packageVersion(): string {
   return '0.0.0';
 }
 
-function runUsage(opts: UsageOptions): void {
-  runAsync(() => usageCommand(opts));
+function runUsage(options: UsageOptions): void {
+  runAsync(() => usageCommand(options));
 }
 
 function validateDate(date: string): void {
-  if (!isValidDateString(date)) {
-    console.error(invalidDateMessage(date));
-    process.exit(1);
+  if (isValidDateString(date)) {
+    return;
   }
+
+  console.error(invalidDateMessage(date));
+  process.exit(1);
 }
 
-interface UsageCommonOpts {
+interface UsageCommonOptions {
   cursor?: boolean;
 }
 
@@ -127,21 +129,21 @@ const USAGE_PERIODS: UsagePeriodDef[] = [
 
 function registerUsageCommands(usage: Command): void {
   for (const def of USAGE_PERIODS) {
-    const cmd = usage
+    const command = usage
       .command(def.name)
       .description(def.description)
       .option('--no-cursor', 'skip local Cursor usage');
 
     if (def.period === 'date') {
-      cmd.action((date: string, opts: UsageCommonOpts) => {
+      command.action((date: string, options: UsageCommonOptions) => {
         validateDate(date);
-        runUsage({ period: 'date', from: date, noCursor: opts.cursor === false });
+        runUsage({ period: 'date', from: date, noCursor: options.cursor === false });
       });
       continue;
     }
 
     if (def.period === 'range') {
-      cmd.action((from: string, to: string, opts: UsageCommonOpts) => {
+      command.action((from: string, to: string, options: UsageCommonOptions) => {
         validateDate(from);
         validateDate(to);
         const rangeError = dateRangeValidationError(from, to);
@@ -149,13 +151,13 @@ function registerUsageCommands(usage: Command): void {
           console.error(rangeError);
           process.exit(1);
         }
-        runUsage({ period: 'range', from, to, noCursor: opts.cursor === false });
+        runUsage({ period: 'range', from, to, noCursor: options.cursor === false });
       });
       continue;
     }
 
     if (def.period === 'last') {
-      cmd.action((n: string, opts: UsageCommonOpts) => {
+      command.action((n: string, options: UsageCommonOptions) => {
         const lastError = usageLastDaysValidationError(n);
         if (lastError) {
           console.error(lastError);
@@ -164,14 +166,14 @@ function registerUsageCommands(usage: Command): void {
         runUsage({
           period: 'last',
           n: parsePositiveInt(n) ?? 1,
-          noCursor: opts.cursor === false,
+          noCursor: options.cursor === false,
         });
       });
       continue;
     }
 
-    cmd.action((opts: UsageCommonOpts) => {
-      runUsage({ period: def.period, noCursor: opts.cursor === false });
+    command.action((options: UsageCommonOptions) => {
+      runUsage({ period: def.period, noCursor: options.cursor === false });
     });
   }
 }
@@ -211,7 +213,7 @@ export function buildProgram(): Command {
     .option('--year <year>', 'only include days from this calendar year', parseInt)
     .option('--tui', 'render a stats table in the terminal instead of a PNG')
     .action(
-      (opts: {
+      (options: {
         output: string;
         dark?: boolean;
         cursor?: boolean;
@@ -222,13 +224,13 @@ export function buildProgram(): Command {
       }) => {
         runAsync(() =>
           showCommand({
-            output: opts.output,
-            dark: opts.dark,
-            all: opts.all,
-            open: opts.open,
-            noCursor: opts.cursor === false,
-            year: Number.isFinite(opts.year) ? opts.year : undefined,
-            tui: opts.tui,
+            output: options.output,
+            dark: options.dark,
+            all: options.all,
+            open: options.open,
+            noCursor: options.cursor === false,
+            year: Number.isFinite(options.year) ? options.year : undefined,
+            tui: options.tui,
           }),
         );
       },
@@ -244,12 +246,12 @@ export function buildProgram(): Command {
     .description('Export an itemized PDF usage receipt for a period (default: month)')
     .option('-o, --output <path>', 'output PDF path', 'aitrack-receipt.pdf')
     .option('--no-cursor', 'skip local Cursor usage')
-    .action((period: string | undefined, opts: { output: string; cursor?: boolean }) => {
+    .action((period: string | undefined, options: { output: string; cursor?: boolean }) => {
       runAsync(() =>
         exportCommand({
           period,
-          output: opts.output,
-          noCursor: opts.cursor === false,
+          output: options.output,
+          noCursor: options.cursor === false,
         }),
       );
     });
@@ -257,16 +259,16 @@ export function buildProgram(): Command {
   program
     .command('daemon')
     .description('Run a local HTTP dashboard that refreshes usage data on an interval')
-    .option('--port <port>', 'HTTP listen port', parseIntArg)
-    .option('--interval <seconds>', 'seconds between data refresh ticks', parseIntArg)
+    .option('--port <port>', 'HTTP listen port', parseIntArgument)
+    .option('--interval <seconds>', 'seconds between data refresh ticks', parseIntArgument)
     .option('--host <host>', 'bind address', '127.0.0.1')
     .option('--sync', 'pull and push local data on each refresh tick')
     .option('--dark', 'dark mode dashboard')
     .option('--no-cursor', 'skip local Cursor usage (no state.vscdb / CSV export)')
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
-    .option('--year <year>', 'only include days from this calendar year', parseIntArg)
+    .option('--year <year>', 'only include days from this calendar year', parseIntArgument)
     .action(
-      (opts: {
+      (options: {
         port?: number;
         interval?: number;
         host?: string;
@@ -278,14 +280,14 @@ export function buildProgram(): Command {
       }) => {
         runAsync(() =>
           daemonCommand({
-            port: opts.port,
-            interval: opts.interval,
-            host: opts.host,
-            sync: opts.sync,
-            dark: opts.dark,
-            all: opts.all,
-            noCursor: opts.cursor === false,
-            year: opts.year,
+            port: options.port,
+            interval: options.interval,
+            host: options.host,
+            sync: options.sync,
+            dark: options.dark,
+            all: options.all,
+            noCursor: options.cursor === false,
+            year: options.year,
           }),
         );
       },
@@ -296,14 +298,14 @@ export function buildProgram(): Command {
     .description(
       'Show top items by tokens or cost. kind: "days" (default) or "models". Uses already-local synced machine data.',
     )
-    .option('-n, --limit <n>', 'number of items to show', parseIntArg, 10)
+    .option('-n, --limit <n>', 'number of items to show', parseIntArgument, 10)
     .option('--sort <field>', 'sort by "tokens" or "cost"', 'cost')
     .option('--no-cursor', 'skip local Cursor usage')
-    .option('--year <year>', 'only include days from this calendar year', parseIntArg)
+    .option('--year <year>', 'only include days from this calendar year', parseIntArgument)
     .action(
       (
         kind: string | undefined,
-        opts: {
+        options: {
           limit: number;
           sort: string;
           cursor?: boolean;
@@ -315,12 +317,12 @@ export function buildProgram(): Command {
           console.error(kindError);
           process.exit(1);
         }
-        const sortError = topSortValidationError(opts.sort);
+        const sortError = topSortValidationError(options.sort);
         if (sortError) {
           console.error(sortError);
           process.exit(1);
         }
-        const limitError = topLimitValidationError(opts.limit);
+        const limitError = topLimitValidationError(options.limit);
         if (limitError) {
           console.error(limitError);
           process.exit(1);
@@ -328,10 +330,10 @@ export function buildProgram(): Command {
         runAsync(() =>
           topCommand({
             kind: parseTopKind(kind),
-            limit: opts.limit,
-            sort: parseTopSort(opts.sort),
-            noCursor: opts.cursor === false,
-            year: opts.year,
+            limit: options.limit,
+            sort: parseTopSort(options.sort),
+            noCursor: options.cursor === false,
+            year: options.year,
           }),
         );
       },

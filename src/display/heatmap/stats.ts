@@ -29,29 +29,28 @@ function hasActivity(dayMap: DayMap, key: string): boolean {
 export function currentStreak(dayMap: DayMap): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const cur = new Date(today);
+  const current = new Date(today);
   let streak = 0;
-  for (;;) {
-    if (!hasActivity(dayMap, dateKey(cur))) break;
+  while (hasActivity(dayMap, dateKey(current))) {
     streak++;
-    cur.setDate(cur.getDate() - 1);
+    current.setDate(current.getDate() - 1);
   }
   return streak;
 }
 
 export function longestStreak(dayMap: DayMap): number {
-  const activeDates = [...dayMap.entries()]
+  const activeDates = [...dayMap]
     .filter(([, v]) => v.inputTokens + v.outputTokens > 0)
     .map(([d]) => d)
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
   if (activeDates.length === 0) return 0;
 
   let longest = 1;
   let current = 1;
-  for (let i = 1; i < activeDates.length; i++) {
-    const prev = new Date(`${activeDates[i - 1]}T12:00:00`);
-    const cur = new Date(`${activeDates[i]}T12:00:00`);
-    const diffDays = Math.round((cur.getTime() - prev.getTime()) / MS_PER_DAY);
+  for (let index = 1; index < activeDates.length; index++) {
+    const previous = new Date(`${activeDates[index - 1]}T12:00:00`);
+    const current_ = new Date(`${activeDates[index]}T12:00:00`);
+    const diffDays = Math.round((current_.getTime() - previous.getTime()) / MS_PER_DAY);
     if (diffDays === 1) {
       current++;
       longest = Math.max(longest, current);
@@ -138,14 +137,14 @@ export function computeModelStats(dayMap: DayMap): ModelStats {
 
 export function formatPeakDate(date: string): string {
   const [y = '', m = '', d = ''] = date.split('-');
-  const monthIdx = parseInt(m, 10) - 1;
-  return `${MONTHS[monthIdx] ?? m} ${parseInt(d, 10)}, ${y}`;
+  const monthIndex = parseInt(m, 10) - 1;
+  return `${MONTHS[monthIndex] ?? m} ${parseInt(d, 10)}, ${y}`;
 }
 
 export function formatMonthLabel(month: string): string {
   const [y = '', m = ''] = month.split('-');
-  const monthIdx = parseInt(m, 10) - 1;
-  return `${MONTHS[monthIdx] ?? m} ${y}`;
+  const monthIndex = parseInt(m, 10) - 1;
+  return `${MONTHS[monthIndex] ?? m} ${y}`;
 }
 
 export function buildHeatmapWeeks(year?: number): Array<Array<string | null>> {
@@ -161,16 +160,16 @@ export function buildDateGrid(year?: number): Array<Array<string | null>> {
   const start = new Date(today);
   start.setDate(start.getDate() - today.getDay() - HEATMAP_WEEKS * 7);
   const weeks: Array<Array<string | null>> = [];
-  const cur = new Date(start);
-  while (cur <= today) {
+  const current = new Date(start);
+  while (current <= today) {
     const week: Array<string | null> = [];
     for (let d = 0; d < 7; d++) {
-      if (cur <= today) {
-        week.push(toLocalDateString(cur));
+      if (current <= today) {
+        week.push(toLocalDateString(current));
       } else {
         week.push(null);
       }
-      cur.setDate(cur.getDate() + 1);
+      current.setDate(current.getDate() + 1);
     }
     weeks.push(week);
   }
@@ -187,18 +186,18 @@ function buildYearGrid(year: number): Array<Array<string | null>> {
   end.setHours(0, 0, 0, 0);
 
   const weeks: Array<Array<string | null>> = [];
-  const cur = new Date(start);
+  const current = new Date(start);
   do {
     const week: Array<string | null> = [];
     for (let d = 0; d < 7; d++) {
-      if (cur <= end && cur.getFullYear() === year) {
-        week.push(toLocalDateString(cur));
+      if (current <= end && current.getFullYear() === year) {
+        week.push(toLocalDateString(current));
       } else {
         week.push(null);
       }
-      cur.setDate(cur.getDate() + 1);
+      current.setDate(current.getDate() + 1);
     }
     weeks.push(week);
-  } while (cur <= end || cur.getDay() !== 0);
+  } while (current <= end || current.getDay() !== 0);
   return weeks;
 }

@@ -44,7 +44,7 @@ export async function recomputeCostsCommand(): Promise<void> {
     const raw = readFileSync(filePath, 'utf8');
     const machine = parseMachineFile(raw, filePath);
     if (!machine) continue;
-    let touched = false;
+    let isTouched = false;
 
     for (const [date, providers] of Object.entries(machine.days)) {
       for (const providerKey of ['claude_code', 'codex'] as const) {
@@ -52,35 +52,35 @@ export async function recomputeCostsCommand(): Promise<void> {
         if (!providerDay) continue;
 
         let dayTotal = 0;
-        let anyModel = false;
-        let dayTouched = false;
+        let isAnyModel = false;
+        let isDayTouched = false;
 
         for (const [model, counts] of Object.entries(providerDay.byModel)) {
           const cost = resolveModelCost(providerKey, model, counts, date, 'recompute');
           if (cost === undefined) {
             if (counts.costUSD !== undefined) {
               dayTotal += counts.costUSD;
-              anyModel = true;
+              isAnyModel = true;
               if (providerKey === 'claude_code') legacySkipped++;
             }
             continue;
           }
           if (counts.costUSD !== cost) {
             counts.costUSD = cost;
-            dayTouched = true;
+            isDayTouched = true;
           }
           dayTotal += cost;
-          anyModel = true;
+          isAnyModel = true;
         }
 
-        if (dayTouched && anyModel) {
+        if (isDayTouched && isAnyModel) {
           providerDay.totals.costUSD = dayTotal;
-          touched = true;
+          isTouched = true;
         }
       }
     }
 
-    if (touched) {
+    if (isTouched) {
       machine.lastUpdated = new Date().toISOString();
       writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
       changed++;
@@ -112,8 +112,8 @@ export async function recomputeCostsCommand(): Promise<void> {
     console.warn('  These costs may be wrong — update src/pricing/ with the correct rates.');
   }
 
-  const pushed = commitDataChanges(`recompute: refresh costs at ${new Date().toISOString()}`);
-  if (!pushed) {
+  const isPushed = commitDataChanges(`recompute: refresh costs at ${new Date().toISOString()}`);
+  if (!isPushed) {
     console.log('No file actually changed on disk — pricing already current.');
     return;
   }

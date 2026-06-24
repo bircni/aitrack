@@ -15,12 +15,12 @@ interface CursorAuthState {
   refreshToken?: string;
 }
 
-function envValue(name: string): string | undefined {
+function environmentValue(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value === '' ? undefined : value;
 }
 
-function getCursorDefaultStateDbPath(): string {
+function getCursorDefaultStateDatabasePath(): string {
   if (process.platform === 'darwin') {
     return join(
       homedir(),
@@ -31,21 +31,21 @@ function getCursorDefaultStateDbPath(): string {
     );
   }
   if (process.platform === 'win32') {
-    const appData = envValue('APPDATA') ?? join(homedir(), 'AppData', 'Roaming');
+    const appData = environmentValue('APPDATA') ?? join(homedir(), 'AppData', 'Roaming');
     return join(appData, 'Cursor', CURSOR_STATE_DB_RELATIVE_PATH);
   }
-  const xdgConfigHome = envValue('XDG_CONFIG_HOME') ?? join(homedir(), '.config');
+  const xdgConfigHome = environmentValue('XDG_CONFIG_HOME') ?? join(homedir(), '.config');
   return join(xdgConfigHome, 'Cursor', CURSOR_STATE_DB_RELATIVE_PATH);
 }
 
-function getCursorStateDbCandidates(): string[] {
-  const explicitDbPath = process.env[CURSOR_STATE_DB_PATH_ENV]?.trim();
-  if (explicitDbPath) return [resolve(explicitDbPath)];
+function getCursorStateDatabaseCandidates(): string[] {
+  const explicitDatabasePath = process.env[CURSOR_STATE_DB_PATH_ENV]?.trim();
+  if (explicitDatabasePath) return [resolve(explicitDatabasePath)];
 
-  const configuredDirs = process.env[CURSOR_CONFIG_DIR_ENV]?.trim();
-  if (!configuredDirs) return [getCursorDefaultStateDbPath()];
+  const configuredDirectories = process.env[CURSOR_CONFIG_DIR_ENV]?.trim();
+  if (!configuredDirectories) return [getCursorDefaultStateDatabasePath()];
 
-  return configuredDirs
+  return configuredDirectories
     .split(',')
     .map((v) => v.trim())
     .filter((v) => v !== '')
@@ -57,7 +57,7 @@ function getCursorStateDbCandidates(): string[] {
 
 export function getCursorStateDbPath(): string | null {
   const seen = new Set<string>();
-  for (const candidate of getCursorStateDbCandidates()) {
+  for (const candidate of getCursorStateDatabaseCandidates()) {
     if (seen.has(candidate)) continue;
     seen.add(candidate);
     if (existsSync(candidate)) return candidate;
@@ -65,7 +65,7 @@ export function getCursorStateDbPath(): string | null {
   return null;
 }
 
-function normalizeCursorDbValue(value: unknown): string | undefined {
+function normalizeCursorDatabaseValue(value: unknown): string | undefined {
   if (typeof value === 'string') {
     const trimmed = value.trim();
     return trimmed === '' ? undefined : trimmed;
@@ -84,8 +84,8 @@ function readCursorAuthStateFromDatabase(databasePath: string): CursorAuthState 
     const accessRow = query.get('cursorAuth/accessToken') as { value?: unknown } | undefined;
     const refreshRow = query.get('cursorAuth/refreshToken') as { value?: unknown } | undefined;
     return {
-      accessToken: normalizeCursorDbValue(accessRow?.value),
-      refreshToken: normalizeCursorDbValue(refreshRow?.value),
+      accessToken: normalizeCursorDatabaseValue(accessRow?.value),
+      refreshToken: normalizeCursorDatabaseValue(refreshRow?.value),
     };
   } finally {
     database.close();
@@ -143,7 +143,7 @@ function decodeJwtPayload(token: string): { sub?: string } | null {
 }
 
 function getCursorWebBaseUrl(): string {
-  return (envValue(CURSOR_WEB_BASE_URL_ENV) ?? 'https://cursor.com').replace(/\/+$/, '');
+  return (environmentValue(CURSOR_WEB_BASE_URL_ENV) ?? 'https://cursor.com').replace(/\/+$/, '');
 }
 
 function buildCookieHeaderValue(cookieValue: string): string {

@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const TEST_HOME = vi.hoisted(() => {
-  const tmp = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
-  return `${tmp}/aitrack-codex-read-test`;
+  const temporary = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
+  return `${temporary}/aitrack-codex-read-test`;
 });
 
 vi.mock('os', async (importOriginal) => {

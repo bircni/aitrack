@@ -27,24 +27,24 @@ const SECTION_H =
   SEC_PAD_TOP + HEADER_H + DIVIDER_H + MONTH_H + GRID_H + LEGEND_H + STATS_H + SEC_PAD_BOT;
 
 function roundedRect(
-  ctx: SKRSContext2D,
+  context: SKRSContext2D,
   x: number,
   y: number,
   w: number,
   h: number,
   r: number,
 ): void {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + w, y, x + w, y + h, r);
+  context.arcTo(x + w, y + h, x, y + h, r);
+  context.arcTo(x, y + h, x, y, r);
+  context.arcTo(x, y, x + w, y, r);
+  context.closePath();
 }
 
 function drawSection(
-  ctx: SKRSContext2D,
+  context: SKRSContext2D,
   providerKey: string,
   dayMap: DayMap,
   weeks: Array<Array<string | null>>,
@@ -52,99 +52,99 @@ function drawSection(
   mode: 'light' | 'dark',
 ): void {
   const C = PALETTE[mode];
-  const dark = mode === 'dark';
-  const vm = buildProviderSectionViewModel(providerKey, dayMap, dark);
-  const themeCells = getProviderTheme(providerKey, dark).cells;
+  const isDark = mode === 'dark';
+  const vm = buildProviderSectionViewModel(providerKey, dayMap, isDark);
+  const themeCells = getProviderTheme(providerKey, isDark).cells;
 
   let y = baseY + SEC_PAD_TOP;
 
-  ctx.fillStyle = C.title;
-  ctx.font = 'bold 22px Arial';
-  ctx.fillText(vm.name, LEFT, y + 16);
+  context.fillStyle = C.title;
+  context.font = 'bold 22px Arial';
+  context.fillText(vm.name, LEFT, y + 16);
 
   const colW = 112;
   const statsRight = LEFT + GRID_W;
-  for (const [i, col] of vm.headerStats.entries()) {
-    const cx = statsRight - (vm.headerStats.length - 1 - i) * colW;
-    ctx.fillStyle = C.label;
-    ctx.font = '9px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(col.label, cx, y + 4);
-    ctx.fillStyle = C.title;
-    ctx.font = 'bold 16px Arial';
-    ctx.fillText(col.value, cx, y + 22);
-    ctx.textAlign = 'left';
+  for (const [index, col] of vm.headerStats.entries()) {
+    const cx = statsRight - (vm.headerStats.length - 1 - index) * colW;
+    context.fillStyle = C.label;
+    context.font = '9px Arial';
+    context.textAlign = 'center';
+    context.fillText(col.label, cx, y + 4);
+    context.fillStyle = C.title;
+    context.font = 'bold 16px Arial';
+    context.fillText(col.value, cx, y + 22);
+    context.textAlign = 'left';
   }
 
   y += HEADER_H;
 
-  ctx.fillStyle = C.divider;
-  ctx.fillRect(LEFT, y, GRID_W, DIVIDER_H);
+  context.fillStyle = C.divider;
+  context.fillRect(LEFT, y, GRID_W, DIVIDER_H);
   y += DIVIDER_H;
 
-  ctx.fillStyle = C.muted;
-  ctx.font = '11px Arial';
+  context.fillStyle = C.muted;
+  context.font = '11px Arial';
   let lastMonth = -1;
   for (const [w, week] of weeks.entries()) {
     const first = week.find((d) => d !== null);
     if (!first) continue;
     const month = parseInt(first.slice(5, 7)) - 1;
     if (month !== lastMonth) {
-      ctx.fillText(MONTHS[month] ?? '', LEFT + w * STEP, y + 14);
+      context.fillText(MONTHS[month] ?? '', LEFT + w * STEP, y + 14);
       lastMonth = month;
     }
   }
   y += MONTH_H;
 
-  ctx.fillStyle = C.muted;
-  ctx.font = '10px Arial';
-  ctx.textAlign = 'right';
-  ctx.fillText('Mon', LEFT - 6, y + STEP + CELL);
-  ctx.fillText('Wed', LEFT - 6, y + 3 * STEP + CELL);
-  ctx.fillText('Fri', LEFT - 6, y + 5 * STEP + CELL);
-  ctx.textAlign = 'left';
+  context.fillStyle = C.muted;
+  context.font = '10px Arial';
+  context.textAlign = 'right';
+  context.fillText('Mon', LEFT - 6, y + STEP + CELL);
+  context.fillText('Wed', LEFT - 6, y + 3 * STEP + CELL);
+  context.fillText('Fri', LEFT - 6, y + 5 * STEP + CELL);
+  context.textAlign = 'left';
 
   for (const [w, week] of weeks.entries()) {
     for (let d = 0; d < 7; d++) {
-      const dateStr = week[d] ?? null;
+      const dateString = week[d] ?? null;
       const x = LEFT + w * STEP;
       const cellY = y + d * STEP;
-      const rec = dateStr ? dayMap.get(dateStr) : null;
+      const rec = dateString ? dayMap.get(dateString) : null;
       const tokens = rec ? rec.inputTokens + rec.outputTokens : 0;
-      const level = dateStr ? tokenIntensityLevel(tokens, vm.maxTokens) : 0;
-      ctx.fillStyle = themeCells[level];
-      roundedRect(ctx, x, cellY, CELL, CELL, 2);
-      ctx.fill();
+      const level = dateString ? tokenIntensityLevel(tokens, vm.maxTokens) : 0;
+      context.fillStyle = themeCells[level];
+      roundedRect(context, x, cellY, CELL, CELL, 2);
+      context.fill();
     }
   }
   y += GRID_H;
 
-  ctx.fillStyle = C.muted;
-  ctx.font = '10px Arial';
-  ctx.fillText('LESS', LEFT, y + CELL);
+  context.fillStyle = C.muted;
+  context.font = '10px Arial';
+  context.fillText('LESS', LEFT, y + CELL);
   const lx = LEFT + 38;
   for (let level = 0; level <= 4; level++) {
-    ctx.fillStyle = themeCells[level] ?? themeCells[0];
-    roundedRect(ctx, lx + level * (CELL + 3), y, CELL, CELL, 2);
-    ctx.fill();
+    context.fillStyle = themeCells[level] ?? themeCells[0];
+    roundedRect(context, lx + level * (CELL + 3), y, CELL, CELL, 2);
+    context.fill();
   }
-  ctx.fillStyle = C.muted;
-  ctx.fillText('MORE', lx + 5 * (CELL + 3) + 4, y + CELL);
+  context.fillStyle = C.muted;
+  context.fillText('MORE', lx + 5 * (CELL + 3) + 4, y + CELL);
   y += LEGEND_H;
 
-  ctx.fillStyle = C.divider;
-  ctx.fillRect(LEFT, y, GRID_W, 1);
+  context.fillStyle = C.divider;
+  context.fillRect(LEFT, y, GRID_W, 1);
   y += 14;
 
   const bColW = GRID_W / vm.bottomStats.length;
-  for (const [i, stat] of vm.bottomStats.entries()) {
-    const bx = LEFT + i * bColW;
-    ctx.fillStyle = C.label;
-    ctx.font = '9px Arial';
-    ctx.fillText(stat.label, bx, y + 12);
-    ctx.fillStyle = C.value;
-    ctx.font = 'bold 13px Arial';
-    ctx.fillText(stat.value, bx, y + 28);
+  for (const [index, stat] of vm.bottomStats.entries()) {
+    const bx = LEFT + index * bColW;
+    context.fillStyle = C.label;
+    context.font = '9px Arial';
+    context.fillText(stat.label, bx, y + 12);
+    context.fillStyle = C.value;
+    context.font = 'bold 13px Arial';
+    context.fillText(stat.value, bx, y + 28);
   }
 }
 
@@ -171,15 +171,15 @@ export function renderToPng(
   const totalH = CANVAS_PAD + active.length * SECTION_H + CANVAS_PAD;
 
   const canvas = createCanvas(TOTAL_W, totalH);
-  const ctx = canvas.getContext('2d');
+  const context = canvas.getContext('2d');
 
-  ctx.fillStyle = C.bg;
-  ctx.fillRect(0, 0, TOTAL_W, totalH);
+  context.fillStyle = C.bg;
+  context.fillRect(0, 0, TOTAL_W, totalH);
 
-  for (const [i, key] of active.entries()) {
+  for (const [index, key] of active.entries()) {
     const dayMap = layoutData[key];
     if (dayMap !== undefined) {
-      drawSection(ctx, key, dayMap, weeks, CANVAS_PAD + i * SECTION_H, mode);
+      drawSection(context, key, dayMap, weeks, CANVAS_PAD + index * SECTION_H, mode);
     }
   }
 

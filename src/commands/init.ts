@@ -87,9 +87,9 @@ export async function initCommand(): Promise<void> {
     return;
   }
 
-  const urlChanged = existing !== null && existing.repoUrl !== repoUrl;
+  const isUrlChanged = existing !== null && existing.repoUrl !== repoUrl;
 
-  if (isCloned() && urlChanged) {
+  if (isCloned() && isUrlChanged) {
     const reclone = await promptReclone();
     if (!reclone) {
       console.log('Aborted.');

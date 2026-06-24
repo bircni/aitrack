@@ -5,7 +5,7 @@ import {
   dateRangeValidationError,
   invalidDateMessage,
   isValidDateString,
-  parseIntArg,
+  parseIntArg as parseIntArgument,
   parsePositiveInt,
   parseTopKind,
   topKindValidationError,
@@ -28,8 +28,8 @@ describe('cli parse helpers', () => {
   });
 
   it('parses integer CLI arguments', () => {
-    expect(parseIntArg('42')).toBe(42);
-    expect(() => parseIntArg('nope')).toThrow('Expected an integer, got: nope');
+    expect(parseIntArgument('42')).toBe(42);
+    expect(() => parseIntArgument('nope')).toThrow('Expected an integer, got: nope');
   });
 
   it('parses positive integers for usage last N', () => {

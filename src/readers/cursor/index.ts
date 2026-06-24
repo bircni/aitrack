@@ -2,7 +2,7 @@ import type { DayMap } from '../../data/types.js';
 import {
   errorMessage,
   fetchCursorUsageCsv,
-  getCursorStateDbPath,
+  getCursorStateDbPath as getCursorStateDatabasePath,
   readCursorAuthState,
 } from './auth.js';
 import { aggregateCursorCsvToDayMap } from './csv.js';
@@ -15,7 +15,7 @@ export { aggregateCursorCsvToDayMap, parseCursorDateString } from './csv.js';
  * Returns an empty map if the DB is missing, there is no access token, or the request fails.
  */
 export async function readCursorData(): Promise<DayMap> {
-  const databasePath = getCursorStateDbPath();
+  const databasePath = getCursorStateDatabasePath();
   if (!databasePath) {
     return new Map();
   }

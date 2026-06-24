@@ -61,7 +61,7 @@ const FAMILY_FALLBACK: Record<'opus' | 'sonnet' | 'haiku', ClaudePricing> = {
 // Tracks ids that fell through to family fallback so callers can warn at end-of-run.
 const fallbackHits = new Set<string>();
 export function consumeClaudeFallbackHits(): string[] {
-  const xs = [...fallbackHits].sort();
+  const xs = [...fallbackHits].sort((a, b) => a.localeCompare(b));
   fallbackHits.clear();
   return xs;
 }
@@ -79,10 +79,12 @@ export function findClaudePricing(model: string, usageDate?: string): ClaudePric
   const exact = CLAUDE_PRICING_BY_ID[id];
   if (exact) return exact;
   for (const family of ['opus', 'haiku', 'sonnet'] as const) {
-    if (id.includes(family)) {
-      fallbackHits.add(id);
-      return FAMILY_FALLBACK[family];
+    if (!id.includes(family)) {
+      continue;
     }
+
+    fallbackHits.add(id);
+    return FAMILY_FALLBACK[family];
   }
   fallbackHits.add(id);
   return FAMILY_FALLBACK.sonnet;
