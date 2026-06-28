@@ -5,3 +5,7 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   simple-git-hooks: true
+
+minimumReleaseAgeExclude:
+  - knip@6.23.0
+  - prettier@3.9.1
