@@ -21,7 +21,7 @@ const DIVIDER_H = 1;
 const MONTH_H = 28;
 const GRID_H = 7 * STEP;
 const LEGEND_H = 32;
-const STATS_H = 64;
+const STATS_H = 78;
 const SEC_PAD_BOT = 28;
 const SECTION_H =
   SEC_PAD_TOP + HEADER_H + DIVIDER_H + MONTH_H + GRID_H + LEGEND_H + STATS_H + SEC_PAD_BOT;
@@ -145,6 +145,13 @@ function drawSection(
     context.fillStyle = C.value;
     context.font = 'bold 13px Arial';
     context.fillText(stat.value, bx, y + 28);
+    // Token amount on its own line in a lighter font, so a long model name and
+    // its token count never run into the neighbouring column.
+    if (stat.sub !== undefined) {
+      context.fillStyle = C.muted;
+      context.font = '11px Arial';
+      context.fillText(stat.sub, bx, y + 43);
+    }
   }
 }
 

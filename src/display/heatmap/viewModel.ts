@@ -17,6 +17,8 @@ import { getProviderTheme } from './themes.js';
 export interface StatCell {
   label: string;
   value: string;
+  /** Optional secondary line (e.g. token amount) rendered under the value in a lighter font. */
+  sub?: string;
 }
 
 export interface ProviderSectionViewModel {
@@ -67,19 +69,23 @@ export function buildProviderSectionViewModel(
   const bottomStats: StatCell[] = [
     {
       label: 'MOST USED MODEL',
-      value: topAllTime ? `${displayModelName(topAllTime.model)} (${fmt(topAllTime.tokens)})` : '—',
+      value: topAllTime ? displayModelName(topAllTime.model) : '—',
+      sub: topAllTime ? fmt(topAllTime.tokens) : undefined,
     },
     {
-      label: 'RECENT USE (LAST 30 DAYS)',
-      value: topRecent ? `${displayModelName(topRecent.model)} (${fmt(topRecent.tokens)})` : '—',
+      label: 'LAST 30 DAYS',
+      value: topRecent ? displayModelName(topRecent.model) : '—',
+      sub: topRecent ? fmt(topRecent.tokens) : undefined,
     },
     {
       label: 'PEAK DAY',
-      value: peak ? `${formatPeakDate(peak.date)} (${fmt(peak.tokens)})` : '—',
+      value: peak ? formatPeakDate(peak.date) : '—',
+      sub: peak ? fmt(peak.tokens) : undefined,
     },
     {
       label: 'PEAK MONTH',
-      value: peakMo ? `${formatMonthLabel(peakMo.month)} (${fmt(peakMo.tokens)})` : '—',
+      value: peakMo ? formatMonthLabel(peakMo.month) : '—',
+      sub: peakMo ? fmt(peakMo.tokens) : undefined,
     },
     { label: 'CURRENT STREAK', value: `${String(cs)} day${cs === 1 ? '' : 's'}` },
     { label: 'LONGEST STREAK', value: `${String(ls)} day${ls === 1 ? '' : 's'}` },

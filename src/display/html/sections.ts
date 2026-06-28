@@ -169,7 +169,7 @@ export function renderProviderSection(
   const bottomHtml = vm.bottomStats
     .map(
       (stat) =>
-        `<div class="bottom-stat"><div class="stat-label">${escapeHtml(stat.label)}</div><div class="stat-value-sm">${escapeHtml(stat.value)}</div></div>`,
+        `<div class="bottom-stat"><div class="stat-label">${escapeHtml(stat.label)}</div><div class="stat-value-sm">${escapeHtml(stat.value)}${stat.sub === undefined ? '' : ` <span class="stat-sub">${escapeHtml(stat.sub)}</span>`}</div></div>`,
     )
     .join('');
 

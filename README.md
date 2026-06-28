@@ -11,6 +11,12 @@ Each machine pushes a single JSON file to a git repo _you_ control. Pull from an
 [![node](https://img.shields.io/node/v/aitrack?logo=node.js&color=339933)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/aitrack?color=blue)](LICENSE)
 
+<br>
+
+<img src="https://raw.githubusercontent.com/bircni/aitrack/main/docs/heatmap.png" alt="aitrack heatmap — a year of Claude Code, Codex and Cursor usage with token totals, cost and streaks" width="720">
+
+<sub>One <code>aitrack show</code> — every assistant, every machine, a year at a glance.</sub>
+
 </div>
 
 ---
@@ -22,6 +28,7 @@ Each machine pushes a single JSON file to a git repo _you_ control. Pull from an
 - 🔑 **No API tokens for sync** — uses your local `git`, so whatever auth already works in your terminal (SSH keys, credential manager) just works.
 - ⚡ **Zero-setup preview** — run `npx aitrack show --tui` and see your local usage _before_ configuring anything.
 - 💰 **Real cost estimates** — per-model pricing applied to Claude Code token + cache usage.
+- 🧮 **Total spend, all in one place** — combined cost across every machine you own, so you can see what your AI tooling actually costs.
 
 > **Synced via git:** Claude Code, Codex (OpenAI).
 > **Cursor** is read locally on demand and **never** written to your repo (see [Where data comes from](#where-data-comes-from)).
@@ -203,7 +210,7 @@ Each machine's file in the repo:
 
 ## Requirements
 
-- **Node.js 22+**
+- **Node.js 24+**
 - **git** installed and on your `PATH`
 - A git remote you can push to (GitHub or any host)
 

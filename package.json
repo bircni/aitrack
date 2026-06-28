@@ -1,7 +1,7 @@
 {
   "name": "aitrack",
   "version": "0.4.1",
-  "description": "Sync AI coding assistant usage across machines via GitHub",
+  "description": "Track and visualize your Claude Code, Codex & Cursor usage and cost — heatmaps, stats, and multi-machine sync over a git repo you own.",
   "author": "Nicolas <bircni@icloud.com>",
   "license": "MIT",
   "repository": {
@@ -15,11 +15,18 @@
   "keywords": [
     "ai",
     "claude",
+    "claude-code",
     "codex",
+    "openai",
     "cursor",
     "usage",
+    "token-usage",
+    "ai-usage",
+    "cost-tracking",
     "heatmap",
     "git-sync",
+    "developer-tools",
+    "tui",
     "cli"
   ],
   "type": "module",
