@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.5.0] - 2026-06-28
+
+
+### Features
+
+- **heatmap:** Split stat token amounts onto a lighter second line
+
 ## [v0.4.1] - 2026-06-22
 
 
