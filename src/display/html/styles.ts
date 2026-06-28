@@ -64,6 +64,7 @@ body {
 .stat-label { font-size: 9px; color: var(--muted); letter-spacing: 0.04em; }
 .stat-value { font-size: 16px; font-weight: 700; margin-top: 4px; }
 .stat-value-sm { font-size: 13px; font-weight: 700; margin-top: 4px; }
+.stat-sub { font-weight: 400; color: var(--muted); }
 .heatmap-wrap { display: flex; gap: 8px; overflow-x: auto; }
 .day-labels {
   display: grid;

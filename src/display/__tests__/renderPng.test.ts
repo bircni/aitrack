@@ -56,4 +56,16 @@ describe('renderToPng', () => {
     const buffer = renderToPng({ claude_code: dayMap }, [], { year: 2024 });
     expect(buffer[0]).toBe(0x89);
   });
+
+  it('renders long model names without crashing (token amount moves to its own line)', () => {
+    const day: DayEntry = {
+      inputTokens: 5_000_000,
+      outputTokens: 40_000,
+      byModel: {
+        'composer-2.5-fast-extra-long-name': { inputTokens: 5_000_000, outputTokens: 40_000 },
+      },
+    };
+    const buffer = renderToPng({ cursor: new Map([['2024-03-15', day]]) }, [], {});
+    expect(buffer[0]).toBe(0x89);
+  });
 });
