@@ -9,3 +9,4 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - knip@6.23.0
   - prettier@3.9.1
+  - tsx@4.23.0
