@@ -113,7 +113,7 @@ describe('loadMergedProviderData', () => {
       },
     });
 
-    const loaded = await loadMergedProviderData({ noCursor: true });
+    const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
 
     expect(console.warn).not.toHaveBeenCalled();
     expect(mocks.writePendingMachineFile).toHaveBeenCalled();
@@ -154,7 +154,7 @@ describe('loadMergedProviderData', () => {
       },
     });
 
-    const loaded = await loadMergedProviderData({ noCursor: true });
+    const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
 
     expect(mocks.readDataFile).toHaveBeenCalledTimes(1);
     expect(mocks.readDataFile.mock.calls[0]?.[0]).toBe('/repo/data/other.json');

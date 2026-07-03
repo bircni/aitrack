@@ -147,7 +147,7 @@ describe('integration', () => {
     await syncCommand();
 
     const outputPath = join(TEST_HOME, 'output.png');
-    await showCommand({ output: outputPath, noCursor: true });
+    await showCommand({ output: outputPath, providers: ['claude_code', 'codex'] });
 
     expect(existsSync(outputPath)).toBe(true);
     const buffer = readFileSync(outputPath);
@@ -186,7 +186,7 @@ describe('integration', () => {
     await syncCommand();
 
     const outputPath = join(TEST_HOME, 'merged.png');
-    await showCommand({ output: outputPath, noCursor: true });
+    await showCommand({ output: outputPath, providers: ['claude_code', 'codex'] });
 
     expect(existsSync(outputPath)).toBe(true);
     const buffer = readFileSync(outputPath);

@@ -116,7 +116,7 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 | `aitrack machines`           | Per-machine totals + last sync time (helpful for spotting stale machines)     |
 | `aitrack recompute-costs`    | Refresh costs: re-read local JSONL; reprice other machines from stored cache  |
 
-**`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--no-cursor` (skip Cursor), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year). `--no-cursor` also works on every `usage` subcommand.
+**`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--providers <list>` (comma-separated providers to show — `claude`, `codex`, `cursor`; default: all), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year). `--providers` also works on `usage`, `export`, `top`, and `daemon`.
 
 **`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), and `--year <year>`.
 
@@ -139,7 +139,7 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 - **Sync** uses a local git clone at `~/.config/aitrack/repo/` with your existing git credentials — ordinary pulls and pushes.
 - **`show` (PNG or `--tui`) always reads fresh local Claude/Codex JSONL** on the current machine and merges in other machines' synced files. No `sync` needed to preview.
 - Before `init`, local usage is staged in `~/.config/aitrack/pending/data/` and adopted on the next `init`/`sync`.
-- **Cursor** is loaded only on the current machine: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls Cursor's own CSV usage export over HTTPS. The token is used solely for that request — it is **never** written to your repo or sent anywhere else. Use `--no-cursor` to skip it.
+- **Cursor** is loaded only on the current machine: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls Cursor's own CSV usage export over HTTPS. The token is used solely for that request — it is **never** written to your repo or sent anywhere else. Use `--providers` without `cursor` (e.g. `--providers claude,codex`) to skip it.
 - **Heatmap intensity** anchors on the 90th-percentile day rather than the absolute max, so one huge day doesn't flatten the rest of the year.
 
 ### Cost handling

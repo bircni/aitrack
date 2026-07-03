@@ -16,7 +16,7 @@ export interface DaemonOptions {
   host?: string;
   sync?: boolean;
   dark?: boolean;
-  noCursor?: boolean;
+  providers?: string[];
   all?: boolean;
   year?: number;
 }
@@ -44,7 +44,7 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
     dark: Boolean(options.dark),
     all: Boolean(options.all),
     year: options.year,
-    noCursor: options.noCursor,
+    providers: options.providers,
   };
   const htmlOptions = {
     dark: renderOptions.dark,
@@ -72,7 +72,7 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
       }
 
       const loaded = await loadMergedProviderData({
-        noCursor: renderOptions.noCursor,
+        providers: renderOptions.providers,
         year: renderOptions.year,
       });
 

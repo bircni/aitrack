@@ -16,7 +16,7 @@ export interface TopOptions {
   kind: TopKind;
   limit: number;
   sort: TopSort;
-  noCursor?: boolean;
+  providers?: string[];
   year?: number;
 }
 
@@ -110,7 +110,7 @@ function topModels(
 
 export async function topCommand(options: TopOptions): Promise<void> {
   const loaded = await loadMergedProviderData({
-    noCursor: options.noCursor,
+    providers: options.providers,
     year: options.year,
   });
 

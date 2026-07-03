@@ -22,6 +22,7 @@ import {
   isValidDateString,
   parseIntArg as parseIntArgument,
   parsePositiveInt,
+  parseProviders,
   parseTopKind,
   parseTopSort,
   topKindValidationError,
@@ -75,8 +76,11 @@ function validateDate(date: string): void {
 }
 
 interface UsageCommonOptions {
-  cursor?: boolean;
+  providers?: string[];
 }
+
+const PROVIDERS_FLAG = '--providers <list>';
+const PROVIDERS_DESC = 'comma-separated providers to show (claude, codex, cursor); default: all';
 
 type UsagePeriodDef =
   | { name: string; period: UsagePeriod; description: string }
@@ -132,12 +136,12 @@ function registerUsageCommands(usage: Command): void {
     const command = usage
       .command(def.name)
       .description(def.description)
-      .option('--no-cursor', 'skip local Cursor usage');
+      .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders);
 
     if (def.period === 'date') {
       command.action((date: string, options: UsageCommonOptions) => {
         validateDate(date);
-        runUsage({ period: 'date', from: date, noCursor: options.cursor === false });
+        runUsage({ period: 'date', from: date, providers: options.providers });
       });
       continue;
     }
@@ -151,7 +155,7 @@ function registerUsageCommands(usage: Command): void {
           console.error(rangeError);
           process.exit(1);
         }
-        runUsage({ period: 'range', from, to, noCursor: options.cursor === false });
+        runUsage({ period: 'range', from, to, providers: options.providers });
       });
       continue;
     }
@@ -166,14 +170,14 @@ function registerUsageCommands(usage: Command): void {
         runUsage({
           period: 'last',
           n: parsePositiveInt(n) ?? 1,
-          noCursor: options.cursor === false,
+          providers: options.providers,
         });
       });
       continue;
     }
 
     command.action((options: UsageCommonOptions) => {
-      runUsage({ period: def.period, noCursor: options.cursor === false });
+      runUsage({ period: def.period, providers: options.providers });
     });
   }
 }
@@ -207,7 +211,7 @@ export function buildProgram(): Command {
     )
     .option('-o, --output <path>', 'output file path', 'aitrack.png')
     .option('--dark', 'dark mode output')
-    .option('--no-cursor', 'skip local Cursor usage (no state.vscdb / CSV export)')
+    .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
     .option('--no-open', 'do not auto-open the generated PNG (useful for scripts / CI)')
     .option('--year <year>', 'only include days from this calendar year', parseInt)
@@ -216,7 +220,7 @@ export function buildProgram(): Command {
       (options: {
         output: string;
         dark?: boolean;
-        cursor?: boolean;
+        providers?: string[];
         all?: boolean;
         open?: boolean;
         year?: number;
@@ -228,7 +232,7 @@ export function buildProgram(): Command {
             dark: options.dark,
             all: options.all,
             open: options.open,
-            noCursor: options.cursor === false,
+            providers: options.providers,
             year: Number.isFinite(options.year) ? options.year : undefined,
             tui: options.tui,
           }),
@@ -245,13 +249,13 @@ export function buildProgram(): Command {
     .command('export [period]')
     .description('Export an itemized PDF usage receipt for a period (default: month)')
     .option('-o, --output <path>', 'output PDF path', 'aitrack-receipt.pdf')
-    .option('--no-cursor', 'skip local Cursor usage')
-    .action((period: string | undefined, options: { output: string; cursor?: boolean }) => {
+    .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
+    .action((period: string | undefined, options: { output: string; providers?: string[] }) => {
       runAsync(() =>
         exportCommand({
           period,
           output: options.output,
-          noCursor: options.cursor === false,
+          providers: options.providers,
         }),
       );
     });
@@ -264,7 +268,7 @@ export function buildProgram(): Command {
     .option('--host <host>', 'bind address', '127.0.0.1')
     .option('--sync', 'pull and push local data on each refresh tick')
     .option('--dark', 'dark mode dashboard')
-    .option('--no-cursor', 'skip local Cursor usage (no state.vscdb / CSV export)')
+    .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
     .option('--year <year>', 'only include days from this calendar year', parseIntArgument)
     .action(
@@ -274,7 +278,7 @@ export function buildProgram(): Command {
         host?: string;
         sync?: boolean;
         dark?: boolean;
-        cursor?: boolean;
+        providers?: string[];
         all?: boolean;
         year?: number;
       }) => {
@@ -286,7 +290,7 @@ export function buildProgram(): Command {
             sync: options.sync,
             dark: options.dark,
             all: options.all,
-            noCursor: options.cursor === false,
+            providers: options.providers,
             year: options.year,
           }),
         );
@@ -300,7 +304,7 @@ export function buildProgram(): Command {
     )
     .option('-n, --limit <n>', 'number of items to show', parseIntArgument, 10)
     .option('--sort <field>', 'sort by "tokens" or "cost"', 'cost')
-    .option('--no-cursor', 'skip local Cursor usage')
+    .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--year <year>', 'only include days from this calendar year', parseIntArgument)
     .action(
       (
@@ -308,7 +312,7 @@ export function buildProgram(): Command {
         options: {
           limit: number;
           sort: string;
-          cursor?: boolean;
+          providers?: string[];
           year?: number;
         },
       ) => {
@@ -332,7 +336,7 @@ export function buildProgram(): Command {
             kind: parseTopKind(kind),
             limit: options.limit,
             sort: parseTopSort(options.sort),
-            noCursor: options.cursor === false,
+            providers: options.providers,
             year: options.year,
           }),
         );

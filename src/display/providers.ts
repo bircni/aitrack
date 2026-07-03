@@ -9,6 +9,27 @@ export const PROVIDER_LABELS: Record<string, string> = {
   all: 'All providers',
 };
 
+/** Canonical provider keys the `--providers` flag can select. */
+export const SELECTABLE_PROVIDERS = ['claude_code', 'codex', 'cursor'] as const;
+
+/** Friendly spellings accepted on the CLI, mapped to their canonical key. */
+const PROVIDER_ALIASES: Record<string, string> = {
+  claude: 'claude_code',
+  'claude-code': 'claude_code',
+  claude_code: 'claude_code',
+  claudecode: 'claude_code',
+  codex: 'codex',
+  cursor: 'cursor',
+};
+
+/**
+ * Normalize a user-supplied provider name (case-insensitive, friendly aliases)
+ * to its canonical key, or return null when it is not a known provider.
+ */
+export function normalizeProviderKey(input: string): string | null {
+  return PROVIDER_ALIASES[input.trim().toLowerCase()] ?? null;
+}
+
 export function providerLabel(providerKey: string): string {
   return PROVIDER_LABELS[providerKey] ?? providerKey;
 }

@@ -60,15 +60,20 @@ describe('buildProgram', () => {
   });
 
   it('maps show options', async () => {
-    await run('show', '--tui', '--dark', '--no-cursor');
+    await run('show', '--tui', '--dark', '--providers', 'claude,codex');
     expect(mocks.showCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ tui: true, dark: true, noCursor: true, output: 'aitrack.png' }),
+      expect.objectContaining({
+        tui: true,
+        dark: true,
+        providers: ['claude_code', 'codex'],
+        output: 'aitrack.png',
+      }),
     );
   });
 
   it('maps the usage period subcommands', async () => {
-    await run('usage', 'today', '--no-cursor');
-    expect(mocks.usageCommand).toHaveBeenCalledWith({ period: 'today', noCursor: true });
+    await run('usage', 'today', '--providers', 'cursor');
+    expect(mocks.usageCommand).toHaveBeenCalledWith({ period: 'today', providers: ['cursor'] });
 
     await run('usage', 'last', '5');
     expect(mocks.usageCommand).toHaveBeenCalledWith(
