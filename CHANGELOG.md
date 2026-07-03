@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.5.1] - 2026-07-03
+
+
+### Features
+
+- **pricing:** Update Claude pricing for sonnet-5 and add introductory pricing details
+
 ## [v0.5.0] - 2026-06-28
 
 
