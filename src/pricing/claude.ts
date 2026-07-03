@@ -1,7 +1,7 @@
 // Per-model Claude pricing from https://platform.claude.com/docs/en/about-claude/pricing
 // Cache read = 0.10x input; cache create (5min) = 1.25x input.
 // Keep entries keyed by canonical model id (with `-YYYYMMDD` date suffix stripped).
-// Last updated: 2026-05. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
+// Last updated: 2026-07. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
 
 export interface ClaudePricing {
   inputPerMillion: number;
@@ -30,6 +30,7 @@ export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
   'claude-opus-4-5': priceFromBase(5, 25),
   'claude-sonnet-4-6': priceFromBase(3, 15),
   'claude-sonnet-4-5': priceFromBase(3, 15),
+  'claude-sonnet-5': priceFromBase(3, 15),
   'claude-haiku-4-5': priceFromBase(1, 5),
   // Older / deprecated
   'claude-opus-4-1': priceFromBase(15, 75),
@@ -49,7 +50,10 @@ export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
 export const CLAUDE_PRICING_OVERRIDES: Record<
   string,
   Array<{ before: string; pricing: ClaudePricing }>
-> = {};
+> = {
+  // Introductory pricing through 2026-08-31; standard tier from 2026-09-01.
+  'claude-sonnet-5': [{ before: '2026-09-01', pricing: priceFromBase(2, 10) }],
+};
 
 // Family fallback for unknown future models.
 const FAMILY_FALLBACK: Record<'opus' | 'sonnet' | 'haiku', ClaudePricing> = {

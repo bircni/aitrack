@@ -12,6 +12,14 @@ describe('claude pricing', () => {
     expect(sonnet.inputPerMillion).toBe(3);
     expect(sonnet.outputPerMillion).toBe(15);
 
+    const sonnet5Intro = findClaudePricing('claude-sonnet-5', '2026-07-01');
+    expect(sonnet5Intro.inputPerMillion).toBe(2);
+    expect(sonnet5Intro.outputPerMillion).toBe(10);
+
+    const sonnet5Standard = findClaudePricing('claude-sonnet-5', '2026-09-01');
+    expect(sonnet5Standard.inputPerMillion).toBe(3);
+    expect(sonnet5Standard.outputPerMillion).toBe(15);
+
     const dated = findClaudePricing('claude-haiku-4-5-20251001');
     expect(dated.inputPerMillion).toBe(1);
     expect(dated.outputPerMillion).toBe(5);
