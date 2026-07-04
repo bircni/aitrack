@@ -27,8 +27,8 @@ Each machine pushes a single JSON file to a git repo _you_ control. Pull from an
 - 🔒 **You own the data** — it lives in a git repo you create. No accounts, no telemetry, no third-party servers.
 - 🔑 **No API tokens for sync** — uses your local `git`, so whatever auth already works in your terminal (SSH keys, credential manager) just works.
 - ⚡ **Zero-setup preview** — run `npx aitrack show --tui` and see your local usage _before_ configuring anything.
-- 💰 **Real cost estimates** — per-model pricing applied to Claude Code token + cache usage.
-- 🧮 **Total spend, all in one place** — combined cost across every machine you own, so you can see what your AI tooling actually costs.
+- 💰 **API-equivalent cost estimates** — per-model list pricing applied to Claude Code token + cache usage. On a subscription this is the pay-as-you-go value of your usage, not what you're billed.
+- 🧮 **Total usage value, all in one place** — combined estimate across every machine you own, so you can see what your AI tooling would cost at API rates.
 
 > **Synced via git:** Claude Code, Codex (OpenAI).
 > **Cursor** is read locally on demand and **never** written to your repo (see [Where data comes from](#where-data-comes-from)).
@@ -116,7 +116,7 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 | `aitrack machines`           | Per-machine totals + last sync time (helpful for spotting stale machines)     |
 | `aitrack recompute-costs`    | Refresh costs: re-read local JSONL; reprice other machines from stored cache  |
 
-**`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--no-cursor` (skip Cursor), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year). `--no-cursor` also works on every `usage` subcommand.
+**`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--providers <list>` (comma-separated providers to show — `claude`, `codex`, `cursor`; default: all), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year). `--providers` also works on `usage`, `export`, `top`, and `daemon`.
 
 **`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), and `--year <year>`.
 
@@ -139,7 +139,7 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 - **Sync** uses a local git clone at `~/.config/aitrack/repo/` with your existing git credentials — ordinary pulls and pushes.
 - **`show` (PNG or `--tui`) always reads fresh local Claude/Codex JSONL** on the current machine and merges in other machines' synced files. No `sync` needed to preview.
 - Before `init`, local usage is staged in `~/.config/aitrack/pending/data/` and adopted on the next `init`/`sync`.
-- **Cursor** is loaded only on the current machine: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls Cursor's own CSV usage export over HTTPS. The token is used solely for that request — it is **never** written to your repo or sent anywhere else. Use `--no-cursor` to skip it.
+- **Cursor** is loaded only on the current machine: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls Cursor's own CSV usage export over HTTPS. The token is used solely for that request — it is **never** written to your repo or sent anywhere else. Use `--providers` without `cursor` (e.g. `--providers claude,codex`) to skip it.
 - **Heatmap intensity** anchors on the 90th-percentile day rather than the absolute max, so one huge day doesn't flatten the rest of the year.
 
 ### Cost handling

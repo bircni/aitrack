@@ -11,7 +11,6 @@ import { defaultTableStyle, renderTerminalTable } from './terminalTable.js';
 
 export interface TuiOptions {
   dark?: boolean;
-  noCursor?: boolean;
   all?: boolean;
   year?: number;
 }

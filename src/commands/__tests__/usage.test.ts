@@ -82,7 +82,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'today', noCursor: true });
+    await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain(`today (${TODAY_LOCALE})`);
@@ -102,7 +102,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'today', noCursor: true });
+    await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
     expect(output()).toContain(`No usage recorded for today (${TODAY_LOCALE}).`);
   });
@@ -121,7 +121,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'week', noCursor: true });
+    await usageCommand({ period: 'week', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('last 7 days (2026-06-09 → 2026-06-15)');
@@ -143,7 +143,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'month', noCursor: true });
+    await usageCommand({ period: 'month', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('last 30 days (2026-05-17 → 2026-06-15)');
@@ -165,7 +165,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'year', noCursor: true });
+    await usageCommand({ period: 'year', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('aitrack usage 2026');
@@ -186,7 +186,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'all', noCursor: true });
+    await usageCommand({ period: 'all', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('aitrack usage all time');
@@ -216,7 +216,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'today', noCursor: true });
+    await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
     const out = output();
     const lines = out.split('\n');
@@ -248,7 +248,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'today', noCursor: true });
+    await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
     const out = output();
     const lines = out.split('\n');
@@ -269,7 +269,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'yesterday', noCursor: true });
+    await usageCommand({ period: 'yesterday', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('yesterday (2026-06-14)');
@@ -289,7 +289,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'date', from: '2026-03-10', noCursor: true });
+    await usageCommand({ period: 'date', from: '2026-03-10', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('2026-03-10');
@@ -311,7 +311,12 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'range', from: '2026-05-01', to: '2026-05-31', noCursor: true });
+    await usageCommand({
+      period: 'range',
+      from: '2026-05-01',
+      to: '2026-05-31',
+      providers: ['claude_code', 'codex'],
+    });
 
     const out = output();
     expect(out).toContain('2026-05-01 → 2026-05-31');
@@ -333,7 +338,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'thisweek', noCursor: true });
+    await usageCommand({ period: 'thisweek', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('this week (2026-06-15 → 2026-06-15)');
@@ -355,7 +360,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'lastweek', noCursor: true });
+    await usageCommand({ period: 'lastweek', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('last week (2026-06-08 → 2026-06-14)');
@@ -377,7 +382,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'thismonth', noCursor: true });
+    await usageCommand({ period: 'thismonth', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('this month (2026-06-01 → 2026-06-15)');
@@ -399,7 +404,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'lastmonth', noCursor: true });
+    await usageCommand({ period: 'lastmonth', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('last month (2026-05-01 → 2026-05-31)');
@@ -421,7 +426,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'last', n: 14, noCursor: true });
+    await usageCommand({ period: 'last', n: 14, providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('last 14 days (2026-06-02 → 2026-06-15)');
@@ -434,17 +439,19 @@ describe('usageCommand', () => {
     mocks.tryLoadConfig.mockReturnValue(null);
     mocks.isCloned.mockReturnValue(false);
 
-    await usageCommand({ period: 'today', noCursor: true });
+    await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
     expect(console.log).toHaveBeenCalledWith('No local usage data found.');
   });
 
-  it('forwards noCursor option to loadMergedProviderData', async () => {
+  it('forwards providers option to loadMergedProviderData', async () => {
     mocks.loadMergedProviderData.mockResolvedValue(null);
 
-    await usageCommand({ period: 'week', noCursor: true });
+    await usageCommand({ period: 'week', providers: ['claude_code', 'codex'] });
 
-    expect(mocks.loadMergedProviderData).toHaveBeenCalledWith({ noCursor: true });
+    expect(mocks.loadMergedProviderData).toHaveBeenCalledWith({
+      providers: ['claude_code', 'codex'],
+    });
   });
 
   it('renders multiple providers with em-dash for missing costs', async () => {
@@ -457,7 +464,7 @@ describe('usageCommand', () => {
       fileCount: 1,
     });
 
-    await usageCommand({ period: 'today', noCursor: true });
+    await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
     const out = output();
     expect(out).toContain('Claude Code');

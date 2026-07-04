@@ -139,7 +139,7 @@ describe('showCommand', () => {
       },
     });
 
-    await showCommand({ noCursor: true });
+    await showCommand({ providers: ['claude_code', 'codex'] });
 
     const providerData = getRenderedProviderData();
     const day = providerData.claude_code.get('2024-01-01');
@@ -162,7 +162,7 @@ describe('showCommand', () => {
       },
     });
 
-    await showCommand({ tui: true, noCursor: true });
+    await showCommand({ tui: true, providers: ['claude_code', 'codex'] });
 
     expect(mocks.renderToPng).not.toHaveBeenCalled();
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
@@ -203,7 +203,7 @@ describe('showCommand', () => {
         },
       });
 
-    await showCommand({ noCursor: true });
+    await showCommand({ providers: ['claude_code', 'codex'] });
 
     const providerData = getRenderedProviderData();
     const day = providerData.claude_code.get('2024-01-01');

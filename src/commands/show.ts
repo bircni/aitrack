@@ -21,7 +21,7 @@ function openFile(filePath: string): void {
 interface ShowOptions {
   output?: string;
   dark?: boolean;
-  noCursor?: boolean;
+  providers?: string[];
   all?: boolean;
   open?: boolean;
   year?: number;
@@ -30,7 +30,7 @@ interface ShowOptions {
 
 export async function showCommand(options: ShowOptions = {}): Promise<void> {
   const loaded = await loadMergedProviderData({
-    noCursor: options.noCursor,
+    providers: options.providers,
     year: options.year,
   });
 

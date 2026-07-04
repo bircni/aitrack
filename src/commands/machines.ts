@@ -4,7 +4,7 @@ import { tryLoadConfig } from '../config.js';
 import type { MachineFile } from '../data/types.js';
 import { emptyUsageMessage, loadMergedProviderData } from '../data/usageData.js';
 import { fmt, fmtUSD } from '../display/format.js';
-import { providerLabel, sortProviderKeys } from '../display/providers.js';
+import { providerLabel, SELECTABLE_PROVIDERS, sortProviderKeys } from '../display/providers.js';
 import {
   defaultTableStyle,
   renderTerminalTable,
@@ -63,7 +63,10 @@ function summarizeMachine(file: MachineFile): MachineSummary {
 }
 
 export async function machinesCommand(): Promise<void> {
-  const loaded = await loadMergedProviderData({ noCursor: true });
+  // Machines are summarized from synced data only; skip the local Cursor read.
+  const loaded = await loadMergedProviderData({
+    providers: SELECTABLE_PROVIDERS.filter((p) => p !== 'cursor'),
+  });
 
   if (!loaded || loaded.machineData.length === 0) {
     console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));

@@ -9,7 +9,7 @@ import { isNoArgPeriod as isNoArgumentPeriod, NO_ARG_PERIODS } from '../display/
 export interface ExportOptions {
   period?: string;
   output: string;
-  noCursor?: boolean;
+  providers?: string[];
 }
 
 export async function exportCommand(options: ExportOptions): Promise<void> {
@@ -18,7 +18,7 @@ export async function exportCommand(options: ExportOptions): Promise<void> {
     throw new Error(`Invalid period: "${period}". Expected one of: ${NO_ARG_PERIODS.join(', ')}.`);
   }
 
-  const report = await buildUsageReport({ period, noCursor: options.noCursor });
+  const report = await buildUsageReport({ period, providers: options.providers });
 
   if (!report || report.rowCount === 0) {
     console.log(emptyReportMessage(report));

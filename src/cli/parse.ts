@@ -1,4 +1,7 @@
+import { InvalidArgumentError } from 'commander';
+
 import type { TopKind, TopSort } from '../commands/top.js';
+import { normalizeProviderKey, SELECTABLE_PROVIDERS } from '../display/providers.js';
 
 export function cliErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -60,6 +63,32 @@ export function dateRangeValidationError(from: string, to: string): string | nul
     return `Start date "${from}" must not be after end date "${to}".`;
   }
   return null;
+}
+
+/**
+ * Parse the `--providers` value: a comma-separated list of provider names
+ * (case-insensitive, friendly aliases accepted). Returns the canonical keys,
+ * de-duplicated and order-preserved. Throws on any unknown name.
+ */
+export function parseProviders(value: string): string[] {
+  const seen = new Set<string>();
+  for (const raw of value.split(',')) {
+    const name = raw.trim();
+    if (name === '') continue;
+    const key = normalizeProviderKey(name);
+    if (key === null) {
+      throw new InvalidArgumentError(
+        `Invalid provider: "${name}". Expected one of: ${SELECTABLE_PROVIDERS.join(', ')}.`,
+      );
+    }
+    seen.add(key);
+  }
+  if (seen.size === 0) {
+    throw new InvalidArgumentError(
+      `No valid providers given. Expected one of: ${SELECTABLE_PROVIDERS.join(', ')}.`,
+    );
+  }
+  return [...seen];
 }
 
 export function usageLastDaysValidationError(n: string): string | null {

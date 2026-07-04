@@ -7,6 +7,7 @@ import {
   isValidDateString,
   parseIntArg as parseIntArgument,
   parsePositiveInt,
+  parseProviders,
   parseTopKind,
   topKindValidationError,
   topLimitValidationError,
@@ -45,6 +46,14 @@ describe('cli parse helpers', () => {
     expect(topKindValidationError('weeks')).toContain('days" or "models');
     expect(topSortValidationError('price')).toContain('tokens" or "cost');
     expect(topLimitValidationError(0)).toContain('positive integer');
+  });
+
+  it('parses the --providers list into canonical keys', () => {
+    expect(parseProviders('claude,codex')).toEqual(['claude_code', 'codex']);
+    expect(parseProviders('CURSOR')).toEqual(['cursor']);
+    expect(parseProviders('claude_code, claude , cursor')).toEqual(['claude_code', 'cursor']);
+    expect(() => parseProviders('gemini')).toThrow('Invalid provider: "gemini"');
+    expect(() => parseProviders(' , ')).toThrow('No valid providers given');
   });
 
   it('validates date range order', () => {

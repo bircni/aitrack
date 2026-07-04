@@ -7,7 +7,7 @@ import { emptyUsageMessage, loadMergedProviderData } from './usageData.js';
 
 export interface UsageReportOptions {
   period: UsagePeriod;
-  noCursor?: boolean;
+  providers?: string[];
   from?: string;
   to?: string;
   n?: number;
@@ -56,7 +56,7 @@ export interface UsageReport {
  * both render from a single source of truth.
  */
 export async function buildUsageReport(options: UsageReportOptions): Promise<UsageReport | null> {
-  const loaded = await loadMergedProviderData({ noCursor: options.noCursor });
+  const loaded = await loadMergedProviderData({ providers: options.providers });
   if (!loaded) return null;
 
   const window = computeUsageWindow(options);

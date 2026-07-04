@@ -60,7 +60,12 @@ export function mergeProviderDay(
 }
 
 export interface LoadUsageOptions {
-  noCursor?: boolean;
+  /**
+   * Restrict the loaded data to these canonical provider keys. When omitted,
+   * every available provider is loaded. Cursor is only read from local state
+   * when it is included (or when the filter is absent).
+   */
+  providers?: string[];
   year?: number;
   /** Stage local machine JSON under ~/.config/aitrack/pending/ for later init adoption. */
   stagePending?: boolean;
@@ -137,9 +142,17 @@ export async function loadMergedProviderData(
     overlayMachineFile(providerData, localMachine);
   }
 
-  if (!options.noCursor) {
+  const providerFilter = options.providers ? new Set(options.providers) : undefined;
+
+  if (!providerFilter || providerFilter.has('cursor')) {
     const cursorMap = await readCursorData();
     if (cursorMap.size > 0) providerData.cursor = cursorMap;
+  }
+
+  if (providerFilter) {
+    providerData = Object.fromEntries(
+      Object.entries(providerData).filter(([key]) => providerFilter.has(key)),
+    );
   }
 
   const filtered =
