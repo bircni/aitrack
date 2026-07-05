@@ -1,7 +1,8 @@
 import { createServer, type Server } from 'node:http';
 
 import { tryLoadConfig } from '../config.js';
-import { emptyUsageMessage, loadMergedProviderData } from '../data/usageData.js';
+import { isUsageNotConfigured, usageEmptyMessage } from '../data/emptyState.js';
+import { loadMergedProviderData } from '../data/usageData.js';
 import { renderToHtml } from '../display/html/render.js';
 import { isCloned } from '../git.js';
 import { syncData } from './sync.js';
@@ -81,13 +82,12 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
         // Don't overwrite a previously-good render with the empty state — a
         // transient miss after we've shown real data shouldn't blank the page.
         if (hasRendered) return;
-        const config = tryLoadConfig();
         cachedHtml = renderToHtml(
           {},
           {
             ...htmlOptions,
             lastUpdated,
-            emptyMessage: emptyUsageMessage(!config || !isCloned()),
+            emptyMessage: usageEmptyMessage(isUsageNotConfigured()),
           },
         );
         return;
