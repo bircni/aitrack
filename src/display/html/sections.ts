@@ -1,5 +1,6 @@
 import { aggregateModelsByDayMap } from '../../data/aggregate.js';
 import { toLocalDateString } from '../../data/dayMap.js';
+import { compareByCostThenTokens } from '../../data/sort.js';
 import type { DayMap, ProviderData } from '../../data/types.js';
 import { fmt, fmtUSD, fmtUSDCost } from '../format.js';
 import { tokenIntensityLevel } from '../heatmap/intensity.js';
@@ -125,7 +126,7 @@ function renderUsageTable(providerKey: string, dayMap: DayMap): string {
       hasCost: agg.hasCost,
     }))
     .filter((r) => r.tokens > 0 || r.hasCost)
-    .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens);
+    .sort((a, b) => compareByCostThenTokens(a, b));
 
   if (rows.length === 0) return '';
 

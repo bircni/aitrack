@@ -14,7 +14,7 @@ function makeDay(input: number, output: number): DayEntry {
 describe('renderToPng', () => {
   it('returns a valid PNG buffer', () => {
     const dayMap = new Map([['2024-01-15', makeDay(1000, 500)]]);
-    const buffer = renderToPng({ claude_code: dayMap }, [], {});
+    const buffer = renderToPng({ claude_code: dayMap }, {});
     expect(buffer).toBeInstanceOf(Buffer);
     expect(buffer[0]).toBe(0x89);
     expect(buffer[1]).toBe(0x50);
@@ -24,7 +24,7 @@ describe('renderToPng', () => {
 
   it('works in dark mode', () => {
     const dayMap = new Map([['2024-01-15', makeDay(500, 250)]]);
-    const buffer = renderToPng({ claude_code: dayMap }, [], { dark: true });
+    const buffer = renderToPng({ claude_code: dayMap }, { dark: true });
     expect(buffer).toBeInstanceOf(Buffer);
     expect(buffer.length).toBeGreaterThan(0);
   });
@@ -32,18 +32,18 @@ describe('renderToPng', () => {
   it('defaults to one section per provider for multiple providers', () => {
     const claudeMap = new Map([['2024-01-15', makeDay(100, 50)]]);
     const codexMap = new Map([['2024-01-16', makeDay(200, 100)]]);
-    const buffer = renderToPng({ claude_code: claudeMap, codex: codexMap }, [], {});
+    const buffer = renderToPng({ claude_code: claudeMap, codex: codexMap }, {});
     expect(buffer).toBeInstanceOf(Buffer);
   });
 
   it('handles empty provider data without crashing', () => {
-    expect(() => renderToPng({}, [], {})).not.toThrow();
+    expect(() => renderToPng({}, {})).not.toThrow();
   });
 
   it('merges into one section when all is true', () => {
     const claudeMap = new Map([['2024-01-15', makeDay(100, 50)]]);
     const codexMap = new Map([['2024-01-16', makeDay(200, 100)]]);
-    const buffer = renderToPng({ claude_code: claudeMap, codex: codexMap }, [], { all: true });
+    const buffer = renderToPng({ claude_code: claudeMap, codex: codexMap }, { all: true });
     expect(buffer[0]).toBe(0x89);
     expect(buffer[1]).toBe(0x50);
   });
@@ -53,7 +53,7 @@ describe('renderToPng', () => {
       ['2024-06-01', makeDay(100, 50)],
       ['2025-06-01', makeDay(200, 100)],
     ]);
-    const buffer = renderToPng({ claude_code: dayMap }, [], { year: 2024 });
+    const buffer = renderToPng({ claude_code: dayMap }, { year: 2024 });
     expect(buffer[0]).toBe(0x89);
   });
 
@@ -65,7 +65,7 @@ describe('renderToPng', () => {
         'composer-2.5-fast-extra-long-name': { inputTokens: 5_000_000, outputTokens: 40_000 },
       },
     };
-    const buffer = renderToPng({ cursor: new Map([['2024-03-15', day]]) }, [], {});
+    const buffer = renderToPng({ cursor: new Map([['2024-03-15', day]]) }, {});
     expect(buffer[0]).toBe(0x89);
   });
 });

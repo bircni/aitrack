@@ -2,11 +2,10 @@ import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
 
 import type { DayMap, ProviderData, RenderOptions } from '../data/types.js';
 import { tokenIntensityLevel } from './heatmap/intensity.js';
-import { mergeAllProviderDayMaps } from './heatmap/merge.js';
+import { resolveProviderLayout } from './heatmap/layout.js';
 import { buildDateGrid, MONTHS } from './heatmap/stats.js';
 import { getProviderTheme, PALETTE } from './heatmap/themes.js';
 import { buildProviderSectionViewModel } from './heatmap/viewModel.js';
-import { activeProviderKeys } from './providers.js';
 
 const CELL = 12;
 const GAP = 3;
@@ -145,8 +144,6 @@ function drawSection(
     context.fillStyle = C.value;
     context.font = 'bold 13px Arial';
     context.fillText(stat.value, bx, y + 28);
-    // Token amount on its own line in a lighter font, so a long model name and
-    // its token count never run into the neighbouring column.
     if (stat.sub !== undefined) {
       context.fillStyle = C.muted;
       context.font = '11px Arial';
@@ -157,25 +154,15 @@ function drawSection(
 
 export function renderToPng(
   providerData: ProviderData,
-  _machineData: unknown[],
   { dark = false, all = false, year }: RenderOptions = {},
 ): Buffer {
   const mode: 'light' | 'dark' = dark ? 'dark' : 'light';
   const C = PALETTE[mode];
   const weeks = buildDateGrid(year);
-
-  const layoutData: ProviderData = all
-    ? { all: mergeAllProviderDayMaps(providerData) }
-    : providerData;
-
-  const active = all
-    ? (layoutData.all?.size ?? 0) > 0
-      ? ['all']
-      : []
-    : activeProviderKeys(layoutData);
+  const { layoutData, keys } = resolveProviderLayout(providerData, { all, year });
 
   const CANVAS_PAD = 24;
-  const totalH = CANVAS_PAD + active.length * SECTION_H + CANVAS_PAD;
+  const totalH = CANVAS_PAD + keys.length * SECTION_H + CANVAS_PAD;
 
   const canvas = createCanvas(TOTAL_W, totalH);
   const context = canvas.getContext('2d');
@@ -183,7 +170,7 @@ export function renderToPng(
   context.fillStyle = C.bg;
   context.fillRect(0, 0, TOTAL_W, totalH);
 
-  for (const [index, key] of active.entries()) {
+  for (const [index, key] of keys.entries()) {
     const dayMap = layoutData[key];
     if (dayMap !== undefined) {
       drawSection(context, key, dayMap, weeks, CANVAS_PAD + index * SECTION_H, mode);
