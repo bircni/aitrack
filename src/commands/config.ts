@@ -4,7 +4,7 @@ import { resolveMachineId, saveConfig, tryLoadConfig } from '../config.js';
 import type { Config } from '../data/types.js';
 
 /** Configuration keys that can be read/written via the CLI. */
-const CONFIG_KEYS = ['repoUrl', 'machineId'] as const;
+const CONFIG_KEYS = ['repoUrl', 'machineId', 'claudeProjectsDir', 'codexSessionsDir'] as const;
 type ConfigKey = (typeof CONFIG_KEYS)[number];
 
 function isConfigKey(key: string): key is ConfigKey {

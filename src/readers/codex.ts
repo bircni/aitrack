@@ -4,12 +4,18 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
+import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, toLocalDateString } from '../data/dayMap.js';
 import type { DayMap } from '../data/types.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
+import { splitConfiguredPaths } from './paths.js';
 
-function getCodexPaths(): string[] {
-  const paths = new Set<string>();
+export function getCodexPaths(): string[] {
+  const paths = new Set<string>(splitConfiguredPaths(process.env.AITRACK_CODEX_SESSION_DIRS));
+  const configuredPaths = splitConfiguredPaths(tryLoadConfig()?.codexSessionsDir);
+  for (const path of configuredPaths) {
+    paths.add(path);
+  }
   const codexHome = process.env.CODEX_HOME;
   if (codexHome) paths.add(join(codexHome, 'sessions'));
   paths.add(join(homedir(), '.codex', 'sessions'));

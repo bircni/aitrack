@@ -13,7 +13,7 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, homedir: () => TEST_HOME };
 });
 
-import { readClaudeData } from '../claude.js';
+import { getClaudePaths, readClaudeData } from '../claude.js';
 
 function jsonl(path: string, lines: object[]): void {
   writeFileSync(path, lines.map((l) => JSON.stringify(l)).join('\n'));
@@ -37,10 +37,12 @@ describe('readClaudeData', () => {
     rmSync(TEST_HOME, { recursive: true, force: true });
     mkdirSync(TEST_HOME, { recursive: true });
     delete process.env.XDG_CONFIG_HOME;
+    delete process.env.AITRACK_CLAUDE_PROJECTS_DIRS;
   });
 
   afterEach(() => {
     delete process.env.XDG_CONFIG_HOME;
+    delete process.env.AITRACK_CLAUDE_PROJECTS_DIRS;
     rmSync(TEST_HOME, { recursive: true, force: true });
   });
 
@@ -76,5 +78,17 @@ describe('readClaudeData', () => {
     const result = await readClaudeData();
 
     expect(result.get('2024-01-15')?.inputTokens).toBe(10);
+  });
+
+  it('reads custom Claude project roots from the environment', async () => {
+    const customRoot = join(TEST_HOME, 'custom-claude');
+    process.env.AITRACK_CLAUDE_PROJECTS_DIRS = customRoot;
+    mkdirSync(customRoot, { recursive: true });
+    jsonl(join(customRoot, 'history.jsonl'), [assistantLine('custom', 40, 10)]);
+
+    const result = await readClaudeData();
+
+    expect(getClaudePaths()[0]).toBe(customRoot);
+    expect(result.get('2024-01-15')?.inputTokens).toBe(40);
   });
 });

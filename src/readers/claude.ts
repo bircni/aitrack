@@ -4,12 +4,18 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
+import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, toLocalDateString } from '../data/dayMap.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
 import { findClaudePricing } from '../pricing/claude.js';
+import { splitConfiguredPaths } from './paths.js';
 
-function getClaudePaths(): string[] {
-  const paths = new Set<string>();
+export function getClaudePaths(): string[] {
+  const paths = new Set<string>(splitConfiguredPaths(process.env.AITRACK_CLAUDE_PROJECTS_DIRS));
+  const configuredPaths = splitConfiguredPaths(tryLoadConfig()?.claudeProjectsDir);
+  for (const path of configuredPaths) {
+    paths.add(path);
+  }
   const xdg = process.env.XDG_CONFIG_HOME;
   if (xdg) paths.add(join(xdg, 'claude', 'projects'));
   paths.add(join(homedir(), '.config', 'claude', 'projects'));

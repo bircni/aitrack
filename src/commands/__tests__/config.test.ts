@@ -40,6 +40,8 @@ describe('configCommand', () => {
       const out = output();
       expect(out).toContain('repoUrl = git@example.com:me/d.git');
       expect(out).toContain('machineId =');
+      expect(out).toContain('claudeProjectsDir =');
+      expect(out).toContain('codexSessionsDir =');
       expect(out).toContain('resolved-host');
     });
 
@@ -73,12 +75,16 @@ describe('configCommand', () => {
   describe('set', () => {
     it('updates an existing config', async () => {
       mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/d.git' });
-      await configCommand({ action: 'set', key: 'machineId', value: 'work-laptop' });
+      await configCommand({
+        action: 'set',
+        key: 'claudeProjectsDir',
+        value: '/tmp/claude-a,/tmp/claude-b',
+      });
       expect(mocks.saveConfig).toHaveBeenCalledWith({
         repoUrl: 'git@example.com:me/d.git',
-        machineId: 'work-laptop',
+        claudeProjectsDir: '/tmp/claude-a,/tmp/claude-b',
       });
-      expect(output()).toContain('Set machineId = work-laptop');
+      expect(output()).toContain('Set claudeProjectsDir = /tmp/claude-a,/tmp/claude-b');
     });
 
     it('creates a config when none exists and warns about empty repoUrl', async () => {

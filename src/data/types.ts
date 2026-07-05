@@ -48,6 +48,10 @@ export interface Config {
   repoUrl: string;
   /** Stable machine identifier for data/{machineId}.json; defaults to os.hostname(). */
   machineId?: string;
+  /** Comma-separated Claude Code project roots; defaults to the standard Claude locations. */
+  claudeProjectsDir?: string;
+  /** Comma-separated Codex session roots; defaults to the standard Codex locations. */
+  codexSessionsDir?: string;
   daemon?: DaemonConfig;
 }
 

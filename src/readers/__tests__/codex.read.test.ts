@@ -13,7 +13,7 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, homedir: () => TEST_HOME };
 });
 
-import { readCodexData } from '../codex.js';
+import { getCodexPaths, readCodexData } from '../codex.js';
 
 function jsonl(path: string, lines: object[]): void {
   writeFileSync(path, lines.map((l) => JSON.stringify(l)).join('\n'));
@@ -24,10 +24,12 @@ describe('readCodexData', () => {
     rmSync(TEST_HOME, { recursive: true, force: true });
     mkdirSync(TEST_HOME, { recursive: true });
     delete process.env.CODEX_HOME;
+    delete process.env.AITRACK_CODEX_SESSION_DIRS;
   });
 
   afterEach(() => {
     delete process.env.CODEX_HOME;
+    delete process.env.AITRACK_CODEX_SESSION_DIRS;
     rmSync(TEST_HOME, { recursive: true, force: true });
   });
 
@@ -75,5 +77,26 @@ describe('readCodexData', () => {
     const result = await readCodexData();
 
     expect(result.get('2024-01-15')?.inputTokens).toBe(20);
+  });
+
+  it('reads custom Codex session roots from the environment', async () => {
+    const customRoot = join(TEST_HOME, 'custom-codex');
+    process.env.AITRACK_CODEX_SESSION_DIRS = customRoot;
+    mkdirSync(customRoot, { recursive: true });
+    jsonl(join(customRoot, 'session.jsonl'), [
+      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-5' } },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: { total_token_usage: { input_tokens: 30, output_tokens: 12 } },
+        },
+      },
+    ]);
+
+    const result = await readCodexData();
+
+    expect(getCodexPaths()[0]).toBe(customRoot);
+    expect(result.get('2024-01-15')?.inputTokens).toBe(30);
   });
 });

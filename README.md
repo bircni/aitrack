@@ -155,11 +155,15 @@ Stored at `~/.config/aitrack/config.json`:
 ```json
 {
   "repoUrl": "git@github.com:your-username/aitrack-data.git",
-  "machineId": "work-laptop"
+  "machineId": "work-laptop",
+  "claudeProjectsDir": "/custom/claude/projects",
+  "codexSessionsDir": "/custom/codex/sessions"
 }
 ```
 
 `machineId` is optional — without it, `sync` uses your OS hostname as the filename. Set a stable name during `init` if your hostname might collide across machines or change after a reinstall. Existing hostname-based files keep working when read.
+
+`claudeProjectsDir` and `codexSessionsDir` are optional comma-separated overrides for nonstandard local data locations. You can also set `AITRACK_CLAUDE_PROJECTS_DIRS` or `AITRACK_CODEX_SESSION_DIRS`.
 
 ---
 
