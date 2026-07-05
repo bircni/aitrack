@@ -381,7 +381,9 @@ export function buildProgram(): Command {
 
   config
     .command('set <key> <value>')
-    .description('Set a configuration value (keys: repoUrl, machineId)')
+    .description(
+      'Set a configuration value (keys: repoUrl, machineId, claudeProjectsDir, codexSessionsDir)',
+    )
     .action((key: string, value: string) => {
       runAsync(() => configCommand({ action: 'set', key, value }));
     });
