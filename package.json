@@ -46,7 +46,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "clean": "rm -rf dist",
+    "build": "pnpm run clean && tsc",
     "dev": "tsx src/cli.ts",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier . --write",

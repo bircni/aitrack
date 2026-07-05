@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -9,13 +9,17 @@ import { renderTui } from '../display/tui.js';
 import { isCloned } from '../git.js';
 
 function openFile(filePath: string): void {
-  const command =
-    process.platform === 'win32'
-      ? `start "" "${filePath}"`
-      : process.platform === 'darwin'
-        ? `open "${filePath}"`
-        : `xdg-open "${filePath}"`;
-  exec(command);
+  if (process.platform === 'win32') {
+    spawn('cmd', ['/c', 'start', '', filePath], {
+      detached: true,
+      stdio: 'ignore',
+      windowsVerbatimArguments: true,
+    }).unref();
+    return;
+  }
+
+  const opener = process.platform === 'darwin' ? 'open' : 'xdg-open';
+  spawn(opener, [filePath], { detached: true, stdio: 'ignore' }).unref();
 }
 
 interface ShowOptions {

@@ -31,6 +31,8 @@ describe('cli parse helpers', () => {
   it('parses integer CLI arguments', () => {
     expect(parseIntArgument('42')).toBe(42);
     expect(() => parseIntArgument('nope')).toThrow('Expected an integer, got: nope');
+    expect(() => parseIntArgument('123abc')).toThrow('Expected an integer, got: 123abc');
+    expect(() => parseIntArgument('1.5')).toThrow('Expected an integer, got: 1.5');
   });
 
   it('parses positive integers for usage last N', () => {

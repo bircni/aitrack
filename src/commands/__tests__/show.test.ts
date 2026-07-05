@@ -11,12 +11,12 @@ const mocks = vi.hoisted(() => ({
   readCursorData: vi.fn(),
   renderToPng: vi.fn(),
   writeFileSync: vi.fn(),
-  exec: vi.fn(),
+  spawn: vi.fn(() => ({ unref: vi.fn() })),
   hostname: vi.fn(),
 }));
 
 vi.mock('fs', () => ({ writeFileSync: mocks.writeFileSync }));
-vi.mock('child_process', () => ({ exec: mocks.exec }));
+vi.mock('child_process', () => ({ spawn: mocks.spawn }));
 vi.mock('os', () => ({ hostname: mocks.hostname }));
 vi.mock('../../config.js', () => ({
   tryLoadConfig: mocks.tryLoadConfig,
@@ -121,7 +121,7 @@ describe('showCommand', () => {
       expect.stringContaining('out.png'),
       expect.any(Buffer),
     );
-    expect(mocks.exec).toHaveBeenCalled();
+    expect(mocks.spawn).toHaveBeenCalled();
   });
 
   it('backfills cost for old synced Claude JSON missing costUSD', async () => {
@@ -166,7 +166,7 @@ describe('showCommand', () => {
 
     expect(mocks.renderToPng).not.toHaveBeenCalled();
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(mocks.exec).not.toHaveBeenCalled();
+    expect(mocks.spawn).not.toHaveBeenCalled();
     const out = vi
       .mocked(console.log)
       .mock.calls.map((call) => String(call[0]))

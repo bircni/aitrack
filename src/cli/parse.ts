@@ -16,8 +16,9 @@ export function invalidDateMessage(date: string): string {
 }
 
 export function parseIntArg(value: string): number {
-  const n = parseInt(value, 10);
-  if (!Number.isFinite(n)) throw new Error(`Expected an integer, got: ${value}`);
+  if (!/^-?\d+$/.test(value)) throw new Error(`Expected an integer, got: ${value}`);
+  const n = Number(value);
+  if (!Number.isSafeInteger(n)) throw new Error(`Expected a safe integer, got: ${value}`);
   return n;
 }
 
