@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 
+import { printJson } from '../cli/json.js';
 import {
   buildUsageReport,
   emptyReportMessage,
@@ -8,7 +9,7 @@ import {
 import { fmt, fmtUSD } from '../display/format.js';
 import { defaultTableStyle, renderTerminalTable } from '../display/terminalTable.js';
 
-export type UsageOptions = UsageReportOptions;
+export type UsageOptions = UsageReportOptions & { json?: boolean };
 
 interface Row {
   provider: string;
@@ -23,6 +24,11 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
 
   if (!report || report.rowCount === 0) {
     console.log(emptyReportMessage(report));
+    return;
+  }
+
+  if (options.json) {
+    printJson(report);
     return;
   }
 

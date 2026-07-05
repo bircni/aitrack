@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 
+import { printJson } from '../cli/json.js';
 import { tryLoadConfig } from '../config.js';
 import { aggregateModelsByDayMap } from '../data/aggregate.js';
 import type { DayMap, ProviderData } from '../data/types.js';
@@ -18,6 +19,7 @@ export interface TopOptions {
   sort: TopSort;
   providers?: string[];
   year?: number;
+  json?: boolean;
 }
 
 interface Row {
@@ -33,6 +35,30 @@ interface DayEntryAccumulator {
   tokens: number;
   cost: number | null;
   byProvider: Record<string, number>;
+}
+
+interface ModelAccumulator {
+  providerKey: string;
+  provider: string;
+  model: string;
+  tokens: number;
+  cost: number | null;
+  days: number;
+}
+
+function topProviderKey(byProvider: Record<string, number>): string | null {
+  const top = Object.entries(byProvider).sort((a, b) => b[1] - a[1])[0];
+  return top ? top[0] : null;
+}
+
+function topJsonEnvelope(options: TopOptions, items: unknown[]): Record<string, unknown> {
+  return {
+    kind: options.kind,
+    sort: options.sort,
+    limit: options.limit,
+    year: options.year ?? null,
+    items,
+  };
 }
 
 function topDays(
@@ -67,15 +93,6 @@ function topDays(
   return all.slice(0, limit);
 }
 
-interface ModelAccumulator {
-  providerKey: string;
-  provider: string;
-  model: string;
-  tokens: number;
-  cost: number | null;
-  days: number;
-}
-
 function aggregateModels(dayMap: DayMap, providerKey: string, year?: number): ModelAccumulator[] {
   const byModel = aggregateModelsByDayMap(dayMap, { year });
   return [...byModel]
@@ -108,6 +125,27 @@ function topModels(
   return all.slice(0, limit);
 }
 
+function dayToRow(d: DayEntryAccumulator, index: number): Row {
+  const providerKey = topProviderKey(d.byProvider);
+  return {
+    rank: String(index + 1),
+    label: d.date,
+    sub: providerKey ? providerLabel(providerKey) : '',
+    tokens: fmt(d.tokens),
+    cost: fmtUSD(d.cost),
+  };
+}
+
+function modelToRow(m: ModelAccumulator, index: number): Row {
+  return {
+    rank: String(index + 1),
+    label: m.model,
+    sub: m.provider,
+    tokens: fmt(m.tokens),
+    cost: fmtUSD(m.cost),
+  };
+}
+
 export async function topCommand(options: TopOptions): Promise<void> {
   const loaded = await loadMergedProviderData({
     providers: options.providers,
@@ -123,20 +161,27 @@ export async function topCommand(options: TopOptions): Promise<void> {
 
   if (options.kind === 'days') {
     const items = topDays(loaded.providerData, options.limit, options.sort, options.year);
+    if (options.json) {
+      printJson(
+        topJsonEnvelope(
+          options,
+          items.map((d, index) => ({
+            rank: index + 1,
+            date: d.date,
+            tokens: d.tokens,
+            costUSD: d.cost,
+            topProvider: topProviderKey(d.byProvider),
+            byProvider: d.byProvider,
+          })),
+        ),
+      );
+      return;
+    }
     if (items.length === 0) {
       console.log('No usage recorded.');
       return;
     }
-    const rows: Row[] = items.map((d, index) => {
-      const topProvider = Object.entries(d.byProvider).sort((a, b) => b[1] - a[1])[0];
-      return {
-        rank: String(index + 1),
-        label: d.date,
-        sub: topProvider ? providerLabel(topProvider[0]) : '',
-        tokens: fmt(d.tokens),
-        cost: fmtUSD(d.cost),
-      };
-    });
+    const rows = items.map(dayToRow);
     console.log(chalk.bold(`Top ${String(options.limit)} days by ${options.sort}${yearSuffix}`));
     console.log(
       renderTerminalTable(
@@ -155,17 +200,28 @@ export async function topCommand(options: TopOptions): Promise<void> {
   }
 
   const items = topModels(loaded.providerData, options.limit, options.sort, options.year);
+  if (options.json) {
+    printJson(
+      topJsonEnvelope(
+        options,
+        items.map((m, index) => ({
+          rank: index + 1,
+          providerKey: m.providerKey,
+          provider: m.provider,
+          model: m.model,
+          tokens: m.tokens,
+          costUSD: m.cost,
+          days: m.days,
+        })),
+      ),
+    );
+    return;
+  }
   if (items.length === 0) {
     console.log('No usage recorded.');
     return;
   }
-  const rows: Row[] = items.map((m, index) => ({
-    rank: String(index + 1),
-    label: m.model,
-    sub: m.provider,
-    tokens: fmt(m.tokens),
-    cost: fmtUSD(m.cost),
-  }));
+  const rows = items.map(modelToRow);
   console.log(chalk.bold(`Top ${String(options.limit)} models by ${options.sort}${yearSuffix}`));
   console.log(
     renderTerminalTable(
