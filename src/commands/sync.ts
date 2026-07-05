@@ -10,20 +10,24 @@ import { consumeCodexFallbackHits } from '../pricing/codex.js';
 
 export interface SyncDataOptions {
   quiet?: boolean;
+  dryRun?: boolean;
 }
 
 export async function syncData(options: SyncDataOptions = {}): Promise<void> {
   const config = loadConfig();
   const isQuiet = Boolean(options.quiet);
+  const isDryRun = Boolean(options.dryRun);
 
   if (!isCloned()) {
     throw new Error('Repo not cloned. Run: npx aitrack init');
   }
 
-  if (!isQuiet) {
+  if (!isQuiet && !isDryRun) {
     console.log('Pulling latest from remote...');
   }
-  pull();
+  if (!isDryRun) {
+    pull();
+  }
 
   // Cursor usage is merged at `show` time only (local CSV export); it is never written to git.
   if (!isQuiet) {
@@ -49,7 +53,6 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
 
   const host = resolveMachineId(config);
   const dataDir = join(LOCAL_REPO, 'data');
-  mkdirSync(dataDir, { recursive: true });
 
   const freshData = buildMachineData(host, { claude_code: claudeData, codex: codexData });
   const dataFilePath = join(dataDir, `${host}.json`);
@@ -68,10 +71,23 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
     if (!isQuiet) {
       console.log('No changes to push — data is already up to date.');
     }
-    removePendingMachineFile(host);
+    if (!isDryRun) {
+      removePendingMachineFile(host);
+    }
     return;
   }
 
+  if (isDryRun) {
+    if (!isQuiet) {
+      const action = existingDays === null ? 'create' : 'update';
+      console.log(
+        `Dry run: would ${action} data/${host}.json (${String(totalDays)} days). No changes written.`,
+      );
+    }
+    return;
+  }
+
+  mkdirSync(dataDir, { recursive: true });
   writeFileSync(dataFilePath, JSON.stringify(freshData, null, 2), 'utf8');
   removePendingMachineFile(host);
 
@@ -97,6 +113,6 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
   }
 }
 
-export async function syncCommand(): Promise<void> {
-  await syncData();
+export async function syncCommand(options: SyncDataOptions = {}): Promise<void> {
+  await syncData(options);
 }

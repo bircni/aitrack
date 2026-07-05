@@ -125,6 +125,20 @@ describe('syncCommand', () => {
     expect(mocks.commitAndPush).toHaveBeenCalledWith('host');
   });
 
+  it('dry-runs without pulling, writing, committing, or cleaning pending data', async () => {
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+
+    await syncCommand({ dryRun: true });
+
+    expect(mocks.pull).not.toHaveBeenCalled();
+    expect(mocks.mkdirSync).not.toHaveBeenCalled();
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.commitAndPush).not.toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith(
+      'Dry run: would create data/host.json (1 days). No changes written.',
+    );
+  });
+
   it('does not write when persisted days already match fresh data', async () => {
     const existing = {
       hostname: 'host',

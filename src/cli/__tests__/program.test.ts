@@ -54,7 +54,9 @@ describe('buildProgram', () => {
     await run('init');
     expect(mocks.initCommand).toHaveBeenCalled();
     await run('sync');
-    expect(mocks.syncCommand).toHaveBeenCalled();
+    expect(mocks.syncCommand).toHaveBeenCalledWith({ dryRun: undefined });
+    await run('sync', '--dry-run');
+    expect(mocks.syncCommand).toHaveBeenCalledWith({ dryRun: true });
     await run('machines');
     expect(mocks.machinesCommand).toHaveBeenCalled();
     await run('recompute-costs');

@@ -201,8 +201,9 @@ export function buildProgram(): Command {
   program
     .command('sync')
     .description('Read local AI usage data and push to git repo')
-    .action(() => {
-      runAsync(syncCommand);
+    .option('--dry-run', 'show whether data would change without writing, committing, or pushing')
+    .action((options: { dryRun?: boolean }) => {
+      runAsync(() => syncCommand({ dryRun: options.dryRun }));
     });
 
   program
