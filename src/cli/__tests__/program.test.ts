@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   usageCommand: vi.fn(),
   exportCommand: vi.fn(),
   daemonCommand: vi.fn(),
+  doctorCommand: vi.fn(),
   topCommand: vi.fn(),
   machinesCommand: vi.fn(),
   recomputeCostsCommand: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('../../commands/show.js', () => ({ showCommand: mocks.showCommand }));
 vi.mock('../../commands/usage.js', () => ({ usageCommand: mocks.usageCommand }));
 vi.mock('../../commands/export.js', () => ({ exportCommand: mocks.exportCommand }));
 vi.mock('../../commands/daemon.js', () => ({ daemonCommand: mocks.daemonCommand }));
+vi.mock('../../commands/doctor.js', () => ({ doctorCommand: mocks.doctorCommand }));
 vi.mock('../../commands/top.js', () => ({ topCommand: mocks.topCommand }));
 vi.mock('../../commands/machines.js', () => ({ machinesCommand: mocks.machinesCommand }));
 vi.mock('../../commands/recompute.js', () => ({
@@ -57,6 +59,10 @@ describe('buildProgram', () => {
     expect(mocks.machinesCommand).toHaveBeenCalled();
     await run('recompute-costs');
     expect(mocks.recomputeCostsCommand).toHaveBeenCalled();
+    await run('doctor');
+    expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: undefined });
+    await run('doctor', '--pricing-check');
+    expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: true });
   });
 
   it('maps show options', async () => {

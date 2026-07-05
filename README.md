@@ -115,10 +115,13 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 | `aitrack top [days\|models]` | Rank busiest days or most-used models by cost (or `--sort tokens`)            |
 | `aitrack machines`           | Per-machine totals + last sync time (helpful for spotting stale machines)     |
 | `aitrack recompute-costs`    | Refresh costs: re-read local JSONL; reprice other machines from stored cache  |
+| `aitrack doctor`             | Check Node, git, config, source paths, Cursor auth, sync health, and pricing   |
 
 **`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--providers <list>` (comma-separated providers to show — `claude`, `codex`, `cursor`; default: all), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year). `--providers` also works on `usage`, `export`, `top`, and `daemon`.
 
 **`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), and `--year <year>`.
+
+**`doctor` flags:** `--pricing-check` runs the pricing drift script when you are in a source checkout.
 
 ---
 
