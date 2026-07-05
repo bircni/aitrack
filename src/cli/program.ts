@@ -248,19 +248,26 @@ export function buildProgram(): Command {
   registerUsageCommands(usage);
 
   program
-    .command('export [period]')
+    .command('export [period] [args...]')
     .description('Export an itemized PDF usage receipt for a period (default: month)')
     .option('-o, --output <path>', 'output PDF path', 'aitrack-receipt.pdf')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
-    .action((period: string | undefined, options: { output: string; providers?: string[] }) => {
+    .action(
+      (
+        period: string | undefined,
+        args: string[],
+        options: { output: string; providers?: string[] },
+      ) => {
       runAsync(() =>
         exportCommand({
           period,
+          args,
           output: options.output,
           providers: options.providers,
         }),
       );
-    });
+      },
+    );
 
   program
     .command('daemon')

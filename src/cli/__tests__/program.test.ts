@@ -102,7 +102,15 @@ describe('buildProgram', () => {
   it('maps export options', async () => {
     await run('export', 'week', '-o', 'out.pdf');
     expect(mocks.exportCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ period: 'week', output: 'out.pdf' }),
+      expect.objectContaining({ period: 'week', args: [], output: 'out.pdf' }),
+    );
+
+    await run('export', 'range', '2026-06-01', '2026-06-02');
+    expect(mocks.exportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        period: 'range',
+        args: ['2026-06-01', '2026-06-02'],
+      }),
     );
   });
 

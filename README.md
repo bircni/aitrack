@@ -112,6 +112,7 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 | `aitrack usage month`        | Rolling 30-day usage table                                                    |
 | `aitrack usage year`         | Current calendar-year usage table                                             |
 | `aitrack usage all`          | All-time usage table                                                          |
+| `aitrack export [period]`    | PDF receipt for month/week/date/range/last windows                            |
 | `aitrack top [days\|models]` | Rank busiest days or most-used models by cost (or `--sort tokens`)            |
 | `aitrack machines`           | Per-machine totals + last sync time (helpful for spotting stale machines)     |
 | `aitrack recompute-costs`    | Refresh costs: re-read local JSONL; reprice other machines from stored cache  |

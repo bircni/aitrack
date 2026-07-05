@@ -9,6 +9,7 @@ import {
   parsePositiveInt,
   parseProviders,
   parseTopKind,
+  parseUsageReportOptions,
   topKindValidationError,
   topLimitValidationError,
   topSortValidationError,
@@ -61,5 +62,30 @@ describe('cli parse helpers', () => {
   it('validates date range order', () => {
     expect(dateRangeValidationError('2024-01-01', '2024-01-02')).toBeNull();
     expect(dateRangeValidationError('2024-02-01', '2024-01-01')).toContain('must not be after');
+  });
+
+  it('parses usage report options from period and args', () => {
+    expect(parseUsageReportOptions({ period: 'month' })).toEqual({ period: 'month' });
+    expect(parseUsageReportOptions({ period: 'date', args: ['2026-06-01'] })).toEqual({
+      period: 'date',
+      from: '2026-06-01',
+    });
+    expect(
+      parseUsageReportOptions({ period: 'range', args: ['2026-06-01', '2026-06-02'] }),
+    ).toEqual({
+      period: 'range',
+      from: '2026-06-01',
+      to: '2026-06-02',
+    });
+    expect(parseUsageReportOptions({ period: 'last', args: ['14'] })).toEqual({
+      period: 'last',
+      n: 14,
+    });
+    expect(() => parseUsageReportOptions({ period: 'month', args: ['extra'] })).toThrow(
+      'does not accept extra arguments',
+    );
+    expect(() =>
+      parseUsageReportOptions({ period: 'range', args: ['2026-06-02', '2026-06-01'] }),
+    ).toThrow('must not be after');
   });
 });
