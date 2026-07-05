@@ -14,23 +14,15 @@ import { recomputeCostsCommand } from '../commands/recompute.js';
 import { showCommand } from '../commands/show.js';
 import { syncCommand } from '../commands/sync.js';
 import { topCommand } from '../commands/top.js';
-import { usageCommand, type UsageOptions } from '../commands/usage.js';
-import { type UsagePeriod } from '../display/usagePeriods.js';
 import {
   cliErrorMessage,
-  dateRangeValidationError,
-  invalidDateMessage,
-  isValidDateString,
   parseIntArg as parseIntArgument,
-  parsePositiveInt,
   parseProviders,
   parseTopKind,
+  parseTopLimit,
   parseTopSort,
-  topKindValidationError,
-  topLimitValidationError,
-  topSortValidationError,
-  usageLastDaysValidationError,
 } from './parse.js';
+import { PROVIDERS_DESC, PROVIDERS_FLAG, registerUsageCommands } from './usageCommands.js';
 
 /**
  * Run an async command handler, printing a friendly error and exiting with a
@@ -63,133 +55,32 @@ function packageVersion(): string {
   return '0.0.0';
 }
 
-function runUsage(options: UsageOptions): void {
-  runAsync(() => usageCommand(options));
-}
-
-function validateDate(date: string): void {
-  if (isValidDateString(date)) {
+function runTop(
+  kind: string | undefined,
+  options: {
+    limit: number;
+    sort: string;
+    providers?: string[];
+    year?: number;
+    json?: boolean;
+  },
+): void {
+  let parsed: Parameters<typeof topCommand>[0];
+  try {
+    parsed = {
+      kind: parseTopKind(kind),
+      limit: parseTopLimit(options.limit),
+      sort: parseTopSort(options.sort),
+      providers: options.providers,
+      year: options.year,
+      json: options.json,
+    };
+  } catch (error) {
+    console.error(cliErrorMessage(error));
+    process.exit(1);
     return;
   }
-
-  console.error(invalidDateMessage(date));
-  process.exit(1);
-}
-
-interface UsageCommonOptions {
-  providers?: string[];
-  json?: boolean;
-}
-
-const PROVIDERS_FLAG = '--providers <list>';
-const PROVIDERS_DESC = 'comma-separated providers to show (claude, codex, cursor); default: all';
-
-type UsagePeriodDef =
-  | { name: string; period: UsagePeriod; description: string }
-  | { name: string; period: 'date'; description: string; arg: 'date' }
-  | { name: string; period: 'range'; description: string; args: ['from', 'to'] }
-  | { name: string; period: 'last'; description: string; arg: 'n' };
-
-const USAGE_PERIODS: UsagePeriodDef[] = [
-  {
-    name: 'today',
-    period: 'today',
-    description: "Today's usage: provider / tokens / model / price",
-  },
-  { name: 'yesterday', period: 'yesterday', description: "Yesterday's usage" },
-  {
-    name: 'date <date>',
-    period: 'date',
-    description: 'Usage for a specific date (YYYY-MM-DD)',
-    arg: 'date',
-  },
-  {
-    name: 'range <from> <to>',
-    period: 'range',
-    description: 'Usage for a custom date range (YYYY-MM-DD YYYY-MM-DD)',
-    args: ['from', 'to'],
-  },
-  {
-    name: 'thisweek',
-    period: 'thisweek',
-    description: 'Usage for the current calendar week (Mon–Sun)',
-  },
-  {
-    name: 'lastweek',
-    period: 'lastweek',
-    description: 'Usage for the previous calendar week (Mon–Sun)',
-  },
-  { name: 'week', period: 'week', description: 'Rolling 7-day usage ending today' },
-  { name: 'thismonth', period: 'thismonth', description: 'Usage for the current calendar month' },
-  { name: 'lastmonth', period: 'lastmonth', description: 'Usage for the previous calendar month' },
-  { name: 'month', period: 'month', description: 'Rolling 30-day usage ending today' },
-  {
-    name: 'last <n>',
-    period: 'last',
-    description: 'Rolling N-day usage ending today, e.g. last 14',
-    arg: 'n',
-  },
-  { name: 'year', period: 'year', description: 'Usage for the current calendar year' },
-  { name: 'all', period: 'all', description: 'All-time usage across every recorded day' },
-];
-
-function registerUsageCommands(usage: Command): void {
-  for (const def of USAGE_PERIODS) {
-    const command = usage
-      .command(def.name)
-      .description(def.description)
-      .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
-      .option('--json', 'print machine-readable JSON');
-
-    if (def.period === 'date') {
-      command.action((date: string, options: UsageCommonOptions) => {
-        validateDate(date);
-        runUsage({ period: 'date', from: date, providers: options.providers, json: options.json });
-      });
-      continue;
-    }
-
-    if (def.period === 'range') {
-      command.action((from: string, to: string, options: UsageCommonOptions) => {
-        validateDate(from);
-        validateDate(to);
-        const rangeError = dateRangeValidationError(from, to);
-        if (rangeError) {
-          console.error(rangeError);
-          process.exit(1);
-        }
-        runUsage({
-          period: 'range',
-          from,
-          to,
-          providers: options.providers,
-          json: options.json,
-        });
-      });
-      continue;
-    }
-
-    if (def.period === 'last') {
-      command.action((n: string, options: UsageCommonOptions) => {
-        const lastError = usageLastDaysValidationError(n);
-        if (lastError) {
-          console.error(lastError);
-          process.exit(1);
-        }
-        runUsage({
-          period: 'last',
-          n: parsePositiveInt(n) ?? 1,
-          providers: options.providers,
-          json: options.json,
-        });
-      });
-      continue;
-    }
-
-    command.action((options: UsageCommonOptions) => {
-      runUsage({ period: def.period, providers: options.providers, json: options.json });
-    });
-  }
+  runAsync(() => topCommand(parsed));
 }
 
 export function buildProgram(): Command {
@@ -254,7 +145,7 @@ export function buildProgram(): Command {
   const usage = program
     .command('usage')
     .description('Show usage broken down by provider and model over a fixed time window');
-  registerUsageCommands(usage);
+  registerUsageCommands(usage, runAsync);
 
   program
     .command('export [period] [args...]')
@@ -336,31 +227,7 @@ export function buildProgram(): Command {
           json?: boolean;
         },
       ) => {
-        const kindError = topKindValidationError(kind);
-        if (kindError) {
-          console.error(kindError);
-          process.exit(1);
-        }
-        const sortError = topSortValidationError(options.sort);
-        if (sortError) {
-          console.error(sortError);
-          process.exit(1);
-        }
-        const limitError = topLimitValidationError(options.limit);
-        if (limitError) {
-          console.error(limitError);
-          process.exit(1);
-        }
-        runAsync(() =>
-          topCommand({
-            kind: parseTopKind(kind),
-            limit: options.limit,
-            sort: parseTopSort(options.sort),
-            providers: options.providers,
-            year: options.year,
-            json: options.json,
-          }),
-        );
+        runTop(kind, options);
       },
     );
 
@@ -387,8 +254,9 @@ export function buildProgram(): Command {
     .command('doctor')
     .description('Check local setup, provider sources, git sync health, and pricing metadata')
     .option('--pricing-check', 'run the pricing drift script from a source checkout')
-    .action((options: { pricingCheck?: boolean }) => {
-      runAsync(() => doctorCommand({ pricingCheck: options.pricingCheck }));
+    .option('--json', 'print machine-readable JSON')
+    .action((options: { pricingCheck?: boolean; json?: boolean }) => {
+      runAsync(() => doctorCommand({ pricingCheck: options.pricingCheck, json: options.json }));
     });
 
   const config = program

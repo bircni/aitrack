@@ -15,24 +15,105 @@ export type UsagePeriod =
   | 'range'
   | 'last';
 
+export type UsagePeriodArgShape = 'none' | 'date' | 'range' | 'last';
+
+export interface UsagePeriodDefinition {
+  name: string;
+  period: UsagePeriod;
+  description: string;
+  argShape: UsagePeriodArgShape;
+}
+
+/** Single registry for CLI registration, parsing, and validation. */
+export const USAGE_PERIOD_DEFINITIONS = [
+  {
+    name: 'today',
+    period: 'today',
+    description: "Today's usage: provider / tokens / model / price",
+    argShape: 'none',
+  },
+  { name: 'yesterday', period: 'yesterday', description: "Yesterday's usage", argShape: 'none' },
+  {
+    name: 'date <date>',
+    period: 'date',
+    description: 'Usage for a specific date (YYYY-MM-DD)',
+    argShape: 'date',
+  },
+  {
+    name: 'range <from> <to>',
+    period: 'range',
+    description: 'Usage for a custom date range (YYYY-MM-DD YYYY-MM-DD)',
+    argShape: 'range',
+  },
+  {
+    name: 'thisweek',
+    period: 'thisweek',
+    description: 'Usage for the current calendar week (Mon–Sun)',
+    argShape: 'none',
+  },
+  {
+    name: 'lastweek',
+    period: 'lastweek',
+    description: 'Usage for the previous calendar week (Mon–Sun)',
+    argShape: 'none',
+  },
+  {
+    name: 'week',
+    period: 'week',
+    description: 'Rolling 7-day usage ending today',
+    argShape: 'none',
+  },
+  {
+    name: 'thismonth',
+    period: 'thismonth',
+    description: 'Usage for the current calendar month',
+    argShape: 'none',
+  },
+  {
+    name: 'lastmonth',
+    period: 'lastmonth',
+    description: 'Usage for the previous calendar month',
+    argShape: 'none',
+  },
+  {
+    name: 'month',
+    period: 'month',
+    description: 'Rolling 30-day usage ending today',
+    argShape: 'none',
+  },
+  {
+    name: 'last <n>',
+    period: 'last',
+    description: 'Rolling N-day usage ending today, e.g. last 14',
+    argShape: 'last',
+  },
+  {
+    name: 'year',
+    period: 'year',
+    description: 'Usage for the current calendar year',
+    argShape: 'none',
+  },
+  {
+    name: 'all',
+    period: 'all',
+    description: 'All-time usage across every recorded day',
+    argShape: 'none',
+  },
+] as const satisfies readonly UsagePeriodDefinition[];
+
 /** Periods that need no extra arguments (unlike `date`, `range`, or `last`). */
-export const NO_ARG_PERIODS = [
-  'today',
-  'yesterday',
-  'thisweek',
-  'lastweek',
-  'week',
-  'thismonth',
-  'lastmonth',
-  'month',
-  'year',
-  'all',
-] as const satisfies readonly UsagePeriod[];
+export const NO_ARG_PERIODS = USAGE_PERIOD_DEFINITIONS.filter((def) => def.argShape === 'none').map(
+  (def) => def.period,
+) as ReadonlyArray<Exclude<UsagePeriod, 'date' | 'range' | 'last'>>;
 
 export type NoArgPeriod = (typeof NO_ARG_PERIODS)[number];
 
 export function isNoArgPeriod(value: string): value is NoArgPeriod {
   return (NO_ARG_PERIODS as readonly string[]).includes(value);
+}
+
+export function isUsagePeriod(value: string): value is UsagePeriod {
+  return USAGE_PERIOD_DEFINITIONS.some((def) => def.period === value);
 }
 
 export interface UsageWindowOptions {

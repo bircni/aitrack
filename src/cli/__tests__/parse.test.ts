@@ -2,18 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import {
   cliErrorMessage,
-  dateRangeValidationError,
   invalidDateMessage,
   isValidDateString,
   parseIntArg as parseIntArgument,
   parsePositiveInt,
   parseProviders,
   parseTopKind,
+  parseTopLimit,
+  parseTopSort,
   parseUsageReportOptions,
-  topKindValidationError,
-  topLimitValidationError,
-  topSortValidationError,
-  usageLastDaysValidationError,
 } from '../parse.js';
 
 describe('cli parse helpers', () => {
@@ -40,15 +37,19 @@ describe('cli parse helpers', () => {
     expect(parsePositiveInt('14')).toBe(14);
     expect(parsePositiveInt('0')).toBeUndefined();
     expect(parsePositiveInt('1.5')).toBeUndefined();
-    expect(usageLastDaysValidationError('0')).toContain('positive integer');
+    expect(() => parseUsageReportOptions({ period: 'last', args: ['0'] })).toThrow(
+      'positive integer',
+    );
   });
 
-  it('validates top kind, sort, and limit', () => {
+  it('parses and validates top kind, sort, and limit', () => {
     expect(parseTopKind(undefined)).toBe('days');
     expect(parseTopKind('models')).toBe('models');
-    expect(topKindValidationError('weeks')).toContain('days" or "models');
-    expect(topSortValidationError('price')).toContain('tokens" or "cost');
-    expect(topLimitValidationError(0)).toContain('positive integer');
+    expect(() => parseTopKind('weeks')).toThrow('days" or "models');
+    expect(parseTopSort('cost')).toBe('cost');
+    expect(() => parseTopSort('price')).toThrow('tokens" or "cost');
+    expect(parseTopLimit(5)).toBe(5);
+    expect(() => parseTopLimit(0)).toThrow('positive integer');
   });
 
   it('parses the --providers list into canonical keys', () => {
@@ -57,11 +58,6 @@ describe('cli parse helpers', () => {
     expect(parseProviders('claude_code, claude , cursor')).toEqual(['claude_code', 'cursor']);
     expect(() => parseProviders('gemini')).toThrow('Invalid provider: "gemini"');
     expect(() => parseProviders(' , ')).toThrow('No valid providers given');
-  });
-
-  it('validates date range order', () => {
-    expect(dateRangeValidationError('2024-01-01', '2024-01-02')).toBeNull();
-    expect(dateRangeValidationError('2024-02-01', '2024-01-01')).toContain('must not be after');
   });
 
   it('parses usage report options from period and args', () => {
