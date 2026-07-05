@@ -93,6 +93,29 @@ describe('usageCommand', () => {
     expect(out).toContain('$1.20');
   });
 
+  it('prints JSON when requested', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([[TODAY, makeDay(1000, 200, 1.2, 'claude-opus-4-8')]]),
+      },
+      machineData: [],
+      fileCount: 1,
+    });
+
+    await usageCommand({ period: 'today', providers: ['claude_code'], json: true });
+
+    const parsed = JSON.parse(output()) as {
+      providers: Array<{ key: string; rows: Array<{ model: string; tokens: number }> }>;
+      totals: { tokens: number; costUSD: number };
+    };
+    expect(parsed.providers[0]?.key).toBe('claude_code');
+    expect(parsed.providers[0]?.rows[0]).toMatchObject({
+      model: 'claude-opus-4-8',
+      tokens: 1200,
+    });
+    expect(parsed.totals).toMatchObject({ tokens: 1200, costUSD: 1.2 });
+  });
+
   it('today: prints no-usage message when no entry for today exists', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {

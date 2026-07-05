@@ -78,6 +78,7 @@ function validateDate(date: string): void {
 
 interface UsageCommonOptions {
   providers?: string[];
+  json?: boolean;
 }
 
 const PROVIDERS_FLAG = '--providers <list>';
@@ -137,12 +138,13 @@ function registerUsageCommands(usage: Command): void {
     const command = usage
       .command(def.name)
       .description(def.description)
-      .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders);
+      .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
+      .option('--json', 'print machine-readable JSON');
 
     if (def.period === 'date') {
       command.action((date: string, options: UsageCommonOptions) => {
         validateDate(date);
-        runUsage({ period: 'date', from: date, providers: options.providers });
+        runUsage({ period: 'date', from: date, providers: options.providers, json: options.json });
       });
       continue;
     }
@@ -156,7 +158,13 @@ function registerUsageCommands(usage: Command): void {
           console.error(rangeError);
           process.exit(1);
         }
-        runUsage({ period: 'range', from, to, providers: options.providers });
+        runUsage({
+          period: 'range',
+          from,
+          to,
+          providers: options.providers,
+          json: options.json,
+        });
       });
       continue;
     }
@@ -172,13 +180,14 @@ function registerUsageCommands(usage: Command): void {
           period: 'last',
           n: parsePositiveInt(n) ?? 1,
           providers: options.providers,
+          json: options.json,
         });
       });
       continue;
     }
 
     command.action((options: UsageCommonOptions) => {
-      runUsage({ period: def.period, providers: options.providers });
+      runUsage({ period: def.period, providers: options.providers, json: options.json });
     });
   }
 }
@@ -315,6 +324,7 @@ export function buildProgram(): Command {
     .option('--sort <field>', 'sort by "tokens" or "cost"', 'cost')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--year <year>', 'only include days from this calendar year', parseIntArgument)
+    .option('--json', 'print machine-readable JSON')
     .action(
       (
         kind: string | undefined,
@@ -323,6 +333,7 @@ export function buildProgram(): Command {
           sort: string;
           providers?: string[];
           year?: number;
+          json?: boolean;
         },
       ) => {
         const kindError = topKindValidationError(kind);
@@ -347,6 +358,7 @@ export function buildProgram(): Command {
             sort: parseTopSort(options.sort),
             providers: options.providers,
             year: options.year,
+            json: options.json,
           }),
         );
       },
@@ -357,8 +369,9 @@ export function buildProgram(): Command {
     .description(
       'List all machines synced to the repo with totals, last sync, and active providers',
     )
-    .action(() => {
-      runAsync(machinesCommand);
+    .option('--json', 'print machine-readable JSON')
+    .action((options: { json?: boolean }) => {
+      runAsync(() => machinesCommand({ json: options.json }));
     });
 
   program

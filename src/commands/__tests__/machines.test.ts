@@ -92,6 +92,28 @@ describe('machinesCommand', () => {
     expect(out).toContain('Codex');
   });
 
+  it('prints JSON when requested', async () => {
+    const machine = makeMachine('box', {
+      '2026-01-01': [{ providerKey: 'claude_code', input: 1000, output: 100, cost: 5 }],
+    });
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {},
+      machineData: [machine],
+      fileCount: 1,
+    });
+
+    await machinesCommand({ json: true });
+
+    const parsed = JSON.parse(captured()) as {
+      machines: Array<{ hostname: string; totalTokens: number; costUSD: number }>;
+    };
+    expect(parsed.machines[0]).toMatchObject({
+      hostname: 'box',
+      totalTokens: 1100,
+      costUSD: 5,
+    });
+  });
+
   it('shows empty message when no machine data', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {},

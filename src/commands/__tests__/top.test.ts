@@ -92,6 +92,30 @@ describe('topCommand', () => {
     expect(sonnetIndex).toBeGreaterThan(opusIndex);
   });
 
+  it('prints JSON when requested', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([['2026-01-01', makeDay(900, 100, 5, 'opus')]]),
+      },
+      machineData: [],
+      fileCount: 0,
+    });
+
+    await topCommand({ kind: 'models', limit: 5, sort: 'tokens', json: true });
+
+    const parsed = JSON.parse(captured()) as {
+      kind: string;
+      items: Array<{ rank: number; providerKey: string; model: string; tokens: number }>;
+    };
+    expect(parsed.kind).toBe('models');
+    expect(parsed.items[0]).toMatchObject({
+      rank: 1,
+      providerKey: 'claude_code',
+      model: 'opus',
+      tokens: 1000,
+    });
+  });
+
   it('respects year filter', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {

@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 
+import { printJson } from '../cli/json.js';
 import { tryLoadConfig } from '../config.js';
 import type { MachineFile } from '../data/types.js';
 import { emptyUsageMessage, loadMergedProviderData } from '../data/usageData.js';
@@ -62,7 +63,11 @@ function summarizeMachine(file: MachineFile): MachineSummary {
   };
 }
 
-export async function machinesCommand(): Promise<void> {
+interface MachinesOptions {
+  json?: boolean;
+}
+
+export async function machinesCommand(options: MachinesOptions = {}): Promise<void> {
   // Machines are summarized from synced data only; skip the local Cursor read.
   const loaded = await loadMergedProviderData({
     providers: SELECTABLE_PROVIDERS.filter((p) => p !== 'cursor'),
@@ -76,6 +81,11 @@ export async function machinesCommand(): Promise<void> {
   const summaries = loaded.machineData
     .map(summarizeMachine)
     .sort((a, b) => b.totalTokens - a.totalTokens);
+
+  if (options.json) {
+    printJson({ machines: summaries });
+    return;
+  }
 
   const columns: Array<TerminalTableColumn<MachineSummary>> = [
     { header: 'Machine', align: 'left', cell: (m) => m.hostname },

@@ -58,7 +58,9 @@ describe('buildProgram', () => {
     await run('sync', '--dry-run');
     expect(mocks.syncCommand).toHaveBeenCalledWith({ dryRun: true });
     await run('machines');
-    expect(mocks.machinesCommand).toHaveBeenCalled();
+    expect(mocks.machinesCommand).toHaveBeenCalledWith({ json: undefined });
+    await run('machines', '--json');
+    expect(mocks.machinesCommand).toHaveBeenCalledWith({ json: true });
     await run('recompute-costs');
     expect(mocks.recomputeCostsCommand).toHaveBeenCalled();
     await run('doctor');
@@ -80,8 +82,12 @@ describe('buildProgram', () => {
   });
 
   it('maps the usage period subcommands', async () => {
-    await run('usage', 'today', '--providers', 'cursor');
-    expect(mocks.usageCommand).toHaveBeenCalledWith({ period: 'today', providers: ['cursor'] });
+    await run('usage', 'today', '--providers', 'cursor', '--json');
+    expect(mocks.usageCommand).toHaveBeenCalledWith({
+      period: 'today',
+      providers: ['cursor'],
+      json: true,
+    });
 
     await run('usage', 'last', '5');
     expect(mocks.usageCommand).toHaveBeenCalledWith(
@@ -117,8 +123,10 @@ describe('buildProgram', () => {
   it('maps top options', async () => {
     await run('top', 'models', '--sort', 'tokens', '-n', '5');
     expect(mocks.topCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'models', sort: 'tokens', limit: 5 }),
+      expect.objectContaining({ kind: 'models', sort: 'tokens', limit: 5, json: undefined }),
     );
+    await run('top', 'days', '--json');
+    expect(mocks.topCommand).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });
 
   it('wires the config subcommands', async () => {

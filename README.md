@@ -120,6 +120,8 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 
 **`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--providers <list>` (comma-separated providers to show — `claude`, `codex`, `cursor`; default: all), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year). `--providers` also works on `usage`, `export`, `top`, and `daemon`.
 
+**JSON output:** add `--json` to `usage`, `top`, or `machines` for scripting.
+
 **`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), and `--year <year>`.
 
 **`doctor` flags:** `--pricing-check` runs the pricing drift script when you are in a source checkout.
