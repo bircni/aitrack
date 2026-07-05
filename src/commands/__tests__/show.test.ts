@@ -44,6 +44,29 @@ function emptyLocalMachine(host = 'host'): MachineFile {
   return { hostname: host, lastUpdated: 'now', days: {} };
 }
 
+function localMachineWithData(host = 'host'): MachineFile {
+  return {
+    hostname: host,
+    lastUpdated: 'now',
+    days: {
+      '2024-01-01': {
+        codex: {
+          byModel: { 'gpt-5': { inputTokens: 10, outputTokens: 5 } },
+          totals: { inputTokens: 10, outputTokens: 5 },
+        },
+      },
+    },
+  };
+}
+
+function withPlatform(platform: NodeJS.Platform, callback: () => Promise<void>): Promise<void> {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: platform });
+  return callback().finally(() => {
+    if (descriptor) Object.defineProperty(process, 'platform', descriptor);
+  });
+}
+
 describe('showCommand', () => {
   function getRenderCall(): [ProviderData, MachineFile[], RenderOptions] {
     const call = mocks.renderToPng.mock.calls[0];
@@ -122,6 +145,25 @@ describe('showCommand', () => {
       expect.any(Buffer),
     );
     expect(mocks.spawn).toHaveBeenCalled();
+  });
+
+  it('opens generated files with platform-specific commands', async () => {
+    mocks.buildLocalMachineFile.mockResolvedValue(localMachineWithData());
+
+    await withPlatform('win32', () => showCommand({ output: 'out.png' }));
+    expect(mocks.spawn).toHaveBeenLastCalledWith(
+      'cmd',
+      ['/c', 'start', '', expect.stringContaining('out.png')],
+      expect.objectContaining({ windowsVerbatimArguments: true }),
+    );
+
+    mocks.spawn.mockClear();
+    await withPlatform('linux', () => showCommand({ output: 'out.png' }));
+    expect(mocks.spawn).toHaveBeenLastCalledWith(
+      'xdg-open',
+      [expect.stringContaining('out.png')],
+      expect.objectContaining({ detached: true }),
+    );
   });
 
   it('backfills cost for old synced Claude JSON missing costUSD', async () => {
