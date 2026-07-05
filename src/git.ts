@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -17,8 +17,26 @@ import { parseMachineFile } from './data/validate.js';
 export const LOCAL_REPO = join(homedir(), '.config', 'aitrack', 'repo');
 export const PENDING_DATA_DIR = join(homedir(), '.config', 'aitrack', 'pending', 'data');
 
-function git(arguments_: string, options: Record<string, unknown> = {}): void {
-  execSync(`git ${arguments_}`, { cwd: LOCAL_REPO, stdio: 'inherit', ...options });
+function runGit(args: string[], options: { stdio?: 'inherit' | 'pipe' } = {}): string {
+  const stdio = options.stdio ?? 'inherit';
+  if (stdio === 'pipe') {
+    const result = spawnSync('git', args, {
+      cwd: LOCAL_REPO,
+      stdio: 'pipe',
+      encoding: 'utf8',
+    });
+    if (result.status !== 0) {
+      throw new Error(`git ${args.join(' ')} failed with exit code ${String(result.status)}`);
+    }
+    const stdout = result.stdout;
+    return typeof stdout === 'string' ? stdout.trim() : '';
+  }
+
+  const result = spawnSync('git', args, { cwd: LOCAL_REPO, stdio: 'inherit' });
+  if (result.status !== 0) {
+    throw new Error(`git ${args.join(' ')} failed with exit code ${String(result.status)}`);
+  }
+  return '';
 }
 
 export function isCloned(): boolean {
@@ -39,33 +57,27 @@ export function removeLocalClone(): void {
 }
 
 export function pull(): void {
-  const references = execSync('git ls-remote --heads origin', { cwd: LOCAL_REPO, stdio: 'pipe' })
-    .toString()
-    .trim();
-  if (!references) return; // empty repo, nothing to pull yet
-  git('pull --ff-only --quiet');
+  const references = runGit(['ls-remote', '--heads', 'origin'], { stdio: 'pipe' });
+  if (!references) return;
+  runGit(['pull', '--ff-only', '--quiet']);
 }
 
 export function tryPull(options?: { quiet?: boolean }): void {
   try {
-    const references = execSync('git ls-remote --heads origin', { cwd: LOCAL_REPO, stdio: 'pipe' })
-      .toString()
-      .trim();
+    const references = runGit(['ls-remote', '--heads', 'origin'], { stdio: 'pipe' });
     if (!references) return;
     if (!options?.quiet) {
       console.log('Pulling latest from remote...');
     }
-    git('pull --ff-only --quiet');
+    runGit(['pull', '--ff-only', '--quiet']);
   } catch {
     // Offline or unreachable — continue with the local clone.
   }
 }
 
 export function commitDataChanges(message: string): boolean {
-  git('add data/');
-  const staged = execSync('git status --porcelain -- data/', { cwd: LOCAL_REPO, stdio: 'pipe' })
-    .toString()
-    .trim();
+  runGit(['add', 'data/']);
+  const staged = runGit(['status', '--porcelain', '--', 'data/'], { stdio: 'pipe' });
   if (!staged) {
     return false;
   }
@@ -77,9 +89,9 @@ export function commitDataChanges(message: string): boolean {
     throw new Error(`git commit failed with exit code ${String(result.status)}`);
   }
   try {
-    git('push');
+    runGit(['push']);
   } catch {
-    git('push -u origin HEAD');
+    runGit(['push', '-u', 'origin', 'HEAD']);
   }
   return true;
 }

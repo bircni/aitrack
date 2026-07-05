@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  execSync: vi.fn(),
   spawnSync: vi.fn(),
   existsSync: vi.fn(),
   readdirSync: vi.fn(),
@@ -14,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   rmSync: vi.fn(),
 }));
 
-vi.mock('child_process', () => ({ execSync: mocks.execSync, spawnSync: mocks.spawnSync }));
+vi.mock('child_process', () => ({ spawnSync: mocks.spawnSync }));
 vi.mock('fs', () => ({
   existsSync: mocks.existsSync,
   readdirSync: mocks.readdirSync,
@@ -44,22 +43,23 @@ describe('git helpers', () => {
   });
 
   it('does not pull when the remote has no heads', () => {
-    mocks.execSync.mockReturnValueOnce(Buffer.from(''));
+    mocks.spawnSync.mockReturnValueOnce({ status: 0, stdout: '' });
 
     pull();
 
-    expect(mocks.execSync).toHaveBeenCalledTimes(1);
-    expect(mocks.execSync).toHaveBeenCalledWith(
-      'git ls-remote --heads origin',
+    expect(mocks.spawnSync).toHaveBeenCalledTimes(1);
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
+      'git',
+      ['ls-remote', '--heads', 'origin'],
       expect.objectContaining({ stdio: 'pipe' }),
     );
   });
 
   it('tryPull with quiet does not log when pulling', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    mocks.execSync
-      .mockReturnValueOnce(Buffer.from('refs/heads/main'))
-      .mockReturnValueOnce(Buffer.from(''));
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
+      .mockReturnValueOnce({ status: 0 });
 
     tryPull({ quiet: true });
 
@@ -67,7 +67,7 @@ describe('git helpers', () => {
   });
 
   it('tryPull continues silently when pull fails', () => {
-    mocks.execSync.mockImplementation(() => {
+    mocks.spawnSync.mockImplementation(() => {
       throw new Error('network down');
     });
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -79,36 +79,38 @@ describe('git helpers', () => {
   });
 
   it('returns false when there are no staged data changes', () => {
-    mocks.execSync.mockReturnValueOnce(Buffer.from('added')).mockReturnValueOnce(Buffer.from(''));
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0 })
+      .mockReturnValueOnce({ status: 0, stdout: '' });
 
     expect(commitAndPush('host')).toBe(false);
-    expect(mocks.execSync).toHaveBeenCalledTimes(2);
-    expect(mocks.execSync.mock.calls[0][0]).toBe('git add data/');
-    expect(mocks.execSync.mock.calls[1][0]).toBe('git status --porcelain -- data/');
+    expect(mocks.spawnSync).toHaveBeenCalledTimes(2);
+    expect(mocks.spawnSync.mock.calls[0]?.[1]).toEqual(['add', 'data/']);
+    expect(mocks.spawnSync.mock.calls[1]?.[1]).toEqual(['status', '--porcelain', '--', 'data/']);
   });
 
   it('surfaces commit failures when there are staged data changes', () => {
-    mocks.execSync
-      .mockReturnValueOnce(Buffer.from('added'))
-      .mockReturnValueOnce(Buffer.from('A  data/host.json\n'));
-    mocks.spawnSync.mockReturnValueOnce({ status: 1 });
-
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0 })
+      .mockReturnValueOnce({ status: 0, stdout: 'A  data/host.json\n' })
+      .mockReturnValueOnce({ status: 1 });
     expect(() => commitAndPush('host')).toThrow('git commit failed');
   });
 
   it('sets upstream when a normal push fails', () => {
-    mocks.execSync
-      .mockReturnValueOnce(Buffer.from('added'))
-      .mockReturnValueOnce(Buffer.from('A  data/host.json\n'))
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0 })
+      .mockReturnValueOnce({ status: 0, stdout: 'A  data/host.json\n' })
+      .mockReturnValueOnce({ status: 0 })
       .mockImplementationOnce(() => {
         throw new Error('no upstream');
       })
-      .mockReturnValueOnce(Buffer.from('pushed'));
-    mocks.spawnSync.mockReturnValueOnce({ status: 0 });
+      .mockReturnValueOnce({ status: 0 });
 
     expect(commitAndPush('host')).toBe(true);
-    expect(mocks.execSync).toHaveBeenLastCalledWith(
-      'git push -u origin HEAD',
+    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+      'git',
+      ['push', '-u', 'origin', 'HEAD'],
       expect.objectContaining({ stdio: 'inherit' }),
     );
   });
