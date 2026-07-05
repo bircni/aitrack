@@ -214,7 +214,7 @@ Each machine's file in the repo:
 - **git** installed and on your `PATH`
 - A git remote you can push to (GitHub or any host)
 
-Native dependencies (`better-sqlite3`, `@napi-rs/canvas`) install automatically; on some systems you may need build tools if prebuilt binaries aren't available.
+Native dependencies (`@napi-rs/canvas`) install automatically; on some systems you may need build tools if prebuilt binaries aren't available.
 
 ---
 
