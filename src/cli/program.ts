@@ -6,6 +6,7 @@ import { Command } from 'commander';
 
 import { configCommand } from '../commands/config.js';
 import { daemonCommand } from '../commands/daemon.js';
+import { doctorCommand } from '../commands/doctor.js';
 import { exportCommand } from '../commands/export.js';
 import { initCommand } from '../commands/init.js';
 import { machinesCommand } from '../commands/machines.js';
@@ -359,6 +360,14 @@ export function buildProgram(): Command {
     )
     .action(() => {
       runAsync(recomputeCostsCommand);
+    });
+
+  program
+    .command('doctor')
+    .description('Check local setup, provider sources, git sync health, and pricing metadata')
+    .option('--pricing-check', 'run the pricing drift script from a source checkout')
+    .action((options: { pricingCheck?: boolean }) => {
+      runAsync(() => doctorCommand({ pricingCheck: options.pricingCheck }));
     });
 
   const config = program

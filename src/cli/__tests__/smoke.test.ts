@@ -56,6 +56,7 @@ describe('CLI smoke', () => {
     expect(stdout).toContain('init');
     expect(stdout).toContain('show');
     expect(stdout).toContain('daemon');
+    expect(stdout).toContain('doctor');
     expect(stdout).toContain('top');
   });
 
