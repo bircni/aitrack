@@ -15,10 +15,7 @@ export type UsagePeriod =
   | 'range'
   | 'last';
 
-/**
- * Periods that need no extra arguments (unlike `date`/`range`/`last`). These are
- * the only periods the `export` command accepts.
- */
+/** Periods that need no extra arguments (unlike `date`, `range`, or `last`). */
 export const NO_ARG_PERIODS = [
   'today',
   'yesterday',

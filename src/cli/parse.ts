@@ -1,7 +1,12 @@
 import { InvalidArgumentError } from 'commander';
 
 import type { TopKind, TopSort } from '../commands/top.js';
+import type { UsageReportOptions } from '../data/usageReport.js';
 import { normalizeProviderKey, SELECTABLE_PROVIDERS } from '../display/providers.js';
+import { isNoArgPeriod, NO_ARG_PERIODS, type UsagePeriod } from '../display/usagePeriods.js';
+
+const EXTRA_ARG_PERIODS = ['date', 'range', 'last'] as const satisfies readonly UsagePeriod[];
+const ALL_USAGE_PERIODS = [...NO_ARG_PERIODS, ...EXTRA_ARG_PERIODS] as const;
 
 export function cliErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -97,4 +102,61 @@ export function usageLastDaysValidationError(n: string): string | null {
     return `Invalid number of days: "${n}". Expected a positive integer.`;
   }
   return null;
+}
+
+export interface ParseUsageReportOptionsInput {
+  period?: string;
+  args?: string[];
+  providers?: string[];
+}
+
+function invalidUsagePeriodMessage(period: string): string {
+  return `Invalid period: "${period}". Expected one of: ${ALL_USAGE_PERIODS.join(', ')}.`;
+}
+
+/** Parse `[period] [args...]` (export) or equivalent into shared usage-report options. */
+export function parseUsageReportOptions(input: ParseUsageReportOptionsInput): UsageReportOptions {
+  const period = input.period ?? 'month';
+  const args = input.args ?? [];
+  const { providers } = input;
+
+  if (isNoArgPeriod(period)) {
+    if (args.length > 0) {
+      throw new Error(`Period "${period}" does not accept extra arguments.`);
+    }
+    return { period, providers };
+  }
+
+  if (period === 'date') {
+    const [from, ...rest] = args;
+    if (from === undefined || rest.length > 0) {
+      throw new Error('Usage: aitrack export date <date>');
+    }
+    if (!isValidDateString(from)) throw new Error(invalidDateMessage(from));
+    return { period: 'date', from, providers };
+  }
+
+  if (period === 'range') {
+    const [from, to, ...rest] = args;
+    if (from === undefined || to === undefined || rest.length > 0) {
+      throw new Error('Usage: aitrack export range <from> <to>');
+    }
+    if (!isValidDateString(from)) throw new Error(invalidDateMessage(from));
+    if (!isValidDateString(to)) throw new Error(invalidDateMessage(to));
+    const rangeError = dateRangeValidationError(from, to);
+    if (rangeError) throw new Error(rangeError);
+    return { period: 'range', from, to, providers };
+  }
+
+  if (period === 'last') {
+    const [n, ...rest] = args;
+    if (n === undefined || rest.length > 0) {
+      throw new Error('Usage: aitrack export last <n>');
+    }
+    const lastError = usageLastDaysValidationError(n);
+    if (lastError) throw new Error(lastError);
+    return { period: 'last', n: parsePositiveInt(n) ?? 1, providers };
+  }
+
+  throw new Error(invalidUsagePeriodMessage(period));
 }

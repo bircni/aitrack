@@ -61,9 +61,18 @@ describe('exportCommand', () => {
     );
   });
 
-  it('rejects a period that needs extra args (date/range/last)', async () => {
+  it('rejects missing or invalid extra period arguments', async () => {
     await expect(exportCommand({ period: 'range', output: 'r.pdf' })).rejects.toThrow(
-      'Invalid period',
+      'aitrack export range',
+    );
+    await expect(
+      exportCommand({ period: 'date', args: ['bad'], output: 'r.pdf' }),
+    ).rejects.toThrow('Invalid date');
+    await expect(
+      exportCommand({ period: 'range', args: ['2026-06-02', '2026-06-01'], output: 'r.pdf' }),
+    ).rejects.toThrow('must not be after');
+    await expect(exportCommand({ period: 'last', args: ['0'], output: 'r.pdf' })).rejects.toThrow(
+      'positive integer',
     );
   });
 
@@ -75,6 +84,28 @@ describe('exportCommand', () => {
     );
     expect(mocks.writeFileSync).toHaveBeenCalledWith('r.pdf', expect.any(Buffer));
     expect(output()).toContain('r.pdf');
+  });
+
+  it('exports date, range, and last windows', async () => {
+    mocks.buildUsageReport.mockResolvedValue(report(3));
+    await exportCommand({ period: 'date', args: ['2026-06-01'], output: 'date.pdf' });
+    expect(mocks.buildUsageReport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ period: 'date', from: '2026-06-01' }),
+    );
+
+    await exportCommand({
+      period: 'range',
+      args: ['2026-06-01', '2026-06-02'],
+      output: 'range.pdf',
+    });
+    expect(mocks.buildUsageReport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ period: 'range', from: '2026-06-01', to: '2026-06-02' }),
+    );
+
+    await exportCommand({ period: 'last', args: ['14'], output: 'last.pdf' });
+    expect(mocks.buildUsageReport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ period: 'last', n: 14 }),
+    );
   });
 
   it('prints the not-configured hint and writes nothing when no data is loaded', async () => {
