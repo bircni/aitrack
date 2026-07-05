@@ -93,3 +93,77 @@ export function findClaudePricing(model: string, usageDate?: string): ClaudePric
   fallbackHits.add(id);
   return FAMILY_FALLBACK.sonnet;
 }
+
+export interface ClaudeMessageUsage {
+  input_tokens?: number;
+  cache_read_input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
+export function estimateClaudeCostUSD(
+  model: string,
+  usage: ClaudeMessageUsage,
+  usageDate?: string,
+): number {
+  const pricing = findClaudePricing(model, usageDate);
+  return (
+    ((usage.input_tokens ?? 0) * pricing.inputPerMillion +
+      (usage.output_tokens ?? 0) * pricing.outputPerMillion +
+      (usage.cache_read_input_tokens ?? 0) * pricing.cacheReadPerMillion +
+      (usage.cache_creation_input_tokens ?? 0) * pricing.cacheCreatePerMillion) /
+    1_000_000
+  );
+}
+
+// Backfill estimator for synced rows that lack a costUSD value (older data).
+// The cache vs raw-input split has already been collapsed into a single
+// inputTokens number, so we apply full input pricing — an upper bound.
+export function estimateClaudeCostFromAggregateTokens(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  usageDate?: string,
+): number {
+  const pricing = findClaudePricing(model, usageDate);
+  return (
+    (inputTokens * pricing.inputPerMillion + outputTokens * pricing.outputPerMillion) / 1_000_000
+  );
+}
+
+export function claudeCountsHaveCostBreakdown(counts: {
+  rawInputTokens?: number;
+  cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
+}): boolean {
+  return (
+    counts.rawInputTokens !== undefined ||
+    counts.cachedInputTokens !== undefined ||
+    counts.cacheCreationInputTokens !== undefined
+  );
+}
+
+export function estimateClaudeCostFromStoredCounts(
+  model: string,
+  counts: {
+    inputTokens: number;
+    outputTokens: number;
+    rawInputTokens?: number;
+    cachedInputTokens?: number;
+    cacheCreationInputTokens?: number;
+  },
+  usageDate?: string,
+): number | undefined {
+  if (!claudeCountsHaveCostBreakdown(counts)) return undefined;
+  const pricing = findClaudePricing(model, usageDate);
+  const cacheRead = counts.cachedInputTokens ?? 0;
+  const cacheCreate = counts.cacheCreationInputTokens ?? 0;
+  const raw = counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheCreate);
+  return (
+    (raw * pricing.inputPerMillion +
+      counts.outputTokens * pricing.outputPerMillion +
+      cacheRead * pricing.cacheReadPerMillion +
+      cacheCreate * pricing.cacheCreatePerMillion) /
+    1_000_000
+  );
+}
