@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import chalk from 'chalk';
 
+import { printJsonCommand } from '../cli/json.js';
 import { resolveMachineId, tryLoadConfig } from '../config.js';
 import { isCloned, LOCAL_REPO } from '../git.js';
 import { CLAUDE_PRICING_BY_ID } from '../pricing/claude.js';
@@ -15,6 +16,7 @@ import { jsonlSourceSummary } from '../readers/paths.js';
 
 interface DoctorOptions {
   pricingCheck?: boolean;
+  json?: boolean;
 }
 
 type CheckStatus = 'ok' | 'warn' | 'fail';
@@ -35,14 +37,23 @@ function parseMajor(version: string): number {
   return Number(version.split('.', 1)[0] ?? 0);
 }
 
-function commandWorks(command: string, arguments_: string[], cwd?: string): boolean {
+interface CommandRunResult {
+  ok: boolean;
+  output: string;
+}
+
+function runCommand(command: string, arguments_: string[], cwd?: string): CommandRunResult {
   const result = spawnSync(command, arguments_, {
     cwd,
     encoding: 'utf8',
     stdio: 'pipe',
     timeout: 10_000,
   });
-  return result.status === 0;
+  const output = [result.stderr, result.stdout]
+    .filter((chunk): chunk is string => typeof chunk === 'string' && chunk.trim().length > 0)
+    .join('\n')
+    .trim();
+  return { ok: result.status === 0, output };
 }
 
 function commandCheck(
@@ -53,15 +64,22 @@ function commandCheck(
     cwd?: string;
     okStatus?: CheckStatus;
     failStatus?: CheckStatus;
-    okDetail: string;
-    failDetail: string;
+    okDetail: string | ((output: string) => string);
+    failDetail: string | ((output: string) => string);
   },
 ): CheckResult {
-  const ok = commandWorks(command, arguments_, options.cwd);
+  const run = runCommand(command, arguments_, options.cwd);
+  const detail = run.ok
+    ? typeof options.okDetail === 'function'
+      ? options.okDetail(run.output)
+      : options.okDetail
+    : typeof options.failDetail === 'function'
+      ? options.failDetail(run.output)
+      : options.failDetail;
   return {
-    status: ok ? (options.okStatus ?? 'ok') : (options.failStatus ?? 'fail'),
+    status: run.ok ? (options.okStatus ?? 'ok') : (options.failStatus ?? 'fail'),
     label,
-    detail: ok ? options.okDetail : options.failDetail,
+    detail,
   };
 }
 
@@ -104,17 +122,20 @@ function pricingCheck(options: DoctorOptions): CheckResult {
     return {
       status: 'warn',
       label: 'Pricing drift',
-      detail: 'package.json not found in current directory; skipping pnpm run pricing:check',
+      detail:
+        'package.json not found in current directory; run doctor --pricing-check from the aitrack repo root',
     };
   }
 
-  const ok = commandWorks('pnpm', ['run', 'pricing:check'], process.cwd());
-  return ok
+  const run = runCommand('pnpm', ['run', 'pricing:check'], process.cwd());
+  return run.ok
     ? { status: 'ok', label: 'Pricing drift', detail: 'pnpm run pricing:check passed' }
     : {
         status: 'warn',
         label: 'Pricing drift',
-        detail: 'pnpm run pricing:check did not pass; inspect its output from the repo root',
+        detail: run.output
+          ? `pnpm run pricing:check failed: ${run.output}`
+          : 'pnpm run pricing:check did not pass; run from the aitrack repo root and inspect its output',
       };
 }
 
@@ -143,7 +164,7 @@ async function cursorCheck(): Promise<CheckResult> {
   }
 }
 
-export async function doctorCommand(options: DoctorOptions = {}): Promise<void> {
+async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
   const config = tryLoadConfig();
   const checks: CheckResult[] = [];
 
@@ -176,7 +197,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
       commandCheck('Repo health', 'git', ['status', '--short'], {
         cwd: LOCAL_REPO,
         okDetail: 'git status succeeded',
-        failDetail: 'git status failed',
+        failDetail: (output) =>
+          output ? `git status failed: ${output}` : 'git status failed in local repo',
       }),
     );
     checks.push(
@@ -184,8 +206,11 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
         cwd: LOCAL_REPO,
         okStatus: 'ok',
         failStatus: 'warn',
-        okDetail: 'checked with git push --dry-run',
-        failDetail: 'checked with git push --dry-run',
+        okDetail: 'git push --dry-run succeeded',
+        failDetail: (output) =>
+          output
+            ? `git push --dry-run failed: ${output}`
+            : 'git push --dry-run failed; check remote access and branch tracking',
       }),
     );
   }
@@ -195,9 +220,26 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
   checks.push(await cursorCheck());
   checks.push(pricingCheck(options));
 
-  console.log(chalk.bold('aitrack doctor'));
-  for (const check of checks) {
-    console.log(`${statusLabel(check.status).padEnd(9)} ${check.label}: ${check.detail}`);
+  return checks;
+}
+
+export async function doctorCommand(options: DoctorOptions = {}): Promise<void> {
+  const checks = await collectChecks(options);
+
+  if (options.json) {
+    printJsonCommand('doctor', {
+      checks: checks.map((check) => ({
+        status: check.status,
+        label: check.label,
+        detail: check.detail,
+      })),
+      hasFailures: checks.some((check) => check.status === 'fail'),
+    });
+  } else {
+    console.log(chalk.bold('aitrack doctor'));
+    for (const check of checks) {
+      console.log(`${statusLabel(check.status).padEnd(9)} ${check.label}: ${check.detail}`);
+    }
   }
 
   if (checks.some((check) => check.status === 'fail')) {

@@ -113,7 +113,7 @@ describe('exportCommand', () => {
     mocks.tryLoadConfig.mockReturnValue(null);
     await exportCommand({ period: 'month', output: 'r.pdf' });
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(output()).toContain('not configured');
+    expect(output()).toContain('No local usage data found');
   });
 
   it('prints a no-usage message when the window is empty', async () => {

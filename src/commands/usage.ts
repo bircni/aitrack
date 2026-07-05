@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 
-import { printJson } from '../cli/json.js';
+import { printJsonCommand } from '../cli/json.js';
 import {
   buildUsageReport,
   emptyReportMessage,
@@ -28,7 +28,12 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   }
 
   if (options.json) {
-    printJson(report);
+    printJsonCommand('usage', {
+      windowLabel: report.windowLabel,
+      providers: report.providers,
+      totals: report.totals,
+      rowCount: report.rowCount,
+    });
     return;
   }
 

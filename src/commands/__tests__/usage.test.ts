@@ -105,9 +105,11 @@ describe('usageCommand', () => {
     await usageCommand({ period: 'today', providers: ['claude_code'], json: true });
 
     const parsed = JSON.parse(output()) as {
+      command: string;
       providers: Array<{ key: string; rows: Array<{ model: string; tokens: number }> }>;
       totals: { tokens: number; costUSD: number };
     };
+    expect(parsed.command).toBe('usage');
     expect(parsed.providers[0]?.key).toBe('claude_code');
     expect(parsed.providers[0]?.rows[0]).toMatchObject({
       model: 'claude-opus-4-8',
@@ -464,7 +466,9 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
-    expect(console.log).toHaveBeenCalledWith('No local usage data found.');
+    expect(console.log).toHaveBeenCalledWith(
+      'No local usage data found (Claude Code or Codex). Run: npx aitrack init to sync across machines.',
+    );
   });
 
   it('forwards providers option to loadMergedProviderData', async () => {

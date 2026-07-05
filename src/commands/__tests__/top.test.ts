@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../data/usageData.js', () => ({
   loadMergedProviderData: mocks.loadMergedProviderData,
-  emptyUsageMessage: () => 'No data.',
+  usageEmptyMessage: () => 'No data.',
+  usageEmptyWindowMessage: () => 'No usage recorded.',
 }));
 vi.mock('../../config.js', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
 vi.mock('../../git.js', () => ({ isCloned: mocks.isCloned }));
@@ -104,9 +105,11 @@ describe('topCommand', () => {
     await topCommand({ kind: 'models', limit: 5, sort: 'tokens', json: true });
 
     const parsed = JSON.parse(captured()) as {
+      command: string;
       kind: string;
       items: Array<{ rank: number; providerKey: string; model: string; tokens: number }>;
     };
+    expect(parsed.command).toBe('top');
     expect(parsed.kind).toBe('models');
     expect(parsed.items[0]).toMatchObject({
       rank: 1,
@@ -150,10 +153,12 @@ describe('topCommand', () => {
     await topCommand({ kind: 'days', limit: 5, sort: 'tokens', json: true, year: 2025 });
 
     const parsed = JSON.parse(captured()) as {
+      command: string;
       kind: string;
       year: number;
       items: Array<{ topProvider: string | null }>;
     };
+    expect(parsed.command).toBe('top');
     expect(parsed).toMatchObject({ kind: 'days', year: 2025, items: [] });
   });
 
