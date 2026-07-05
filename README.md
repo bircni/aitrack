@@ -105,7 +105,7 @@ Run `aitrack init` once per machine with the **same** repo URL, then `aitrack sy
 | Command                      | What it does                                                                  |
 | ---------------------------- | ----------------------------------------------------------------------------- |
 | `aitrack init`               | Interactive setup — provide your repo URL and clone it locally                |
-| `aitrack sync`               | Read local data, write it to the cloned repo, and push                        |
+| `aitrack sync`               | Read local data, write it to the cloned repo, and push (`--dry-run` previews) |
 | `aitrack show`               | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table) |
 | `aitrack usage today`        | Today's usage as a table: provider / tokens / model / price                   |
 | `aitrack usage week`         | Rolling 7-day usage table                                                     |
