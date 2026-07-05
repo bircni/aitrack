@@ -1,6 +1,6 @@
 {
   "name": "aitrack",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Track and visualize your Claude Code, Codex & Cursor usage and cost — heatmaps, stats, and multi-machine sync over a git repo you own.",
   "author": "Nicolas <bircni@icloud.com>",
   "license": "MIT",

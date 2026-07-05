@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.6.0] - 2026-07-05
+
+
+### Features
+
+- Replace --no-cursor with --providers allowlist (#32)
+
 ## [v0.5.1] - 2026-07-03
 
 
