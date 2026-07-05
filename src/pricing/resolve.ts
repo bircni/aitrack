@@ -2,7 +2,7 @@ import type { TokenCounts } from '../data/types.js';
 import {
   estimateClaudeCostFromAggregateTokens,
   estimateClaudeCostFromStoredCounts,
-} from '../readers/claude.js';
+} from './claude.js';
 import { estimateCodexCostUSD } from './codex.js';
 
 export type ResolveModelCostMode = 'merge' | 'recompute';
