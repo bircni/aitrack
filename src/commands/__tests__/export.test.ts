@@ -65,9 +65,9 @@ describe('exportCommand', () => {
     await expect(exportCommand({ period: 'range', output: 'r.pdf' })).rejects.toThrow(
       'aitrack export range',
     );
-    await expect(
-      exportCommand({ period: 'date', args: ['bad'], output: 'r.pdf' }),
-    ).rejects.toThrow('Invalid date');
+    await expect(exportCommand({ period: 'date', args: ['bad'], output: 'r.pdf' })).rejects.toThrow(
+      'Invalid date',
+    );
     await expect(
       exportCommand({ period: 'range', args: ['2026-06-02', '2026-06-01'], output: 'r.pdf' }),
     ).rejects.toThrow('must not be after');

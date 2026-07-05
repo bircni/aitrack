@@ -267,14 +267,14 @@ export function buildProgram(): Command {
         args: string[],
         options: { output: string; providers?: string[] },
       ) => {
-      runAsync(() =>
-        exportCommand({
-          period,
-          args,
-          output: options.output,
-          providers: options.providers,
-        }),
-      );
+        runAsync(() =>
+          exportCommand({
+            period,
+            args,
+            output: options.output,
+            providers: options.providers,
+          }),
+        );
       },
     );
 
