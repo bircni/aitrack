@@ -4,11 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  estimateClaudeCostFromStoredCounts,
-  estimateClaudeCostUSD,
-  parseJsonlFile,
-} from '../claude.js';
+import { estimateClaudeCostFromStoredCounts, estimateClaudeCostUSD } from '../../pricing/claude.js';
+import { parseJsonlFile } from '../claude.js';
 
 let tmpDir: string;
 

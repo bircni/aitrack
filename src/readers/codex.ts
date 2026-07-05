@@ -1,40 +1,24 @@
-import { createReadStream, existsSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, toLocalDateString } from '../data/dayMap.js';
 import type { DayMap } from '../data/types.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
-import { splitConfiguredPaths } from './paths.js';
+import { listJsonlFiles, resolveSourceRoots } from './paths.js';
 
 export function getCodexPaths(): string[] {
-  const paths = new Set<string>(splitConfiguredPaths(process.env.AITRACK_CODEX_SESSION_DIRS));
-  const configuredPaths = splitConfiguredPaths(tryLoadConfig()?.codexSessionsDir);
-  for (const path of configuredPaths) {
-    paths.add(path);
-  }
   const codexHome = process.env.CODEX_HOME;
-  if (codexHome) paths.add(join(codexHome, 'sessions'));
-  paths.add(join(homedir(), '.codex', 'sessions'));
-  return [...paths].map((p) => resolve(p));
-}
-
-async function findJsonlFiles(dir: string): Promise<string[]> {
-  const files: string[] = [];
-  if (!existsSync(dir)) return files;
-  async function walk(current: string): Promise<void> {
-    const entries = await readdir(current, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = join(current, entry.name);
-      if (entry.isDirectory()) await walk(full);
-      else if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(full);
-    }
-  }
-  await walk(dir);
-  return files;
+  return resolveSourceRoots({
+    envValue: process.env.AITRACK_CODEX_SESSION_DIRS,
+    configValue: tryLoadConfig()?.codexSessionsDir,
+    defaults: [
+      ...(codexHome ? [join(codexHome, 'sessions')] : []),
+      join(homedir(), '.codex', 'sessions'),
+    ],
+  });
 }
 
 interface TokenUsage {
@@ -147,13 +131,12 @@ export async function readCodexData(): Promise<DayMap> {
   const allDays: DayMap = new Map();
 
   for (const root of roots) {
-    const files = await findJsonlFiles(root);
+    const files = await listJsonlFiles(root);
     for (const file of files) {
-      const resolved = resolve(file);
-      if (seenPaths.has(resolved)) continue;
-      seenPaths.add(resolved);
+      if (seenPaths.has(file)) continue;
+      seenPaths.add(file);
 
-      const result = await parseSessionFile(resolved);
+      const result = await parseSessionFile(file);
       if (!result) continue;
 
       const { dateStr, model, inputTokens, outputTokens, cachedInputTokens } = result;
