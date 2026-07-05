@@ -3,10 +3,12 @@ import { InvalidArgumentError } from 'commander';
 import type { TopKind, TopSort } from '../commands/top.js';
 import type { UsageReportOptions } from '../data/usageReport.js';
 import { normalizeProviderKey, SELECTABLE_PROVIDERS } from '../display/providers.js';
-import { isNoArgPeriod, NO_ARG_PERIODS, type UsagePeriod } from '../display/usagePeriods.js';
-
-const EXTRA_ARG_PERIODS = ['date', 'range', 'last'] as const satisfies readonly UsagePeriod[];
-const ALL_USAGE_PERIODS = [...NO_ARG_PERIODS, ...EXTRA_ARG_PERIODS] as const;
+import {
+  isNoArgPeriod,
+  isUsagePeriod,
+  USAGE_PERIOD_DEFINITIONS,
+  type UsagePeriod,
+} from '../display/usagePeriods.js';
 
 export function cliErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -35,40 +37,29 @@ export function parsePositiveInt(value: string): number | undefined {
 }
 
 export function parseTopKind(kind: string | undefined): TopKind {
+  if (kind !== undefined && kind !== 'days' && kind !== 'models') {
+    throw new Error(`Invalid kind: "${kind}". Expected "days" or "models".`);
+  }
   return kind === 'models' ? 'models' : 'days';
 }
 
-export function topKindValidationError(kind: string | undefined): string | null {
-  if (kind !== undefined && kind !== 'days' && kind !== 'models') {
-    return `Invalid kind: "${kind}". Expected "days" or "models".`;
-  }
-  return null;
-}
-
-export function topSortValidationError(sort: string): string | null {
-  if (sort !== 'tokens' && sort !== 'cost') {
-    return `Invalid --sort value: "${sort}". Expected "tokens" or "cost".`;
-  }
-  return null;
-}
-
 export function parseTopSort(sort: string): TopSort {
-  if (sort === 'cost') return 'cost';
-  return 'tokens';
+  if (sort !== 'tokens' && sort !== 'cost') {
+    throw new Error(`Invalid --sort value: "${sort}". Expected "tokens" or "cost".`);
+  }
+  return sort;
 }
 
-export function topLimitValidationError(limit: number): string | null {
+export function parseTopLimit(limit: number): number {
   if (!Number.isSafeInteger(limit) || limit < 1) {
-    return `Invalid --limit: "${String(limit)}". Expected a positive integer.`;
+    throw new Error(`Invalid --limit: "${String(limit)}". Expected a positive integer.`);
   }
-  return null;
+  return limit;
 }
 
-export function dateRangeValidationError(from: string, to: string): string | null {
-  if (from > to) {
-    return `Start date "${from}" must not be after end date "${to}".`;
-  }
-  return null;
+function invalidUsagePeriodMessage(period: string): string {
+  const periods = USAGE_PERIOD_DEFINITIONS.map((def) => def.period).join(', ');
+  return `Invalid period: "${period}". Expected one of: ${periods}.`;
 }
 
 /**
@@ -97,21 +88,10 @@ export function parseProviders(value: string): string[] {
   return [...seen];
 }
 
-export function usageLastDaysValidationError(n: string): string | null {
-  if (parsePositiveInt(n) === undefined) {
-    return `Invalid number of days: "${n}". Expected a positive integer.`;
-  }
-  return null;
-}
-
 export interface ParseUsageReportOptionsInput {
   period?: string;
   args?: string[];
   providers?: string[];
-}
-
-function invalidUsagePeriodMessage(period: string): string {
-  return `Invalid period: "${period}". Expected one of: ${ALL_USAGE_PERIODS.join(', ')}.`;
 }
 
 /** Parse `[period] [args...]` (export) or equivalent into shared usage-report options. */
@@ -120,6 +100,18 @@ export function parseUsageReportOptions(input: ParseUsageReportOptionsInput): Us
   const args = input.args ?? [];
   const { providers } = input;
 
+  if (!isUsagePeriod(period)) {
+    throw new Error(invalidUsagePeriodMessage(period));
+  }
+
+  return parseUsageReportOptionsForPeriod(period, args, providers);
+}
+
+function parseUsageReportOptionsForPeriod(
+  period: UsagePeriod,
+  args: string[],
+  providers?: string[],
+): UsageReportOptions {
   if (isNoArgPeriod(period)) {
     if (args.length > 0) {
       throw new Error(`Period "${period}" does not accept extra arguments.`);
@@ -143,20 +135,19 @@ export function parseUsageReportOptions(input: ParseUsageReportOptionsInput): Us
     }
     if (!isValidDateString(from)) throw new Error(invalidDateMessage(from));
     if (!isValidDateString(to)) throw new Error(invalidDateMessage(to));
-    const rangeError = dateRangeValidationError(from, to);
-    if (rangeError) throw new Error(rangeError);
+    if (from > to) {
+      throw new Error(`Start date "${from}" must not be after end date "${to}".`);
+    }
     return { period: 'range', from, to, providers };
   }
 
-  if (period === 'last') {
-    const [n, ...rest] = args;
-    if (n === undefined || rest.length > 0) {
-      throw new Error('Usage: aitrack export last <n>');
-    }
-    const lastError = usageLastDaysValidationError(n);
-    if (lastError) throw new Error(lastError);
-    return { period: 'last', n: parsePositiveInt(n) ?? 1, providers };
+  const [n, ...rest] = args;
+  if (n === undefined || rest.length > 0) {
+    throw new Error('Usage: aitrack export last <n>');
   }
-
-  throw new Error(invalidUsagePeriodMessage(period));
+  const parsed = parsePositiveInt(n);
+  if (parsed === undefined) {
+    throw new Error(`Invalid number of days: "${n}". Expected a positive integer.`);
+  }
+  return { period: 'last', n: parsed, providers };
 }

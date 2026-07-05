@@ -64,9 +64,11 @@ describe('buildProgram', () => {
     await run('recompute-costs');
     expect(mocks.recomputeCostsCommand).toHaveBeenCalled();
     await run('doctor');
-    expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: undefined });
+    expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: undefined, json: undefined });
     await run('doctor', '--pricing-check');
-    expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: true });
+    expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: true, json: undefined });
+    await run('doctor', '--json');
+    expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: undefined, json: true });
   });
 
   it('maps show options', async () => {
