@@ -1,12 +1,11 @@
 import chalk from 'chalk';
 
 import { sumDayMap } from '../data/aggregate.js';
-import { filterProviderDataByYear } from '../data/dayMap.js';
 import type { DayMap, ProviderData } from '../data/types.js';
 import { fmt, fmtUSD } from './format.js';
-import { mergeAllProviderDayMaps } from './heatmap/merge.js';
+import { resolveProviderLayout } from './heatmap/layout.js';
 import { currentStreak, formatMonthLabel, longestStreak, peakMonth } from './heatmap/stats.js';
-import { activeProviderKeys, providerLabel } from './providers.js';
+import { providerLabel } from './providers.js';
 import { defaultTableStyle, renderTerminalTable } from './terminalTable.js';
 
 export interface TuiOptions {
@@ -82,20 +81,19 @@ function totalRow(rows: StatsRow[]): StatsRow {
 }
 
 export function renderTui(providerData: ProviderData, options: TuiOptions = {}): string {
-  const filtered =
-    options.year === undefined
-      ? providerData
-      : filterProviderDataByYear(providerData, options.year);
+  const { layoutData, keys } = resolveProviderLayout(providerData, {
+    all: options.all,
+    year: options.year,
+  });
 
   let rows: StatsRow[];
   if (options.all) {
-    const merged = mergeAllProviderDayMaps(filtered);
-    rows = merged.size > 0 ? [summarizeDayMap(merged, 'all')] : [];
+    const merged = layoutData.all;
+    rows = merged && merged.size > 0 ? [summarizeDayMap(merged, 'all')] : [];
   } else {
-    const keys = activeProviderKeys(filtered);
     rows = keys
       .map((key) => {
-        const dayMap = filtered[key];
+        const dayMap = layoutData[key];
         return dayMap ? summarizeDayMap(dayMap, key) : null;
       })
       .filter((row): row is StatsRow => row !== null);

@@ -1,8 +1,7 @@
-import { filterProviderDataByYear } from '../../data/dayMap.js';
+import { formatUsageEmptyMessage } from '../../data/emptyState.js';
 import type { ProviderData, RenderOptions } from '../../data/types.js';
-import { mergeAllProviderDayMaps } from '../heatmap/merge.js';
+import { resolveProviderLayout } from '../heatmap/layout.js';
 import { buildHeatmapWeeks } from '../heatmap/stats.js';
-import { activeProviderKeys } from '../providers.js';
 import { escapeHtml } from './escape.js';
 import { renderProviderSection, renderTodaySection } from './sections.js';
 import { pageStyles } from './styles.js';
@@ -67,14 +66,8 @@ export function renderToHtml(
     refreshIntervalSeconds,
   }: HtmlRenderOptions = {},
 ): string {
-  const filtered = year === undefined ? providerData : filterProviderDataByYear(providerData, year);
+  const { layoutData, keys: providers } = resolveProviderLayout(providerData, { all, year });
   const weeks = buildHeatmapWeeks(year);
-  const layoutData: ProviderData = all ? { all: mergeAllProviderDayMaps(filtered) } : filtered;
-  const providers = all
-    ? (layoutData.all?.size ?? 0) > 0
-      ? ['all']
-      : []
-    : activeProviderKeys(layoutData);
 
   const title = year === undefined ? 'aitrack' : `aitrack (${String(year)})`;
   const metaLines: string[] = [];
@@ -88,7 +81,7 @@ export function renderToHtml(
   }
 
   if (providers.length === 0) {
-    const message = emptyMessage ?? 'No usage data found.';
+    const message = emptyMessage ?? formatUsageEmptyMessage('no-data');
     return pageShell(
       title,
       dark,
