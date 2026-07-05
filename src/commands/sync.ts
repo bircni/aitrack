@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { loadConfig, resolveMachineId } from '../config.js';
 import { buildMachineData, readLocalProviderMaps } from '../data/localData.js';
 import type { MachineFile } from '../data/types.js';
+import { parseMachineFile } from '../data/validate.js';
 import { commitAndPush, isCloned, LOCAL_REPO, pull, removePendingMachineFile } from '../git.js';
 import { consumeClaudeFallbackHits } from '../pricing/claude.js';
 import { consumeCodexFallbackHits } from '../pricing/codex.js';
@@ -62,7 +63,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
   let existingDays: MachineFile['days'] | null = null;
   try {
     const raw = readFileSync(dataFilePath, 'utf8');
-    existingDays = (JSON.parse(raw) as MachineFile).days;
+    existingDays = parseMachineFile(raw, dataFilePath)?.days ?? null;
   } catch {
     /* file doesn't exist yet */
   }

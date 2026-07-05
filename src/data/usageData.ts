@@ -1,12 +1,15 @@
 import { hostname } from 'node:os';
 
 import { resolveMachineId, tryLoadConfig } from '../config.js';
+import { isSyncedProvider } from '../display/providers.js';
 import { isCloned, listDataFiles, readDataFile, writePendingMachineFile } from '../git.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { readCursorData } from '../readers/cursor/index.js';
 import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
 import { buildLocalMachineFile, machineHasData } from './localData.js';
 import type { DayEntry, MachineFile, ProviderData, ProviderDay } from './types.js';
+
+export { usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
 
 // Merge one provider-day record into the running accumulator for that day.
 // Day cost prefers the stored totals.costUSD; falls back to the sum of per-model
@@ -78,17 +81,10 @@ export interface LoadedUsageData {
   warnedNotConfigured?: boolean;
 }
 
-export function emptyUsageMessage(warnedNotConfigured?: boolean): string {
-  if (warnedNotConfigured) {
-    return 'No local usage data found (Claude Code or Codex). Run: npx aitrack init to sync across machines.';
-  }
-  return 'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.';
-}
-
 function overlayMachineFile(providerData: ProviderData, machine: MachineFile): void {
   for (const [date, dayProviders] of Object.entries(machine.days)) {
     for (const [providerKey, pData] of Object.entries(dayProviders)) {
-      if (providerKey === 'cursor') continue;
+      if (!isSyncedProvider(providerKey)) continue;
       const dayMap = (providerData[providerKey] ??= new Map());
       mergeProviderDay(getOrCreateDay(dayMap, date), providerKey, pData, date);
     }
@@ -97,14 +93,8 @@ function overlayMachineFile(providerData: ProviderData, machine: MachineFile): v
 
 function splitByProvider(machineFiles: MachineFile[]): ProviderData {
   const providers: ProviderData = {};
-  for (const data of machineFiles) {
-    for (const [date, providerData] of Object.entries(data.days)) {
-      for (const [providerKey, pData] of Object.entries(providerData)) {
-        if (providerKey === 'cursor') continue;
-        const dayMap = (providers[providerKey] ??= new Map());
-        mergeProviderDay(getOrCreateDay(dayMap, date), providerKey, pData, date);
-      }
-    }
+  for (const file of machineFiles) {
+    overlayMachineFile(providers, file);
   }
   return providers;
 }
@@ -116,7 +106,7 @@ export async function loadMergedProviderData(
   const machineId = config ? resolveMachineId(config) : hostname();
   const localMachine = await buildLocalMachineFile(machineId);
 
-  if (options.stagePending !== false) {
+  if (options.stagePending) {
     writePendingMachineFile(localMachine);
   }
 

@@ -2,11 +2,10 @@ import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { tryLoadConfig } from '../config.js';
-import { emptyUsageMessage, loadMergedProviderData } from '../data/usageData.js';
+import { isUsageNotConfigured, usageEmptyMessage } from '../data/emptyState.js';
+import { loadMergedProviderData } from '../data/usageData.js';
 import { renderToPng } from '../display/renderPng.js';
 import { renderTui } from '../display/tui.js';
-import { isCloned } from '../git.js';
 
 function openFile(filePath: string): void {
   if (process.platform === 'win32') {
@@ -36,10 +35,11 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
   const loaded = await loadMergedProviderData({
     providers: options.providers,
     year: options.year,
+    stagePending: true,
   });
 
   if (!loaded) {
-    console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));
+    console.log(usageEmptyMessage(isUsageNotConfigured()));
     return;
   }
 
@@ -49,12 +49,12 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
       all: options.all,
       year: options.year,
     });
-    console.log(output || 'No usage data found.');
+    console.log(output || usageEmptyMessage(loaded.warnedNotConfigured));
     return;
   }
 
   const outputPath = resolve(options.output ?? 'aitrack.png');
-  const png = renderToPng(loaded.providerData, loaded.machineData, {
+  const png = renderToPng(loaded.providerData, {
     dark: Boolean(options.dark),
     all: Boolean(options.all),
     year: options.year,

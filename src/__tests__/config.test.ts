@@ -83,4 +83,11 @@ describe('config', () => {
     writeRawConfig(JSON.stringify('a string'));
     expect(tryLoadConfig()).toBeNull();
   });
+
+  it('returns null when optional daemon fields have invalid types', () => {
+    writeRawConfig(
+      JSON.stringify({ repoUrl: 'git@example.com:test/repo.git', daemon: { port: 'bad' } }),
+    );
+    expect(tryLoadConfig()).toBeNull();
+  });
 });

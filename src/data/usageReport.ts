@@ -1,9 +1,9 @@
-import { tryLoadConfig } from '../config.js';
 import { orderedProviderKeys, providerLabel } from '../display/providers.js';
 import { computeUsageWindow, type UsagePeriod } from '../display/usagePeriods.js';
-import { isCloned } from '../git.js';
 import { aggregateModelsByDayMap } from './aggregate.js';
-import { emptyUsageMessage, loadMergedProviderData } from './usageData.js';
+import { isUsageNotConfigured, usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
+import { compareByCostThenTokens } from './sort.js';
+import { loadMergedProviderData } from './usageData.js';
 
 export interface UsageReportOptions {
   period: UsagePeriod;
@@ -105,7 +105,7 @@ export async function buildUsageReport(options: UsageReportOptions): Promise<Usa
     }
 
     if (rows.length === 0) continue;
-    rows.sort((a, b) => b.costUSD - a.costUSD || b.tokens - a.tokens);
+    rows.sort((a, b) => compareByCostThenTokens(a, b));
     rowCount += rows.length;
     providers.push({
       key,
@@ -129,7 +129,7 @@ export async function buildUsageReport(options: UsageReportOptions): Promise<Usa
  * `export` commands so both report empty states identically.
  */
 export function emptyReportMessage(report: UsageReport | null): string | null {
-  if (!report) return emptyUsageMessage(!tryLoadConfig() || !isCloned());
-  if (report.rowCount === 0) return `No usage recorded for ${report.windowLabel}.`;
+  if (!report) return usageEmptyMessage(isUsageNotConfigured());
+  if (report.rowCount === 0) return usageEmptyWindowMessage(report.windowLabel);
   return null;
 }

@@ -12,6 +12,13 @@ export const PROVIDER_LABELS: Record<string, string> = {
 /** Canonical provider keys the `--providers` flag can select. */
 export const SELECTABLE_PROVIDERS = ['claude_code', 'codex', 'cursor'] as const;
 
+/** Providers written to git during sync; Cursor stays local-only. */
+export const SYNCED_PROVIDERS = ['claude_code', 'codex'] as const;
+
+export function isSyncedProvider(providerKey: string): boolean {
+  return (SYNCED_PROVIDERS as readonly string[]).includes(providerKey);
+}
+
 /** Friendly spellings accepted on the CLI, mapped to their canonical key. */
 const PROVIDER_ALIASES: Record<string, string> = {
   claude: 'claude_code',

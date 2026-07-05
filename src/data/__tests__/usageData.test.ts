@@ -113,12 +113,23 @@ describe('loadMergedProviderData', () => {
       },
     });
 
-    const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
+    const loaded = await loadMergedProviderData({
+      providers: ['claude_code', 'codex'],
+      stagePending: true,
+    });
 
     expect(console.warn).not.toHaveBeenCalled();
     expect(mocks.writePendingMachineFile).toHaveBeenCalled();
     expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(10);
     expect(loaded?.warnedNotConfigured).toBe(true);
+  });
+
+  it('does not stage pending data by default', async () => {
+    mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
+
+    await loadMergedProviderData({ providers: ['claude_code'] });
+
+    expect(mocks.writePendingMachineFile).not.toHaveBeenCalled();
   });
 
   it('merges git data from other machines and overlays fresh local read', async () => {
