@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../data/usageData.js', () => ({
   loadMergedProviderData: mocks.loadMergedProviderData,
-  emptyUsageMessage: () => 'No data.',
+  usageEmptyMessage: () => 'No data.',
 }));
 vi.mock('../../config.js', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
 vi.mock('../../git.js', () => ({ isCloned: mocks.isCloned }));
@@ -105,8 +105,10 @@ describe('machinesCommand', () => {
     await machinesCommand({ json: true });
 
     const parsed = JSON.parse(captured()) as {
+      command: string;
       machines: Array<{ hostname: string; totalTokens: number; costUSD: number }>;
     };
+    expect(parsed.command).toBe('machines');
     expect(parsed.machines[0]).toMatchObject({
       hostname: 'box',
       totalTokens: 1100,

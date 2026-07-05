@@ -1,14 +1,22 @@
 import chalk from 'chalk';
 
-import { printJson } from '../cli/json.js';
-import { tryLoadConfig } from '../config.js';
+import { printJsonCommand } from '../cli/json.js';
 import { aggregateModelsByDayMap } from '../data/aggregate.js';
+import { isUsageNotConfigured } from '../data/emptyState.js';
+import { compareByCostThenTokens } from '../data/sort.js';
 import type { DayMap, ProviderData } from '../data/types.js';
-import { emptyUsageMessage, loadMergedProviderData } from '../data/usageData.js';
+import {
+  loadMergedProviderData,
+  usageEmptyMessage,
+  usageEmptyWindowMessage,
+} from '../data/usageData.js';
 import { fmt, fmtUSD } from '../display/format.js';
 import { providerLabel } from '../display/providers.js';
-import { defaultTableStyle, renderTerminalTable } from '../display/terminalTable.js';
-import { isCloned } from '../git.js';
+import {
+  defaultTableStyle,
+  renderTerminalTable,
+  type TerminalTableColumn,
+} from '../display/terminalTable.js';
 
 export type TopKind = 'days' | 'models';
 export type TopSort = 'tokens' | 'cost';
@@ -30,35 +38,43 @@ interface Row {
   cost: string;
 }
 
-interface DayEntryAccumulator {
-  date: string;
+interface TopSortable {
   tokens: number;
   cost: number | null;
+}
+
+interface DayEntryAccumulator extends TopSortable {
+  date: string;
   byProvider: Record<string, number>;
 }
 
-interface ModelAccumulator {
+interface ModelAccumulator extends TopSortable {
   providerKey: string;
   provider: string;
   model: string;
-  tokens: number;
-  cost: number | null;
   days: number;
+}
+
+interface TopJsonItem {
+  rank: number;
+  tokens: number;
+  costUSD: number | null;
+  [key: string]: unknown;
+}
+
+function compareTopEntries(a: TopSortable, b: TopSortable, sort: TopSort): number {
+  if (sort === 'tokens') {
+    return b.tokens - a.tokens || (b.cost ?? 0) - (a.cost ?? 0);
+  }
+  return compareByCostThenTokens(
+    { tokens: a.tokens, cost: a.cost },
+    { tokens: b.tokens, cost: b.cost },
+  );
 }
 
 function topProviderKey(byProvider: Record<string, number>): string | null {
   const top = Object.entries(byProvider).sort((a, b) => b[1] - a[1])[0];
   return top ? top[0] : null;
-}
-
-function topJsonEnvelope(options: TopOptions, items: unknown[]): Record<string, unknown> {
-  return {
-    kind: options.kind,
-    sort: options.sort,
-    limit: options.limit,
-    year: options.year ?? null,
-    items,
-  };
 }
 
 function topDays(
@@ -85,11 +101,7 @@ function topDays(
     }
   }
   const all = [...byDate.values()];
-  all.sort((a, b) =>
-    sort === 'cost'
-      ? (b.cost ?? 0) - (a.cost ?? 0) || b.tokens - a.tokens
-      : b.tokens - a.tokens || (b.cost ?? 0) - (a.cost ?? 0),
-  );
+  all.sort((a, b) => compareTopEntries(a, b, sort));
   return all.slice(0, limit);
 }
 
@@ -117,11 +129,7 @@ function topModels(
   for (const [providerKey, dayMap] of Object.entries(providerData)) {
     all.push(...aggregateModels(dayMap, providerKey, year));
   }
-  all.sort((a, b) =>
-    sort === 'cost'
-      ? (b.cost ?? 0) - (a.cost ?? 0) || b.tokens - a.tokens
-      : b.tokens - a.tokens || (b.cost ?? 0) - (a.cost ?? 0),
-  );
+  all.sort((a, b) => compareTopEntries(a, b, sort));
   return all.slice(0, limit);
 }
 
@@ -146,6 +154,35 @@ function modelToRow(m: ModelAccumulator, index: number): Row {
   };
 }
 
+function renderTopOutput<T>(
+  options: TopOptions,
+  title: string,
+  items: T[],
+  toJsonItem: (item: T, index: number) => TopJsonItem,
+  toRow: (item: T, index: number) => Row,
+  columns: Array<TerminalTableColumn<Row>>,
+): void {
+  if (options.json) {
+    printJsonCommand('top', {
+      kind: options.kind,
+      sort: options.sort,
+      limit: options.limit,
+      year: options.year ?? null,
+      items: items.map((item, index) => toJsonItem(item, index)),
+    });
+    return;
+  }
+
+  if (items.length === 0) {
+    console.log(usageEmptyWindowMessage());
+    return;
+  }
+
+  const rows = items.map((item, index) => toRow(item, index));
+  console.log(chalk.bold(title));
+  console.log(renderTerminalTable(rows, columns, { style: defaultTableStyle() }));
+}
+
 export async function topCommand(options: TopOptions): Promise<void> {
   const loaded = await loadMergedProviderData({
     providers: options.providers,
@@ -153,7 +190,7 @@ export async function topCommand(options: TopOptions): Promise<void> {
   });
 
   if (!loaded) {
-    console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));
+    console.log(usageEmptyMessage(isUsageNotConfigured()));
     return;
   }
 
@@ -161,79 +198,51 @@ export async function topCommand(options: TopOptions): Promise<void> {
 
   if (options.kind === 'days') {
     const items = topDays(loaded.providerData, options.limit, options.sort, options.year);
-    if (options.json) {
-      printJson(
-        topJsonEnvelope(
-          options,
-          items.map((d, index) => ({
-            rank: index + 1,
-            date: d.date,
-            tokens: d.tokens,
-            costUSD: d.cost,
-            topProvider: topProviderKey(d.byProvider),
-            byProvider: d.byProvider,
-          })),
-        ),
-      );
-      return;
-    }
-    if (items.length === 0) {
-      console.log('No usage recorded.');
-      return;
-    }
-    const rows = items.map(dayToRow);
-    console.log(chalk.bold(`Top ${String(options.limit)} days by ${options.sort}${yearSuffix}`));
-    console.log(
-      renderTerminalTable(
-        rows,
-        [
-          { header: '#', align: 'right', cell: (r) => r.rank },
-          { header: 'Date', align: 'left', cell: (r) => r.label },
-          { header: 'Top provider', align: 'left', cell: (r) => r.sub },
-          { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
-          { header: 'Cost', align: 'right', cell: (r) => r.cost },
-        ],
-        { style: defaultTableStyle() },
-      ),
+    renderTopOutput(
+      options,
+      `Top ${String(options.limit)} days by ${options.sort}${yearSuffix}`,
+      items,
+      (d, index) => ({
+        rank: index + 1,
+        date: d.date,
+        tokens: d.tokens,
+        costUSD: d.cost,
+        topProvider: topProviderKey(d.byProvider),
+        byProvider: d.byProvider,
+      }),
+      dayToRow,
+      [
+        { header: '#', align: 'right', cell: (r) => r.rank },
+        { header: 'Date', align: 'left', cell: (r) => r.label },
+        { header: 'Top provider', align: 'left', cell: (r) => r.sub },
+        { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
+        { header: 'Cost', align: 'right', cell: (r) => r.cost },
+      ],
     );
     return;
   }
 
   const items = topModels(loaded.providerData, options.limit, options.sort, options.year);
-  if (options.json) {
-    printJson(
-      topJsonEnvelope(
-        options,
-        items.map((m, index) => ({
-          rank: index + 1,
-          providerKey: m.providerKey,
-          provider: m.provider,
-          model: m.model,
-          tokens: m.tokens,
-          costUSD: m.cost,
-          days: m.days,
-        })),
-      ),
-    );
-    return;
-  }
-  if (items.length === 0) {
-    console.log('No usage recorded.');
-    return;
-  }
-  const rows = items.map(modelToRow);
-  console.log(chalk.bold(`Top ${String(options.limit)} models by ${options.sort}${yearSuffix}`));
-  console.log(
-    renderTerminalTable(
-      rows,
-      [
-        { header: '#', align: 'right', cell: (r) => r.rank },
-        { header: 'Model', align: 'left', cell: (r) => r.label },
-        { header: 'Provider', align: 'left', cell: (r) => r.sub },
-        { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
-        { header: 'Cost', align: 'right', cell: (r) => r.cost },
-      ],
-      { style: defaultTableStyle() },
-    ),
+  renderTopOutput(
+    options,
+    `Top ${String(options.limit)} models by ${options.sort}${yearSuffix}`,
+    items,
+    (m, index) => ({
+      rank: index + 1,
+      providerKey: m.providerKey,
+      provider: m.provider,
+      model: m.model,
+      tokens: m.tokens,
+      costUSD: m.cost,
+      days: m.days,
+    }),
+    modelToRow,
+    [
+      { header: '#', align: 'right', cell: (r) => r.rank },
+      { header: 'Model', align: 'left', cell: (r) => r.label },
+      { header: 'Provider', align: 'left', cell: (r) => r.sub },
+      { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
+      { header: 'Cost', align: 'right', cell: (r) => r.cost },
+    ],
   );
 }

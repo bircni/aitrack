@@ -1,17 +1,16 @@
 import chalk from 'chalk';
 
-import { printJson } from '../cli/json.js';
-import { tryLoadConfig } from '../config.js';
+import { printJsonCommand } from '../cli/json.js';
+import { isUsageNotConfigured } from '../data/emptyState.js';
 import type { MachineFile } from '../data/types.js';
-import { emptyUsageMessage, loadMergedProviderData } from '../data/usageData.js';
+import { loadMergedProviderData, usageEmptyMessage } from '../data/usageData.js';
 import { fmt, fmtUSD } from '../display/format.js';
-import { providerLabel, SELECTABLE_PROVIDERS, sortProviderKeys } from '../display/providers.js';
+import { providerLabel, sortProviderKeys, SYNCED_PROVIDERS } from '../display/providers.js';
 import {
   defaultTableStyle,
   renderTerminalTable,
   type TerminalTableColumn,
 } from '../display/terminalTable.js';
-import { isCloned } from '../git.js';
 
 interface MachineSummary {
   hostname: string;
@@ -68,13 +67,12 @@ interface MachinesOptions {
 }
 
 export async function machinesCommand(options: MachinesOptions = {}): Promise<void> {
-  // Machines are summarized from synced data only; skip the local Cursor read.
   const loaded = await loadMergedProviderData({
-    providers: SELECTABLE_PROVIDERS.filter((p) => p !== 'cursor'),
+    providers: [...SYNCED_PROVIDERS],
   });
 
   if (!loaded || loaded.machineData.length === 0) {
-    console.log(emptyUsageMessage(!tryLoadConfig() || !isCloned()));
+    console.log(usageEmptyMessage(loaded?.warnedNotConfigured ?? isUsageNotConfigured()));
     return;
   }
 
@@ -83,7 +81,7 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
     .sort((a, b) => b.totalTokens - a.totalTokens);
 
   if (options.json) {
-    printJson({ machines: summaries });
+    printJsonCommand('machines', { machines: summaries });
     return;
   }
 

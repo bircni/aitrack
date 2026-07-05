@@ -37,7 +37,6 @@ vi.mock('../../readers/cursor/index.js', () => ({ readCursorData: mocks.readCurs
 vi.mock('../../display/renderPng.js', () => ({ renderToPng: mocks.renderToPng }));
 
 import type { MachineFile, ProviderData, RenderOptions } from '../../data/types.js';
-import { emptyUsageMessage } from '../../data/usageData.js';
 import { showCommand } from '../show.js';
 
 function emptyLocalMachine(host = 'host'): MachineFile {
@@ -68,11 +67,13 @@ function withPlatform(platform: NodeJS.Platform, callback: () => Promise<void>):
 }
 
 describe('showCommand', () => {
-  function getRenderCall(): [ProviderData, MachineFile[], RenderOptions] {
+  let logSpy: ReturnType<typeof vi.spyOn>;
+
+  function getRenderCall(): [ProviderData, RenderOptions] {
     const call = mocks.renderToPng.mock.calls[0];
     expect(call).toBeDefined();
     if (call === undefined) throw new Error('expected renderToPng to be called');
-    return call as [ProviderData, MachineFile[], RenderOptions];
+    return call as [ProviderData, RenderOptions];
   }
 
   function getRenderedProviderData(): ProviderData {
@@ -89,7 +90,7 @@ describe('showCommand', () => {
     mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
     mocks.readCursorData.mockResolvedValue(new Map());
     mocks.renderToPng.mockReturnValue(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
@@ -109,13 +110,17 @@ describe('showCommand', () => {
     await showCommand();
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(console.log).toHaveBeenCalledWith(emptyUsageMessage(true));
+    expect(logSpy).toHaveBeenCalledWith(
+      'No local usage data found (Claude Code or Codex). Run: npx aitrack init to sync across machines.',
+    );
   });
 
   it('prints the sync hint when configured but no git or local data exists', async () => {
     await showCommand();
 
-    expect(console.log).toHaveBeenCalledWith(emptyUsageMessage(false));
+    expect(logSpy).toHaveBeenCalledWith(
+      'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
+    );
   });
 
   it('renders cursor-only data when local cursor data is available', async () => {
@@ -136,9 +141,8 @@ describe('showCommand', () => {
 
     await showCommand({ output: 'out.png', dark: true, all: true });
 
-    const [providerData, machineData, renderOptions] = getRenderCall();
+    const [providerData, renderOptions] = getRenderCall();
     expect(providerData.cursor).toBeInstanceOf(Map);
-    expect(machineData).toEqual([]);
     expect(renderOptions).toEqual({ dark: true, all: true, year: undefined });
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
       expect.stringContaining('out.png'),

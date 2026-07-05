@@ -117,6 +117,7 @@ describe('doctorCommand', () => {
   it('reports pricing check results and cursor read errors', async () => {
     mocks.spawnSync.mockImplementation((command: string, args: string[]) => ({
       status: command === 'pnpm' && args.includes('pricing:check') ? 1 : 0,
+      stderr: 'drift detected',
     }));
     mocks.readCursorAuthState.mockRejectedValue(new Error('locked'));
 
@@ -124,6 +125,19 @@ describe('doctorCommand', () => {
 
     const out = output();
     expect(out).toContain('Cursor source: locked');
-    expect(out).toContain('Pricing drift: pnpm run pricing:check did not pass');
+    expect(out).toContain('Pricing drift: pnpm run pricing:check failed: drift detected');
+  });
+
+  it('prints JSON when requested', async () => {
+    await doctorCommand({ json: true });
+
+    const parsed = JSON.parse(output()) as {
+      command: string;
+      checks: Array<{ status: string; label: string }>;
+      hasFailures: boolean;
+    };
+    expect(parsed.command).toBe('doctor');
+    expect(parsed.checks.some((check) => check.label === 'Node.js')).toBe(true);
+    expect(parsed.hasFailures).toBe(false);
   });
 });
