@@ -1,41 +1,25 @@
-import { createReadStream, existsSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, toLocalDateString } from '../data/dayMap.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
-import { findClaudePricing } from '../pricing/claude.js';
-import { splitConfiguredPaths } from './paths.js';
+import { estimateClaudeCostUSD } from '../pricing/claude.js';
+import { listJsonlFiles, resolveSourceRoots } from './paths.js';
 
 export function getClaudePaths(): string[] {
-  const paths = new Set<string>(splitConfiguredPaths(process.env.AITRACK_CLAUDE_PROJECTS_DIRS));
-  const configuredPaths = splitConfiguredPaths(tryLoadConfig()?.claudeProjectsDir);
-  for (const path of configuredPaths) {
-    paths.add(path);
-  }
   const xdg = process.env.XDG_CONFIG_HOME;
-  if (xdg) paths.add(join(xdg, 'claude', 'projects'));
-  paths.add(join(homedir(), '.config', 'claude', 'projects'));
-  paths.add(join(homedir(), '.claude', 'projects'));
-  return [...paths].map((p) => resolve(p));
-}
-
-async function findJsonlFiles(dir: string): Promise<string[]> {
-  const files: string[] = [];
-  if (!existsSync(dir)) return files;
-  async function walk(current: string): Promise<void> {
-    const entries = await readdir(current, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = join(current, entry.name);
-      if (entry.isDirectory()) await walk(full);
-      else if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(full);
-    }
-  }
-  await walk(dir);
-  return files;
+  return resolveSourceRoots({
+    envValue: process.env.AITRACK_CLAUDE_PROJECTS_DIRS,
+    configValue: tryLoadConfig()?.claudeProjectsDir,
+    defaults: [
+      ...(xdg ? [join(xdg, 'claude', 'projects')] : []),
+      join(homedir(), '.config', 'claude', 'projects'),
+      join(homedir(), '.claude', 'projects'),
+    ],
+  });
 }
 
 interface ClaudeEntry {
@@ -52,63 +36,6 @@ interface ClaudeEntry {
       cache_creation_input_tokens?: number;
     };
   };
-}
-
-export function estimateClaudeCostUSD(
-  model: string,
-  usage: NonNullable<NonNullable<ClaudeEntry['message']>['usage']>,
-  usageDate?: string,
-): number {
-  const pricing = findClaudePricing(model, usageDate);
-  return (
-    ((usage.input_tokens ?? 0) * pricing.inputPerMillion +
-      (usage.output_tokens ?? 0) * pricing.outputPerMillion +
-      (usage.cache_read_input_tokens ?? 0) * pricing.cacheReadPerMillion +
-      (usage.cache_creation_input_tokens ?? 0) * pricing.cacheCreatePerMillion) /
-    1_000_000
-  );
-}
-
-// Backfill estimator for synced rows that lack a costUSD value (older data).
-// The cache vs raw-input split has already been collapsed into a single
-// inputTokens number, so we apply full input pricing — an upper bound.
-export function estimateClaudeCostFromAggregateTokens(
-  model: string,
-  inputTokens: number,
-  outputTokens: number,
-  usageDate?: string,
-): number {
-  const pricing = findClaudePricing(model, usageDate);
-  return (
-    (inputTokens * pricing.inputPerMillion + outputTokens * pricing.outputPerMillion) / 1_000_000
-  );
-}
-
-export function claudeCountsHaveCostBreakdown(counts: TokenCounts): boolean {
-  return (
-    counts.rawInputTokens !== undefined ||
-    counts.cachedInputTokens !== undefined ||
-    counts.cacheCreationInputTokens !== undefined
-  );
-}
-
-export function estimateClaudeCostFromStoredCounts(
-  model: string,
-  counts: TokenCounts,
-  usageDate?: string,
-): number | undefined {
-  if (!claudeCountsHaveCostBreakdown(counts)) return undefined;
-  const pricing = findClaudePricing(model, usageDate);
-  const cacheRead = counts.cachedInputTokens ?? 0;
-  const cacheCreate = counts.cacheCreationInputTokens ?? 0;
-  const raw = counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheCreate);
-  return (
-    (raw * pricing.inputPerMillion +
-      counts.outputTokens * pricing.outputPerMillion +
-      cacheRead * pricing.cacheReadPerMillion +
-      cacheCreate * pricing.cacheCreatePerMillion) /
-    1_000_000
-  );
 }
 
 function addClaudeUsageBreakdown(
@@ -215,17 +142,14 @@ export async function readClaudeData(): Promise<DayMap> {
   const allDays: DayMap = new Map();
 
   for (const root of roots) {
-    const files = await findJsonlFiles(root);
+    const files = await listJsonlFiles(root);
     for (const file of files) {
-      const resolved = resolve(file);
-      if (seenPaths.has(resolved)) continue;
-      seenPaths.add(resolved);
-      const dayData = await parseJsonlFile(resolved, seenMessages);
+      if (seenPaths.has(file)) continue;
+      seenPaths.add(file);
+      const dayData = await parseJsonlFile(file, seenMessages);
       mergeDayMaps(allDays, dayData);
     }
   }
 
   return allDays;
 }
-
-export { findClaudePricing as findPricing } from '../pricing/claude.js';
