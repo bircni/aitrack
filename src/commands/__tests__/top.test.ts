@@ -135,6 +135,91 @@ describe('topCommand', () => {
     expect(out).not.toContain('2025-01-01');
   });
 
+  it('days: ranks by tokens and prints JSON without a top provider when empty', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([
+          ['2026-01-01', makeDay(100, 0, undefined, 'm1')],
+          ['2026-01-02', makeDay(200, 0, undefined, 'm1')],
+        ]),
+      },
+      machineData: [],
+      fileCount: 0,
+    });
+
+    await topCommand({ kind: 'days', limit: 5, sort: 'tokens', json: true, year: 2025 });
+
+    const parsed = JSON.parse(captured()) as {
+      kind: string;
+      year: number;
+      items: Array<{ topProvider: string | null }>;
+    };
+    expect(parsed).toMatchObject({ kind: 'days', year: 2025, items: [] });
+  });
+
+  it('days: prints no-usage message when filtering removes all days', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([['2026-01-01', makeDay(100, 0, undefined, 'm1')]]),
+      },
+      machineData: [],
+      fileCount: 0,
+    });
+
+    await topCommand({ kind: 'days', limit: 5, sort: 'tokens', year: 2025 });
+
+    expect(captured()).toContain('No usage recorded.');
+  });
+
+  it('models: ranks by cost and prints no-usage when all rows are empty', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([
+          ['2026-01-01', makeDay(10, 0, 1, 'cheap')],
+          ['2026-01-02', makeDay(1, 0, 10, 'expensive')],
+        ]),
+        codex: new Map([
+          [
+            '2026-01-01',
+            {
+              inputTokens: 0,
+              outputTokens: 0,
+              byModel: { empty: { inputTokens: 0, outputTokens: 0 } },
+            },
+          ],
+        ]),
+      },
+      machineData: [],
+      fileCount: 0,
+    });
+
+    await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
+
+    const out = captured();
+    expect(out.indexOf('expensive')).toBeLessThan(out.indexOf('cheap'));
+
+    vi.mocked(console.log).mockClear();
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        codex: new Map([
+          [
+            '2026-01-01',
+            {
+              inputTokens: 0,
+              outputTokens: 0,
+              byModel: { empty: { inputTokens: 0, outputTokens: 0 } },
+            },
+          ],
+        ]),
+      },
+      machineData: [],
+      fileCount: 0,
+    });
+    await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
+
+    expect(captured()).toContain('No usage recorded.');
+  });
+
   it('emits empty message on no data', async () => {
     mocks.loadMergedProviderData.mockResolvedValue(null);
 
