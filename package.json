@@ -88,7 +88,7 @@
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-simple-import-sort": "^13.0.0",
-    "eslint-plugin-unicorn": "^70.0.0",
+    "eslint-plugin-unicorn": "^71.0.0",
     "git-cliff": "^2.13.1",
     "globals": "^17.7.0",
     "jiti": "^2.7.0",
