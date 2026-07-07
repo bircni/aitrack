@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.0] - 2026-07-07
+
+
+### Bug Fixes
+
+- Harden release readiness checks
+
+### Features
+
+- Support custom usage source directories
+- Add doctor command
+- Add sync dry run
+- Expand export periods
+- Add json output modes
+
+### Refactoring
+
+- **readers:** Centralize JSONL walking and source root resolution
+- **pricing:** Move Claude cost estimation into pricing layer
+- **cli:** Unify usage period parsing and command registration
+- **data:** Centralize empty states, sorting, and provider policy
+- **git:** Run git via spawnSync with argv arrays
+- **display:** Share heatmap layout and simplify render entrypoints
+- **commands:** Normalize JSON output and improve doctor diagnostics
+
+### Tests
+
+- Cover doctor command
+- Improve command branch coverage
+
 ## [v0.6.0] - 2026-07-05
 
 
