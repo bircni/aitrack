@@ -45,7 +45,13 @@
     {
       "files": ["**/*.ts"],
       "rules": {
+        "typescript/adjacent-overload-signatures": "error",
         "typescript/array-type": ["error", { "default": "array-simple" }],
+        "typescript/ban-tslint-comment": "error",
+        "typescript/class-literal-property-style": "error",
+        "typescript/consistent-generic-constructors": "error",
+        "typescript/consistent-indexed-object-style": "error",
+        "typescript/consistent-type-assertions": "error",
         "typescript/consistent-type-definitions": ["error", "interface"],
         "typescript/consistent-type-imports": [
           "error",
@@ -55,6 +61,12 @@
             "disallowTypeAnnotations": false
           }
         ],
+        "typescript/dot-notation": "error",
+        "typescript/no-confusing-non-null-assertion": "error",
+        "typescript/no-dynamic-delete": "error",
+        "typescript/no-empty-object-type": "error",
+        "typescript/no-explicit-any": "error",
+        "typescript/no-extraneous-class": "error",
         "typescript/no-unused-vars": [
           "error",
           {
@@ -63,6 +75,21 @@
             "varsIgnorePattern": "^_"
           }
         ],
+        "typescript/no-inferrable-types": "error",
+        "typescript/no-invalid-void-type": "error",
+        "typescript/no-namespace": "error",
+        "typescript/no-non-null-asserted-nullish-coalescing": "error",
+        "typescript/no-non-null-assertion": "error",
+        "typescript/no-require-imports": "error",
+        "typescript/no-unnecessary-boolean-literal-compare": "error",
+        "typescript/no-unnecessary-condition": "error",
+        "typescript/no-unnecessary-template-expression": "error",
+        "typescript/no-unnecessary-type-arguments": "error",
+        "typescript/no-unnecessary-type-assertion": "error",
+        "typescript/no-unnecessary-type-constraint": "error",
+        "typescript/no-unnecessary-type-conversion": "error",
+        "typescript/no-unnecessary-type-parameters": "error",
+        "typescript/no-unsafe-enum-comparison": "error",
         "typescript/no-floating-promises": ["error", { "ignoreVoid": true, "ignoreIIFE": false }],
         "typescript/no-misused-promises": [
           "error",
@@ -78,6 +105,18 @@
         "typescript/no-unsafe-call": "error",
         "typescript/no-unsafe-member-access": "error",
         "typescript/no-unsafe-return": "error",
+        "typescript/non-nullable-type-assertion-style": "error",
+        "typescript/prefer-find": "error",
+        "typescript/prefer-for-of": "error",
+        "typescript/prefer-function-type": "error",
+        "typescript/prefer-literal-enum-member": "error",
+        "typescript/prefer-optional-chain": "error",
+        "typescript/prefer-reduce-type-parameter": "error",
+        "typescript/prefer-regexp-exec": "error",
+        "typescript/prefer-return-this-type": "error",
+        "typescript/prefer-string-starts-ends-with": "error",
+        "typescript/unified-signatures": "error",
+        "typescript/use-unknown-in-catch-callback-variable": "error",
         "eqeqeq": ["error", "always"],
         "no-implicit-coercion": "error",
         "no-var": "error",

@@ -188,9 +188,9 @@ describe('showCommand', () => {
     await showCommand({ providers: ['claude_code', 'codex'] });
 
     const providerData = getRenderedProviderData();
-    const day = providerData.claude_code.get('2024-01-01');
+    const day = providerData.claude_code?.get('2024-01-01');
     expect(day?.costUSD).toBeCloseTo(4.5, 5);
-    expect(day?.byModel['claude-sonnet-4'].costUSD).toBeCloseTo(4.5, 5);
+    expect(day?.byModel['claude-sonnet-4']?.costUSD).toBeCloseTo(4.5, 5);
   });
 
   it('renders a terminal table and skips PNG generation when --tui is set', async () => {
@@ -252,8 +252,8 @@ describe('showCommand', () => {
     await showCommand({ providers: ['claude_code', 'codex'] });
 
     const providerData = getRenderedProviderData();
-    const day = providerData.claude_code.get('2024-01-01');
+    const day = providerData.claude_code?.get('2024-01-01');
     expect(day?.costUSD).toBeCloseTo(0.3);
-    expect(day?.byModel.claude.costUSD).toBeCloseTo(0.3);
+    expect(day?.byModel.claude?.costUSD).toBeCloseTo(0.3);
   });
 });

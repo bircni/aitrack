@@ -55,9 +55,8 @@ describe('validateMachineFile', () => {
 
   it('warns and returns null for invalid cache breakdown fields', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = structuredClone(validMachine) as Record<string, unknown>;
-    const days = invalid.days as Record<string, Record<string, Record<string, unknown>>>;
-    const model = days['2026-01-15'].claude_code.byModel['claude-sonnet-4'] as Record<
+    const invalid = structuredClone(validMachine);
+    const model = invalid.days['2026-01-15'].claude_code.byModel['claude-sonnet-4'] as Record<
       string,
       unknown
     >;
@@ -124,7 +123,8 @@ describe('validateMachineFile', () => {
   it('warns and returns null when byModel is not an object', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const invalid = structuredClone(validMachine);
-    invalid.days['2026-01-15'].claude_code.byModel = [] as unknown as Record<string, unknown>;
+    const provider = invalid.days['2026-01-15'].claude_code as { byModel: unknown };
+    provider.byModel = [];
     expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('byModel must be an object'));
     warn.mockRestore();

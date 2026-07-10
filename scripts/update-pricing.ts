@@ -36,7 +36,9 @@ function pricesAt(html: string, hits: number[], windowSize: number): number[] {
     const re = /\$([\d.]+)/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(window)) !== null) {
-      const v = parseFloat(m[1]);
+      const amount = m[1];
+      if (amount === undefined) continue;
+      const v = parseFloat(amount);
       if (!Number.isNaN(v)) found.push(v);
     }
   }
@@ -57,8 +59,11 @@ async function fetchHtml(url: string): Promise<string> {
 function claudeHeading(modelId: string): string {
   const m = /^claude-(opus|sonnet|haiku)-(\d+)(?:-(\d+))?$/.exec(modelId);
   if (!m) return modelId;
-  const family = m[1].charAt(0).toUpperCase() + m[1].slice(1);
-  const version = m[3] ? `${m[2]}.${m[3]}` : m[2];
+  const familyId = m[1];
+  const majorVersion = m[2];
+  if (familyId === undefined || majorVersion === undefined) return modelId;
+  const family = familyId.charAt(0).toUpperCase() + familyId.slice(1);
+  const version = m[3] ? `${majorVersion}.${m[3]}` : majorVersion;
   return `Claude ${family} ${version}`;
 }
 
@@ -79,7 +84,10 @@ function discoverClaudeModelsOnPage(html: string): string[] {
     if (after && /[\d.]/.test(after)) continue;
     const prices = pricesAt(html, [m.index], 800);
     if (prices.length === 0) continue;
-    found.add(claudeModelId(m[1], m[2]));
+    const family = m[1];
+    const version = m[2];
+    if (family === undefined || version === undefined) continue;
+    found.add(claudeModelId(family, version));
   }
   return [...found].sort((a, b) => a.localeCompare(b));
 }
@@ -145,7 +153,7 @@ async function checkCodex(): Promise<{ drift: number; unverified: number }> {
     html = await fetchHtml(CODEX_PRICING_URL);
   } catch (error) {
     console.error('Fetch failed:', (error as Error).message);
-    return { drift: 1, unverified: 0, missing: 0 };
+    return { drift: 1, unverified: 0 };
   }
 
   let drift = 0;
