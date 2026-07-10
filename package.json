@@ -2,37 +2,32 @@
   "name": "aitrack",
   "version": "1.0.0",
   "description": "Track and visualize your Claude Code, Codex & Cursor usage and cost — heatmaps, stats, and multi-machine sync over a git repo you own.",
-  "author": "Nicolas <bircni@icloud.com>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/bircni/aitrack.git"
-  },
+  "keywords": [
+    "ai",
+    "ai-usage",
+    "claude",
+    "claude-code",
+    "cli",
+    "codex",
+    "cost-tracking",
+    "cursor",
+    "developer-tools",
+    "git-sync",
+    "heatmap",
+    "openai",
+    "token-usage",
+    "tui",
+    "usage"
+  ],
   "homepage": "https://github.com/bircni/aitrack#readme",
   "bugs": {
     "url": "https://github.com/bircni/aitrack/issues"
   },
-  "keywords": [
-    "ai",
-    "claude",
-    "claude-code",
-    "codex",
-    "openai",
-    "cursor",
-    "usage",
-    "token-usage",
-    "ai-usage",
-    "cost-tracking",
-    "heatmap",
-    "git-sync",
-    "developer-tools",
-    "tui",
-    "cli"
-  ],
-  "type": "module",
-  "packageManager": "pnpm@11.9.0+sha512.9a36518224080c6fe5165afdcfe79bfa118c29be703f3f462b1e32efe1e98e47e8750b148e08286250aad4113cc7993ca413c4e2cd447752708c2ee5751bc95f",
-  "engines": {
-    "node": ">=24"
+  "license": "MIT",
+  "author": "Nicolas <bircni@icloud.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bircni/aitrack.git"
   },
   "bin": {
     "aitrack": "./dist/cli.js"
@@ -42,17 +37,18 @@
     "README.md",
     "!dist/**/*.test.js"
   ],
+  "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "pnpm run clean && tsc",
+    "build": "pnpm run clean && tsc -p tsconfig.build.json",
     "dev": "tsx src/cli.ts",
-    "lint": "eslint . --max-warnings 0",
-    "format": "prettier . --write",
-    "format:check": "prettier . --check",
-    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --type-aware --max-warnings=0",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json",
     "test": "vitest run",
     "test:smoke": "vitest run src/cli/__tests__/smoke.test.ts",
     "pricing:check": "tsx scripts/update-pricing.ts",
@@ -66,9 +62,6 @@
     "commitlint": "commitlint --edit",
     "prepare": "simple-git-hooks || true"
   },
-  "simple-git-hooks": {
-    "commit-msg": "pnpm exec commitlint --edit \"$1\""
-  },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.2",
     "chalk": "^5.6.2",
@@ -79,25 +72,25 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.0",
     "@commitlint/config-conventional": "^21.2.0",
-    "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.0",
     "@types/pdfkit": "^0.17.6",
     "@types/prompts": "^2.4.9",
     "@vitest/coverage-v8": "^4.1.9",
-    "@vitest/eslint-plugin": "^1.6.20",
-    "eslint": "^10.6.0",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-simple-import-sort": "^13.0.0",
-    "eslint-plugin-unicorn": "^70.0.0",
     "git-cliff": "^2.13.1",
-    "globals": "^17.7.0",
-    "jiti": "^2.7.0",
     "knip": "^6.24.0",
-    "prettier": "^3.9.4",
+    "oxfmt": "^0.58.0",
+    "oxlint": "^1.73.0",
+    "oxlint-tsgolint": "^0.24.0",
     "simple-git-hooks": "^2.13.1",
     "tsx": "^4.23.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.0",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.9"
-  }
+  },
+  "simple-git-hooks": {
+    "commit-msg": "pnpm exec commitlint --edit \"$1\""
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.9.0+sha512.9a36518224080c6fe5165afdcfe79bfa118c29be703f3f462b1e32efe1e98e47e8750b148e08286250aad4113cc7993ca413c4e2cd447752708c2ee5751bc95f"
 }

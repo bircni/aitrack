@@ -47,9 +47,9 @@ Commits **must** follow [Conventional Commits](https://www.conventionalcommits.o
 | `pnpm run test`         | Run tests                                              |
 | `pnpm run coverage`     | Run tests with coverage                                |
 | `pnpm run build`        | Compile TypeScript to `dist/`                          |
-| `pnpm run lint`         | ESLint                                                 |
-| `pnpm run format`       | Prettier write                                         |
-| `pnpm run format:check` | Prettier check                                         |
+| `pnpm run lint`         | oxlint (type-aware)                                    |
+| `pnpm run format`       | oxfmt write                                            |
+| `pnpm run format:check` | oxfmt check                                            |
 
 ## Releasing
 

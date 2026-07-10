@@ -1,8 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "noUncheckedIndexedAccess": true
-  },
-  "include": ["*.config.ts", "src/**/*.ts", "scripts/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
-}

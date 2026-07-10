@@ -124,9 +124,10 @@ export async function readCursorAuthState(databasePath: string): Promise<CursorA
     return readCursorAuthStateFromDatabase(databasePath);
   } catch (error) {
     if (!isSqliteLockedError(error)) throw error;
-    return withCursorStateSnapshot(databasePath, (snapshotPath) =>
+    const state = await withCursorStateSnapshot(databasePath, (snapshotPath) =>
       readCursorAuthStateFromDatabase(snapshotPath),
     );
+    return state;
   }
 }
 

@@ -175,7 +175,9 @@ describe('buildProgram', () => {
       const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
       const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       runAsync(() => Promise.reject(new Error('boom')));
-      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
       expect(error).toHaveBeenCalledWith('boom');
       expect(exit).toHaveBeenCalledWith(1);
     });

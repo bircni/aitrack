@@ -7,10 +7,11 @@ updates:
       day: 'monday'
     open-pull-requests-limit: 10
     groups:
-      typescript-eslint:
+      oxc:
         patterns:
-          - 'typescript-eslint'
-          - '@typescript-eslint/*'
+          - 'oxlint'
+          - 'oxfmt'
+          - 'oxlint-tsgolint'
       vitest:
         patterns:
           - 'vitest'
@@ -23,8 +24,9 @@ updates:
           - 'minor'
           - 'patch'
         exclude-patterns:
-          - 'typescript-eslint'
-          - '@typescript-eslint/*'
+          - 'oxlint'
+          - 'oxfmt'
+          - 'oxlint-tsgolint'
           - 'vitest'
           - '@vitest/*'
           - '@types/*'

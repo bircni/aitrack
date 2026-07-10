@@ -61,7 +61,9 @@ describe('daemon HTTP integration', () => {
   });
 
   afterEach(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
     exitSpy.mockRestore();
   });
 
