@@ -143,8 +143,21 @@ function decodeJwtPayload(token: string): { sub?: string } | null {
   }
 }
 
-function getCursorWebBaseUrl(): string {
-  return (environmentValue(CURSOR_WEB_BASE_URL_ENV) ?? 'https://cursor.com').replace(/\/+$/, '');
+function getCursorWebBaseUrl(): URL {
+  const configured = environmentValue(CURSOR_WEB_BASE_URL_ENV) ?? 'https://cursor.com';
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new Error(`${CURSOR_WEB_BASE_URL_ENV} must be a valid HTTPS URL`);
+  }
+  if (url.protocol !== 'https:') {
+    throw new Error(`${CURSOR_WEB_BASE_URL_ENV} must use HTTPS before Cursor credentials are sent`);
+  }
+  if (url.username !== '' || url.password !== '') {
+    throw new Error(`${CURSOR_WEB_BASE_URL_ENV} must not contain embedded credentials`);
+  }
+  return url;
 }
 
 function buildCookieHeaderValue(cookieValue: string): string {
