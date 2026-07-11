@@ -41,6 +41,14 @@ export function parsePositiveIntArg(value: string): number {
   return n;
 }
 
+export function parsePortArg(value: string): number {
+  const port = parsePositiveIntArg(value);
+  if (port > 65_535) {
+    throw new InvalidArgumentError(`Expected a port between 1 and 65535, got: ${value}`);
+  }
+  return port;
+}
+
 export function parsePositiveInt(value: string): number | undefined {
   if (!/^\d+$/.test(value)) return undefined;
   const n = Number(value);

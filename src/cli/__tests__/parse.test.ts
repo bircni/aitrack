@@ -8,6 +8,7 @@ import {
   parseIntArg as parseIntArgument,
   parsePositiveInt,
   parsePositiveIntArg as parsePositiveIntArgument,
+  parsePortArg as parsePortArgument,
   parseProviders,
   parseTopKind,
   parseTopLimit,
@@ -37,6 +38,8 @@ describe('cli parse helpers', () => {
     expect(parsePositiveIntArgument('42')).toBe(42);
     expect(() => parsePositiveIntArgument('0')).toThrow('Expected a positive integer');
     expect(() => parsePositiveIntArgument('-1')).toThrow(InvalidArgumentError);
+    expect(parsePortArgument('9089')).toBe(9089);
+    expect(() => parsePortArgument('65536')).toThrow('between 1 and 65535');
   });
 
   it('parses positive integers for usage last N', () => {

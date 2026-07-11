@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { Command } from 'commander';
 
-import { configCommand } from '../commands/config.js';
+import { CONFIG_KEYS, configCommand } from '../commands/config.js';
 import { daemonCommand } from '../commands/daemon.js';
 import { doctorCommand } from '../commands/doctor.js';
 import { exportCommand } from '../commands/export.js';
@@ -16,6 +16,7 @@ import { topCommand } from '../commands/top.js';
 import {
   cliErrorMessage,
   parseIntArg as parseIntArgument,
+  parsePortArg as parsePortArgument,
   parsePositiveIntArg as parsePositiveIntArgument,
   parseProviders,
   parseTopKind,
@@ -172,10 +173,11 @@ export function buildProgram(): Command {
   program
     .command('daemon')
     .description('Run a local HTTP dashboard that refreshes usage data on an interval')
-    .option('--port <port>', 'HTTP listen port', parsePositiveIntArgument)
+    .option('--port <port>', 'HTTP listen port', parsePortArgument)
     .option('--interval <seconds>', 'seconds between data refresh ticks', parsePositiveIntArgument)
     .option('--host <host>', 'bind address', '127.0.0.1')
     .option('--sync', 'pull and push local data on each refresh tick')
+    .option('--no-sync', 'disable configured sync-on-refresh')
     .option('--dark', 'dark mode dashboard')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
@@ -279,9 +281,7 @@ export function buildProgram(): Command {
 
   config
     .command('set <key> <value>')
-    .description(
-      'Set a configuration value (keys: repoUrl, machineId, claudeProjectsDir, codexSessionsDir)',
-    )
+    .description(`Set a configuration value (keys: ${CONFIG_KEYS.join(', ')})`)
     .action((key: string, value: string) => {
       runAsync(() => configCommand({ action: 'set', key, value }));
     });

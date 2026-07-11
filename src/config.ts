@@ -26,7 +26,12 @@ function validateDaemon(value: unknown): Config['daemon'] | undefined {
     daemon.sync = value.sync;
   }
   if (value.port !== undefined) {
-    if (typeof value.port !== 'number' || !Number.isSafeInteger(value.port) || value.port < 1) {
+    if (
+      typeof value.port !== 'number' ||
+      !Number.isSafeInteger(value.port) ||
+      value.port < 1 ||
+      value.port > 65_535
+    ) {
       return undefined;
     }
     daemon.port = value.port;
