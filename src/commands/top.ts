@@ -190,7 +190,19 @@ export async function topCommand(options: TopOptions): Promise<void> {
   });
 
   if (!loaded) {
-    console.log(usageEmptyMessage(isUsageNotConfigured()));
+    const message = usageEmptyMessage(isUsageNotConfigured());
+    if (options.json) {
+      printJsonCommand('top', {
+        kind: options.kind,
+        sort: options.sort,
+        limit: options.limit,
+        year: options.year ?? null,
+        items: [],
+        message,
+      });
+    } else {
+      console.log(message);
+    }
     return;
   }
 

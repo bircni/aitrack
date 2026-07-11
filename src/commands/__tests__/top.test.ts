@@ -232,4 +232,18 @@ describe('topCommand', () => {
 
     expect(captured()).toContain('No data.');
   });
+
+  it('emits valid empty JSON on no data', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue(null);
+
+    await topCommand({ kind: 'models', limit: 5, sort: 'cost', json: true });
+
+    expect(JSON.parse(captured())).toMatchObject({
+      command: 'top',
+      kind: 'models',
+      sort: 'cost',
+      limit: 5,
+      items: [],
+    });
+  });
 });

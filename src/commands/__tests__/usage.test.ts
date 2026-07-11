@@ -118,6 +118,31 @@ describe('usageCommand', () => {
     expect(parsed.totals).toMatchObject({ tokens: 1200, costUSD: 1.2 });
   });
 
+  it('prints valid JSON for empty data and empty windows', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue(null);
+    await usageCommand({ period: 'today', json: true });
+    expect(JSON.parse(output())).toMatchObject({
+      command: 'usage',
+      windowLabel: null,
+      providers: [],
+      rowCount: 0,
+      totals: { tokens: 0 },
+    });
+
+    vi.mocked(console.log).mockClear();
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: { claude_code: new Map([['2020-01-01', makeDay(10, 0)]]) },
+      machineData: [],
+      fileCount: 0,
+    });
+    await usageCommand({ period: 'today', json: true });
+    expect(JSON.parse(output())).toMatchObject({
+      command: 'usage',
+      providers: [],
+      rowCount: 0,
+    });
+  });
+
   it('today: prints no-usage message when no entry for today exists', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {

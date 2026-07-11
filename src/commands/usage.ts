@@ -22,18 +22,26 @@ interface Row {
 export async function usageCommand(options: UsageOptions): Promise<void> {
   const report = await buildUsageReport(options);
 
-  if (!report || report.rowCount === 0) {
-    console.log(emptyReportMessage(report));
+  if (options.json) {
+    const emptyTotals = {
+      inputTokens: 0,
+      outputTokens: 0,
+      tokens: 0,
+      costUSD: 0,
+      hasCost: false,
+    };
+    printJsonCommand('usage', {
+      windowLabel: report?.windowLabel ?? null,
+      providers: report?.providers ?? [],
+      totals: report?.totals ?? emptyTotals,
+      rowCount: report?.rowCount ?? 0,
+      ...(emptyReportMessage(report) !== null && { message: emptyReportMessage(report) }),
+    });
     return;
   }
 
-  if (options.json) {
-    printJsonCommand('usage', {
-      windowLabel: report.windowLabel,
-      providers: report.providers,
-      totals: report.totals,
-      rowCount: report.rowCount,
-    });
+  if (!report || report.rowCount === 0) {
+    console.log(emptyReportMessage(report));
     return;
   }
 

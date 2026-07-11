@@ -127,4 +127,20 @@ describe('machinesCommand', () => {
 
     expect(captured()).toContain('No data.');
   });
+
+  it('prints valid JSON when no machine data exists', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {},
+      machineData: [],
+      fileCount: 0,
+    });
+
+    await machinesCommand({ json: true });
+
+    expect(JSON.parse(captured())).toMatchObject({
+      command: 'machines',
+      machines: [],
+      message: 'No data.',
+    });
+  });
 });
