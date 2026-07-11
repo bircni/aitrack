@@ -4,6 +4,9 @@
 // Run: `pnpm run pricing:check`
 // Exits 0 if everything matches, 1 if drift is detected.
 
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { CLAUDE_PRICING_BY_ID, type ClaudePricing } from '../src/pricing/claude.js';
 import {
   CODEX_PRICING_BY_ID,
@@ -60,7 +63,7 @@ async function fetchHtml(url: string): Promise<string> {
 // ── Claude ────────────────────────────────────────────────────────────────
 
 // `claude-opus-4-7` -> `Claude Opus 4.7`
-function claudeHeading(modelId: string): string {
+export function claudeHeading(modelId: string): string {
   const m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?$/.exec(modelId);
   if (!m) return modelId;
   const familyId = m[1];
@@ -79,7 +82,7 @@ function claudeModelId(family: string, version: string): string {
 }
 
 // Scan the docs page for priced Claude models we don't track yet.
-function discoverClaudeModelsOnPage(html: string): string[] {
+export function discoverClaudeModelsOnPage(html: string): string[] {
   const re = /Claude (Opus|Sonnet|Haiku|Fable|Mythos) (\d+(?:\.\d+)?)/g;
   const found = new Set<string>();
   let m: RegExpExecArray | null;
@@ -150,22 +153,67 @@ function codexSummary(p: CodexPricing): string {
   return `$${p.inputPerMillion}/${p.outputPerMillion}`;
 }
 
-// Scan the docs page for priced Codex models we don't track yet. Suffix is
-// open-ended (`-mini`, `-nano`, `-codex-max`, `-luna`, `-sol`, ...) since
-// OpenAI names new tiers/snapshots freely; boundary check below keeps this
-// from swallowing unrelated trailing text.
-function discoverCodexModelsOnPage(html: string): string[] {
-  const re = /gpt-\d+(?:\.\d+)?(?:-[a-z]+)*/g;
-  const found = new Set<string>();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    const after = html[m.index + m[0].length];
-    if (after && /[\w.-]/.test(after)) continue;
-    const prices = pricesAt(html, [m.index], 3000);
-    if (prices.length === 0) continue;
-    found.add(m[0]);
+interface CodexPricingRow {
+  modelId: string;
+  prices: number[];
+}
+
+function codexPricingRows(html: string): CodexPricingRow[] {
+  const rowPattern = /\[1,\[\[0,&quot;([^[]*?)&quot;\]/g;
+  const matches = [...html.matchAll(rowPattern)];
+  const rows: CodexPricingRow[] = [];
+
+  for (const [index, match] of matches.entries()) {
+    const label = match[1];
+    if (!label) continue;
+    const modelMatch = /^(gpt-\d+(?:\.\d+)?(?:-[a-z0-9]+)*)(?:\s|$)/i.exec(label);
+    const modelId = modelMatch?.[1]?.toLowerCase();
+    if (!modelId) continue;
+
+    const rowStart = match.index + match[0].length;
+    const rowEnd = matches[index + 1]?.index ?? html.length;
+    const rowHtml = html.slice(rowStart, rowEnd);
+    const prices = [...rowHtml.matchAll(/\[0,(-?\d+(?:\.\d+)?)\]/g)].flatMap((priceMatch) => {
+      const raw = priceMatch[1];
+      if (!raw) return [];
+      const price = Number(raw);
+      return Number.isFinite(price) ? [price] : [];
+    });
+    rows.push({ modelId, prices });
   }
-  return [...found].sort((a, b) => a.localeCompare(b));
+
+  return rows;
+}
+
+function standardPricingPane(html: string): string {
+  const paneMarker = '<div data-content-switcher-pane="true" data-value="standard">';
+  const start = html.indexOf(paneMarker);
+  if (start === -1) return '';
+  const next = html.indexOf('<div data-content-switcher-pane="true"', start + paneMarker.length);
+  return html.slice(start, next === -1 ? html.length : next);
+}
+
+export function discoverCodexModelsOnPage(html: string): string[] {
+  const isCurrentVersion = (modelId: string, minimumGpt5Minor: number): boolean => {
+    const match = /^gpt-(\d+)(?:\.(\d+))?/.exec(modelId);
+    if (!match?.[1]) return false;
+    const major = Number(match[1]);
+    if (major > 5) return true;
+    return major === 5 && match[2] !== undefined && Number(match[2]) >= minimumGpt5Minor;
+  };
+  const currentStandardRows = codexPricingRows(standardPricingPane(html)).filter((row) =>
+    isCurrentVersion(row.modelId, 4),
+  );
+  const codexSpecificRows = codexPricingRows(html).filter(
+    (row) => /-codex(?:-|$)/.test(row.modelId) && isCurrentVersion(row.modelId, 3),
+  );
+  return [
+    ...new Set(
+      [...currentStandardRows, ...codexSpecificRows]
+        .filter((row) => row.prices.length >= 2)
+        .map((row) => row.modelId),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
 }
 
 async function checkCodex(): Promise<{ drift: number; unverified: number; missing: number }> {
@@ -180,14 +228,10 @@ async function checkCodex(): Promise<{ drift: number; unverified: number; missin
 
   let drift = 0;
   let unverified = 0;
+  let missing = 0;
+  const rows = codexPricingRows(html);
   for (const [modelId, pricing] of Object.entries(CODEX_PRICING_CURRENT)) {
-    // Boundary: any char that can't continue a model id (digit, dot, dash,
-    // letter) ends the match. This keeps `gpt-5` from matching `gpt-5.1` and
-    // `gpt-5.1-codex` from matching `gpt-5.1-codex-mini`.
-    const hits = findHits(html, modelId, (c) => !/[\w.-]/.test(c));
-    // Pricing table cells have a lot of inline-style boilerplate between
-    // the model name and the price, so use a generous window.
-    const found = pricesAt(html, hits, 3000);
+    const found = rows.find((row) => row.modelId === modelId)?.prices ?? [];
     if (found.length === 0) {
       console.log(`? ${modelId.padEnd(22)} ${codexSummary(pricing)}  — "${modelId}" not on page`);
       unverified++;
@@ -205,14 +249,12 @@ async function checkCodex(): Promise<{ drift: number; unverified: number; missin
     }
   }
 
-  let missing = 0;
   const known = new Set(Object.keys(CODEX_PRICING_BY_ID));
   for (const modelId of discoverCodexModelsOnPage(html)) {
     if (known.has(modelId)) continue;
     console.log(`+ ${modelId.padEnd(22)} — on docs page but missing from src/pricing/codex.ts`);
     missing++;
   }
-
   return { drift, unverified, missing };
 }
 
@@ -243,11 +285,14 @@ async function main(): Promise<number> {
   return totalDrift > 0 || totalMissing > 0 ? 1 : 0;
 }
 
-main()
-  .then((code) => {
-    process.exit(code);
-  })
-  .catch((error: unknown) => {
-    console.error(error);
-    process.exit(1);
-  });
+const entryPoint = process.argv[1];
+if (entryPoint && import.meta.url === pathToFileURL(resolve(entryPoint)).href) {
+  main()
+    .then((code) => {
+      process.exit(code);
+    })
+    .catch((error: unknown) => {
+      console.error(error);
+      process.exit(1);
+    });
+}

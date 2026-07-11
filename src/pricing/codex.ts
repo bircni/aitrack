@@ -5,7 +5,7 @@
 //   https://openrouter.ai/openai/gpt-5.1-codex
 // Codex sessions report aggregate input/output tokens plus a cached-input subset,
 // which is billed at 10% of the base input rate.
-// Last updated: 2026-05.
+// Last updated: 2026-07.
 
 export interface CodexPricing {
   inputPerMillion: number;
@@ -19,9 +19,11 @@ export const CODEX_PRICING_CURRENT: Record<string, CodexPricing> = {
   'gpt-5.6-terra': { inputPerMillion: 2.5, outputPerMillion: 15 },
   'gpt-5.6-luna': { inputPerMillion: 1, outputPerMillion: 6 },
   'gpt-5.5': { inputPerMillion: 5, outputPerMillion: 30 },
+  'gpt-5.5-pro': { inputPerMillion: 30, outputPerMillion: 180 },
   'gpt-5.4': { inputPerMillion: 2.5, outputPerMillion: 15 },
   'gpt-5.4-mini': { inputPerMillion: 0.75, outputPerMillion: 4.5 },
   'gpt-5.4-nano': { inputPerMillion: 0.2, outputPerMillion: 1.25 },
+  'gpt-5.4-pro': { inputPerMillion: 30, outputPerMillion: 180 },
   'gpt-5.3-codex': { inputPerMillion: 1.75, outputPerMillion: 14 },
   'gpt-5-codex': { inputPerMillion: 1.25, outputPerMillion: 10 },
 };
