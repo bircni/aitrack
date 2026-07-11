@@ -51,6 +51,16 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(day.outputTokens).toBe(30);
   });
 
+  it('preserves legacy rows that only expose aggregate Tokens', () => {
+    const map = aggregateCursorCsvToDayMap('Date,Model,Tokens\n2024-01-10,gpt-4o,200');
+
+    expect(map.get('2024-01-10')).toEqual({
+      inputTokens: 200,
+      outputTokens: 0,
+      byModel: { 'gpt-4o': { inputTokens: 200, outputTokens: 0 } },
+    });
+  });
+
   it('accumulates multiple rows on the same date', () => {
     const csv = makeCsv('2024-01-10,gpt-4o,100,0,0,50,150', '2024-01-10,gpt-4o,200,0,0,100,300');
     const map = aggregateCursorCsvToDayMap(csv);
