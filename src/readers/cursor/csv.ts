@@ -75,9 +75,16 @@ function createCursorTokenTotals(row: CursorCsvRow): { input: number; output: nu
   const inputWithoutCacheWrite = parseCursorNumber(row['Input (w/o Cache Write)']) ?? 0;
   const cacheInput = parseCursorNumber(row['Cache Read']) ?? 0;
   const outputTokens = parseCursorNumber(row['Output Tokens']) ?? 0;
+  const inputTokens = inputWithCacheWrite + inputWithoutCacheWrite + cacheInput;
+
+  // Older exports only expose an aggregate Tokens column. Preserve their total
+  // as input when no input/output breakdown is available.
+  if (inputTokens === 0 && outputTokens === 0) {
+    return { input: total, output: 0 };
+  }
 
   return {
-    input: inputWithCacheWrite + inputWithoutCacheWrite + cacheInput,
+    input: inputTokens,
     output: outputTokens,
   };
 }
