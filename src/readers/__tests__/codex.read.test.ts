@@ -59,6 +59,50 @@ describe('readCodexData', () => {
     expect(day?.costUSD).toBeCloseTo(0.000105);
   });
 
+  it('keeps model and day transitions separate within one session', async () => {
+    const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
+    mkdirSync(sessionDir, { recursive: true });
+    jsonl(join(sessionDir, 'a.jsonl'), [
+      {
+        type: 'turn_context',
+        timestamp: new Date(2024, 0, 15, 10).toISOString(),
+        payload: { model: 'gpt-5.1-codex' },
+      },
+      {
+        type: 'event_msg',
+        timestamp: new Date(2024, 0, 15, 10, 1).toISOString(),
+        payload: {
+          type: 'token_count',
+          info: { total_token_usage: { input_tokens: 100, output_tokens: 10 } },
+        },
+      },
+      {
+        type: 'turn_context',
+        timestamp: new Date(2024, 0, 16, 10).toISOString(),
+        payload: { model: 'gpt-5.4' },
+      },
+      {
+        type: 'event_msg',
+        timestamp: new Date(2024, 0, 16, 10, 1).toISOString(),
+        payload: {
+          type: 'token_count',
+          info: { total_token_usage: { input_tokens: 250, output_tokens: 25 } },
+        },
+      },
+    ]);
+
+    const result = await readCodexData();
+
+    expect(result.get('2024-01-15')?.byModel['gpt-5.1-codex']).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 10,
+    });
+    expect(result.get('2024-01-16')?.byModel['gpt-5.4']).toMatchObject({
+      inputTokens: 150,
+      outputTokens: 15,
+    });
+  });
+
   it('deduplicates the same resolved CODEX_HOME and homedir session root', async () => {
     process.env.CODEX_HOME = join(TEST_HOME, '.codex');
     const sessionDir = join(TEST_HOME, '.codex', 'sessions');
