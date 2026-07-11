@@ -89,6 +89,60 @@ describe('validateMachineFile', () => {
     warn.mockRestore();
   });
 
+  it('rejects provider totals that do not equal the by-model token sum', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const invalid = structuredClone(validMachine);
+    invalid.days['2026-01-15'].claude_code.totals.inputTokens = 101;
+
+    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('totals.inputTokens must equal the sum of byModel.inputTokens'),
+    );
+    warn.mockRestore();
+  });
+
+  it('rejects cache-breakdown totals that do not equal the by-model sum', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const invalid = structuredClone(validMachine);
+    const provider = invalid.days['2026-01-15'].claude_code;
+    (provider.totals as Record<string, unknown>).cachedInputTokens = 10;
+    (provider.byModel['claude-sonnet-4'] as Record<string, unknown>).cachedInputTokens = 9;
+
+    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'totals.cachedInputTokens must equal the sum of byModel.cachedInputTokens',
+      ),
+    );
+    warn.mockRestore();
+  });
+
+  it('rejects a stale aggregate cost but lets recompute load it for repair', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const stale = structuredClone(validMachine);
+    stale.days['2026-01-15'].claude_code.totals.costUSD = 99;
+
+    expect(validateMachineFile(stale, 'data/stale.json')).toBeNull();
+    expect(
+      validateMachineFile(stale, 'data/stale.json', { allowInconsistentCostTotals: true }),
+    ).toEqual(stale);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('totals.costUSD must equal the sum of byModel.costUSD'),
+    );
+    warn.mockRestore();
+  });
+
+  it('accepts a legacy aggregate cost when by-model costs are absent', () => {
+    const legacy = structuredClone(validMachine);
+    delete (
+      legacy.days['2026-01-15'].claude_code.byModel['claude-sonnet-4'] as {
+        costUSD?: number;
+      }
+    ).costUSD;
+
+    expect(validateMachineFile(legacy, 'data/legacy.json')).toEqual(legacy);
+  });
+
   it('warns and returns null when root is not an object', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     expect(validateMachineFile(null, 'data/bad.json')).toBeNull();
