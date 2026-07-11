@@ -1,3 +1,4 @@
+import { InvalidArgumentError } from 'commander';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,6 +7,7 @@ import {
   isValidDateString,
   parseIntArg as parseIntArgument,
   parsePositiveInt,
+  parsePositiveIntArg as parsePositiveIntArgument,
   parseProviders,
   parseTopKind,
   parseTopLimit,
@@ -29,8 +31,12 @@ describe('cli parse helpers', () => {
   it('parses integer CLI arguments', () => {
     expect(parseIntArgument('42')).toBe(42);
     expect(() => parseIntArgument('nope')).toThrow('Expected an integer, got: nope');
+    expect(() => parseIntArgument('nope')).toThrow(InvalidArgumentError);
     expect(() => parseIntArgument('123abc')).toThrow('Expected an integer, got: 123abc');
     expect(() => parseIntArgument('1.5')).toThrow('Expected an integer, got: 1.5');
+    expect(parsePositiveIntArgument('42')).toBe(42);
+    expect(() => parsePositiveIntArgument('0')).toThrow('Expected a positive integer');
+    expect(() => parsePositiveIntArgument('-1')).toThrow(InvalidArgumentError);
   });
 
   it('parses positive integers for usage last N', () => {

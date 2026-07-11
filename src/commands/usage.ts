@@ -23,6 +23,7 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   const report = await buildUsageReport(options);
 
   if (options.json) {
+    const message = emptyReportMessage(report);
     const emptyTotals = {
       inputTokens: 0,
       outputTokens: 0,
@@ -35,7 +36,7 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
       providers: report?.providers ?? [],
       totals: report?.totals ?? emptyTotals,
       rowCount: report?.rowCount ?? 0,
-      ...(emptyReportMessage(report) !== null && { message: emptyReportMessage(report) }),
+      ...(message !== null && { message }),
     });
     return;
   }

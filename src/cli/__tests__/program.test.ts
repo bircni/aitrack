@@ -72,13 +72,14 @@ describe('buildProgram', () => {
   });
 
   it('maps show options', async () => {
-    await run('show', '--tui', '--dark', '--providers', 'claude,codex');
+    await run('show', '--tui', '--dark', '--providers', 'claude,codex', '--year', '2026');
     expect(mocks.showCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         tui: true,
         dark: true,
         providers: ['claude_code', 'codex'],
         output: 'aitrack.png',
+        year: 2026,
       }),
     );
   });
@@ -167,6 +168,16 @@ describe('buildProgram', () => {
 
     it('rejects invalid usage last days', async () => {
       await expect(run('usage', 'last', '0')).rejects.toThrow('exit');
+    });
+
+    it('rejects malformed and non-positive numeric options', async () => {
+      await expect(run('show', '--year', '2026junk')).rejects.toThrow('exit');
+      await expect(run('daemon', '--port', '0')).rejects.toThrow('exit');
+      await expect(run('daemon', '--interval', '-1')).rejects.toThrow('exit');
+      await expect(run('top', '--year', '0')).rejects.toThrow('exit');
+      expect(mocks.showCommand).not.toHaveBeenCalled();
+      expect(mocks.daemonCommand).not.toHaveBeenCalled();
+      expect(mocks.topCommand).not.toHaveBeenCalled();
     });
   });
 

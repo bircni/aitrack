@@ -16,6 +16,7 @@ import { topCommand } from '../commands/top.js';
 import {
   cliErrorMessage,
   parseIntArg as parseIntArgument,
+  parsePositiveIntArg as parsePositiveIntArgument,
   parseProviders,
   parseTopKind,
   parseTopLimit,
@@ -87,7 +88,7 @@ export function buildProgram(): Command {
 
   program
     .name('aitrack')
-    .description('Sync AI coding assistant usage across machines via GitHub')
+    .description('Sync AI coding assistant usage across machines via a git remote')
     .version(packageVersion());
 
   program
@@ -108,14 +109,14 @@ export function buildProgram(): Command {
   program
     .command('show')
     .description(
-      'Pull data from all machines and render heatmap PNG (or terminal table with --tui)',
+      'Merge local usage with already-synced machine data and render a heatmap PNG (or terminal table with --tui)',
     )
     .option('-o, --output <path>', 'output file path', 'aitrack.png')
     .option('--dark', 'dark mode output')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
     .option('--no-open', 'do not auto-open the generated PNG (useful for scripts / CI)')
-    .option('--year <year>', 'only include days from this calendar year', parseInt)
+    .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
     .option('--tui', 'render a stats table in the terminal instead of a PNG')
     .action(
       (options: {
@@ -134,7 +135,7 @@ export function buildProgram(): Command {
             all: options.all,
             open: options.open,
             providers: options.providers,
-            year: Number.isFinite(options.year) ? options.year : undefined,
+            year: options.year,
             tui: options.tui,
           }),
         );
@@ -171,14 +172,14 @@ export function buildProgram(): Command {
   program
     .command('daemon')
     .description('Run a local HTTP dashboard that refreshes usage data on an interval')
-    .option('--port <port>', 'HTTP listen port', parseIntArgument)
-    .option('--interval <seconds>', 'seconds between data refresh ticks', parseIntArgument)
+    .option('--port <port>', 'HTTP listen port', parsePositiveIntArgument)
+    .option('--interval <seconds>', 'seconds between data refresh ticks', parsePositiveIntArgument)
     .option('--host <host>', 'bind address', '127.0.0.1')
     .option('--sync', 'pull and push local data on each refresh tick')
     .option('--dark', 'dark mode dashboard')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
-    .option('--year <year>', 'only include days from this calendar year', parseIntArgument)
+    .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
     .action(
       (options: {
         port?: number;
@@ -213,7 +214,7 @@ export function buildProgram(): Command {
     .option('-n, --limit <n>', 'number of items to show', parseIntArgument, 10)
     .option('--sort <field>', 'sort by "tokens" or "cost"', 'cost')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
-    .option('--year <year>', 'only include days from this calendar year', parseIntArgument)
+    .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
     .option('--json', 'print machine-readable JSON')
     .action(
       (
