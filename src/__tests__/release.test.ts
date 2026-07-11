@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -64,5 +66,24 @@ describe('release tooling', () => {
     expect(result.stdout).toContain(`Dry run complete: would release ${expectedTag}.`);
     expect(result.stdout).not.toContain('git push --tags');
     expect(result.stdout).not.toContain('Release complete:');
+  });
+
+  it('previews successfully in a clean checkout without a configured remote', () => {
+    const checkout = mkdtempSync(join(tmpdir(), 'aitrack-release-no-remote-'));
+    try {
+      const init = spawnSync('git', ['init', '--quiet'], { cwd: checkout, encoding: 'utf8' });
+      expect(init.status).toBe(0);
+
+      const result = spawnSync(process.execPath, [RELEASE_SCRIPT_PATH, 'patch', '--dry-run'], {
+        cwd: checkout,
+        encoding: 'utf8',
+      });
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('git push <remote> HEAD');
+      expect(result.stdout).toContain('Dry run complete: would release');
+    } finally {
+      rmSync(checkout, { recursive: true, force: true });
+    }
   });
 });

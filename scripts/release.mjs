@@ -96,7 +96,7 @@ export function previewVersionBump(currentVersion, bump) {
   }
 }
 
-function getPushRemote() {
+function getPushRemote({ allowPlaceholder = false } = {}) {
   const branch = output('git', ['branch', '--show-current']);
   const configured = [
     optionalOutput('git', ['config', '--get', `branch.${branch}.pushRemote`]),
@@ -110,6 +110,7 @@ function getPushRemote() {
     .filter((remote) => remote.length > 0);
   if (remotes.includes('origin')) return 'origin';
   if (remotes.length === 1) return remotes[0];
+  if (allowPlaceholder) return '<remote>';
   throw new Error('Could not determine push remote. Configure an upstream or remote.pushDefault.');
 }
 
@@ -143,7 +144,7 @@ function main() {
   const options = { dryRun };
 
   ensureCleanGitTree(dryRun);
-  const pushRemote = getPushRemote();
+  const pushRemote = getPushRemote({ allowPlaceholder: dryRun });
 
   run('pnpm', ['run', 'validate'], options);
   run('pnpm', ['run', 'build'], options);
