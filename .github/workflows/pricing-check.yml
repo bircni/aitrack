@@ -1,13 +1,11 @@
 name: Pricing drift check
 
-# Anthropic occasionally adds models or adjusts prices. Run weekly to catch
-# drift between src/pricing/claude.ts and the published pricing table.
-# (Codex pricing is hand-maintained — OpenAI's pricing page blocks
-# unauthenticated fetches.)
+# Vendors occasionally add models or adjust prices. Run weekly to catch drift
+# between src/pricing/*.ts and their published pricing tables.
 
 on:
   schedule:
-    - cron: '0 9 * * *' # daily at 09:00 UTC
+    - cron: '0 9 * * 1' # Mondays at 09:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -44,10 +42,10 @@ jobs:
           set -euo pipefail
           TITLE="Pricing drift detected by scheduled check"
           BODY=$(cat <<EOF
-          The scheduled \`pricing:check\` run flagged drift between
-          \`src/pricing/claude.ts\` and the Anthropic pricing docs.
+          The scheduled \`pricing:check\` run flagged drift between the bundled
+          pricing tables in \`src/pricing/*.ts\` and vendor pricing docs.
 
-          Update the table and re-run \`pnpm run pricing:check\` locally
+          Update the affected table(s) and re-run \`pnpm run pricing:check\` locally
           to confirm.
 
           <details><summary>Script output</summary>
