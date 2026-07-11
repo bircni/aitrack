@@ -9,8 +9,13 @@ import {
 
 describe('codex pricing', () => {
   it('costs 1M+1M tokens correctly for known models', () => {
+    expect(estimateCodexCostUSD('gpt-5.6-sol', 1_000_000, 1_000_000)).toBe(35);
+    expect(estimateCodexCostUSD('gpt-5.6-terra', 1_000_000, 1_000_000)).toBe(17.5);
+    expect(estimateCodexCostUSD('gpt-5.6-luna', 1_000_000, 1_000_000)).toBe(7);
     expect(estimateCodexCostUSD('gpt-5.5', 1_000_000, 1_000_000)).toBe(35);
+    expect(estimateCodexCostUSD('gpt-5.5-pro', 1_000_000, 1_000_000)).toBe(210);
     expect(estimateCodexCostUSD('gpt-5.4', 1_000_000, 1_000_000)).toBe(17.5);
+    expect(estimateCodexCostUSD('gpt-5.4-pro', 1_000_000, 1_000_000)).toBe(210);
     expect(estimateCodexCostUSD('gpt-5.1-codex', 1_000_000, 1_000_000)).toBe(11.25);
     expect(estimateCodexCostUSD('gpt-5.1-codex-mini', 1_000_000, 1_000_000)).toBe(2.25);
     expect(estimateCodexCostUSD('gpt-5.3-codex', 1_000_000, 1_000_000)).toBe(15.75);
