@@ -8,5 +8,7 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - knip@6.23.0
-  - prettier@3.9.1
+  - oxfmt@0.58.0
+  - oxlint@1.73.0
+  - oxlint-tsgolint@0.24.0
   - tsx@4.23.0

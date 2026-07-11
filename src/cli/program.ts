@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import { Command } from 'commander';
 
@@ -37,7 +36,7 @@ export function runAsync(function_: () => Promise<void>): void {
 }
 
 function packageVersion(): string {
-  const packagePath = join(dirname(fileURLToPath(import.meta.url)), '../../package.json');
+  const packagePath = join(import.meta.dirname, '../../package.json');
   try {
     const parsed: unknown = JSON.parse(readFileSync(packagePath, 'utf8'));
     if (

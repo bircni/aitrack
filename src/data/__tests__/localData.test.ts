@@ -27,8 +27,12 @@ describe('localData', () => {
     });
 
     expect(machine.hostname).toBe('host');
-    expect(machine.days['2024-01-01'].claude_code.totals.inputTokens).toBe(10);
-    expect(machine.days['2024-01-01'].codex.totals.outputTokens).toBe(10);
+    expect(machine.days).toMatchObject({
+      '2024-01-01': {
+        claude_code: { totals: { inputTokens: 10 } },
+        codex: { totals: { outputTokens: 10 } },
+      },
+    });
   });
 
   it('machineHasData is false for empty days', () => {
@@ -55,6 +59,6 @@ describe('localData', () => {
     const machine = await buildLocalMachineFile('work-laptop');
 
     expect(machine.hostname).toBe('work-laptop');
-    expect(machine.days['2024-01-01'].claude_code).toBeDefined();
+    expect(machine.days['2024-01-01']?.claude_code).toBeDefined();
   });
 });

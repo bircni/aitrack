@@ -25,7 +25,7 @@ function toUrl(input: Parameters<typeof fetch>[0]): URL {
 function setFetchMock(
   implementation: (...arguments_: Parameters<typeof fetch>) => Promise<Response>,
 ): void {
-  globalThis.fetch = async (...arguments_) => {
+  globalThis.fetch = (...arguments_) => {
     fetchCalls.push(arguments_);
     return implementation(...arguments_);
   };

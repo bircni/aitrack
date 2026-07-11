@@ -104,8 +104,10 @@ describe('integration', () => {
     const data = readMachineFile(dataFile);
     expect(data.hostname).toBe(host);
     expect(Object.keys(data.days)).toHaveLength(2);
-    expect(data.days['2024-06-01'].claude_code.totals.inputTokens).toBe(1000);
-    expect(data.days['2024-06-02'].claude_code.totals.inputTokens).toBe(2000);
+    expect(data.days).toMatchObject({
+      '2024-06-01': { claude_code: { totals: { inputTokens: 1000 } } },
+      '2024-06-02': { claude_code: { totals: { inputTokens: 2000 } } },
+    });
 
     // verify it was actually committed
     const log = execSync('git log --oneline', { cwd: LOCAL_REPO }).toString();

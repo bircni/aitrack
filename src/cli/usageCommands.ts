@@ -59,10 +59,11 @@ export function registerUsageCommands(
           runUsageFromPeriod(def.period, [n], options, runAsync);
         });
         break;
-      default:
+      case 'none':
         command.action((options: UsageCommonOptions) => {
           runUsageFromPeriod(def.period, [], options, runAsync);
         });
+        break;
     }
   }
 }
