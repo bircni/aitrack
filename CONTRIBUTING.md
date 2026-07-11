@@ -57,7 +57,7 @@ Releases are generated from Conventional Commits using [git-cliff](https://git-c
 
 ### One-time setup
 
-Add an `NPM_TOKEN` secret to the GitHub repository (npm → Access Tokens → Granular or Classic with publish permission).
+Configure the `aitrack` package on npm with [GitHub Actions as a trusted publisher](https://docs.npmjs.com/trusted-publishers/) for this repository and `.github/workflows/publish.yml`. The workflow exchanges GitHub's OIDC identity for short-lived npm credentials; do not add a long-lived `NPM_TOKEN` repository secret.
 
 ### Cut a release locally
 
@@ -67,7 +67,7 @@ pnpm run release
 
 Patch bump by default. Pass a bump type if needed: `pnpm run release -- minor`.
 
-This runs `validate` and `build`, bumps `package.json`, updates `CHANGELOG.md`, commits, tags (`v*`), and pushes branch + tag. npm publish happens in CI — not locally.
+This runs `validate` and `build`, bumps `package.json`, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes the current branch plus that exact tag to the configured remote. npm publish happens in CI — not locally.
 
 Preview without changing anything:
 
@@ -75,6 +75,8 @@ Preview without changing anything:
 pnpm run release:dry-run
 ```
 
+The dry run calculates and prints the next version, changelog command, commit, and exact pushes without changing repository files.
+
 ### After the tag is pushed
 
-The [Publish workflow](.github/workflows/publish.yml) triggers on `v*` tags (local `git push --tags`), re-runs `validate`, builds, then publishes with `pnpm publish --provenance --access public` and `NPM_TOKEN` — same pattern as [GitHub's npm publish guide](https://docs.github.com/en/actions/tutorials/publish-packages/publish-nodejs-packages#publishing-packages-to-the-npm-registry).
+The [Publish workflow](.github/workflows/publish.yml) triggers when the release script pushes its exact `v*` tag, re-runs `validate`, builds, and runs `pnpm publish --no-git-checks`. Public access comes from `publishConfig` in `package.json`; authentication comes from npm trusted publishing through the workflow's `id-token: write` permission.
