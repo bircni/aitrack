@@ -228,7 +228,9 @@ async function main(): Promise<number> {
 
   console.log('');
   if (totalMissing > 0) {
-    console.log(`${totalMissing} model(s) on docs page missing from src/pricing/*.ts — add them and re-run`);
+    console.log(
+      `${totalMissing} model(s) on docs page missing from src/pricing/*.ts — add them and re-run`,
+    );
   }
   if (totalDrift > 0) {
     console.log(`${totalDrift} model(s) drift from current docs — update src/pricing/*.ts`);
