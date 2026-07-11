@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('child_process', () => ({ spawnSync: mocks.spawnSync }));
 vi.mock('fs', () => ({
+  constants: { COPYFILE_EXCL: 1 },
   existsSync: mocks.existsSync,
   readdirSync: mocks.readdirSync,
   readFileSync: mocks.readFileSync,
@@ -28,8 +29,10 @@ vi.mock('os', () => ({ homedir: () => '/home/test' }));
 import {
   adoptPendingDataFiles,
   commitAndPush,
+  hasMachineDataChanges,
   listDataFiles,
   listPendingDataFiles,
+  migrateMachineDataFiles,
   pull,
   readDataFile,
   removePendingMachineFile,
@@ -115,6 +118,17 @@ describe('git helpers', () => {
     );
   });
 
+  it('checks literal git status only for a bracketed machine target', () => {
+    mocks.spawnSync.mockReturnValue({ status: 0, stdout: '?? data/new-host[1].json\n' });
+
+    expect(hasMachineDataChanges('new-host[1]')).toBe(true);
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
+      'git',
+      ['status', '--porcelain', '--', ':(literal)data/new-host[1].json'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+  });
+
   it('returns no data files when the data directory is missing', () => {
     mocks.existsSync.mockReturnValue(false);
 
@@ -138,33 +152,121 @@ describe('git helpers', () => {
     expect(readDataFile(file)).toEqual({ hostname: 'host', lastUpdated: 'now', days: {} });
   });
 
-  it('writes and lists pending machine files', () => {
+  it('writes and lists pending machine files for a legitimate custom id', () => {
     mocks.existsSync.mockReturnValue(true);
-    mocks.readdirSync.mockReturnValue(['host.json']);
+    mocks.readdirSync.mockReturnValue(['Work Laptop_01.2.json']);
 
-    writePendingMachineFile({ hostname: 'host', lastUpdated: 'now', days: {} });
+    writePendingMachineFile({ hostname: 'Work Laptop_01.2', lastUpdated: 'now', days: {} });
 
     expect(mocks.mkdirSync).toHaveBeenCalled();
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining(join('pending', 'data', 'host.json')),
+      expect.stringContaining(join('pending', 'data', 'Work Laptop_01.2.json')),
       expect.any(String),
       'utf8',
     );
     expect(listPendingDataFiles()).toHaveLength(1);
   });
 
+  it.each(['../escape', '..\\escape', 'nested/machine'])(
+    'rejects unsafe pending machine id %j before touching the filesystem',
+    (hostname) => {
+      expect(() => {
+        writePendingMachineFile({ hostname, lastUpdated: 'now', days: {} });
+      }).toThrow('Machine name');
+      expect(mocks.mkdirSync).not.toHaveBeenCalled();
+      expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    },
+  );
+
+  it('migrates persisted and pending files and updates their hostname', () => {
+    mocks.existsSync.mockImplementation((path: string) => path.endsWith(join('data', 'old.json')));
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify({ hostname: 'old', lastUpdated: 'now', days: {} }),
+    );
+
+    migrateMachineDataFiles('old', 'Work Laptop_01.2');
+
+    expect(mocks.writeFileSync).toHaveBeenCalledTimes(2);
+    for (const [target, contents, options] of mocks.writeFileSync.mock.calls) {
+      expect(String(target)).toContain('Work Laptop_01.2.json');
+      expect(JSON.parse(String(contents))).toMatchObject({
+        hostname: 'Work Laptop_01.2',
+        lastUpdated: 'now',
+      });
+      expect(options).toEqual({ encoding: 'utf8', flag: 'wx' });
+    }
+    expect(mocks.rmSync).toHaveBeenCalledWith(expect.stringContaining('old.json'));
+  });
+
+  it('migrates a structurally valid file with stale aggregate cost totals', () => {
+    mocks.existsSync.mockImplementation((path: string) =>
+      path.endsWith(join('data', 'old-cost.json')),
+    );
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify({
+        hostname: 'old-cost',
+        lastUpdated: 'now',
+        days: {
+          '2026-01-01': {
+            codex: {
+              byModel: { gpt: { inputTokens: 10, outputTokens: 5, costUSD: 1 } },
+              totals: { inputTokens: 10, outputTokens: 5, costUSD: 99 },
+            },
+          },
+        },
+      }),
+    );
+
+    migrateMachineDataFiles('old-cost', 'new-cost');
+
+    const migrated = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as {
+      hostname: string;
+      days: Record<string, { codex: { totals: { costUSD: number } } }>;
+    };
+    expect(migrated.hostname).toBe('new-cost');
+    expect(migrated.days['2026-01-01']?.codex.totals.costUSD).toBe(99);
+  });
+
+  it('rejects a machine migration when the destination already exists', () => {
+    mocks.existsSync.mockImplementation(
+      (path: string) => path.endsWith(join('data', 'old.json')) || path.endsWith('new.json'),
+    );
+
+    expect(() => {
+      migrateMachineDataFiles('old', 'new');
+    }).toThrow('already exists');
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.rmSync).not.toHaveBeenCalled();
+  });
+
   it('adopts pending files into the repo data directory', () => {
-    mocks.existsSync.mockReturnValue(true);
+    mocks.existsSync.mockImplementation((path: string) => path.includes(join('pending', 'data')));
     mocks.readdirSync.mockReturnValue(['host.json', 'other.json']);
 
     const adopted = adoptPendingDataFiles('/home/test/.config/aitrack/repo/data');
 
     expect(adopted).toBe(2);
     expect(mocks.copyFileSync).toHaveBeenCalledTimes(2);
+    expect(mocks.copyFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('host.json'),
+      expect.stringContaining(join('repo', 'data', 'host.json')),
+      1,
+    );
     expect(mocks.rmSync).toHaveBeenCalledWith(
       expect.stringContaining(join('pending', 'data')),
       expect.objectContaining({ recursive: true }),
     );
+  });
+
+  it('does not overwrite an existing file while adopting pending data', () => {
+    mocks.existsSync.mockReturnValue(true);
+    mocks.readdirSync.mockReturnValue(['host.json']);
+
+    expect(() => adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toThrow(
+      'already exists',
+    );
+    expect(mocks.copyFileSync).not.toHaveBeenCalled();
+    expect(mocks.rmSync).not.toHaveBeenCalled();
   });
 
   it('removes a pending file for a machine id', () => {
@@ -173,5 +275,39 @@ describe('git helpers', () => {
     removePendingMachineFile('host');
 
     expect(mocks.rmSync).toHaveBeenCalledWith(expect.stringContaining('host.json'));
+  });
+
+  it('rolls back a completed repo migration when the pending migration fails', () => {
+    const repoOld = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'old.json');
+    const repoNew = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'new.json');
+    const pendingOld = join('/home/test', '.config', 'aitrack', 'pending', 'data', 'old.json');
+    const pendingNew = join('/home/test', '.config', 'aitrack', 'pending', 'data', 'new.json');
+    const original = JSON.stringify({ hostname: 'old', lastUpdated: 'now', days: {} });
+    const files = new Map<string, string>([
+      [repoOld, original],
+      [pendingOld, original],
+    ]);
+    mocks.existsSync.mockImplementation((path: string) => files.has(path));
+    mocks.readFileSync.mockImplementation((path: string) => {
+      const contents = files.get(path);
+      if (contents === undefined) throw new Error(`missing ${path}`);
+      return contents;
+    });
+    mocks.writeFileSync.mockImplementation((path: string, contents: string) => {
+      if (path === pendingNew) throw new Error('pending write failed');
+      files.set(path, contents);
+    });
+    mocks.rmSync.mockImplementation((path: string) => {
+      files.delete(path);
+    });
+
+    expect(() => {
+      migrateMachineDataFiles('old', 'new');
+    }).toThrow('pending write failed');
+
+    expect(files.get(repoOld)).toBe(original);
+    expect(files.get(pendingOld)).toBe(original);
+    expect(files.has(repoNew)).toBe(false);
+    expect(files.has(pendingNew)).toBe(false);
   });
 });

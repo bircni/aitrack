@@ -4,12 +4,16 @@ const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   saveConfig: vi.fn(),
   resolveMachineId: vi.fn(),
+  migrateMachineDataFiles: vi.fn(),
 }));
 
 vi.mock('../../config.js', () => ({
   tryLoadConfig: mocks.tryLoadConfig,
   saveConfig: mocks.saveConfig,
   resolveMachineId: mocks.resolveMachineId,
+}));
+vi.mock('../../git.js', () => ({
+  migrateMachineDataFiles: mocks.migrateMachineDataFiles,
 }));
 
 import { configCommand } from '../config.js';
@@ -24,6 +28,7 @@ function output(): string {
 describe('configCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.migrateMachineDataFiles.mockReset();
     mocks.resolveMachineId.mockReturnValue('resolved-host');
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -91,8 +96,53 @@ describe('configCommand', () => {
       mocks.tryLoadConfig.mockReturnValue(null);
       const warn = vi.spyOn(console, 'warn');
       await configCommand({ action: 'set', key: 'machineId', value: 'work-laptop' });
+      expect(mocks.migrateMachineDataFiles).toHaveBeenCalledWith('resolved-host', 'work-laptop');
       expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: '', machineId: 'work-laptop' });
       expect(warn).toHaveBeenCalled();
+    });
+
+    it('normalizes and migrates a legitimate later machineId change', async () => {
+      mocks.tryLoadConfig.mockReturnValue({
+        repoUrl: 'git@example.com:me/d.git',
+        machineId: 'old-pc',
+      });
+      mocks.resolveMachineId.mockReturnValue('old-pc');
+
+      await configCommand({ action: 'set', key: 'machineId', value: '  Work Laptop_01.2  ' });
+
+      expect(mocks.migrateMachineDataFiles).toHaveBeenCalledWith('old-pc', 'Work Laptop_01.2');
+      expect(mocks.saveConfig).toHaveBeenCalledWith({
+        repoUrl: 'git@example.com:me/d.git',
+        machineId: 'Work Laptop_01.2',
+      });
+    });
+
+    it.each(['../escape', '..\\escape', 'nested/machine'])(
+      'rejects unsafe machineId %j before migration or save',
+      async (value) => {
+        await expect(configCommand({ action: 'set', key: 'machineId', value })).rejects.toThrow(
+          'Machine name',
+        );
+        expect(mocks.migrateMachineDataFiles).not.toHaveBeenCalled();
+        expect(mocks.saveConfig).not.toHaveBeenCalled();
+      },
+    );
+
+    it('preserves the old config when machine data migration conflicts', async () => {
+      mocks.tryLoadConfig.mockReturnValue({
+        repoUrl: 'git@example.com:me/d.git',
+        machineId: 'old-pc',
+      });
+      mocks.resolveMachineId.mockReturnValue('old-pc');
+      mocks.migrateMachineDataFiles.mockImplementation(() => {
+        throw new Error('already exists');
+      });
+
+      await expect(
+        configCommand({ action: 'set', key: 'machineId', value: 'new-pc' }),
+      ).rejects.toThrow('already exists');
+
+      expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
     it('rejects an unknown key', async () => {

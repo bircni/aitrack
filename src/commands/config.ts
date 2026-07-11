@@ -2,6 +2,8 @@ import chalk from 'chalk';
 
 import { resolveMachineId, saveConfig, tryLoadConfig } from '../config.js';
 import type { Config } from '../data/types.js';
+import { migrateMachineDataFiles } from '../git.js';
+import { normalizeMachineId } from '../machineId.js';
 
 /** Configuration keys that can be read/written via the CLI. */
 const CONFIG_KEYS = ['repoUrl', 'machineId', 'claudeProjectsDir', 'codexSessionsDir'] as const;
@@ -76,9 +78,14 @@ function setConfig(key: string | undefined, value: string | undefined): void {
     throw new Error(`A value is required: aitrack config set ${key} <value>`);
   }
   const existing = tryLoadConfig();
-  const next: Config = { ...(existing ?? { repoUrl: '' }), [key]: value };
+  const normalizedValue = key === 'machineId' ? normalizeMachineId(value) : value;
+  if (key === 'machineId') {
+    const previousMachineId = resolveMachineId(existing ?? { repoUrl: '' });
+    migrateMachineDataFiles(previousMachineId, normalizedValue);
+  }
+  const next: Config = { ...(existing ?? { repoUrl: '' }), [key]: normalizedValue };
   saveConfig(next);
-  console.log(`Set ${key} = ${value}`);
+  console.log(`Set ${key} = ${normalizedValue}`);
   if (next.repoUrl.length === 0) {
     console.warn(chalk.yellow('Warning: repoUrl is not set. Run: npx aitrack init'));
   }
