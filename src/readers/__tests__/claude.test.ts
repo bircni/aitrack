@@ -156,7 +156,7 @@ describe('parseJsonlFile', () => {
       }),
     ).toBe(6);
     expect(
-      estimateClaudeCostUSD('claude-haiku-3-5', {
+      estimateClaudeCostUSD('claude-3-5-haiku-20241022', {
         input_tokens: 1_000_000,
         output_tokens: 1_000_000,
       }),

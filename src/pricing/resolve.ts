@@ -20,11 +20,14 @@ export function resolveModelCost(
     if (mode === 'recompute') {
       return estimateClaudeCostFromStoredCounts(model, counts, usageDate);
     }
-    return estimateClaudeCostFromAggregateTokens(
-      model,
-      counts.inputTokens,
-      counts.outputTokens,
-      usageDate,
+    return (
+      estimateClaudeCostFromStoredCounts(model, counts, usageDate) ??
+      estimateClaudeCostFromAggregateTokens(
+        model,
+        counts.inputTokens,
+        counts.outputTokens,
+        usageDate,
+      )
     );
   }
 
