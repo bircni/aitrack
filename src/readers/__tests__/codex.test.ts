@@ -34,8 +34,8 @@ describe('parseSessionFile', () => {
     ]);
 
     const result = await parseSessionFile(file);
-    expect(result).not.toBeNull();
-    expect(result).toMatchObject({
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
       dateStr: '2024-01-15',
       model: 'gpt-4o',
       inputTokens: 200,
@@ -66,7 +66,7 @@ describe('parseSessionFile', () => {
     ]);
 
     const result = await parseSessionFile(file);
-    expect(result).toMatchObject({ inputTokens: 300, outputTokens: 150 });
+    expect(result[0]).toMatchObject({ inputTokens: 300, outputTokens: 150 });
   });
 
   it('detects context window rollback and adds last_token_usage', async () => {
@@ -96,7 +96,7 @@ describe('parseSessionFile', () => {
     ]);
 
     const result = await parseSessionFile(file);
-    expect(result).toMatchObject({ inputTokens: 180, outputTokens: 90 });
+    expect(result[0]).toMatchObject({ inputTokens: 180, outputTokens: 90 });
   });
 
   it('falls back to last_token_usage when no total is present', async () => {
@@ -113,7 +113,7 @@ describe('parseSessionFile', () => {
     ]);
 
     const result = await parseSessionFile(file);
-    expect(result).toMatchObject({ inputTokens: 50, outputTokens: 25 });
+    expect(result[0]).toMatchObject({ inputTokens: 50, outputTokens: 25 });
   });
 
   it('returns null for a session with no token events', async () => {
@@ -123,13 +123,13 @@ describe('parseSessionFile', () => {
       { type: 'user_message', content: 'hello' },
     ]);
 
-    expect(await parseSessionFile(file)).toBeNull();
+    expect(await parseSessionFile(file)).toEqual([]);
   });
 
   it('returns null for an empty file', async () => {
     const file = join(tmpDir, 'empty.jsonl');
     writeFileSync(file, '');
-    expect(await parseSessionFile(file)).toBeNull();
+    expect(await parseSessionFile(file)).toEqual([]);
   });
 
   it('uses the timestamp of the first entry as the session date', async () => {
@@ -153,6 +153,57 @@ describe('parseSessionFile', () => {
     ]);
 
     const result = await parseSessionFile(file);
-    expect(result).toMatchObject({ dateStr: expected });
+    expect(result[0]).toMatchObject({ dateStr: expected });
+  });
+
+  it('splits cumulative usage by the active model and local day', async () => {
+    const file = join(tmpDir, 's.jsonl');
+    const firstDay = new Date(2024, 0, 15, 10, 0, 0);
+    const secondDay = new Date(2024, 0, 16, 10, 0, 0);
+    jsonl(file, [
+      {
+        type: 'turn_context',
+        timestamp: firstDay.toISOString(),
+        payload: { model: 'gpt-5.1-codex' },
+      },
+      {
+        type: 'event_msg',
+        timestamp: new Date(2024, 0, 15, 10, 1, 0).toISOString(),
+        payload: {
+          type: 'token_count',
+          info: { total_token_usage: { input_tokens: 100, output_tokens: 10 } },
+        },
+      },
+      {
+        type: 'turn_context',
+        timestamp: secondDay.toISOString(),
+        payload: { model: 'gpt-5.4' },
+      },
+      {
+        type: 'event_msg',
+        timestamp: new Date(2024, 0, 16, 10, 1, 0).toISOString(),
+        payload: {
+          type: 'token_count',
+          info: { total_token_usage: { input_tokens: 250, output_tokens: 25 } },
+        },
+      },
+    ]);
+
+    expect(await parseSessionFile(file)).toEqual([
+      {
+        dateStr: '2024-01-15',
+        model: 'gpt-5.1-codex',
+        inputTokens: 100,
+        outputTokens: 10,
+        cachedInputTokens: 0,
+      },
+      {
+        dateStr: '2024-01-16',
+        model: 'gpt-5.4',
+        inputTokens: 150,
+        outputTokens: 15,
+        cachedInputTokens: 0,
+      },
+    ]);
   });
 });

@@ -49,16 +49,49 @@ interface SessionResult {
   cachedInputTokens: number;
 }
 
-export async function parseSessionFile(filePath: string): Promise<SessionResult | null> {
+function tokenUsageValues(usage: TokenUsage): {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+} {
+  return {
+    inputTokens: usage.input_tokens ?? 0,
+    outputTokens: usage.output_tokens ?? 0,
+    cachedInputTokens: usage.cached_input_tokens ?? 0,
+  };
+}
+
+function addSessionUsage(
+  results: Map<string, SessionResult>,
+  dateStr: string,
+  model: string,
+  usage: { inputTokens: number; outputTokens: number; cachedInputTokens: number },
+): void {
+  if (usage.inputTokens === 0 && usage.outputTokens === 0) return;
+  const key = `${dateStr}\0${model}`;
+  const result = results.get(key) ?? {
+    dateStr,
+    model,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+  };
+  result.inputTokens += usage.inputTokens;
+  result.outputTokens += usage.outputTokens;
+  result.cachedInputTokens += usage.cachedInputTokens;
+  results.set(key, result);
+}
+
+export async function parseSessionFile(filePath: string): Promise<SessionResult[]> {
   const rl = createInterface({
     input: createReadStream(filePath, { encoding: 'utf8' }),
     crlfDelay: Infinity,
   });
 
-  let sessionDate: string | null = null;
+  let currentDate: string | null = null;
   let model = 'unknown';
   let previousTotal = { input_tokens: 0, output_tokens: 0, cached_input_tokens: 0 };
-  const accumulated = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 };
+  const results = new Map<string, SessionResult>();
 
   for await (const line of rl) {
     if (!line.trim()) continue;
@@ -69,8 +102,11 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult 
       continue;
     }
 
-    if (sessionDate === null && entry.timestamp) {
-      sessionDate = toLocalDateString(entry.timestamp);
+    if (entry.timestamp) {
+      const parsedTimestamp = new Date(entry.timestamp);
+      if (!Number.isNaN(parsedTimestamp.getTime())) {
+        currentDate = toLocalDateString(parsedTimestamp);
+      }
     }
 
     if (entry.type === 'turn_context' && entry.payload?.model) {
@@ -82,30 +118,26 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult 
     const info = entry.payload.info;
     if (!info) continue;
 
+    let usage: { inputTokens: number; outputTokens: number; cachedInputTokens: number } | null =
+      null;
     if (info.total_token_usage) {
       const current = info.total_token_usage;
       const isRolledBack =
         (current.input_tokens ?? 0) < previousTotal.input_tokens ||
-        (current.output_tokens ?? 0) < previousTotal.output_tokens;
+        (current.output_tokens ?? 0) < previousTotal.output_tokens ||
+        (current.cached_input_tokens ?? 0) < previousTotal.cached_input_tokens;
 
-      if (isRolledBack && info.last_token_usage) {
-        const last = info.last_token_usage;
-        accumulated.inputTokens += last.input_tokens ?? 0;
-        accumulated.outputTokens += last.output_tokens ?? 0;
-        accumulated.cachedInputTokens += last.cached_input_tokens ?? 0;
+      if (isRolledBack) {
+        usage = tokenUsageValues(info.last_token_usage ?? current);
       } else {
-        accumulated.inputTokens += Math.max(
-          0,
-          (current.input_tokens ?? 0) - previousTotal.input_tokens,
-        );
-        accumulated.outputTokens += Math.max(
-          0,
-          (current.output_tokens ?? 0) - previousTotal.output_tokens,
-        );
-        accumulated.cachedInputTokens += Math.max(
-          0,
-          (current.cached_input_tokens ?? 0) - previousTotal.cached_input_tokens,
-        );
+        usage = {
+          inputTokens: Math.max(0, (current.input_tokens ?? 0) - previousTotal.input_tokens),
+          outputTokens: Math.max(0, (current.output_tokens ?? 0) - previousTotal.output_tokens),
+          cachedInputTokens: Math.max(
+            0,
+            (current.cached_input_tokens ?? 0) - previousTotal.cached_input_tokens,
+          ),
+        };
       }
       previousTotal = {
         input_tokens: current.input_tokens ?? 0,
@@ -113,16 +145,13 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult 
         cached_input_tokens: current.cached_input_tokens ?? 0,
       };
     } else if (info.last_token_usage) {
-      const last = info.last_token_usage;
-      accumulated.inputTokens += last.input_tokens ?? 0;
-      accumulated.outputTokens += last.output_tokens ?? 0;
-      accumulated.cachedInputTokens += last.cached_input_tokens ?? 0;
+      usage = tokenUsageValues(info.last_token_usage);
     }
+
+    if (currentDate && usage) addSessionUsage(results, currentDate, model, usage);
   }
 
-  if (!sessionDate || (accumulated.inputTokens === 0 && accumulated.outputTokens === 0))
-    return null;
-  return { dateStr: sessionDate, model, ...accumulated };
+  return [...results.values()];
 }
 
 export async function readCodexData(): Promise<DayMap> {
@@ -136,29 +165,28 @@ export async function readCodexData(): Promise<DayMap> {
       if (seenPaths.has(file)) continue;
       seenPaths.add(file);
 
-      const result = await parseSessionFile(file);
-      if (!result) continue;
+      const results = await parseSessionFile(file);
+      for (const { dateStr, model, inputTokens, outputTokens, cachedInputTokens } of results) {
+        const day = getOrCreateDay(allDays, dateStr);
+        const modelTotals = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
+        modelTotals.inputTokens += inputTokens;
+        modelTotals.outputTokens += outputTokens;
+        modelTotals.cachedInputTokens = (modelTotals.cachedInputTokens ?? 0) + cachedInputTokens;
+        day.inputTokens += inputTokens;
+        day.outputTokens += outputTokens;
+        day.cachedInputTokens = (day.cachedInputTokens ?? 0) + cachedInputTokens;
 
-      const { dateStr, model, inputTokens, outputTokens, cachedInputTokens } = result;
-      const day = getOrCreateDay(allDays, dateStr);
-      const modelTotals = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-      modelTotals.inputTokens += inputTokens;
-      modelTotals.outputTokens += outputTokens;
-      modelTotals.cachedInputTokens = (modelTotals.cachedInputTokens ?? 0) + cachedInputTokens;
-      day.inputTokens += inputTokens;
-      day.outputTokens += outputTokens;
-      day.cachedInputTokens = (day.cachedInputTokens ?? 0) + cachedInputTokens;
-
-      const cost = estimateCodexCostUSD(
-        model,
-        inputTokens,
-        outputTokens,
-        cachedInputTokens,
-        dateStr,
-      );
-      if (cost !== undefined) {
-        modelTotals.costUSD = (modelTotals.costUSD ?? 0) + cost;
-        day.costUSD = (day.costUSD ?? 0) + cost;
+        const cost = estimateCodexCostUSD(
+          model,
+          inputTokens,
+          outputTokens,
+          cachedInputTokens,
+          dateStr,
+        );
+        if (cost !== undefined) {
+          modelTotals.costUSD = (modelTotals.costUSD ?? 0) + cost;
+          day.costUSD = (day.costUSD ?? 0) + cost;
+        }
       }
     }
   }
