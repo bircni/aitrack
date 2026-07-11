@@ -3,6 +3,7 @@ import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
 
 import type { Config } from './data/types.js';
+import { normalizeMachineId } from './machineId.js';
 
 const CONFIG_DIR = join(homedir(), '.config', 'aitrack');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
@@ -47,8 +48,16 @@ function validateConfig(parsed: unknown): Config | null {
   if (!isRecord(parsed)) return null;
   if (typeof parsed.repoUrl !== 'string') return null;
 
-  const machineId = optionalString(parsed.machineId);
-  if (parsed.machineId !== undefined && machineId === undefined) return null;
+  const rawMachineId = optionalString(parsed.machineId);
+  if (parsed.machineId !== undefined && rawMachineId === undefined) return null;
+  let machineId: string | undefined;
+  if (rawMachineId !== undefined) {
+    try {
+      machineId = normalizeMachineId(rawMachineId);
+    } catch {
+      return null;
+    }
+  }
 
   const claudeProjectsDir = optionalString(parsed.claudeProjectsDir);
   if (parsed.claudeProjectsDir !== undefined && claudeProjectsDir === undefined) return null;
@@ -87,11 +96,14 @@ export function tryLoadConfig(): Config | null {
 }
 
 export function saveConfig(config: Config): void {
+  const normalized = {
+    ...config,
+    ...(config.machineId !== undefined && { machineId: normalizeMachineId(config.machineId) }),
+  };
   mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+  writeFileSync(CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf8');
 }
 
 export function resolveMachineId(config: Config): string {
-  const id = config.machineId?.trim();
-  return id && id.length > 0 ? id : hostname();
+  return normalizeMachineId(config.machineId ?? hostname());
 }
