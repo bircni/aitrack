@@ -41,10 +41,20 @@ describe('config', () => {
   });
 
   it('round-trips a config with machineId through save and load', () => {
-    const config = { repoUrl: 'git@github.com:test/repo.git', machineId: 'work-laptop' };
+    const config = { repoUrl: 'git@github.com:test/repo.git', machineId: 'Work Laptop_01.2' };
     saveConfig(config);
     expect(loadConfig()).toEqual(config);
   });
+
+  it.each(['../escape', '..\\escape', 'nested/machine', 'bad\0name', 'CON'])(
+    'rejects unsafe machineId %j before saving',
+    (machineId) => {
+      expect(() => {
+        saveConfig({ repoUrl: 'git@example.com:test/repo.git', machineId });
+      }).toThrow('Machine name');
+      expect(tryLoadConfig()).toBeNull();
+    },
+  );
 
   it('resolveMachineId falls back to hostname when machineId is unset', () => {
     expect(resolveMachineId({ repoUrl: 'git@github.com:test/repo.git' })).toBeTruthy();
@@ -54,6 +64,12 @@ describe('config', () => {
     expect(
       resolveMachineId({ repoUrl: 'git@github.com:test/repo.git', machineId: 'work-laptop' }),
     ).toBe('work-laptop');
+  });
+
+  it('rejects an unsafe machineId passed directly to resolveMachineId', () => {
+    expect(() =>
+      resolveMachineId({ repoUrl: 'git@github.com:test/repo.git', machineId: '../../escape' }),
+    ).toThrow('Machine name');
   });
 
   it('throws when no config file exists', () => {
@@ -76,6 +92,13 @@ describe('config', () => {
     writeRawConfig(JSON.stringify({ machineId: 'work-laptop' }));
     expect(tryLoadConfig()).toBeNull();
     writeRawConfig(JSON.stringify({ repoUrl: 123 }));
+    expect(tryLoadConfig()).toBeNull();
+  });
+
+  it('returns null when loaded config contains an unsafe machineId', () => {
+    writeRawConfig(
+      JSON.stringify({ repoUrl: 'git@example.com:test/repo.git', machineId: '../../escape' }),
+    );
     expect(tryLoadConfig()).toBeNull();
   });
 
