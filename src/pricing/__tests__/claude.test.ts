@@ -23,6 +23,12 @@ describe('claude pricing', () => {
     const dated = findClaudePricing('claude-haiku-4-5-20251001');
     expect(dated.inputPerMillion).toBe(1);
     expect(dated.outputPerMillion).toBe(5);
+
+    consumeClaudeFallbackHits();
+    const legacyVersionFirst = findClaudePricing('claude-3-5-haiku-20241022');
+    expect(legacyVersionFirst.inputPerMillion).toBe(0.8);
+    expect(legacyVersionFirst.outputPerMillion).toBe(4);
+    expect(consumeClaudeFallbackHits()).toEqual([]);
   });
 
   it('falls back to family pricing for unknown models', () => {

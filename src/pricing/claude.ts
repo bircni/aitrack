@@ -1,6 +1,6 @@
 // Per-model Claude pricing from https://platform.claude.com/docs/en/about-claude/pricing
 // Cache read = 0.10x input; cache create (5min) = 1.25x input.
-// Keep entries keyed by canonical model id (with `-YYYYMMDD` date suffix stripped).
+// Keep entries keyed by normalized family-first id (with date/latest suffixes stripped).
 // Last updated: 2026-07. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
 
 export interface ClaudePricing {
@@ -70,8 +70,17 @@ export function consumeClaudeFallbackHits(): string[] {
   return xs;
 }
 
+function canonicalClaudeModelId(model: string): string {
+  const id = model.toLowerCase().replace(/-(?:latest|\d{8})$/, '');
+  const legacy = /^claude-(\d+)(?:-(\d+))?-(opus|sonnet|haiku)$/.exec(id);
+  if (!legacy) return id;
+  const [, major, minor, family] = legacy;
+  if (!major || !family) return id;
+  return `claude-${family}-${major}${minor ? `-${minor}` : ''}`;
+}
+
 export function findClaudePricing(model: string, usageDate?: string): ClaudePricing {
-  const id = model.toLowerCase().replace(/-\d{8}$/, '');
+  const id = canonicalClaudeModelId(model);
   if (usageDate) {
     const overrides = CLAUDE_PRICING_OVERRIDES[id];
     if (overrides) {

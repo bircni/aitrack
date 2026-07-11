@@ -3,8 +3,8 @@
 //   https://developers.openai.com/api/docs/pricing
 //   https://developers.openai.com/codex/pricing
 //   https://openrouter.ai/openai/gpt-5.1-codex
-// Codex sessions only report aggregate input/output tokens (no cache split),
-// so we model cost as `input × inputPrice + output × outputPrice`.
+// Codex sessions report aggregate input/output tokens plus a cached-input subset,
+// which is billed at 10% of the base input rate.
 // Last updated: 2026-05.
 
 export interface CodexPricing {

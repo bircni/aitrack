@@ -42,6 +42,23 @@ describe('resolveModelCost', () => {
     expect(cost).toBe(18);
   });
 
+  it('uses stored Claude cache breakdown when backfilling a missing merge cost', () => {
+    const cost = resolveModelCost(
+      'claude_code',
+      'claude-opus-4-7',
+      {
+        inputTokens: 1_100_000,
+        outputTokens: 100_000,
+        rawInputTokens: 100_000,
+        cachedInputTokens: 1_000_000,
+        cacheCreationInputTokens: 0,
+      },
+      '2026-01-01',
+      'merge',
+    );
+    expect(cost).toBeCloseTo(3.5, 5);
+  });
+
   it('estimates Codex cost with cached input tokens', () => {
     const cost = resolveModelCost(
       'codex',
