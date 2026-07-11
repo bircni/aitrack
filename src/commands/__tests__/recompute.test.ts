@@ -151,6 +151,71 @@ describe('recomputeCostsCommand', () => {
     ).toBeCloseTo(3.5, 5);
   });
 
+  it('repairs a stale day total when model costs are already current', async () => {
+    mocks.resolveMachineId.mockReturnValue('local-pc');
+    mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify({
+        hostname: 'other',
+        lastUpdated: 'old',
+        days: {
+          '2024-01-01': {
+            claude_code: {
+              byModel: {
+                'claude-opus-4-7': {
+                  inputTokens: 1_100_000,
+                  outputTokens: 100_000,
+                  rawInputTokens: 100_000,
+                  cachedInputTokens: 1_000_000,
+                  costUSD: 3.5,
+                },
+              },
+              totals: {
+                inputTokens: 1_100_000,
+                outputTokens: 100_000,
+                rawInputTokens: 100_000,
+                cachedInputTokens: 1_000_000,
+                costUSD: 999,
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    await recomputeCostsCommand();
+
+    const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
+    expect(written.days['2024-01-01']?.claude_code?.totals.costUSD).toBeCloseTo(3.5, 5);
+    expect(
+      written.days['2024-01-01']?.claude_code?.byModel['claude-opus-4-7']?.costUSD,
+    ).toBeCloseTo(3.5, 5);
+  });
+
+  it('preserves an aggregate cost when an unknown model has no stored cost', async () => {
+    mocks.resolveMachineId.mockReturnValue('local-pc');
+    mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify({
+        hostname: 'other',
+        lastUpdated: 'old',
+        days: {
+          '2024-01-01': {
+            codex: {
+              byModel: { unknown: { inputTokens: 100, outputTokens: 10 } },
+              totals: { inputTokens: 100, outputTokens: 10, costUSD: 999 },
+            },
+          },
+        },
+      }),
+    );
+
+    await recomputeCostsCommand();
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith('Nothing to recompute — costs are already current.');
+  });
+
   it('leaves legacy rows without cache breakdown unchanged', async () => {
     mocks.resolveMachineId.mockReturnValue('local-pc');
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);

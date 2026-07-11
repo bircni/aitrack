@@ -9,6 +9,10 @@ import { consumeClaudeFallbackHits } from '../pricing/claude.js';
 import { consumeCodexFallbackHits } from '../pricing/codex.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 
+function costsEqual(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+}
+
 export async function recomputeCostsCommand(): Promise<void> {
   const config = loadConfig();
   const machineId = resolveMachineId(config);
@@ -42,7 +46,7 @@ export async function recomputeCostsCommand(): Promise<void> {
     }
 
     const raw = readFileSync(filePath, 'utf8');
-    const machine = parseMachineFile(raw, filePath);
+    const machine = parseMachineFile(raw, filePath, { allowInconsistentCostTotals: true });
     if (!machine) continue;
     let isTouched = false;
 
@@ -52,15 +56,18 @@ export async function recomputeCostsCommand(): Promise<void> {
         if (!providerDay) continue;
 
         let dayTotal = 0;
-        let isAnyModel = false;
+        let modelCount = 0;
+        let isCostComplete = true;
         let isDayTouched = false;
 
         for (const [model, counts] of Object.entries(providerDay.byModel)) {
+          modelCount++;
           const cost = resolveModelCost(providerKey, model, counts, date, 'recompute');
           if (cost === undefined) {
-            if (counts.costUSD !== undefined) {
+            if (counts.costUSD === undefined) {
+              isCostComplete = false;
+            } else {
               dayTotal += counts.costUSD;
-              isAnyModel = true;
               if (providerKey === 'claude_code') legacySkipped++;
             }
             continue;
@@ -70,10 +77,15 @@ export async function recomputeCostsCommand(): Promise<void> {
             isDayTouched = true;
           }
           dayTotal += cost;
-          isAnyModel = true;
         }
 
-        if (isDayTouched && isAnyModel) {
+        if (isDayTouched) isTouched = true;
+        if (
+          modelCount > 0 &&
+          isCostComplete &&
+          (providerDay.totals.costUSD === undefined ||
+            !costsEqual(providerDay.totals.costUSD, dayTotal))
+        ) {
           providerDay.totals.costUSD = dayTotal;
           isTouched = true;
         }
