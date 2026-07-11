@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   isCloned: vi.fn(),
   pull: vi.fn(),
   commitAndPush: vi.fn(),
+  hasMachineDataChanges: vi.fn(),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   readFileSync: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock('../../git.js', () => ({
   isCloned: mocks.isCloned,
   pull: mocks.pull,
   commitAndPush: mocks.commitAndPush,
+  hasMachineDataChanges: mocks.hasMachineDataChanges,
   removePendingMachineFile: vi.fn(),
 }));
 
@@ -72,6 +74,8 @@ describe('syncCommand', () => {
     mocks.hostname.mockReturnValue('host');
     mocks.readClaudeData.mockResolvedValue(new Map());
     mocks.readCodexData.mockResolvedValue(new Map());
+    mocks.commitAndPush.mockReturnValue(false);
+    mocks.hasMachineDataChanges.mockReturnValue(false);
     mocks.readFileSync.mockImplementation(() => {
       throw new Error('missing');
     });
@@ -98,6 +102,17 @@ describe('syncCommand', () => {
     expect(mocks.commitAndPush).toHaveBeenCalledWith('host');
   });
 
+  it('pushes a pending machine migration when no local usage remains', async () => {
+    mocks.commitAndPush.mockReturnValue(true);
+    mocks.hasMachineDataChanges.mockReturnValue(true);
+
+    await syncCommand();
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.commitAndPush).toHaveBeenCalledWith('host');
+    expect(console.log).toHaveBeenCalledWith('Done! Pushed machine data migration for host.');
+  });
+
   it('uses a configured machineId for the data filename', async () => {
     mocks.loadConfig.mockReturnValue({
       repoUrl: 'git@example.com:me/data.git',
@@ -113,6 +128,19 @@ describe('syncCommand', () => {
       'utf8',
     );
     expect(mocks.commitAndPush).toHaveBeenCalledWith('work-laptop');
+  });
+
+  it('rejects an unsafe configured machineId before writing a data file', async () => {
+    mocks.loadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: '../../escape',
+    });
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+
+    await expect(syncCommand()).rejects.toThrow('Machine name');
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.commitAndPush).not.toHaveBeenCalled();
   });
 
   it('syncData with quiet suppresses progress logs', async () => {
@@ -139,7 +167,7 @@ describe('syncCommand', () => {
     );
   });
 
-  it('does not write when persisted days already match fresh data', async () => {
+  it('does not commit unrelated data changes when the matching current target is clean', async () => {
     const existing = {
       hostname: 'host',
       lastUpdated: 'old',
@@ -158,7 +186,37 @@ describe('syncCommand', () => {
     await syncCommand();
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.hasMachineDataChanges).toHaveBeenCalledWith('host');
     expect(mocks.commitAndPush).not.toHaveBeenCalled();
     expect(console.log).toHaveBeenCalledWith('No changes to push — data is already up to date.');
+  });
+
+  it('pushes a pending machine rename even when usage data already matches', async () => {
+    const existing = {
+      hostname: 'new-host',
+      lastUpdated: 'old',
+      days: {
+        '2024-01-01': {
+          codex: {
+            byModel: { 'gpt-5': { inputTokens: 20, outputTokens: 10 } },
+            totals: { inputTokens: 20, outputTokens: 10 },
+          },
+        },
+      },
+    };
+    mocks.loadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: 'new-host',
+    });
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+    mocks.readFileSync.mockReturnValue(JSON.stringify(existing));
+    mocks.commitAndPush.mockReturnValue(true);
+    mocks.hasMachineDataChanges.mockReturnValue(true);
+
+    await syncCommand();
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.commitAndPush).toHaveBeenCalledWith('new-host');
+    expect(console.log).toHaveBeenCalledWith('Done! Pushed data/new-host.json (1 days)');
   });
 });

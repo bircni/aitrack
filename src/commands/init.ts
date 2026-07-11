@@ -4,14 +4,16 @@ import { dirname, join } from 'node:path';
 
 import prompts from 'prompts';
 
-import { loadConfig, saveConfig } from '../config.js';
+import { loadConfig, resolveMachineId, saveConfig } from '../config.js';
 import {
   adoptPendingDataFiles,
   cloneRepo,
   isCloned,
   LOCAL_REPO,
+  migrateMachineDataFiles,
   removeLocalClone,
 } from '../git.js';
+import { machineIdValidationError, normalizeMachineId } from '../machineId.js';
 
 async function promptOverwrite(): Promise<boolean | undefined> {
   const answers = await prompts<'overwrite'>({
@@ -54,10 +56,10 @@ async function promptMachineId(initial: string): Promise<string | undefined> {
     message: 'Machine name (used as data filename):',
     hint: 'e.g. work-laptop',
     initial,
-    validate: (v: string) => v.trim().length > 0 || 'Name is required',
+    validate: (v: string) => machineIdValidationError(v) ?? true,
   });
   const machineId: unknown = answers.machineId;
-  return typeof machineId === 'string' ? machineId.trim() : undefined;
+  return typeof machineId === 'string' ? normalizeMachineId(machineId) : undefined;
 }
 
 export async function initCommand(): Promise<void> {
@@ -76,6 +78,7 @@ export async function initCommand(): Promise<void> {
       return;
     }
   }
+  const previousMachineId = resolveMachineId(existing ?? { repoUrl: '' });
 
   console.log('First, create an empty GitHub repository (or any git remote) for storing data.');
   console.log('Example: https://github.com/new — name it something like "aitrack-data".');
@@ -88,8 +91,10 @@ export async function initCommand(): Promise<void> {
   }
 
   const isUrlChanged = existing !== null && existing.repoUrl !== repoUrl;
+  const wasCloned = isCloned();
+  let hasClone = wasCloned;
 
-  if (isCloned() && isUrlChanged) {
+  if (wasCloned && isUrlChanged) {
     const reclone = await promptReclone();
     if (!reclone) {
       console.log('Aborted.');
@@ -100,12 +105,14 @@ export async function initCommand(): Promise<void> {
     console.log(`Cloning ${repoUrl} into ${LOCAL_REPO}...`);
     mkdirSync(dirname(LOCAL_REPO), { recursive: true });
     cloneRepo(repoUrl);
-  } else if (isCloned()) {
+    hasClone = true;
+  } else if (wasCloned) {
     console.log(`Repo already cloned at ${LOCAL_REPO}. Skipping clone.`);
   } else {
     console.log(`Cloning ${repoUrl} into ${LOCAL_REPO}...`);
     mkdirSync(dirname(LOCAL_REPO), { recursive: true });
     cloneRepo(repoUrl);
+    hasClone = true;
   }
 
   const machineId = await promptMachineId(existing?.machineId ?? hostname());
@@ -114,13 +121,19 @@ export async function initCommand(): Promise<void> {
     return;
   }
 
-  saveConfig({ repoUrl, machineId });
-
-  if (isCloned()) {
-    const adopted = adoptPendingDataFiles(join(LOCAL_REPO, 'data'));
-    if (adopted > 0) {
-      console.log(`Adopted ${adopted} pending data file(s) into the repo.`);
+  let adopted = 0;
+  if (hasClone) {
+    // Adopt pre-clone staging under the identity that created it. Once a clone
+    // already exists, pending data may duplicate its synced current-machine file.
+    if (existing === null || !wasCloned) {
+      adopted = adoptPendingDataFiles(join(LOCAL_REPO, 'data'));
     }
+    migrateMachineDataFiles(previousMachineId, machineId);
+  }
+
+  saveConfig({ repoUrl, machineId });
+  if (adopted > 0) {
+    console.log(`Adopted ${adopted} pending data file(s) into the repo.`);
   }
 
   console.log('');

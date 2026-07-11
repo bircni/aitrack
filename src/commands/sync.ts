@@ -5,7 +5,15 @@ import { loadConfig, resolveMachineId } from '../config.js';
 import { buildMachineData, readLocalProviderMaps } from '../data/localData.js';
 import type { MachineFile } from '../data/types.js';
 import { parseMachineFile } from '../data/validate.js';
-import { commitAndPush, isCloned, LOCAL_REPO, pull, removePendingMachineFile } from '../git.js';
+import {
+  commitAndPush,
+  hasMachineDataChanges,
+  isCloned,
+  LOCAL_REPO,
+  pull,
+  removePendingMachineFile,
+} from '../git.js';
+import { machineDataFilename } from '../machineId.js';
 import { consumeClaudeFallbackHits } from '../pricing/claude.js';
 import { consumeCodexFallbackHits } from '../pricing/codex.js';
 
@@ -30,7 +38,11 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
     pull();
   }
 
-  // Cursor usage is merged at `show` time only (local CSV export); it is never written to git.
+  const host = resolveMachineId(config);
+  const dataDir = join(LOCAL_REPO, 'data');
+  const dataFilePath = join(dataDir, machineDataFilename(host));
+
+  // Cursor usage is loaded locally by report/display commands; it is never written to git.
   if (!isQuiet) {
     console.log('Reading local data...');
   }
@@ -39,8 +51,13 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
   const totalDays = new Set([...claudeData.keys(), ...codexData.keys()]).size;
 
   if (totalDays === 0) {
+    const isPushed = !isDryRun && hasMachineDataChanges(host) && commitAndPush(host);
     if (!isQuiet) {
-      console.log('No local data found (Claude Code or Codex).');
+      console.log(
+        isPushed
+          ? `Done! Pushed machine data migration for ${host}.`
+          : 'No local data found (Claude Code or Codex).',
+      );
     }
     return;
   }
@@ -52,11 +69,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
     console.log(`Found: ${sources.join(', ')}`);
   }
 
-  const host = resolveMachineId(config);
-  const dataDir = join(LOCAL_REPO, 'data');
-
   const freshData = buildMachineData(host, { claude_code: claudeData, codex: codexData });
-  const dataFilePath = join(dataDir, `${host}.json`);
 
   // Only write if the usage data changed — avoids a spurious commit on every run
   // (lastUpdated would otherwise always make the file dirty).
@@ -69,11 +82,19 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
   }
 
   if (JSON.stringify(existingDays) === JSON.stringify(freshData.days)) {
-    if (!isQuiet) {
-      console.log('No changes to push — data is already up to date.');
-    }
+    let isPushed = false;
     if (!isDryRun) {
       removePendingMachineFile(host);
+      // A machineId change can leave a matching target file as a pending git
+      // rename. Give it the same commit/push path as a content update.
+      isPushed = hasMachineDataChanges(host) && commitAndPush(host);
+    }
+    if (!isQuiet) {
+      console.log(
+        isPushed
+          ? `Done! Pushed data/${host}.json (${String(totalDays)} days)`
+          : 'No changes to push — data is already up to date.',
+      );
     }
     return;
   }
