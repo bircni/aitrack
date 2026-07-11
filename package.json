@@ -42,7 +42,7 @@
     "access": "public"
   },
   "scripts": {
-    "clean": "rm -rf dist",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "pnpm run clean && tsc -p tsconfig.build.json",
     "dev": "tsx src/cli.ts",
     "lint": "oxlint --type-aware --max-warnings=0",
