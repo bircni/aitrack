@@ -8,10 +8,8 @@ const mocks = vi.hoisted(() => ({
   readDataFile: vi.fn(),
   writePendingMachineFile: vi.fn(),
   buildLocalMachineFile: vi.fn(),
-  hostname: vi.fn(),
 }));
 
-vi.mock('os', () => ({ hostname: mocks.hostname }));
 vi.mock('../../config.js', () => ({
   tryLoadConfig: mocks.tryLoadConfig,
   resolveMachineId: mocks.resolveMachineId,
@@ -65,6 +63,33 @@ describe('mergeProviderDay', () => {
     expect(rec.costUSD).toBe(18);
   });
 
+  it('uses stored Claude cache breakdown when backfilling a missing day cost', () => {
+    const rec = emptyDay();
+    const pData: ProviderDay = {
+      byModel: {
+        'claude-opus-4-7': {
+          inputTokens: 1_100_000,
+          outputTokens: 100_000,
+          rawInputTokens: 100_000,
+          cachedInputTokens: 1_000_000,
+          cacheCreationInputTokens: 0,
+        },
+      },
+      totals: {
+        inputTokens: 1_100_000,
+        outputTokens: 100_000,
+        rawInputTokens: 100_000,
+        cachedInputTokens: 1_000_000,
+        cacheCreationInputTokens: 0,
+      },
+    };
+
+    mergeProviderDay(rec, 'claude_code', pData, '2026-01-01');
+
+    expect(rec.costUSD).toBeCloseTo(3.5, 5);
+    expect(rec.byModel['claude-opus-4-7']?.costUSD).toBeCloseTo(3.5, 5);
+  });
+
   it('leaves costUSD undefined for non-claude providers when costs are missing', () => {
     const rec = emptyDay();
     const pData: ProviderDay = {
@@ -91,7 +116,7 @@ describe('mergeProviderDay', () => {
 describe('loadMergedProviderData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.hostname.mockReturnValue('host');
+    mocks.resolveMachineId.mockReturnValue('host');
     mocks.tryLoadConfig.mockReturnValue(null);
     mocks.isCloned.mockReturnValue(false);
     mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
@@ -121,6 +146,7 @@ describe('loadMergedProviderData', () => {
     expect(console.warn).not.toHaveBeenCalled();
     expect(mocks.writePendingMachineFile).toHaveBeenCalled();
     expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(10);
+    expect(loaded?.machineData).toEqual([]);
     expect(loaded?.warnedNotConfigured).toBe(true);
   });
 
@@ -140,18 +166,33 @@ describe('loadMergedProviderData', () => {
     mocks.resolveMachineId.mockReturnValue('host');
     mocks.isCloned.mockReturnValue(true);
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json', '/repo/data/host.json']);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'other',
-      lastUpdated: 'now',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 100, outputTokens: 50 } },
-            totals: { inputTokens: 100, outputTokens: 50 },
+    mocks.readDataFile.mockImplementation((filePath: string) =>
+      filePath.endsWith('/other.json')
+        ? {
+            hostname: 'other',
+            lastUpdated: 'synced-other',
+            days: {
+              '2024-01-01': {
+                claude_code: {
+                  byModel: { claude: { inputTokens: 100, outputTokens: 50 } },
+                  totals: { inputTokens: 100, outputTokens: 50 },
+                },
+              },
+            },
+          }
+        : {
+            hostname: 'host',
+            lastUpdated: 'synced-host',
+            days: {
+              '2024-01-03': {
+                codex: {
+                  byModel: { stale: { inputTokens: 999, outputTokens: 1 } },
+                  totals: { inputTokens: 999, outputTokens: 1 },
+                },
+              },
+            },
           },
-        },
-      },
-    });
+    );
     mocks.buildLocalMachineFile.mockResolvedValue({
       hostname: 'host',
       lastUpdated: 'now',
@@ -167,10 +208,136 @@ describe('loadMergedProviderData', () => {
 
     const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
 
-    expect(mocks.readDataFile).toHaveBeenCalledTimes(1);
+    expect(mocks.readDataFile).toHaveBeenCalledTimes(2);
     expect(mocks.readDataFile.mock.calls[0]?.[0]).toBe('/repo/data/other.json');
     expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(100);
     expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
+    expect(loaded?.providerData.codex?.has('2024-01-03')).toBe(false);
     expect(loaded?.machineData).toHaveLength(2);
+    expect(loaded?.machineData.map((machine) => machine.lastUpdated)).toEqual([
+      'synced-other',
+      'synced-host',
+    ]);
+  });
+
+  it('uses exact basenames when replacing the persisted current machine', async () => {
+    mocks.tryLoadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: 'host',
+    });
+    mocks.resolveMachineId.mockReturnValue('host');
+    mocks.isCloned.mockReturnValue(true);
+    mocks.listDataFiles.mockReturnValue(['/repo/data/work-host.json', '/repo/data/host.json']);
+    mocks.readDataFile.mockImplementation((filePath: string) => ({
+      hostname: filePath.endsWith('/work-host.json') ? 'work-host' : 'host',
+      lastUpdated: 'synced',
+      days: {
+        [filePath.endsWith('/work-host.json') ? '2024-01-01' : '2024-01-02']: {
+          codex: {
+            byModel: { gpt: { inputTokens: 10, outputTokens: 5 } },
+            totals: { inputTokens: 10, outputTokens: 5 },
+          },
+        },
+      },
+    }));
+    mocks.buildLocalMachineFile.mockResolvedValue({
+      hostname: 'host',
+      lastUpdated: 'fresh',
+      days: {
+        '2024-01-03': {
+          codex: {
+            byModel: { gpt: { inputTokens: 20, outputTokens: 10 } },
+            totals: { inputTokens: 20, outputTokens: 10 },
+          },
+        },
+      },
+    });
+
+    const loaded = await loadMergedProviderData({ providers: ['codex'] });
+
+    expect(loaded?.providerData.codex?.has('2024-01-01')).toBe(true);
+    expect(loaded?.providerData.codex?.has('2024-01-02')).toBe(false);
+    expect(loaded?.providerData.codex?.has('2024-01-03')).toBe(true);
+    expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['work-host', 'host']);
+  });
+
+  it('falls back to persisted current-machine data when the local read is empty', async () => {
+    mocks.tryLoadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: 'host',
+    });
+    mocks.resolveMachineId.mockReturnValue('host');
+    mocks.isCloned.mockReturnValue(true);
+    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
+    mocks.readDataFile.mockReturnValue({
+      hostname: 'host',
+      lastUpdated: 'last-sync',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { claude: { inputTokens: 30, outputTokens: 10 } },
+            totals: { inputTokens: 30, outputTokens: 10 },
+          },
+        },
+      },
+    });
+    mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
+
+    const loaded = await loadMergedProviderData({ providers: ['claude_code'] });
+
+    expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(30);
+    expect(loaded?.machineData).toEqual([
+      expect.objectContaining({ hostname: 'host', lastUpdated: 'last-sync' }),
+    ]);
+  });
+
+  it('keeps persisted providers that have no fresh local data without double-counting fresh providers', async () => {
+    mocks.tryLoadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: 'host',
+    });
+    mocks.resolveMachineId.mockReturnValue('host');
+    mocks.isCloned.mockReturnValue(true);
+    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
+    mocks.readDataFile.mockReturnValue({
+      hostname: 'host',
+      lastUpdated: 'last-sync',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { claude: { inputTokens: 30, outputTokens: 10 } },
+            totals: { inputTokens: 30, outputTokens: 10 },
+          },
+        },
+        '2024-01-02': {
+          codex: {
+            byModel: { stale: { inputTokens: 900, outputTokens: 100 } },
+            totals: { inputTokens: 900, outputTokens: 100 },
+          },
+        },
+      },
+    });
+    mocks.buildLocalMachineFile.mockResolvedValue({
+      hostname: 'host',
+      lastUpdated: 'fresh',
+      days: {
+        '2024-01-03': {
+          codex: {
+            byModel: { fresh: { inputTokens: 20, outputTokens: 10 } },
+            totals: { inputTokens: 20, outputTokens: 10 },
+          },
+        },
+      },
+    });
+
+    const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
+
+    expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(30);
+    expect(loaded?.providerData.codex?.has('2024-01-02')).toBe(false);
+    expect(loaded?.providerData.codex?.get('2024-01-03')?.inputTokens).toBe(20);
+    expect(loaded?.machineData).toHaveLength(1);
+    expect(loaded?.machineData[0]).toMatchObject({ hostname: 'host', lastUpdated: 'last-sync' });
+    expect(loaded?.machineData[0]?.days).toHaveProperty('2024-01-01');
+    expect(loaded?.machineData[0]?.days).toHaveProperty('2024-01-02');
   });
 });

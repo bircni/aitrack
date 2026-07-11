@@ -1,8 +1,9 @@
-import { hostname } from 'node:os';
+import { basename } from 'node:path';
 
 import { resolveMachineId, tryLoadConfig } from '../config.js';
 import { isSyncedProvider } from '../display/providers.js';
 import { isCloned, listDataFiles, readDataFile, writePendingMachineFile } from '../git.js';
+import { machineDataFilename } from '../machineId.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { readCursorData } from '../readers/cursor/index.js';
 import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
@@ -99,11 +100,34 @@ function splitByProvider(machineFiles: MachineFile[]): ProviderData {
   return providers;
 }
 
+function machineProviderKeys(machine: MachineFile): Set<string> {
+  const providers = new Set<string>();
+  for (const dayProviders of Object.values(machine.days)) {
+    for (const providerKey of Object.keys(dayProviders)) providers.add(providerKey);
+  }
+  return providers;
+}
+
+function persistedProviderFallback(
+  machine: MachineFile,
+  freshProviders: ReadonlySet<string>,
+): MachineFile | null {
+  const days: MachineFile['days'] = {};
+  for (const [date, dayProviders] of Object.entries(machine.days)) {
+    const fallbackProviders: Record<string, ProviderDay> = {};
+    for (const [providerKey, providerDay] of Object.entries(dayProviders)) {
+      if (!freshProviders.has(providerKey)) fallbackProviders[providerKey] = providerDay;
+    }
+    if (Object.keys(fallbackProviders).length > 0) days[date] = fallbackProviders;
+  }
+  return Object.keys(days).length > 0 ? { ...machine, days } : null;
+}
+
 export async function loadMergedProviderData(
   options: LoadUsageOptions = {},
 ): Promise<LoadedUsageData | null> {
   const config = tryLoadConfig();
-  const machineId = config ? resolveMachineId(config) : hostname();
+  const machineId = resolveMachineId(config ?? { repoUrl: '' });
   const localMachine = await buildLocalMachineFile(machineId);
 
   if (options.stagePending) {
@@ -119,16 +143,28 @@ export async function loadMergedProviderData(
   if (config && isCloned()) {
     const files = listDataFiles();
     fileCount = files.length;
-    const currentFile = `${machineId}.json`;
-    machineData = files
-      .filter((f) => !f.endsWith(currentFile))
-      .map(readDataFile)
-      .filter((data): data is MachineFile => data !== null);
-    providerData = splitByProvider(machineData);
+    const currentFile = machineDataFilename(machineId);
+    const persisted = files
+      .map((filePath) => ({ filePath, machine: readDataFile(filePath) }))
+      .filter(
+        (entry): entry is { filePath: string; machine: MachineFile } => entry.machine !== null,
+      );
+    machineData = persisted.map((entry) => entry.machine);
+
+    const freshProviders = machineProviderKeys(localMachine);
+    const reportMachines: MachineFile[] = [];
+    for (const entry of persisted) {
+      if (basename(entry.filePath) !== currentFile || freshProviders.size === 0) {
+        reportMachines.push(entry.machine);
+        continue;
+      }
+      const fallback = persistedProviderFallback(entry.machine, freshProviders);
+      if (fallback) reportMachines.push(fallback);
+    }
+    providerData = splitByProvider(reportMachines);
   }
 
   if (machineHasData(localMachine)) {
-    machineData.push(localMachine);
     overlayMachineFile(providerData, localMachine);
   }
 
