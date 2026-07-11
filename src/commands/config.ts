@@ -6,7 +6,15 @@ import { migrateMachineDataFiles } from '../git.js';
 import { normalizeMachineId } from '../machineId.js';
 
 /** Configuration keys that can be read/written via the CLI. */
-const CONFIG_KEYS = ['repoUrl', 'machineId', 'claudeProjectsDir', 'codexSessionsDir'] as const;
+export const CONFIG_KEYS = [
+  'repoUrl',
+  'machineId',
+  'claudeProjectsDir',
+  'codexSessionsDir',
+  'daemon.port',
+  'daemon.interval',
+  'daemon.sync',
+] as const;
 type ConfigKey = (typeof CONFIG_KEYS)[number];
 
 function isConfigKey(key: string): key is ConfigKey {
@@ -15,6 +23,47 @@ function isConfigKey(key: string): key is ConfigKey {
 
 function unknownKeyError(key: string): Error {
   return new Error(`Unknown config key: "${key}". Valid keys: ${CONFIG_KEYS.join(', ')}.`);
+}
+
+function configValue(config: Config | null, key: ConfigKey): string | number | boolean | undefined {
+  if (!config) return undefined;
+  switch (key) {
+    case 'repoUrl':
+    case 'machineId':
+    case 'claudeProjectsDir':
+    case 'codexSessionsDir': {
+      return config[key];
+    }
+    case 'daemon.port': {
+      return config.daemon?.port;
+    }
+    case 'daemon.interval': {
+      return config.daemon?.interval;
+    }
+    case 'daemon.sync': {
+      return config.daemon?.sync;
+    }
+  }
+}
+
+function parseDaemonInteger(key: 'daemon.port' | 'daemon.interval', value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${key} must be a positive integer.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error(`${key} must be a positive integer.`);
+  }
+  if (key === 'daemon.port' && parsed > 65_535) {
+    throw new Error('daemon.port must be between 1 and 65535.');
+  }
+  return parsed;
+}
+
+function parseDaemonBoolean(value: string): boolean {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new Error('daemon.sync must be either true or false.');
 }
 
 export interface ConfigCommandOptions {
@@ -51,7 +100,7 @@ function listConfig(): void {
   }
   console.log(chalk.bold('aitrack config'));
   for (const key of CONFIG_KEYS) {
-    const value = config[key];
+    const value = configValue(config, key);
     console.log(`  ${key} = ${value ?? chalk.dim('(unset)')}`);
   }
   console.log(`  ${chalk.dim('resolved machineId')} = ${resolveMachineId(config)}`);
@@ -62,7 +111,7 @@ function getConfig(key: string | undefined): void {
     throw unknownKeyError(key ?? '');
   }
   const config = tryLoadConfig();
-  const value = config?.[key];
+  const value = configValue(config, key);
   if (value === undefined) {
     console.log('');
     return;
@@ -78,12 +127,28 @@ function setConfig(key: string | undefined, value: string | undefined): void {
     throw new Error(`A value is required: aitrack config set ${key} <value>`);
   }
   const existing = tryLoadConfig();
-  const normalizedValue = key === 'machineId' ? normalizeMachineId(value) : value;
+  const normalizedValue =
+    key === 'machineId'
+      ? normalizeMachineId(value)
+      : key === 'daemon.port' || key === 'daemon.interval'
+        ? parseDaemonInteger(key, value)
+        : key === 'daemon.sync'
+          ? parseDaemonBoolean(value)
+          : value;
   if (key === 'machineId') {
     const previousMachineId = resolveMachineId(existing ?? { repoUrl: '' });
-    migrateMachineDataFiles(previousMachineId, normalizedValue);
+    migrateMachineDataFiles(previousMachineId, normalizeMachineId(value));
   }
-  const next: Config = { ...(existing ?? { repoUrl: '' }), [key]: normalizedValue };
+  const base: Config = existing ?? { repoUrl: '' };
+  const next: Config = key.startsWith('daemon.')
+    ? {
+        ...base,
+        daemon: {
+          ...base.daemon,
+          [key.slice('daemon.'.length)]: normalizedValue,
+        },
+      }
+    : { ...base, [key]: normalizedValue };
   saveConfig(next);
   console.log(`Set ${key} = ${normalizedValue}`);
   if (next.repoUrl.length === 0) {

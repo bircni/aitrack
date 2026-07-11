@@ -113,4 +113,11 @@ describe('config', () => {
     );
     expect(tryLoadConfig()).toBeNull();
   });
+
+  it('returns null when the daemon port exceeds the TCP range', () => {
+    writeRawConfig(
+      JSON.stringify({ repoUrl: 'git@example.com:test/repo.git', daemon: { port: 65_536 } }),
+    );
+    expect(tryLoadConfig()).toBeNull();
+  });
 });
