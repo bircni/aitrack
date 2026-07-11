@@ -5,7 +5,11 @@
 // Exits 0 if everything matches, 1 if drift is detected.
 
 import { CLAUDE_PRICING_BY_ID, type ClaudePricing } from '../src/pricing/claude.js';
-import { CODEX_PRICING_CURRENT, type CodexPricing } from '../src/pricing/codex.js';
+import {
+  CODEX_PRICING_BY_ID,
+  CODEX_PRICING_CURRENT,
+  type CodexPricing,
+} from '../src/pricing/codex.js';
 
 const CLAUDE_PRICING_URL = 'https://platform.claude.com/docs/en/about-claude/pricing';
 const CODEX_PRICING_URL = 'https://developers.openai.com/api/docs/pricing';
@@ -57,7 +61,7 @@ async function fetchHtml(url: string): Promise<string> {
 
 // `claude-opus-4-7` -> `Claude Opus 4.7`
 function claudeHeading(modelId: string): string {
-  const m = /^claude-(opus|sonnet|haiku)-(\d+)(?:-(\d+))?$/.exec(modelId);
+  const m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?$/.exec(modelId);
   if (!m) return modelId;
   const familyId = m[1];
   const majorVersion = m[2];
@@ -146,14 +150,32 @@ function codexSummary(p: CodexPricing): string {
   return `$${p.inputPerMillion}/${p.outputPerMillion}`;
 }
 
-async function checkCodex(): Promise<{ drift: number; unverified: number }> {
+// Scan the docs page for priced Codex models we don't track yet. Suffix is
+// open-ended (`-mini`, `-nano`, `-codex-max`, `-luna`, `-sol`, ...) since
+// OpenAI names new tiers/snapshots freely; boundary check below keeps this
+// from swallowing unrelated trailing text.
+function discoverCodexModelsOnPage(html: string): string[] {
+  const re = /gpt-\d+(?:\.\d+)?(?:-[a-z]+)*/g;
+  const found = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const after = html[m.index + m[0].length];
+    if (after && /[\w.-]/.test(after)) continue;
+    const prices = pricesAt(html, [m.index], 3000);
+    if (prices.length === 0) continue;
+    found.add(m[0]);
+  }
+  return [...found].sort((a, b) => a.localeCompare(b));
+}
+
+async function checkCodex(): Promise<{ drift: number; unverified: number; missing: number }> {
   console.log(`\n── Codex (${CODEX_PRICING_URL}) ──`);
   let html: string;
   try {
     html = await fetchHtml(CODEX_PRICING_URL);
   } catch (error) {
     console.error('Fetch failed:', (error as Error).message);
-    return { drift: 1, unverified: 0 };
+    return { drift: 1, unverified: 0, missing: 0 };
   }
 
   let drift = 0;
@@ -182,7 +204,16 @@ async function checkCodex(): Promise<{ drift: number; unverified: number }> {
       drift++;
     }
   }
-  return { drift, unverified };
+
+  let missing = 0;
+  const known = new Set(Object.keys(CODEX_PRICING_BY_ID));
+  for (const modelId of discoverCodexModelsOnPage(html)) {
+    if (known.has(modelId)) continue;
+    console.log(`+ ${modelId.padEnd(22)} — on docs page but missing from src/pricing/codex.ts`);
+    missing++;
+  }
+
+  return { drift, unverified, missing };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
@@ -193,13 +224,11 @@ async function main(): Promise<number> {
 
   const totalDrift = claude.drift + codex.drift;
   const totalUnverified = claude.unverified + codex.unverified;
-  const totalMissing = claude.missing;
+  const totalMissing = claude.missing + codex.missing;
 
   console.log('');
   if (totalMissing > 0) {
-    console.log(
-      `${totalMissing} model(s) on docs page missing from src/pricing/claude.ts — add them and re-run`,
-    );
+    console.log(`${totalMissing} model(s) on docs page missing from src/pricing/*.ts — add them and re-run`);
   }
   if (totalDrift > 0) {
     console.log(`${totalDrift} model(s) drift from current docs — update src/pricing/*.ts`);

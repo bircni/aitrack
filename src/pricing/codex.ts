@@ -20,6 +20,7 @@ export const CODEX_PRICING_CURRENT: Record<string, CodexPricing> = {
   'gpt-5.4-mini': { inputPerMillion: 0.75, outputPerMillion: 4.5 },
   'gpt-5.4-nano': { inputPerMillion: 0.2, outputPerMillion: 1.25 },
   'gpt-5.3-codex': { inputPerMillion: 1.75, outputPerMillion: 14 },
+  'gpt-5-codex': { inputPerMillion: 1.25, outputPerMillion: 10 },
 };
 
 // Models we've seen in synced session data but that OpenAI no longer lists
