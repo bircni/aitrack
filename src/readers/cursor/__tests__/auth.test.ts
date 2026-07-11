@@ -119,6 +119,25 @@ describe('cursor auth', () => {
     expect(calls[0]).toBe('Bearer good-token');
   });
 
+  it.each([
+    ['http://cursor.test', 'must use HTTPS'],
+    ['https://user:password@cursor.test', 'must not contain embedded credentials'],
+    ['not a URL', 'must be a valid HTTPS URL'],
+  ])(
+    'rejects an unsafe Cursor export endpoint %s before sending credentials',
+    async (url, error) => {
+      let calls = 0;
+      setFetchMock(() => {
+        calls++;
+        return new Response('unexpected', { status: 200 });
+      });
+      process.env.CURSOR_WEB_BASE_URL = url;
+
+      await expect(fetchCursorUsageCsv('secret-token')).rejects.toThrow(error);
+      expect(calls).toBe(0);
+    },
+  );
+
   it('tries cookie auth when bearer fails and includes JWT subject cookies', async () => {
     const token = jwtWithSub('user-1');
     const cookieHeaders: string[] = [];
