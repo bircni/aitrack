@@ -72,7 +72,12 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
   });
 
   if (!loaded || loaded.machineData.length === 0) {
-    console.log(usageEmptyMessage(loaded?.warnedNotConfigured ?? isUsageNotConfigured()));
+    const message = usageEmptyMessage(loaded?.warnedNotConfigured ?? isUsageNotConfigured());
+    if (options.json) {
+      printJsonCommand('machines', { machines: [], message });
+    } else {
+      console.log(message);
+    }
     return;
   }
 
