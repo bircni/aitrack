@@ -1,6 +1,5 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { hostname } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,7 +24,7 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...actual, exec: vi.fn() };
 });
 
-import { saveConfig } from '../../config.js';
+import { localMachineId, saveConfig } from '../../config.js';
 import type { MachineFile } from '../../data/types.js';
 import { LOCAL_REPO } from '../../git.js';
 import { showCommand } from '../show.js';
@@ -97,8 +96,11 @@ describe('integration', () => {
 
     await syncCommand();
 
-    const host = hostname();
+    // Short hostname, not the FQDN: the machine identity must not change with
+    // the network the machine happens to be on.
+    const host = localMachineId();
     const dataFile = join(LOCAL_REPO, 'data', `${host}.json`);
+    expect(host).not.toContain('.');
     expect(existsSync(dataFile)).toBe(true);
 
     const data = readMachineFile(dataFile);

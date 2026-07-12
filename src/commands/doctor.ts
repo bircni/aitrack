@@ -6,7 +6,8 @@ import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
 import { resolveMachineId, tryLoadConfig } from '../config.js';
-import { isCloned, LOCAL_REPO } from '../git.js';
+import type { MachineFile } from '../data/types.js';
+import { isCloned, listDataFiles, LOCAL_REPO, readDataFile } from '../git.js';
 import { CLAUDE_PRICING_BY_ID } from '../pricing/claude.js';
 import { CODEX_PRICING_BY_ID } from '../pricing/codex.js';
 import { getClaudePaths } from '../readers/claude.js';
@@ -164,6 +165,54 @@ async function cursorCheck(): Promise<CheckResult> {
   }
 }
 
+// One physical machine synced under two identities (e.g. after a hostname or
+// machineId change that left the old data file behind) gets counted twice in
+// every aggregate. The tell is the same day carrying a byte-identical payload
+// under more than one machine file — real distinct machines never collide.
+export function duplicateMachineCheck(): CheckResult {
+  const machines = listDataFiles()
+    .map((filePath) => readDataFile(filePath))
+    .filter((machine): machine is MachineFile => machine !== null);
+
+  const byDay = new Map<string, Map<string, string[]>>();
+  for (const machine of machines) {
+    for (const [date, providers] of Object.entries(machine.days)) {
+      const payloads = byDay.get(date) ?? new Map<string, string[]>();
+      const payload = JSON.stringify(providers);
+      payloads.set(payload, [...(payloads.get(payload) ?? []), machine.hostname]);
+      byDay.set(date, payloads);
+    }
+  }
+
+  const collidingDays = new Set<string>();
+  const collidingMachines = new Set<string>();
+  for (const [date, payloads] of byDay) {
+    for (const hostnames of payloads.values()) {
+      if (hostnames.length < 2) continue;
+      collidingDays.add(date);
+      for (const host of hostnames) collidingMachines.add(host);
+    }
+  }
+
+  if (collidingDays.size === 0) {
+    return {
+      status: 'ok',
+      label: 'Machine identities',
+      detail: `${machines.length} machine(s), no duplicated days`,
+    };
+  }
+
+  const names = [...collidingMachines].sort((a, b) => a.localeCompare(b)).join(', ');
+  return {
+    status: 'warn',
+    label: 'Machine identities',
+    detail:
+      `${collidingDays.size} day(s) are recorded identically under multiple machines (${names}) — ` +
+      'totals are inflated. These are likely one machine synced under several ids; ' +
+      'merge them into one data file.',
+  };
+}
+
 async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
   const config = tryLoadConfig();
   const checks: CheckResult[] = [];
@@ -193,6 +242,7 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
   });
 
   if (isCloned()) {
+    checks.push(duplicateMachineCheck());
     checks.push(
       commandCheck('Repo health', 'git', ['status', '--short'], {
         cwd: LOCAL_REPO,

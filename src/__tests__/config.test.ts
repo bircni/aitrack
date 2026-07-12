@@ -9,12 +9,20 @@ const TEST_HOME = vi.hoisted(() => {
   return `${temporary}/aitrack-config-test`;
 });
 
+const osMock = vi.hoisted(() => ({ hostname: 'MB-Pro-M4.int.example.com' }));
+
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:os')>();
-  return { ...actual, homedir: () => TEST_HOME };
+  return { ...actual, homedir: () => TEST_HOME, hostname: () => osMock.hostname };
 });
 
-import { loadConfig, resolveMachineId, saveConfig, tryLoadConfig } from '../config.js';
+import {
+  loadConfig,
+  localMachineId,
+  resolveMachineId,
+  saveConfig,
+  tryLoadConfig,
+} from '../config.js';
 
 describe('config', () => {
   beforeAll(() => mkdirSync(TEST_HOME, { recursive: true }));
@@ -119,5 +127,24 @@ describe('config', () => {
       JSON.stringify({ repoUrl: 'git@example.com:test/repo.git', daemon: { port: 65_536 } }),
     );
     expect(tryLoadConfig()).toBeNull();
+  });
+
+  describe('localMachineId', () => {
+    // The same machine reports different FQDNs per network; keying data files
+    // off the FQDN mints a second identity and double-counts every total.
+    it('uses the short hostname so network/DNS changes do not fork the identity', () => {
+      osMock.hostname = 'MB-Pro-M4.local';
+      expect(localMachineId()).toBe('MB-Pro-M4');
+
+      osMock.hostname = 'MB-Pro-M4.int.example.com';
+      expect(localMachineId()).toBe('MB-Pro-M4');
+
+      expect(resolveMachineId({ repoUrl: '' })).toBe('MB-Pro-M4');
+    });
+
+    it('keeps a bare hostname unchanged', () => {
+      osMock.hostname = 'pridwen';
+      expect(localMachineId()).toBe('pridwen');
+    });
   });
 });
