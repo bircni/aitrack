@@ -109,6 +109,17 @@ export function saveConfig(config: Config): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf8');
 }
 
+// Use the short hostname, not the FQDN: the same machine reports different
+// fully-qualified names depending on the network it is on (e.g. `host.local`
+// at home vs `host.corp.example` on a VPN). Keying data files off the FQDN
+// mints a fresh machine identity per network, and the old file keeps being
+// counted as a separate machine — silently multiplying every total.
+export function localMachineId(): string {
+  const raw = hostname();
+  const shortName = raw.split('.', 1)[0];
+  return shortName && shortName.length > 0 ? shortName : raw;
+}
+
 export function resolveMachineId(config: Config): string {
-  return normalizeMachineId(config.machineId ?? hostname());
+  return normalizeMachineId(config.machineId ?? localMachineId());
 }

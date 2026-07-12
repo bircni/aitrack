@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   resolveMachineId: vi.fn(),
   isCloned: vi.fn(),
+  listDataFiles: vi.fn(),
+  readDataFile: vi.fn(),
   getClaudePaths: vi.fn(),
   getCodexPaths: vi.fn(),
   getCursorStateDbPath: vi.fn(),
@@ -21,6 +23,8 @@ vi.mock('../../config.js', () => ({
 }));
 vi.mock('../../git.js', () => ({
   isCloned: mocks.isCloned,
+  listDataFiles: mocks.listDataFiles,
+  readDataFile: mocks.readDataFile,
   LOCAL_REPO: '/repo',
 }));
 vi.mock('../../readers/claude.js', () => ({ getClaudePaths: mocks.getClaudePaths }));
@@ -30,7 +34,7 @@ vi.mock('../../readers/cursor/auth.js', () => ({
   readCursorAuthState: mocks.readCursorAuthState,
 }));
 
-import { doctorCommand } from '../doctor.js';
+import { doctorCommand, duplicateMachineCheck } from '../doctor.js';
 
 function dirent(
   name: string,
@@ -53,6 +57,8 @@ function output(): string {
 describe('doctorCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.listDataFiles.mockReturnValue([]);
+    mocks.readDataFile.mockReturnValue(null);
     process.exitCode = undefined;
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     mocks.spawnSync.mockReturnValue({ status: 0 });
@@ -139,5 +145,38 @@ describe('doctorCommand', () => {
     expect(parsed.command).toBe('doctor');
     expect(parsed.checks.some((check) => check.label === 'Node.js')).toBe(true);
     expect(parsed.hasFailures).toBe(false);
+  });
+
+  describe('duplicateMachineCheck', () => {
+    const machine = (hostname: string, days: Record<string, unknown>) => ({ hostname, days });
+    const day = (cost: number) => ({
+      claude_code: {
+        byModel: { 'claude-opus-4-8': { inputTokens: 10, outputTokens: 2, costUSD: cost } },
+        totals: { inputTokens: 10, outputTokens: 2, costUSD: cost },
+      },
+    });
+
+    it('warns when one machine is synced under several ids', () => {
+      const shared = day(5);
+      mocks.listDataFiles.mockReturnValue(['/repo/data/a.json', '/repo/data/b.json']);
+      mocks.readDataFile
+        .mockReturnValueOnce(machine('MB-Pro-M4.local', { '2026-07-01': shared }))
+        .mockReturnValueOnce(machine('MB-Pro-M4.int.example', { '2026-07-01': shared }));
+
+      const check = duplicateMachineCheck();
+      expect(check.status).toBe('warn');
+      expect(check.detail).toContain('1 day(s)');
+      expect(check.detail).toContain('MB-Pro-M4.int.example');
+      expect(check.detail).toContain('MB-Pro-M4.local');
+    });
+
+    it('does not warn for genuinely distinct machines sharing a date', () => {
+      mocks.listDataFiles.mockReturnValue(['/repo/data/a.json', '/repo/data/b.json']);
+      mocks.readDataFile
+        .mockReturnValueOnce(machine('laptop', { '2026-07-01': day(5) }))
+        .mockReturnValueOnce(machine('desktop', { '2026-07-01': day(7) }));
+
+      expect(duplicateMachineCheck().status).toBe('ok');
+    });
   });
 });
