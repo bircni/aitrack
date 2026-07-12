@@ -38,6 +38,20 @@ describe('claude pricing', () => {
     expect(consumeClaudeFallbackHits()).toEqual(['claude-opus-9-9']);
   });
 
+  it('keeps unknown fable and mythos models on the top tier, not sonnet', () => {
+    consumeClaudeFallbackHits();
+    for (const model of ['claude-fable-5-1', 'claude-fable-6', 'claude-mythos-5-1']) {
+      const pricing = findClaudePricing(model);
+      expect(pricing.inputPerMillion).toBe(10);
+      expect(pricing.outputPerMillion).toBe(50);
+    }
+    expect(consumeClaudeFallbackHits()).toEqual([
+      'claude-fable-5-1',
+      'claude-fable-6',
+      'claude-mythos-5-1',
+    ]);
+  });
+
   it('honors date-versioned pricing overrides', () => {
     CLAUDE_PRICING_OVERRIDES['claude-sonnet-4-6'] = [
       {

@@ -56,7 +56,9 @@ export const CLAUDE_PRICING_OVERRIDES: Record<
 };
 
 // Family fallback for unknown future models.
-const FAMILY_FALLBACK: Record<'opus' | 'sonnet' | 'haiku', ClaudePricing> = {
+const FAMILY_FALLBACK: Record<'fable' | 'mythos' | 'opus' | 'sonnet' | 'haiku', ClaudePricing> = {
+  fable: priceFromBase(10, 50),
+  mythos: priceFromBase(10, 50),
   opus: priceFromBase(5, 25),
   sonnet: priceFromBase(3, 15),
   haiku: priceFromBase(1, 5),
@@ -91,7 +93,7 @@ export function findClaudePricing(model: string, usageDate?: string): ClaudePric
   }
   const exact = CLAUDE_PRICING_BY_ID[id];
   if (exact) return exact;
-  for (const family of ['opus', 'haiku', 'sonnet'] as const) {
+  for (const family of ['fable', 'mythos', 'opus', 'haiku', 'sonnet'] as const) {
     if (!id.includes(family)) {
       continue;
     }
