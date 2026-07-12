@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.0] - 2026-07-12
+
+
+### Bug Fixes
+
+- **pricing:** Detect new codex models and verify fable/mythos pricing (#42)
+- **cli:** Keep empty JSON responses machine-readable
+- **cli:** Align option and help contracts
+- **codex:** Preserve session day and model attribution
+- **pricing:** Use exact and cache-aware model costs
+- **data:** Validate and repair aggregate totals
+- **cursor:** Preserve legacy aggregate token rows
+- **release:** Preview versions and push exact tags
+- **build:** Make dist cleanup cross-platform
+- **release:** Allow remote-free dry-run previews
+- **cursor:** Require secure export endpoints
+- **pricing:** Detect and price current vendor models
+- **ci:** Run vendor pricing checks weekly
+- **security:** Constrain machine data filenames
+- **data:** Migrate machine identities safely
+- **data:** Preserve persisted machine history
+- **config:** Expose typed daemon defaults
+
+### Build
+
+- Migrate from eslint/prettier to oxc (oxlint + oxfmt) (#38)
+
+### Documentation
+
+- Align commands privacy and publishing behavior
+
 ## [v1.0.0] - 2026-07-07
 
 
