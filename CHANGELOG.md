@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.1] - 2026-07-22
+
+
+### Bug Fixes
+
+- **pricing:** Keep unknown Fable/Mythos models on the top tier
+- **data:** Derive machine identity from the short hostname
+
 ## [v1.1.0] - 2026-07-12
 
 
