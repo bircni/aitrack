@@ -8,6 +8,14 @@ import {
 
 describe('claude pricing', () => {
   it('finds exact pricing for known model ids', () => {
+    const opus5 = findClaudePricing('claude-opus-5');
+    expect(opus5).toEqual({
+      inputPerMillion: 5,
+      outputPerMillion: 25,
+      cacheReadPerMillion: 0.5,
+      cacheCreatePerMillion: 6.25,
+    });
+
     const sonnet = findClaudePricing('claude-sonnet-4-6');
     expect(sonnet.inputPerMillion).toBe(3);
     expect(sonnet.outputPerMillion).toBe(15);
