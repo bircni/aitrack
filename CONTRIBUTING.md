@@ -53,7 +53,7 @@ Commits **must** follow [Conventional Commits](https://www.conventionalcommits.o
 
 ## Releasing
 
-Releases are generated from Conventional Commits using [git-cliff](https://git-cliff.org/). Tagging and pushing happen locally; **npm publish runs in CI** when the tag lands on GitHub.
+Releases are generated from Conventional Commits using [git-cliff](https://git-cliff.org/). Tagging and pushing happen locally; **npm publish and GitHub Release creation run in CI** when the tag lands on GitHub.
 
 ### One-time setup
 
@@ -67,7 +67,7 @@ pnpm run release
 
 Patch bump by default. Pass a bump type if needed: `pnpm run release -- minor`.
 
-This runs `validate` and `build`, bumps `package.json`, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes the current branch plus that exact tag to the configured remote. npm publish happens in CI — not locally.
+This runs `validate` and `build`, bumps `package.json`, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes the current branch plus that exact tag to the configured remote. npm publish and GitHub Release creation happen in CI — not locally.
 
 Preview without changing anything:
 
@@ -79,4 +79,4 @@ The dry run calculates and prints the next version, changelog command, commit, a
 
 ### After the tag is pushed
 
-The [Publish workflow](.github/workflows/publish.yml) triggers when the release script pushes its exact `v*` tag, re-runs `validate`, builds, and runs `pnpm publish --no-git-checks`. Public access comes from `publishConfig` in `package.json`; authentication comes from npm trusted publishing through the workflow's `id-token: write` permission.
+The [Publish workflow](.github/workflows/publish.yml) triggers when the release script pushes its exact `v*` tag. It re-runs `validate`, builds, extracts that tag's section from `CHANGELOG.md`, creates or updates the matching GitHub Release, and runs `pnpm publish --no-git-checks`. Prerelease tags produce GitHub prereleases. Public npm access comes from `publishConfig` in `package.json`; authentication comes from npm trusted publishing through the workflow's `id-token: write` permission.

@@ -169,7 +169,9 @@ function main() {
     console.log(`Dry run complete: would release ${tag}. No repository files were changed.`);
   } else {
     console.log(`Release complete: ${tag}`);
-    console.log('npm publish runs in GitHub Actions via npm trusted publishing.');
+    console.log(
+      'npm publish and GitHub Release creation run in GitHub Actions after the tag is pushed.',
+    );
   }
 }
 

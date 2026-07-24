@@ -7,12 +7,14 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -36,3 +38,55 @@ jobs:
 
       - name: Publish
         run: pnpm publish --no-git-checks
+
+  github-release:
+    name: Create GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: |
+            CHANGELOG.md
+            scripts/release-notes.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Extract GitHub release notes
+        run: node scripts/release-notes.mjs "$GITHUB_REF_NAME" CHANGELOG.md > release-notes.md
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            is_prerelease=true
+          else
+            is_prerelease=false
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # Set the flag explicitly so a re-run can also clear a stale prerelease flag.
+            edit_flags=(--prerelease="$is_prerelease")
+            if [[ "$is_prerelease" == false ]]; then
+              edit_flags+=(--latest)
+            fi
+            gh release edit "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file release-notes.md \
+              "${edit_flags[@]}"
+          else
+            create_flags=()
+            if [[ "$is_prerelease" == true ]]; then
+              create_flags+=(--prerelease)
+            fi
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file release-notes.md \
+              "${create_flags[@]}"
+          fi
