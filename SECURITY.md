@@ -22,4 +22,6 @@
 
 ## Reporting vulnerabilities
 
-If you find a security issue in aitrack itself, please open a [GitHub issue](https://github.com/bircni/aitrack/issues) or contact the maintainers privately. Do not disclose sensitive details in a public issue until a fix is available.
+If you find a security issue in aitrack itself, please
+[report it privately through GitHub Security Advisories](https://github.com/bircni/aitrack/security/advisories/new).
+Do not disclose sensitive details in a public issue.
