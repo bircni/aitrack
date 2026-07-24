@@ -26,7 +26,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 
 import { localMachineId, saveConfig } from '../../config.js';
 import type { MachineFile } from '../../data/types.js';
-import { LOCAL_REPO } from '../../git.js';
+import { commitAndPush, LOCAL_REPO } from '../../git.js';
 import { showCommand } from '../show.js';
 import { syncCommand } from '../sync.js';
 
@@ -132,6 +132,56 @@ describe('integration', () => {
       .split('\n').length;
 
     expect(commitsAfterSecond).toBe(commitsAfterFirst);
+  });
+
+  it('rebases and preserves both machines when concurrent pushes race', () => {
+    const originDir = join(TEST_HOME, 'origin.git');
+    const dataDir = join(LOCAL_REPO, 'data');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(
+      join(dataDir, 'machine-a.json'),
+      JSON.stringify({ hostname: 'machine-a', lastUpdated: 'first', days: {} }),
+    );
+    expect(commitAndPush('machine-a')).toBe(true);
+
+    const secondClone = join(TEST_HOME, 'machine-b-repo');
+    execSync(`git clone "${originDir}" "${secondClone}"`, { stdio: 'pipe' });
+    execSync('git config user.email "machine-b@aitrack.test"', {
+      cwd: secondClone,
+      stdio: 'pipe',
+    });
+    execSync('git config user.name "Machine B"', { cwd: secondClone, stdio: 'pipe' });
+    mkdirSync(join(secondClone, 'data'), { recursive: true });
+    writeFileSync(
+      join(secondClone, 'data', 'machine-b.json'),
+      JSON.stringify({ hostname: 'machine-b', lastUpdated: 'concurrent', days: {} }),
+    );
+    writeFileSync(
+      join(secondClone, 'data', 'machine-a.json'),
+      JSON.stringify({ hostname: 'machine-a', lastUpdated: 'remote-race', days: {} }),
+    );
+    execSync('git add data/ && git commit -m "sync: machine-b"', {
+      cwd: secondClone,
+      stdio: 'pipe',
+    });
+
+    writeFileSync(
+      join(dataDir, 'machine-a.json'),
+      JSON.stringify({ hostname: 'machine-a', lastUpdated: 'local-wins', days: {} }),
+    );
+    execSync('git push', { cwd: secondClone, stdio: 'pipe' });
+
+    expect(commitAndPush('machine-a')).toBe(true);
+
+    const machineA = JSON.parse(
+      execSync('git show HEAD:data/machine-a.json', { cwd: LOCAL_REPO }).toString(),
+    ) as MachineFile;
+    const machineB = JSON.parse(
+      execSync('git show HEAD:data/machine-b.json', { cwd: LOCAL_REPO }).toString(),
+    ) as MachineFile;
+    expect(machineA.lastUpdated).toBe('local-wins');
+    expect(machineB.lastUpdated).toBe('concurrent');
+    expect(execSync('git rev-list --count HEAD', { cwd: LOCAL_REPO }).toString().trim()).toBe('3');
   });
 
   it('sync with no AI data exits cleanly without committing anything', async () => {

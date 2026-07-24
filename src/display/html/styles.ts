@@ -31,6 +31,25 @@ body {
 }
 .page-header h1 { font-size: 24px; font-weight: 700; }
 .page-meta { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.daemon-status {
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background: var(--section-bg);
+  font-size: 13px;
+}
+.daemon-status-heading { display: flex; align-items: center; gap: 8px; }
+.daemon-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #2da44e;
+}
+.daemon-status-active .daemon-status-dot { background: #bf8700; }
+.daemon-status-degraded .daemon-status-dot { background: #cf222e; }
+.daemon-status-details { color: var(--muted); margin-top: 5px; }
+.daemon-status-error { color: #cf222e; margin-top: 7px; }
 .empty-state {
   padding: 48px 24px;
   text-align: center;

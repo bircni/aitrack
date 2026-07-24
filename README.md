@@ -139,6 +139,11 @@ the same weekdays last week. Comparison data is also included with `--json`.
 
 **`doctor` flags:** `--pricing-check` runs the pricing drift script when you are in a source checkout.
 
+**Daemon reliability:** refresh and sync ticks are single-flight, so a slow refresh cannot overlap the
+next one. The dashboard shows the last successful refresh and sync plus the latest error. For local
+monitoring, `GET /healthz` reports process liveness, `GET /readyz` reports whether a refresh has
+succeeded, and `GET /status.json` returns the full runtime status as JSON.
+
 ---
 
 ## How it works
@@ -155,7 +160,7 @@ the same weekdays last week. Comparison data is also included with `--json`.
         └── work-laptop.json
 ```
 
-- **Sync** uses a local git clone at `~/.config/aitrack/repo/` with your existing git credentials — ordinary pulls and pushes.
+- **Sync** uses a local git clone at `~/.config/aitrack/repo/` with your existing git credentials. Non-fast-forward pushes are rebased and retried up to three times; if both machines updated the same machine file, only the current machine's freshly generated file is reapplied.
 - **`show` (PNG or `--tui`) always reads fresh local Claude/Codex JSONL** on the current machine and merges in other machines' synced files. No `sync` needed to preview.
 - Before `init`, local usage is staged in `~/.config/aitrack/pending/data/` and adopted by the next `init`.
 - **Cursor** is loaded only on the current machine when selected: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls the CSV usage export at `CURSOR_WEB_BASE_URL` (`https://cursor.com` by default). The endpoint is required to use HTTPS and contain no embedded credentials. Any configured HTTPS origin receives the Cursor token, so override it only with an endpoint you trust. The token is **never** written to your repo. Use `--providers` without `cursor` (for example, `--providers claude,codex`) to skip both the credential read and request.

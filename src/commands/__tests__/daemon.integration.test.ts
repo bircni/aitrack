@@ -89,6 +89,25 @@ describe('daemon HTTP integration', () => {
     expect(index.status).toBe(200);
     expect(await index.text()).toContain('live-dashboard');
 
+    const health = await fetch(`${base}/healthz`);
+    expect(health.status).toBe(200);
+    await expect(health.json()).resolves.toMatchObject({ status: 'ok' });
+
+    const readiness = await fetch(`${base}/readyz`);
+    expect(readiness.status).toBe(200);
+    await expect(readiness.json()).resolves.toMatchObject({
+      state: 'ready',
+      refreshInProgress: false,
+    });
+
+    const status = await fetch(`${base}/status.json`);
+    expect(status.status).toBe(200);
+    await expect(status.json()).resolves.toMatchObject({
+      state: 'ready',
+      providers: ['claude_code'],
+      lastError: null,
+    });
+
     const missing = await fetch(`${base}/missing`);
     expect(missing.status).toBe(404);
 

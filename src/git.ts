@@ -18,6 +18,19 @@ import { machineDataFilename, normalizeMachineId } from './machineId.js';
 
 export const LOCAL_REPO = join(homedir(), '.config', 'aitrack', 'repo');
 export const PENDING_DATA_DIR = join(homedir(), '.config', 'aitrack', 'pending', 'data');
+const MAX_PUSH_ATTEMPTS = 3;
+
+class GitCommandError extends Error {
+  constructor(
+    readonly args: string[],
+    readonly status: number | null,
+    readonly output: string,
+  ) {
+    const detail = output === '' ? '' : `: ${output}`;
+    super(`git ${args.join(' ')} failed with exit code ${String(status)}${detail}`);
+    this.name = 'GitCommandError';
+  }
+}
 
 function machineFilePath(directory: string, machineId: string): string {
   return join(directory, machineDataFilename(machineId));
@@ -32,7 +45,9 @@ function runGit(args: string[], options: { stdio?: 'inherit' | 'pipe' } = {}): s
       encoding: 'utf8',
     });
     if (result.status !== 0) {
-      throw new Error(`git ${args.join(' ')} failed with exit code ${String(result.status)}`);
+      const stdout = typeof result.stdout === 'string' ? result.stdout.trim() : '';
+      const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
+      throw new GitCommandError(args, result.status, stderr === '' ? stdout : stderr);
     }
     const stdout = result.stdout;
     return typeof stdout === 'string' ? stdout.trim() : '';
@@ -40,9 +55,113 @@ function runGit(args: string[], options: { stdio?: 'inherit' | 'pipe' } = {}): s
 
   const result = spawnSync('git', args, { cwd: LOCAL_REPO, stdio: 'inherit' });
   if (result.status !== 0) {
-    throw new Error(`git ${args.join(' ')} failed with exit code ${String(result.status)}`);
+    throw new GitCommandError(args, result.status, '');
   }
   return '';
+}
+
+function hasUpstream(): boolean {
+  const result = spawnSync(
+    'git',
+    ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+    {
+      cwd: LOCAL_REPO,
+      stdio: 'pipe',
+      encoding: 'utf8',
+    },
+  );
+  return result.status === 0;
+}
+
+function isNonFastForward(error: unknown): error is GitCommandError {
+  return (
+    error instanceof GitCommandError &&
+    /(?:non-fast-forward|fetch first|\[rejected\].*(?:rejected|stale info))/i.test(error.output)
+  );
+}
+
+interface RetryConflict {
+  path: string;
+  contents: string;
+}
+
+function isRebaseInProgress(): boolean {
+  return (
+    existsSync(join(LOCAL_REPO, '.git', 'rebase-merge')) ||
+    existsSync(join(LOCAL_REPO, '.git', 'rebase-apply'))
+  );
+}
+
+function rebaseForPushRetry(conflict: RetryConflict | undefined, branch: string | null): void {
+  try {
+    const remote = branch === null ? [] : ['origin', branch];
+    runGit(['pull', '--rebase', '--quiet', ...remote], { stdio: 'pipe' });
+  } catch (error) {
+    const conflicts = runGit(['diff', '--name-only', '--diff-filter=U'], { stdio: 'pipe' })
+      .split('\n')
+      .filter((path) => path !== '');
+    if (
+      conflict &&
+      conflicts.length === 1 &&
+      conflicts[0] === conflict.path &&
+      isRebaseInProgress()
+    ) {
+      writeFileSync(join(LOCAL_REPO, conflict.path), conflict.contents, 'utf8');
+      runGit(['add', '--', `:(literal)${conflict.path}`], { stdio: 'pipe' });
+      runGit(['-c', 'core.editor=true', 'rebase', '--continue'], { stdio: 'pipe' });
+      return;
+    }
+    if (isRebaseInProgress()) {
+      try {
+        runGit(['rebase', '--abort'], { stdio: 'pipe' });
+      } catch {
+        // Preserve the original retry failure below.
+      }
+    }
+    throw new Error(
+      `Concurrent sync detected, but the local commit could not be replayed safely. ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+}
+
+function pushWithRetry(conflict?: RetryConflict): void {
+  const upstream = hasUpstream();
+  const branch = upstream ? null : runGit(['branch', '--show-current'], { stdio: 'pipe' });
+  if (!upstream && branch === '') {
+    throw new Error('Cannot push from a detached HEAD without an upstream branch.');
+  }
+  for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
+    try {
+      runGit(upstream ? ['push'] : ['push', '-u', 'origin', 'HEAD'], { stdio: 'pipe' });
+      return;
+    } catch (error) {
+      if (!isNonFastForward(error) || attempt === MAX_PUSH_ATTEMPTS) throw error;
+      rebaseForPushRetry(conflict, branch);
+    }
+  }
+}
+
+function commitStagedData(message: string, conflict?: RetryConflict): boolean {
+  const staged = runGit(['diff', '--cached', '--name-only', '--', 'data/'], { stdio: 'pipe' });
+  if (!staged) return false;
+
+  const result = spawnSync('git', ['commit', '-m', message], {
+    cwd: LOCAL_REPO,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    const stdout = typeof result.stdout === 'string' ? result.stdout.trim() : '';
+    const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
+    throw new GitCommandError(
+      ['commit', '-m', message],
+      result.status,
+      stderr === '' ? stdout : stderr,
+    );
+  }
+  pushWithRetry(conflict);
+  return true;
 }
 
 export function isCloned(): boolean {
@@ -83,28 +202,18 @@ export function tryPull(options?: { quiet?: boolean }): void {
 
 export function commitDataChanges(message: string): boolean {
   runGit(['add', 'data/']);
-  const staged = runGit(['status', '--porcelain', '--', 'data/'], { stdio: 'pipe' });
-  if (!staged) {
-    return false;
-  }
-  const result = spawnSync('git', ['commit', '-m', message], {
-    cwd: LOCAL_REPO,
-    stdio: 'pipe',
-  });
-  if (result.status !== 0) {
-    throw new Error(`git commit failed with exit code ${String(result.status)}`);
-  }
-  try {
-    runGit(['push']);
-  } catch {
-    runGit(['push', '-u', 'origin', 'HEAD']);
-  }
-  return true;
+  return commitStagedData(message);
 }
 
 export function commitAndPush(hostname: string): boolean {
   const machineId = normalizeMachineId(hostname);
-  return commitDataChanges(`sync: ${machineId} at ${new Date().toISOString()}`);
+  const path = `data/${machineDataFilename(machineId)}`;
+  runGit(['add', '--', `:(literal)${path}`]);
+  const contents = readFileSync(join(LOCAL_REPO, path), 'utf8');
+  return commitStagedData(`sync: ${machineId} at ${new Date().toISOString()}`, {
+    path,
+    contents,
+  });
 }
 
 /** Whether this machine's target file is modified, renamed, or untracked in the data repo. */
@@ -144,6 +253,7 @@ interface MachineFileMigration {
   target: string;
   sourceContents: string;
   contents: string;
+  repositoryPaths?: [string, string];
 }
 
 function planMachineFileMigration(
@@ -174,6 +284,13 @@ function planMachineFileMigration(
     target,
     sourceContents,
     contents: JSON.stringify({ ...machine, hostname: nextMachineId }, null, 2),
+    repositoryPaths:
+      directory === join(LOCAL_REPO, 'data')
+        ? [
+            `data/${machineDataFilename(previousMachineId)}`,
+            `data/${machineDataFilename(nextMachineId)}`,
+          ]
+        : undefined,
   };
 }
 
@@ -209,6 +326,12 @@ export function migrateMachineDataFiles(previousId: string, nextId: string): voi
         rmSync(plan.target, { force: true });
         throw error;
       }
+    }
+    for (const plan of plans) {
+      if (plan.repositoryPaths === undefined) continue;
+      runGit(['add', '--', ...plan.repositoryPaths.map((path) => `:(literal)${path}`)], {
+        stdio: 'pipe',
+      });
     }
   } catch (error) {
     let rollbackError: unknown;
