@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.2.0] - 2026-07-24
+
+
+### Bug Fixes
+
+- **pricing:** Add Claude Opus 5 rates
+
+### CI
+
+- Add cross-platform CLI smoke coverage
+- Delay fresh dependency updates
+
+### Features
+
+- **usage:** Compare with previous periods
+- **sync:** Harden concurrent daemon refreshes
+- **release:** Publish GitHub releases from changelog (#53)
+
+### Tests
+
+- Cover operational edge cases
+
 ## [v1.1.1] - 2026-07-22
 
 
