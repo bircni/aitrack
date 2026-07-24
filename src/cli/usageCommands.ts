@@ -7,6 +7,7 @@ import { cliErrorMessage, parseProviders, parseUsageReportOptions } from './pars
 interface UsageCommonOptions {
   providers?: string[];
   json?: boolean;
+  compare?: boolean;
 }
 
 const PROVIDERS_FLAG = '--providers <list>';
@@ -23,6 +24,7 @@ function runUsageFromPeriod(
     parsed = {
       ...parseUsageReportOptions({ period, args, providers: options.providers }),
       json: options.json,
+      ...(options.compare !== undefined && { compare: options.compare }),
     };
   } catch (error) {
     console.error(cliErrorMessage(error));
@@ -41,6 +43,7 @@ export function registerUsageCommands(
       .command(def.name)
       .description(def.description)
       .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
+      .option('--compare', 'compare with the equivalent previous period')
       .option('--json', 'print machine-readable JSON');
 
     switch (def.argShape) {

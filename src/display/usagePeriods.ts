@@ -129,6 +129,90 @@ export interface UsageWindow {
   label: string;
 }
 
+function parseDateString(value: string): Date {
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
+function formatDateString(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function shiftDate(value: string, days: number): string {
+  const date = parseDateString(value);
+  date.setUTCDate(date.getUTCDate() + days);
+  return formatDateString(date);
+}
+
+function inclusiveDayCount(start: string, end: string): number {
+  const milliseconds = parseDateString(end).getTime() - parseDateString(start).getTime();
+  return Math.floor(milliseconds / 86_400_000) + 1;
+}
+
+export function computePreviousUsageWindow(
+  options: UsageWindowOptions,
+  current: UsageWindow = computeUsageWindow(options),
+): UsageWindow {
+  if (options.period === 'all') {
+    throw new Error('All-time usage does not have a comparable previous period.');
+  }
+
+  if (options.period === 'thisweek' || options.period === 'lastweek') {
+    const start = shiftDate(current.start, -7);
+    const end = shiftDate(current.end, -7);
+    const prefix = options.period === 'thisweek' ? 'previous week to date' : 'week before';
+    return { start, end, label: `${prefix} (${start} → ${end})` };
+  }
+
+  if (options.period === 'thismonth') {
+    const currentEnd = parseDateString(current.end);
+    const previousMonth = new Date(
+      Date.UTC(currentEnd.getUTCFullYear(), currentEnd.getUTCMonth() - 1, 1),
+    );
+    const previousMonthEnd = new Date(
+      Date.UTC(currentEnd.getUTCFullYear(), currentEnd.getUTCMonth(), 0),
+    );
+    const comparableDay = Math.min(currentEnd.getUTCDate(), previousMonthEnd.getUTCDate());
+    const end = formatDateString(
+      new Date(
+        Date.UTC(previousMonth.getUTCFullYear(), previousMonth.getUTCMonth(), comparableDay),
+      ),
+    );
+    const start = formatDateString(previousMonth);
+    return { start, end, label: `previous month to date (${start} → ${end})` };
+  }
+
+  if (options.period === 'lastmonth') {
+    const currentStart = parseDateString(current.start);
+    const previousStart = new Date(
+      Date.UTC(currentStart.getUTCFullYear(), currentStart.getUTCMonth() - 1, 1),
+    );
+    const previousEnd = new Date(
+      Date.UTC(currentStart.getUTCFullYear(), currentStart.getUTCMonth(), 0),
+    );
+    const start = formatDateString(previousStart);
+    const end = formatDateString(previousEnd);
+    return { start, end, label: `month before (${start} → ${end})` };
+  }
+
+  if (options.period === 'year') {
+    const today = new Date();
+    const year = today.getFullYear() - 1;
+    const previousMonthEnd = new Date(Date.UTC(year, today.getMonth() + 1, 0)).getUTCDate();
+    const day = Math.min(today.getDate(), previousMonthEnd);
+    const end = formatDateString(new Date(Date.UTC(year, today.getMonth(), day)));
+    return {
+      start: `${String(year)}-01-01`,
+      end,
+      label: `previous year to date (${String(year)}-01-01 → ${end})`,
+    };
+  }
+
+  const days = inclusiveDayCount(current.start, current.end);
+  const end = shiftDate(current.start, -1);
+  const start = shiftDate(end, -(days - 1));
+  return { start, end, label: `previous period (${start} → ${end})` };
+}
+
 export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
   const today = new Date();
   const todayString = toLocalDateString(today);

@@ -118,6 +118,59 @@ describe('usageCommand', () => {
     expect(parsed.totals).toMatchObject({ tokens: 1200, costUSD: 1.2 });
   });
 
+  it('prints comparison totals and per-model movement', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([
+          ['2026-06-08', makeDay(100, 0, 1, 'claude-opus')],
+          ['2026-06-15', makeDay(200, 0, 3, 'claude-opus')],
+        ]),
+      },
+      machineData: [],
+      fileCount: 1,
+    });
+
+    await usageCommand({ period: 'thisweek', compare: true });
+
+    const out = output();
+    expect(out).toContain('Compared with previous week to date');
+    expect(out).toContain('Per-model movement');
+    expect(out).toContain('claude-opus');
+    expect(out).toContain('+100.0%');
+    expect(out).toContain('+200.0%');
+    expect(mocks.loadMergedProviderData).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes structured comparison data in JSON output', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([
+          ['2026-06-08', makeDay(100, 0, 1, 'claude-opus')],
+          ['2026-06-15', makeDay(200, 0, 3, 'claude-opus')],
+        ]),
+      },
+      machineData: [],
+      fileCount: 1,
+    });
+
+    await usageCommand({ period: 'thisweek', compare: true, json: true });
+
+    const parsed = JSON.parse(output()) as {
+      comparison: {
+        totals: { tokens: { delta: number; percentChange: number } };
+        models: Array<{ model: string; costUSD: { delta: number } }>;
+      };
+    };
+    expect(parsed.comparison.totals.tokens).toMatchObject({
+      delta: 100,
+      percentChange: 100,
+    });
+    expect(parsed.comparison.models[0]).toMatchObject({
+      model: 'claude-opus',
+      costUSD: { delta: 2 },
+    });
+  });
+
   it('prints valid JSON for empty data and empty windows', async () => {
     mocks.loadMergedProviderData.mockResolvedValue(null);
     await usageCommand({ period: 'today', json: true });
