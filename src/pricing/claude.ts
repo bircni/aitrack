@@ -24,6 +24,7 @@ export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
   'claude-fable-5': priceFromBase(10, 50),
   'claude-mythos-5': priceFromBase(10, 50),
   // Current generation (Opus 4.5+ and Sonnet/Haiku 4.5+ tier)
+  'claude-opus-5': priceFromBase(5, 25),
   'claude-opus-4-8': priceFromBase(5, 25),
   'claude-opus-4-7': priceFromBase(5, 25),
   'claude-opus-4-6': priceFromBase(5, 25),
