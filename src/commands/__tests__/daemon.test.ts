@@ -185,6 +185,20 @@ describe('daemonCommand', () => {
     await daemonPromise.catch(() => undefined);
   });
 
+  it('reports a sync configuration error but still starts the dashboard server', async () => {
+    const daemonPromise = daemonCommand({ port: 9089, interval: 120, sync: true });
+
+    await vi.waitFor(() => {
+      expect(console.error).toHaveBeenCalledWith(
+        'aitrack daemon refresh failed: Sync enabled but repo not cloned. Run: npx aitrack init',
+      );
+      expect(fakeServer.listen).toHaveBeenCalled();
+    });
+
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
   it('does not pull or push when sync is disabled and repo is cloned', async () => {
     mocks.isCloned.mockReturnValue(true);
 
@@ -251,6 +265,25 @@ describe('daemonCommand', () => {
 
     await vi.waitFor(() => {
       expect(console.error).toHaveBeenCalledWith('aitrack daemon refresh failed: refresh blew up');
+    });
+
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
+  it('renders an empty-state dashboard when the initial refresh has no data', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue(null);
+
+    const daemonPromise = daemonCommand({ port: 9089, interval: 120 });
+
+    await vi.waitFor(() => {
+      expect(mocks.renderToHtml).toHaveBeenLastCalledWith(
+        {},
+        expect.objectContaining({
+          emptyMessage:
+            'No local usage data found (Claude Code or Codex). Run: npx aitrack init to sync across machines.',
+        }),
+      );
     });
 
     process.emit('SIGTERM');

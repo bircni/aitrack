@@ -28,13 +28,16 @@ vi.mock('os', () => ({ homedir: () => '/home/test' }));
 
 import {
   adoptPendingDataFiles,
+  cloneRepo,
   commitAndPush,
   hasMachineDataChanges,
+  isCloned,
   listDataFiles,
   listPendingDataFiles,
   migrateMachineDataFiles,
   pull,
   readDataFile,
+  removeLocalClone,
   removePendingMachineFile,
   tryPull,
   writePendingMachineFile,
@@ -43,6 +46,33 @@ import {
 describe('git helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('detects, clones, and removes the local data repository', () => {
+    mocks.existsSync.mockReturnValueOnce(true).mockReturnValueOnce(true);
+    mocks.spawnSync.mockReturnValue({ status: 0 });
+
+    expect(isCloned()).toBe(true);
+    cloneRepo('git@example.com:me/data.git');
+    removeLocalClone();
+
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
+      'git',
+      ['clone', 'git@example.com:me/data.git', expect.stringContaining(join('aitrack', 'repo'))],
+      { stdio: 'inherit' },
+    );
+    expect(mocks.rmSync).toHaveBeenCalledWith(expect.stringContaining(join('aitrack', 'repo')), {
+      recursive: true,
+      force: true,
+    });
+  });
+
+  it('surfaces clone failures', () => {
+    mocks.spawnSync.mockReturnValue({ status: 1 });
+
+    expect(() => {
+      cloneRepo('git@example.com:me/data.git');
+    }).toThrow('git clone failed with exit code 1');
   });
 
   it('does not pull when the remote has no heads', () => {
@@ -55,6 +85,20 @@ describe('git helpers', () => {
       'git',
       ['ls-remote', '--heads', 'origin'],
       expect.objectContaining({ stdio: 'pipe' }),
+    );
+  });
+
+  it('pulls fast-forward-only when the remote has a branch', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
+      .mockReturnValueOnce({ status: 0 });
+
+    pull();
+
+    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+      'git',
+      ['pull', '--ff-only', '--quiet'],
+      expect.objectContaining({ stdio: 'inherit' }),
     );
   });
 
@@ -269,12 +313,30 @@ describe('git helpers', () => {
     expect(mocks.rmSync).not.toHaveBeenCalled();
   });
 
+  it('rejects an unsafe pending filename before adopting it', () => {
+    mocks.existsSync.mockReturnValue(true);
+    mocks.readdirSync.mockReturnValue(['..\\escape.json']);
+
+    expect(() => adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toThrow(
+      'not safe in a filename',
+    );
+    expect(mocks.copyFileSync).not.toHaveBeenCalled();
+  });
+
   it('removes a pending file for a machine id', () => {
     mocks.existsSync.mockReturnValue(true);
 
     removePendingMachineFile('host');
 
     expect(mocks.rmSync).toHaveBeenCalledWith(expect.stringContaining('host.json'));
+  });
+
+  it('does not remove a missing pending file', () => {
+    mocks.existsSync.mockReturnValue(false);
+
+    removePendingMachineFile('host');
+
+    expect(mocks.rmSync).not.toHaveBeenCalled();
   });
 
   it('rolls back a completed repo migration when the pending migration fails', () => {
