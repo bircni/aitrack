@@ -108,6 +108,11 @@ describe('buildProgram', () => {
       expect.objectContaining({ period: 'last', n: 5 }),
     );
 
+    await run('usage', 'thisweek', '--compare');
+    expect(mocks.usageCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ period: 'thisweek', compare: true }),
+    );
+
     await run('usage', 'date', '2026-06-01');
     expect(mocks.usageCommand).toHaveBeenCalledWith(
       expect.objectContaining({ period: 'date', from: '2026-06-01' }),

@@ -130,6 +130,11 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 **JSON output:** add `--json` to `usage`, `top`, `machines`, or `doctor` for scripting.
 
+**Period comparison:** add `--compare` to any finite `usage` window to compare tokens, estimated
+cost, and per-model movement with the equivalent previous period. Calendar-to-date windows compare
+the same elapsed days—for example, `aitrack usage thisweek --compare` compares this week so far with
+the same weekdays last week. Comparison data is also included with `--json`.
+
 **`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), and `--year <year>`.
 
 **`doctor` flags:** `--pricing-check` runs the pricing drift script when you are in a source checkout.
