@@ -46,6 +46,7 @@ import {
 describe('git helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.spawnSync.mockReset().mockReturnValue({ status: 0 });
   });
 
   it('detects, clones, and removes the local data repository', () => {
@@ -132,8 +133,14 @@ describe('git helpers', () => {
 
     expect(commitAndPush('host')).toBe(false);
     expect(mocks.spawnSync).toHaveBeenCalledTimes(2);
-    expect(mocks.spawnSync.mock.calls[0]?.[1]).toEqual(['add', 'data/']);
-    expect(mocks.spawnSync.mock.calls[1]?.[1]).toEqual(['status', '--porcelain', '--', 'data/']);
+    expect(mocks.spawnSync.mock.calls[0]?.[1]).toEqual(['add', '--', ':(literal)data/host.json']);
+    expect(mocks.spawnSync.mock.calls[1]?.[1]).toEqual([
+      'diff',
+      '--cached',
+      '--name-only',
+      '--',
+      'data/',
+    ]);
   });
 
   it('surfaces commit failures when there are staged data changes', () => {
@@ -141,25 +148,62 @@ describe('git helpers', () => {
       .mockReturnValueOnce({ status: 0 })
       .mockReturnValueOnce({ status: 0, stdout: 'A  data/host.json\n' })
       .mockReturnValueOnce({ status: 1 });
-    expect(() => commitAndPush('host')).toThrow('git commit failed');
+    expect(() => commitAndPush('host')).toThrow('git commit -m sync: host');
   });
 
-  it('sets upstream when a normal push fails', () => {
+  it('sets upstream only when the branch has none', () => {
     mocks.spawnSync
       .mockReturnValueOnce({ status: 0 })
       .mockReturnValueOnce({ status: 0, stdout: 'A  data/host.json\n' })
       .mockReturnValueOnce({ status: 0 })
-      .mockImplementationOnce(() => {
-        throw new Error('no upstream');
-      })
+      .mockReturnValueOnce({ status: 1 })
+      .mockReturnValueOnce({ status: 0, stdout: 'main\n' })
       .mockReturnValueOnce({ status: 0 });
 
     expect(commitAndPush('host')).toBe(true);
     expect(mocks.spawnSync).toHaveBeenLastCalledWith(
       'git',
       ['push', '-u', 'origin', 'HEAD'],
-      expect.objectContaining({ stdio: 'inherit' }),
+      expect.objectContaining({ stdio: 'pipe' }),
     );
+  });
+
+  it('does not disguise a genuine push failure as a missing upstream', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0 })
+      .mockReturnValueOnce({ status: 0, stdout: 'data/host.json\n' })
+      .mockReturnValueOnce({ status: 0 })
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main\n' })
+      .mockReturnValueOnce({ status: 1, stderr: 'remote: permission denied' });
+
+    expect(() => commitAndPush('host')).toThrow('permission denied');
+    expect(
+      mocks.spawnSync.mock.calls.some((call) => Array.isArray(call[1]) && call[1].includes('-u')),
+    ).toBe(false);
+  });
+
+  it('rebases and retries a non-fast-forward push', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0 })
+      .mockReturnValueOnce({ status: 0, stdout: 'data/host.json\n' })
+      .mockReturnValueOnce({ status: 0 })
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main\n' })
+      .mockReturnValueOnce({
+        status: 1,
+        stderr: ' ! [rejected] main -> main (fetch first)',
+      })
+      .mockReturnValueOnce({ status: 0 })
+      .mockReturnValueOnce({ status: 0 });
+
+    expect(commitAndPush('host')).toBe(true);
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
+      'git',
+      ['pull', '--rebase', '--quiet'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+    expect(
+      mocks.spawnSync.mock.calls.filter((call) => Array.isArray(call[1]) && call[1][0] === 'push'),
+    ).toHaveLength(2);
   });
 
   it('checks literal git status only for a bracketed machine target', () => {
@@ -240,6 +284,11 @@ describe('git helpers', () => {
       expect(options).toEqual({ encoding: 'utf8', flag: 'wx' });
     }
     expect(mocks.rmSync).toHaveBeenCalledWith(expect.stringContaining('old.json'));
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
+      'git',
+      ['add', '--', ':(literal)data/old.json', ':(literal)data/Work Laptop_01.2.json'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
   });
 
   it('migrates a structurally valid file with stale aggregate cost totals', () => {

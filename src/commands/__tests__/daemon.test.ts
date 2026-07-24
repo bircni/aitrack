@@ -171,6 +171,43 @@ describe('daemonCommand', () => {
     await daemonPromise.catch(() => undefined);
   });
 
+  it('coalesces interval ticks while a refresh is still running', async () => {
+    const loaded = {
+      providerData: { claude_code: new Map([['2024-06-01', makeDay(100, 50)]]) },
+      machineData: [],
+      fileCount: 0,
+    };
+    let finishRefresh: (() => void) | undefined;
+    mocks.loadMergedProviderData.mockResolvedValueOnce(loaded).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRefresh = () => {
+            resolve(loaded);
+          };
+        }),
+    );
+
+    const daemonPromise = daemonCommand({ port: 9089, interval: 60 });
+    await vi.waitFor(() => {
+      expect(mocks.loadMergedProviderData).toHaveBeenCalledTimes(1);
+    });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.waitFor(() => {
+      expect(mocks.loadMergedProviderData).toHaveBeenCalledTimes(2);
+      expect(finishRefresh).toBeDefined();
+    });
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(mocks.loadMergedProviderData).toHaveBeenCalledTimes(2);
+
+    finishRefresh?.();
+    await vi.waitFor(() => {
+      expect(mocks.renderToHtml).toHaveBeenCalled();
+    });
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
   it('runs sync when sync option is enabled', async () => {
     mocks.isCloned.mockReturnValue(true);
     mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
@@ -265,6 +302,40 @@ describe('daemonCommand', () => {
 
     await vi.waitFor(() => {
       expect(console.error).toHaveBeenCalledWith('aitrack daemon refresh failed: refresh blew up');
+    });
+
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
+  it('reports readiness and the last refresh failure as JSON', async () => {
+    mocks.loadMergedProviderData.mockRejectedValueOnce(new Error('refresh blew up'));
+    const daemonPromise = daemonCommand({ port: 9089, interval: 120 });
+
+    await vi.waitFor(() => {
+      expect(requestHandler).toBeDefined();
+    });
+
+    const chunks: string[] = [];
+    const res = {
+      writeHead: vi.fn(),
+      end: vi.fn((body: string) => {
+        chunks.push(body);
+      }),
+    };
+    if (!requestHandler) throw new Error('expected request handler');
+    requestHandler(
+      { method: 'GET', url: '/readyz' } as IncomingMessage,
+      res as unknown as ServerResponse,
+    );
+
+    expect(res.writeHead).toHaveBeenCalledWith(503, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    expect(JSON.parse(chunks[0] ?? '{}')).toMatchObject({
+      state: 'degraded',
+      lastError: { phase: 'refresh', message: 'refresh blew up' },
     });
 
     process.emit('SIGTERM');

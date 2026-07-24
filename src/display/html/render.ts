@@ -11,12 +11,73 @@ export interface HtmlRenderOptions extends RenderOptions {
   emptyMessage?: string;
   /** When set (e.g. by the daemon), adds a browser refresh meta tag. */
   refreshIntervalSeconds?: number;
+  operationalStatus?: HtmlOperationalStatus;
+}
+
+export interface HtmlOperationalStatus {
+  refreshInProgress: boolean;
+  syncEnabled: boolean;
+  lastRefreshSuccessAt: string | null;
+  lastSyncSuccessAt: string | null;
+  nextRefreshAt: string | null;
+  lastError: {
+    phase: 'sync' | 'refresh';
+    message: string;
+    at: string;
+  } | null;
 }
 
 function formatRefreshHint(seconds: number): string {
   if (seconds < 60) return `every ${String(seconds)}s`;
   const minutes = Math.round(seconds / 60);
   return minutes === 1 ? 'every minute' : `every ${String(minutes)} minutes`;
+}
+
+function formatStatusTime(value: string): string {
+  return new Date(value).toLocaleString();
+}
+
+function renderOperationalStatus(status: HtmlOperationalStatus | undefined): string {
+  if (status === undefined) return '';
+
+  const state = status.refreshInProgress
+    ? 'Refreshing'
+    : status.lastError
+      ? 'Degraded'
+      : status.lastRefreshSuccessAt
+        ? 'Healthy'
+        : 'Starting';
+  const stateClass = status.lastError
+    ? 'degraded'
+    : status.refreshInProgress
+      ? 'active'
+      : 'healthy';
+  const details: string[] = [];
+  if (status.lastRefreshSuccessAt) {
+    details.push(`Last refresh: ${formatStatusTime(status.lastRefreshSuccessAt)}`);
+  }
+  if (status.syncEnabled) {
+    details.push(
+      status.lastSyncSuccessAt
+        ? `Last sync: ${formatStatusTime(status.lastSyncSuccessAt)}`
+        : 'Sync: waiting for first success',
+    );
+  } else {
+    details.push('Sync: disabled');
+  }
+  if (status.nextRefreshAt) {
+    details.push(`Next refresh: ${formatStatusTime(status.nextRefreshAt)}`);
+  }
+  const errorHtml =
+    status.lastError === null
+      ? ''
+      : `<p class="daemon-status-error" role="alert">Last ${escapeHtml(status.lastError.phase)} failed at ${escapeHtml(formatStatusTime(status.lastError.at))}: ${escapeHtml(status.lastError.message)}</p>`;
+
+  return `<section class="daemon-status daemon-status-${stateClass}" aria-label="Daemon status">
+  <div class="daemon-status-heading"><span class="daemon-status-dot"></span><strong>${state}</strong></div>
+  <p class="daemon-status-details">${details.map((detail) => escapeHtml(detail)).join(' · ')}</p>
+  ${errorHtml}
+</section>`;
 }
 
 function pageShell(
@@ -64,6 +125,7 @@ export function renderToHtml(
     lastUpdated,
     emptyMessage,
     refreshIntervalSeconds,
+    operationalStatus,
   }: HtmlRenderOptions = {},
 ): string {
   const { layoutData, keys: providers } = resolveProviderLayout(providerData, { all, year });
@@ -86,7 +148,8 @@ export function renderToHtml(
       title,
       dark,
       metaLines,
-      `<div class="empty-state"><p>${escapeHtml(message)}</p></div>`,
+      `${renderOperationalStatus(operationalStatus)}
+<div class="empty-state"><p>${escapeHtml(message)}</p></div>`,
       refreshIntervalSeconds,
     );
   }
@@ -101,5 +164,11 @@ export function renderToHtml(
     })
     .join('');
 
-  return pageShell(title, dark, metaLines, todayHtml + sections, refreshIntervalSeconds);
+  return pageShell(
+    title,
+    dark,
+    metaLines,
+    renderOperationalStatus(operationalStatus) + todayHtml + sections,
+    refreshIntervalSeconds,
+  );
 }

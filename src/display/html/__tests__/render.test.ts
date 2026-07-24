@@ -127,6 +127,33 @@ describe('renderToHtml', () => {
     expect(html).toContain('Showing 1 provider');
   });
 
+  it('renders daemon health and escapes the last refresh error', () => {
+    const html = renderToHtml(
+      { claude_code: new Map([['2024-06-01', makeDay(100, 50)]]) },
+      {
+        operationalStatus: {
+          refreshInProgress: false,
+          syncEnabled: true,
+          lastRefreshSuccessAt: '2024-06-01T12:00:00.000Z',
+          lastSyncSuccessAt: '2024-06-01T11:59:00.000Z',
+          nextRefreshAt: '2024-06-01T12:02:00.000Z',
+          lastError: {
+            phase: 'refresh',
+            message: 'remote <offline> & retrying',
+            at: '2024-06-01T12:01:00.000Z',
+          },
+        },
+      },
+    );
+
+    expect(html).toContain('Daemon status');
+    expect(html).toContain('Degraded');
+    expect(html).toContain('Last refresh:');
+    expect(html).toContain('Last sync:');
+    expect(html).toContain('remote &lt;offline&gt; &amp; retrying');
+    expect(html).not.toContain('remote <offline>');
+  });
+
   it('uses year-filtered data for the today section', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-06-01T12:00:00Z'));
