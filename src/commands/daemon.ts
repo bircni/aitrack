@@ -136,12 +136,14 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
   }, settings.interval * 1000);
 
   const shutdown = (): void => {
+    process.off('SIGINT', shutdown);
+    process.off('SIGTERM', shutdown);
     clearInterval(refreshTimer);
     server.close(() => {
       process.exit(0);
     });
   };
 
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }

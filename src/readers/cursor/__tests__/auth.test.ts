@@ -70,6 +70,12 @@ describe('cursor auth', () => {
     expect(getCursorStateDatabasePath()).toBe(nested);
   });
 
+  it('returns null when no configured Cursor state database exists', () => {
+    process.env.CURSOR_STATE_DB_PATH = join(tmpDir, 'missing.vscdb');
+
+    expect(getCursorStateDatabasePath()).toBeNull();
+  });
+
   it('reads trimmed string and buffer tokens from sqlite', async () => {
     const databasePath = join(tmpDir, 'state.vscdb');
     createStateDatabase(databasePath, {
@@ -89,6 +95,22 @@ describe('cursor auth', () => {
       'cursorAuth/accessToken': ' '.repeat(3),
       'cursorAuth/refreshToken': '',
     });
+
+    await expect(readCursorAuthState(databasePath)).resolves.toEqual({
+      accessToken: undefined,
+      refreshToken: undefined,
+    });
+  });
+
+  it('returns undefined tokens for unsupported sqlite value types', async () => {
+    const databasePath = join(tmpDir, 'state.vscdb');
+    mkdirSync(join(databasePath, '..'), { recursive: true });
+    const database = new DatabaseSync(databasePath);
+    database.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
+    database
+      .prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)')
+      .run('cursorAuth/accessToken', 42);
+    database.close();
 
     await expect(readCursorAuthState(databasePath)).resolves.toEqual({
       accessToken: undefined,
@@ -151,6 +173,21 @@ describe('cursor auth', () => {
       'Failed to authenticate Cursor usage export',
     );
     expect(cookieHeaders.some((c) => c.includes('user-1::'))).toBe(true);
+  });
+
+  it('falls back to token-only cookies for malformed JWT payloads', async () => {
+    const cookieHeaders: string[] = [];
+    setFetchMock((_input, init) => {
+      const cookie = new Headers(init?.headers).get('Cookie');
+      if (cookie) cookieHeaders.push(cookie);
+      return new Response('denied', { status: 403, statusText: 'Forbidden' });
+    });
+
+    await expect(fetchCursorUsageCsv('header.not-json.signature')).rejects.toThrow(
+      'Failed to authenticate Cursor usage export',
+    );
+    expect(cookieHeaders).not.toHaveLength(0);
+    expect(cookieHeaders.every((cookie) => !cookie.includes('::'))).toBe(true);
   });
 
   it('throws a summary when every auth attempt fails', async () => {

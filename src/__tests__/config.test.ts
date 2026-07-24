@@ -54,6 +54,17 @@ describe('config', () => {
     expect(loadConfig()).toEqual(config);
   });
 
+  it('loads every optional source and daemon setting', () => {
+    const config = {
+      repoUrl: 'git@github.com:test/repo.git',
+      claudeProjectsDir: '/data/claude-a,/data/claude-b',
+      codexSessionsDir: '/data/codex',
+      daemon: { port: 9090, interval: 30, sync: true },
+    };
+    saveConfig(config);
+    expect(loadConfig()).toEqual(config);
+  });
+
   it.each(['../escape', '..\\escape', 'nested/machine', 'bad\0name', 'CON'])(
     'rejects unsafe machineId %j before saving',
     (machineId) => {
@@ -119,6 +130,19 @@ describe('config', () => {
     writeRawConfig(
       JSON.stringify({ repoUrl: 'git@example.com:test/repo.git', daemon: { port: 'bad' } }),
     );
+    expect(tryLoadConfig()).toBeNull();
+  });
+
+  it.each([
+    { repoUrl: 'git@example.com:test/repo.git', claudeProjectsDir: 42 },
+    { repoUrl: 'git@example.com:test/repo.git', codexSessionsDir: [] },
+    { repoUrl: 'git@example.com:test/repo.git', machineId: 42 },
+    { repoUrl: 'git@example.com:test/repo.git', daemon: [] },
+    { repoUrl: 'git@example.com:test/repo.git', daemon: { sync: 'yes' } },
+    { repoUrl: 'git@example.com:test/repo.git', daemon: { interval: 0 } },
+    { repoUrl: 'git@example.com:test/repo.git', daemon: { interval: 1.5 } },
+  ])('returns null for invalid optional config values: %j', (config) => {
+    writeRawConfig(JSON.stringify(config));
     expect(tryLoadConfig()).toBeNull();
   });
 
