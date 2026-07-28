@@ -10,6 +10,7 @@ import {
 } from '../data/localData.js';
 import type { MachineFile } from '../data/types.js';
 import { parseMachineFile } from '../data/validate.js';
+import { SYNCED_PROVIDERS } from '../display/providers.js';
 import { commitDataChanges, isCloned, listDataFiles } from '../git.js';
 import { consumeClaudeFallbackHits } from '../pricing/claude.js';
 import { consumeCodexFallbackHits } from '../pricing/codex.js';
@@ -46,11 +47,7 @@ export async function recomputeCostsCommand(): Promise<void> {
     return;
   }
 
-  const localMaps = await readLocalProviderMaps();
-  const localFresh = buildMachineData(machineId, {
-    claude_code: localMaps.claude_code,
-    codex: localMaps.codex,
-  });
+  const localFresh = buildMachineData(machineId, await readLocalProviderMaps());
 
   let changed = 0;
   let legacySkipped = 0;
@@ -73,7 +70,7 @@ export async function recomputeCostsCommand(): Promise<void> {
     }
 
     for (const [date, providers] of Object.entries(machine.days)) {
-      for (const providerKey of ['claude_code', 'codex'] as const) {
+      for (const providerKey of SYNCED_PROVIDERS) {
         const providerDay = providers[providerKey];
         if (!providerDay) continue;
 

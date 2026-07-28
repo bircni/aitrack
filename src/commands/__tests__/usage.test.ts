@@ -79,7 +79,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
@@ -99,7 +98,6 @@ describe('usageCommand', () => {
         claude_code: new Map([[TODAY, makeDay(1000, 200, 1.2, 'claude-opus-4-8')]]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'today', providers: ['claude_code'], json: true });
@@ -127,7 +125,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'thisweek', compare: true });
@@ -150,7 +147,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'thisweek', compare: true, json: true });
@@ -186,7 +182,6 @@ describe('usageCommand', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: { claude_code: new Map([['2020-01-01', makeDay(10, 0)]]) },
       machineData: [],
-      fileCount: 0,
     });
     await usageCommand({ period: 'today', json: true });
     expect(JSON.parse(output())).toMatchObject({
@@ -202,7 +197,6 @@ describe('usageCommand', () => {
         claude_code: new Map([['2020-01-01', makeDay(1000, 200, 1.2)]]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
@@ -221,7 +215,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'week', providers: ['claude_code', 'codex'] });
@@ -243,7 +236,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'month', providers: ['claude_code', 'codex'] });
@@ -265,7 +257,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'year', providers: ['claude_code', 'codex'] });
@@ -286,7 +277,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'all', providers: ['claude_code', 'codex'] });
@@ -316,7 +306,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
@@ -348,7 +337,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
@@ -369,7 +357,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'yesterday', providers: ['claude_code', 'codex'] });
@@ -389,7 +376,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'date', from: '2026-03-10', providers: ['claude_code', 'codex'] });
@@ -411,7 +397,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({
@@ -438,7 +423,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'thisweek', providers: ['claude_code', 'codex'] });
@@ -460,7 +444,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'lastweek', providers: ['claude_code', 'codex'] });
@@ -482,7 +465,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'thismonth', providers: ['claude_code', 'codex'] });
@@ -504,7 +486,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'lastmonth', providers: ['claude_code', 'codex'] });
@@ -526,7 +507,6 @@ describe('usageCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'last', n: 14, providers: ['claude_code', 'codex'] });
@@ -566,7 +546,6 @@ describe('usageCommand', () => {
         codex: new Map([[TODAY, makeDay(200, 100, undefined, 'gpt-x')]]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });

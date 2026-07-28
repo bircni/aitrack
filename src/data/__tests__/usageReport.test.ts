@@ -50,7 +50,6 @@ describe('buildUsageReport', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: { claude_code: new Map([['2020-01-01', makeDay(100, 20, 1)]]) },
       machineData: [],
-      fileCount: 1,
     });
     const report = await buildUsageReport({ period: 'today' });
     expect(report).not.toBeNull();
@@ -77,7 +76,6 @@ describe('buildUsageReport', () => {
         ]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     const report = await buildUsageReport({ period: 'today' });
@@ -96,7 +94,6 @@ describe('buildUsageReport', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: { claude_code: new Map([[TODAY, makeDay(500, 100)]]) },
       machineData: [],
-      fileCount: 1,
     });
     const report = await buildUsageReport({ period: 'today' });
     expect(report?.providers[0]?.rows[0]?.hasCost).toBe(false);
@@ -113,7 +110,6 @@ describe('buildUsageReport', () => {
         codex: new Map([['2026-06-08', makeDay(50, 0, undefined, 'removed')]]),
       },
       machineData: [],
-      fileCount: 1,
     });
 
     const result = await buildUsageComparison({ period: 'thisweek' });
@@ -144,7 +140,6 @@ describe('buildUsageReport', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: { claude_code: new Map([[TODAY, makeDay(100, 20, 1)]]) },
       machineData: [],
-      fileCount: 1,
     });
 
     await expect(buildUsageComparison({ period: 'all' })).rejects.toThrow(

@@ -77,7 +77,6 @@ describe('machinesCommand', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {},
       machineData: [b, a],
-      fileCount: 2,
     });
 
     await machinesCommand();
@@ -99,7 +98,6 @@ describe('machinesCommand', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {},
       machineData: [machine],
-      fileCount: 1,
     });
 
     await machinesCommand({ json: true });
@@ -120,7 +118,6 @@ describe('machinesCommand', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {},
       machineData: [],
-      fileCount: 0,
     });
 
     await machinesCommand();
@@ -132,7 +129,6 @@ describe('machinesCommand', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {},
       machineData: [],
-      fileCount: 0,
     });
 
     await machinesCommand({ json: true });

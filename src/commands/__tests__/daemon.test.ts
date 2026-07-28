@@ -71,7 +71,6 @@ describe('daemonCommand', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: { claude_code: new Map([['2024-06-01', makeDay(100, 50)]]) },
       machineData: [],
-      fileCount: 0,
     });
     mocks.renderToHtml.mockImplementation(
       (_data: unknown, _machines: unknown, options?: { emptyMessage?: string }) =>
@@ -175,7 +174,6 @@ describe('daemonCommand', () => {
     const loaded = {
       providerData: { claude_code: new Map([['2024-06-01', makeDay(100, 50)]]) },
       machineData: [],
-      fileCount: 0,
     };
     let finishRefresh: (() => void) | undefined;
     mocks.loadMergedProviderData.mockResolvedValueOnce(loaded).mockImplementationOnce(
@@ -386,7 +384,6 @@ describe('daemonCommand', () => {
       .mockResolvedValueOnce({
         providerData: { claude_code: new Map([['2024-06-01', makeDay(100, 50)]]) },
         machineData: [],
-        fileCount: 0,
       })
       .mockResolvedValueOnce(null);
 
