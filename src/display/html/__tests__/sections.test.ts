@@ -77,6 +77,18 @@ describe('renderProviderSection', () => {
     expect(html).toContain('MORE');
   });
 
+  it('declares the column count so a 54-week year is not clipped', () => {
+    const dayMap = new Map([['2028-12-31', makeDay(1000, 500)]]);
+
+    const ordinary = renderProviderSection('claude_code', dayMap, buildHeatmapWeeks(2027), false);
+    const fiftyFour = renderProviderSection('claude_code', dayMap, buildHeatmapWeeks(2028), false);
+
+    // The stylesheet's repeat() reads --weeks; without it the 54th column
+    // landed outside the fixed 53-column template.
+    expect(ordinary).toContain('--weeks:53');
+    expect(fiftyFour).toContain('--weeks:54');
+  });
+
   it('omits the usage table when there is no model activity', () => {
     const dayMap = new Map<string, DayEntry>();
     const weeks = buildHeatmapWeeks(2024);

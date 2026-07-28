@@ -11,8 +11,16 @@ const CELL = 12;
 const GAP = 3;
 const STEP = CELL + GAP;
 const LEFT = 52;
-const GRID_W = 53 * STEP;
-const TOTAL_W = LEFT + GRID_W + 80;
+// A year grid is normally 53 columns, but a leap year whose Jan 1 falls on a
+// Saturday (2028, 2056, ...) needs 54. Keep 53 as the floor so the usual
+// layout is unchanged and only those years widen.
+const MIN_WEEKS = 53;
+function gridWidth(weekCount: number): number {
+  return Math.max(MIN_WEEKS, weekCount) * STEP;
+}
+function totalWidth(weekCount: number): number {
+  return LEFT + gridWidth(weekCount) + 80;
+}
 
 const SEC_PAD_TOP = 32;
 const HEADER_H = 52;
@@ -54,6 +62,7 @@ function drawSection(
   const isDark = mode === 'dark';
   const vm = buildProviderSectionViewModel(providerKey, dayMap, isDark);
   const themeCells = getProviderTheme(providerKey, isDark).cells;
+  const gridW = gridWidth(weeks.length);
 
   let y = baseY + SEC_PAD_TOP;
 
@@ -62,7 +71,7 @@ function drawSection(
   context.fillText(vm.name, LEFT, y + 16);
 
   const colW = 112;
-  const statsRight = LEFT + GRID_W;
+  const statsRight = LEFT + gridW;
   for (const [index, col] of vm.headerStats.entries()) {
     const cx = statsRight - (vm.headerStats.length - 1 - index) * colW;
     context.fillStyle = C.label;
@@ -78,7 +87,7 @@ function drawSection(
   y += HEADER_H;
 
   context.fillStyle = C.divider;
-  context.fillRect(LEFT, y, GRID_W, DIVIDER_H);
+  context.fillRect(LEFT, y, gridW, DIVIDER_H);
   y += DIVIDER_H;
 
   context.fillStyle = C.muted;
@@ -132,10 +141,10 @@ function drawSection(
   y += LEGEND_H;
 
   context.fillStyle = C.divider;
-  context.fillRect(LEFT, y, GRID_W, 1);
+  context.fillRect(LEFT, y, gridW, 1);
   y += 14;
 
-  const bColW = GRID_W / vm.bottomStats.length;
+  const bColW = gridW / vm.bottomStats.length;
   for (const [index, stat] of vm.bottomStats.entries()) {
     const bx = LEFT + index * bColW;
     context.fillStyle = C.label;
@@ -164,11 +173,12 @@ export function renderToPng(
   const CANVAS_PAD = 24;
   const totalH = CANVAS_PAD + keys.length * SECTION_H + CANVAS_PAD;
 
-  const canvas = createCanvas(TOTAL_W, totalH);
+  const totalW = totalWidth(weeks.length);
+  const canvas = createCanvas(totalW, totalH);
   const context = canvas.getContext('2d');
 
   context.fillStyle = C.bg;
-  context.fillRect(0, 0, TOTAL_W, totalH);
+  context.fillRect(0, 0, totalW, totalH);
 
   for (const [index, key] of keys.entries()) {
     const dayMap = layoutData[key];

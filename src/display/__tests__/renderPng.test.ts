@@ -22,6 +22,18 @@ describe('renderToPng', () => {
     expect(buffer[3]).toBe(0x47);
   });
 
+  it('widens the canvas for a 54-week year instead of clipping it', () => {
+    const dayMap = new Map([['2028-12-31', makeDay(1000, 500)]]);
+
+    // PNG width lives in bytes 16-19 of the IHDR chunk.
+    const width = (buffer: Buffer): number => buffer.readUInt32BE(16);
+
+    const ordinary = width(renderToPng({ claude_code: dayMap }, { year: 2027 }));
+    const fiftyFour = width(renderToPng({ claude_code: dayMap }, { year: 2028 }));
+
+    expect(fiftyFour).toBe(ordinary + 15);
+  });
+
   it('works in dark mode', () => {
     const dayMap = new Map([['2024-01-15', makeDay(500, 250)]]);
     const buffer = renderToPng({ claude_code: dayMap }, { dark: true });

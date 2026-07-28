@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DayEntry } from '../../../data/types.js';
-import { computeModelStats, currentStreak, longestStreak, peakMonth } from '../stats.js';
+import {
+  buildDateGrid,
+  computeModelStats,
+  currentStreak,
+  longestStreak,
+  peakMonth,
+} from '../stats.js';
 
 function makeDay(input: number, output: number): DayEntry {
   return {
@@ -69,5 +75,28 @@ describe('peakMonth', () => {
       ['2024-02-15', makeDay(200, 0)],
     ]);
     expect(peakMonth(dayMap)).toEqual({ month: '2024-02', tokens: 700 });
+  });
+});
+
+describe('buildDateGrid', () => {
+  it('needs 54 columns for a leap year starting on Saturday', () => {
+    // Jan 1 is a Saturday in each of these, so the grid opens with a nearly
+    // empty week and still has to carry all 366 days.
+    for (const year of [2000, 2028, 2056]) {
+      expect(buildDateGrid(year)).toHaveLength(54);
+    }
+  });
+
+  it('uses 53 columns for an ordinary year', () => {
+    expect(buildDateGrid(2023)).toHaveLength(53);
+    expect(buildDateGrid(2024)).toHaveLength(53);
+  });
+
+  it('covers every day of the year exactly once', () => {
+    const dates = buildDateGrid(2028)
+      .flat()
+      .filter((d): d is string => d !== null);
+    expect(new Set(dates).size).toBe(366);
+    expect(dates).toContain('2028-12-31');
   });
 });

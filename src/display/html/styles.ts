@@ -99,7 +99,7 @@ body {
 .heatmap-area { flex: 1; min-width: 0; }
 .month-row {
   display: grid;
-  grid-template-columns: repeat(53, 12px);
+  grid-template-columns: repeat(var(--weeks, 53), 12px);
   gap: 3px;
   height: 20px;
   margin-bottom: 8px;
@@ -109,7 +109,7 @@ body {
 .month-label { white-space: nowrap; }
 .heatmap-grid {
   display: grid;
-  grid-template-columns: repeat(53, 12px);
+  grid-template-columns: repeat(var(--weeks, 53), 12px);
   grid-template-rows: repeat(7, 12px);
   gap: 3px;
 }
