@@ -184,10 +184,16 @@ describe('loadMergedProviderData', () => {
             hostname: 'host',
             lastUpdated: 'synced-host',
             days: {
-              '2024-01-03': {
+              '2024-01-02': {
                 codex: {
                   byModel: { stale: { inputTokens: 999, outputTokens: 1 } },
                   totals: { inputTokens: 999, outputTokens: 1 },
+                },
+              },
+              '2024-01-03': {
+                codex: {
+                  byModel: { archived: { inputTokens: 7, outputTokens: 1 } },
+                  totals: { inputTokens: 7, outputTokens: 1 },
                 },
               },
             },
@@ -211,8 +217,10 @@ describe('loadMergedProviderData', () => {
     expect(mocks.readDataFile).toHaveBeenCalledTimes(2);
     expect(mocks.readDataFile.mock.calls[0]?.[0]).toBe('/repo/data/other.json');
     expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(100);
+    // Fresh local data replaces the persisted copy of the same day...
     expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
-    expect(loaded?.providerData.codex?.has('2024-01-03')).toBe(false);
+    // ...but a persisted day the local logs no longer reach is kept.
+    expect(loaded?.providerData.codex?.get('2024-01-03')?.inputTokens).toBe(7);
     expect(loaded?.machineData).toHaveLength(2);
     expect(loaded?.machineData.map((machine) => machine.lastUpdated)).toEqual([
       'synced-other',
@@ -244,7 +252,9 @@ describe('loadMergedProviderData', () => {
       hostname: 'host',
       lastUpdated: 'fresh',
       days: {
-        '2024-01-03': {
+        // Same date the current machine already has persisted, so the fresh
+        // read must replace it rather than add to it.
+        '2024-01-02': {
           codex: {
             byModel: { gpt: { inputTokens: 20, outputTokens: 10 } },
             totals: { inputTokens: 20, outputTokens: 10 },
@@ -255,9 +265,10 @@ describe('loadMergedProviderData', () => {
 
     const loaded = await loadMergedProviderData({ providers: ['codex'] });
 
-    expect(loaded?.providerData.codex?.has('2024-01-01')).toBe(true);
-    expect(loaded?.providerData.codex?.has('2024-01-02')).toBe(false);
-    expect(loaded?.providerData.codex?.has('2024-01-03')).toBe(true);
+    // work-host.json is a different machine, so its day is untouched.
+    expect(loaded?.providerData.codex?.get('2024-01-01')?.inputTokens).toBe(10);
+    // Replaced, not summed: 20 rather than the persisted 10 + fresh 20.
+    expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
     expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['work-host', 'host']);
   });
 
@@ -291,7 +302,7 @@ describe('loadMergedProviderData', () => {
     ]);
   });
 
-  it('keeps persisted providers that have no fresh local data without double-counting fresh providers', async () => {
+  it('keeps persisted days the pruned local logs no longer cover', async () => {
     mocks.tryLoadConfig.mockReturnValue({
       repoUrl: 'git@example.com:me/data.git',
       machineId: 'host',
@@ -333,7 +344,9 @@ describe('loadMergedProviderData', () => {
     const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
 
     expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(30);
-    expect(loaded?.providerData.codex?.has('2024-01-02')).toBe(false);
+    // The local codex logs have been pruned back to 2024-01-03, so the synced
+    // file is the only remaining record of 2024-01-02 and must survive.
+    expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(900);
     expect(loaded?.providerData.codex?.get('2024-01-03')?.inputTokens).toBe(20);
     expect(loaded?.machineData).toHaveLength(1);
     expect(loaded?.machineData[0]).toMatchObject({ hostname: 'host', lastUpdated: 'last-sync' });
