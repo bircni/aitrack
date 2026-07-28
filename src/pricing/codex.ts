@@ -56,6 +56,9 @@ const FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> = [
   { match: /-nano$/, pricing: { inputPerMillion: 0.2, outputPerMillion: 1.25 } },
   { match: /-mini$/, pricing: { inputPerMillion: 0.25, outputPerMillion: 2 } },
   { match: /-codex(-max)?$/, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
+  // Last resort for an unrecognized gpt-5 variant. Ordered after the suffix
+  // rules above so those still win.
+  { match: /^gpt-5/, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
 ];
 
 const fallbackHits = new Set<string>();
@@ -84,10 +87,6 @@ export function findCodexPricing(model: string, usageDate?: string): CodexPricin
 
     fallbackHits.add(id);
     return pricing;
-  }
-  if (id.startsWith('gpt-5')) {
-    fallbackHits.add(id);
-    return { inputPerMillion: 1.25, outputPerMillion: 10 };
   }
   return undefined;
 }
