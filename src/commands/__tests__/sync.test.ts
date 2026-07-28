@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   pull: vi.fn(),
   commitAndPush: vi.fn(),
   hasMachineDataChanges: vi.fn(),
+  pushPendingCommits: vi.fn(),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   readFileSync: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock('../../git.js', () => ({
   pull: mocks.pull,
   commitAndPush: mocks.commitAndPush,
   hasMachineDataChanges: mocks.hasMachineDataChanges,
+  pushPendingCommits: mocks.pushPendingCommits,
   removePendingMachineFile: vi.fn(),
 }));
 
@@ -80,6 +82,7 @@ describe('syncCommand', () => {
     mocks.readCodexData.mockResolvedValue(new Map());
     mocks.commitAndPush.mockReturnValue(false);
     mocks.hasMachineDataChanges.mockReturnValue(false);
+    mocks.pushPendingCommits.mockReturnValue(false);
     mocks.readFileSync.mockImplementation(() => {
       throw new Error('missing');
     });
@@ -219,6 +222,33 @@ describe('syncCommand', () => {
     expect(mocks.hasMachineDataChanges).toHaveBeenCalledWith('host');
     expect(mocks.commitAndPush).not.toHaveBeenCalled();
     expect(console.log).toHaveBeenCalledWith('No changes to push — data is already up to date.');
+  });
+
+  it('retries a commit whose earlier push failed even though the tree is clean', async () => {
+    // Previous run committed but could not push (offline). The data is
+    // unchanged since, so nothing in the working tree signals the gap.
+    const existing = {
+      hostname: 'host',
+      lastUpdated: 'old',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { claude: { inputTokens: 30, outputTokens: 15 } },
+            totals: { inputTokens: 30, outputTokens: 15 },
+          },
+        },
+      },
+    };
+    mocks.readClaudeData.mockResolvedValue(dayMap(30, 15, 'claude'));
+    mocks.readFileSync.mockReturnValue(JSON.stringify(existing));
+    mocks.hasMachineDataChanges.mockReturnValue(false);
+    mocks.pushPendingCommits.mockReturnValue(true);
+
+    await syncCommand();
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.pushPendingCommits).toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith('Done! Pushed data/host.json (1 days)');
   });
 
   it('pushes a pending machine rename even when usage data already matches', async () => {

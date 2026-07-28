@@ -11,6 +11,7 @@ import {
   isCloned,
   LOCAL_REPO,
   pull,
+  pushPendingCommits,
   removePendingMachineFile,
 } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
@@ -51,7 +52,8 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
   const totalDays = new Set([...claudeData.keys(), ...codexData.keys()]).size;
 
   if (totalDays === 0) {
-    const isPushed = !isDryRun && hasMachineDataChanges(host) && commitAndPush(host);
+    const isPushed =
+      !isDryRun && ((hasMachineDataChanges(host) && commitAndPush(host)) || pushPendingCommits());
     if (!isQuiet) {
       console.log(
         isPushed
@@ -95,7 +97,9 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
       removePendingMachineFile(host);
       // A machineId change can leave a matching target file as a pending git
       // rename. Give it the same commit/push path as a content update.
-      isPushed = hasMachineDataChanges(host) && commitAndPush(host);
+      // pushPendingCommits covers a commit whose earlier push failed: the tree
+      // is clean again, so nothing else here would notice it never landed.
+      isPushed = (hasMachineDataChanges(host) && commitAndPush(host)) || pushPendingCommits();
     }
     if (!isQuiet) {
       console.log(

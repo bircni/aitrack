@@ -31,11 +31,13 @@ import {
   cloneRepo,
   commitAndPush,
   hasMachineDataChanges,
+  hasUnpushedCommits,
   isCloned,
   listDataFiles,
   listPendingDataFiles,
   migrateMachineDataFiles,
   pull,
+  pushPendingCommits,
   readDataFile,
   removeLocalClone,
   removePendingMachineFile,
@@ -101,6 +103,93 @@ describe('git helpers', () => {
       ['pull', '--ff-only', '--quiet'],
       expect.objectContaining({ stdio: 'inherit' }),
     );
+  });
+
+  it('reports commits the upstream does not have yet', () => {
+    mocks.spawnSync
+      // hasUpstream
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      // rev-list --count @{upstream}..HEAD
+      .mockReturnValueOnce({ status: 0, stdout: '1\n' });
+
+    expect(hasUnpushedCommits()).toBe(true);
+    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+      'git',
+      ['rev-list', '--count', '@{upstream}..HEAD'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+  });
+
+  it('reports nothing unpushed when the branch matches its upstream', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      .mockReturnValueOnce({ status: 0, stdout: '0\n' });
+
+    expect(hasUnpushedCommits()).toBe(false);
+  });
+
+  it('reports nothing unpushed when the branch has no upstream', () => {
+    mocks.spawnSync.mockReturnValueOnce({ status: 1, stdout: '' });
+
+    expect(hasUnpushedCommits()).toBe(false);
+  });
+
+  it('pushes commits stranded by an earlier failed push', () => {
+    mocks.spawnSync
+      // hasUnpushedCommits: hasUpstream, then rev-list
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      .mockReturnValueOnce({ status: 0, stdout: '2\n' })
+      // pushWithRetry: hasUpstream, then push
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      .mockReturnValueOnce({ status: 0, stdout: '' });
+
+    expect(pushPendingCommits()).toBe(true);
+    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+      'git',
+      ['push'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+  });
+
+  it('does not push when the branch is already in sync', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      .mockReturnValueOnce({ status: 0, stdout: '0\n' });
+
+    expect(pushPendingCommits()).toBe(false);
+  });
+
+  it('rebases instead of failing when a stranded commit diverged the branch', () => {
+    mocks.spawnSync
+      // ls-remote
+      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
+      // pull --ff-only rejects the diverged branch
+      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'Not possible to fast-forward' })
+      // hasUnpushedCommits: hasUpstream, then rev-list
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      .mockReturnValueOnce({ status: 0, stdout: '1\n' })
+      // pull --rebase
+      .mockReturnValueOnce({ status: 0, stdout: '' });
+
+    pull();
+
+    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+      'git',
+      ['pull', '--rebase', '--quiet'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+  });
+
+  it('surfaces a fast-forward failure that no local commit explains', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
+      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'some other failure' })
+      // hasUnpushedCommits: no upstream
+      .mockReturnValueOnce({ status: 1, stdout: '' });
+
+    expect(() => {
+      pull();
+    }).toThrow('git pull --ff-only --quiet failed');
   });
 
   it('tryPull with quiet does not log when pulling', () => {
