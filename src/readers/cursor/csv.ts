@@ -68,25 +68,24 @@ export function parseCursorDateString(value?: string): string | null {
 }
 
 function createCursorTokenTotals(row: CursorCsvRow): { input: number; output: number } | null {
-  const total = parseCursorNumber(row['Total Tokens']) ?? parseCursorNumber(row.Tokens);
-  if (!total) return null;
-
   const inputWithCacheWrite = parseCursorNumber(row['Input (w/ Cache Write)']) ?? 0;
   const inputWithoutCacheWrite = parseCursorNumber(row['Input (w/o Cache Write)']) ?? 0;
   const cacheInput = parseCursorNumber(row['Cache Read']) ?? 0;
   const outputTokens = parseCursorNumber(row['Output Tokens']) ?? 0;
   const inputTokens = inputWithCacheWrite + inputWithoutCacheWrite + cacheInput;
 
-  // Older exports only expose an aggregate Tokens column. Preserve their total
-  // as input when no input/output breakdown is available.
-  if (inputTokens === 0 && outputTokens === 0) {
-    return { input: total, output: 0 };
+  // Prefer the breakdown. The aggregate column is only a fallback, so a row
+  // whose Total Tokens cell is blank or zero still counts when the per-column
+  // figures carry real usage.
+  if (inputTokens > 0 || outputTokens > 0) {
+    return { input: inputTokens, output: outputTokens };
   }
 
-  return {
-    input: inputTokens,
-    output: outputTokens,
-  };
+  // Older exports only expose an aggregate Tokens column. Preserve their total
+  // as input when no input/output breakdown is available.
+  const total = parseCursorNumber(row['Total Tokens']) ?? parseCursorNumber(row.Tokens);
+  if (!total) return null;
+  return { input: total, output: 0 };
 }
 
 function normalizeModelName(raw: string): string {

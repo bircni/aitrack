@@ -89,6 +89,20 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(map.size).toBe(0);
   });
 
+  it('keeps rows whose breakdown has tokens but whose aggregate cell does not', () => {
+    // The aggregate column is a fallback, not a gate: a blank or zero
+    // Total Tokens used to discard the row's real per-column counts.
+    const csv = makeCsv('2024-01-10,gpt-4o,100,200,50,25,', '2024-01-11,gpt-4o,100,0,0,25,0');
+    const map = aggregateCursorCsvToDayMap(csv);
+
+    expect(map.get('2024-01-10')).toEqual({
+      inputTokens: 350,
+      outputTokens: 25,
+      byModel: { 'gpt-4o': { inputTokens: 350, outputTokens: 25 } },
+    });
+    expect(map.get('2024-01-11')?.inputTokens).toBe(100);
+  });
+
   it('skips rows with invalid date', () => {
     const csv = makeCsv('not-a-date,gpt-4o,100,0,0,50,150');
     const map = aggregateCursorCsvToDayMap(csv);
