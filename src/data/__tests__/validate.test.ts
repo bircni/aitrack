@@ -22,6 +22,20 @@ describe('validateMachineFile', () => {
     expect(validateMachineFile(validMachine, 'data/laptop.json')).toEqual(validMachine);
   });
 
+  it('drops a day whose key is not a date and keeps the rest of the file', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const withGarbageDay = {
+      ...validMachine,
+      days: { 'NaN-NaN-NaN': validMachine.days['2026-01-15'], ...validMachine.days },
+    };
+
+    const result = validateMachineFile(withGarbageDay, 'data/laptop.json');
+
+    expect(Object.keys(result?.days ?? {})).toEqual(['2026-01-15']);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('NaN-NaN-NaN'));
+    warn.mockRestore();
+  });
+
   it('accepts Claude cache breakdown fields on token counts', () => {
     const withBreakdown = {
       ...validMachine,

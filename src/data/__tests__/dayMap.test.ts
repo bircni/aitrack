@@ -5,6 +5,7 @@ import {
   filterProviderDataByYear,
   getOrCreateDay,
   toLocalDateString,
+  tryLocalDateString,
 } from '../dayMap.js';
 import type { DayEntry, DayMap } from '../types.js';
 
@@ -26,6 +27,18 @@ describe('dayMap helpers', () => {
     const date = new Date(2024, 5, 15, 23, 30, 0);
     expect(toLocalDateString(date)).toBe('2024-06-15');
     expect(toLocalDateString('2024-06-15T12:00:00.000Z')).toMatch(/^2024-06-1[45]$/);
+  });
+
+  it('tryLocalDateString rejects timestamps that cannot be parsed', () => {
+    expect(tryLocalDateString('corrupted')).toBeNull();
+    expect(tryLocalDateString(new Date('nonsense'))).toBeNull();
+    // Without the guard this is the string "NaN-NaN-NaN", a usable Map key.
+    expect(toLocalDateString('corrupted')).toBe('NaN-NaN-NaN');
+  });
+
+  it('tryLocalDateString matches toLocalDateString for valid input', () => {
+    const date = new Date(2024, 5, 15, 23, 30, 0);
+    expect(tryLocalDateString(date)).toBe(toLocalDateString(date));
   });
 
   it('filterDayMapByYear keeps only matching dates', () => {

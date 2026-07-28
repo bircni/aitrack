@@ -65,6 +65,24 @@ describe('readClaudeData', () => {
     expect(result.get('2024-01-15')?.byModel.claude?.costUSD).toBeCloseTo(0.000285);
   });
 
+  it('drops entries whose timestamp cannot be parsed', async () => {
+    process.env.XDG_CONFIG_HOME = TEST_HOME;
+    const projectDir = join(TEST_HOME, 'claude', 'projects', 'project');
+    mkdirSync(projectDir, { recursive: true });
+    jsonl(join(projectDir, 'a.jsonl'), [
+      assistantLine('good', 10, 5),
+      { ...assistantLine('bad', 999, 999), timestamp: 'corrupted' },
+    ]);
+
+    const result = await readClaudeData();
+
+    // A truthy-but-unparseable timestamp used to produce the day key
+    // "NaN-NaN-NaN", which synced to git and counted toward all-time totals
+    // while every year and window filter skipped it.
+    expect([...result.keys()]).toEqual(['2024-01-15']);
+    expect(result.get('2024-01-15')?.inputTokens).toBe(10);
+  });
+
   it('deduplicates messages across multiple discovered roots', async () => {
     const roots = [
       join(TEST_HOME, '.config', 'claude', 'projects', 'project'),

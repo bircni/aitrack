@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
-import { getOrCreateDay, toLocalDateString } from '../data/dayMap.js';
+import { getOrCreateDay, tryLocalDateString } from '../data/dayMap.js';
 import type { DayMap } from '../data/types.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
 import { listJsonlFiles, resolveSourceRoots } from './paths.js';
@@ -103,10 +103,7 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult[
     }
 
     if (entry.timestamp) {
-      const parsedTimestamp = new Date(entry.timestamp);
-      if (!Number.isNaN(parsedTimestamp.getTime())) {
-        currentDate = toLocalDateString(parsedTimestamp);
-      }
+      currentDate = tryLocalDateString(entry.timestamp) ?? currentDate;
     }
 
     if (entry.type === 'turn_context' && entry.payload?.model) {
