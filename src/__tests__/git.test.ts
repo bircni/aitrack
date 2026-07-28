@@ -232,6 +232,33 @@ describe('git helpers', () => {
     ]);
   });
 
+  it('commits a staged deletion instead of failing to read the file back', () => {
+    // The user cleared their history by deleting the machine file. Reading it
+    // back unconditionally aborted the sync with a raw ENOENT.
+    mocks.existsSync.mockReturnValue(false);
+    mocks.readFileSync.mockImplementation(() => {
+      throw new Error('ENOENT: no such file or directory');
+    });
+    mocks.spawnSync
+      // add
+      .mockReturnValueOnce({ status: 0 })
+      // diff --cached
+      .mockReturnValueOnce({ status: 0, stdout: 'D  data/host.json\n' })
+      // commit
+      .mockReturnValueOnce({ status: 0, stdout: '' })
+      // pushWithRetry: hasUpstream, then push
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      .mockReturnValueOnce({ status: 0, stdout: '' });
+
+    expect(commitAndPush('host')).toBe(true);
+    expect(mocks.readFileSync).not.toHaveBeenCalled();
+
+    // These two are not reset in beforeEach, and a throwing readFileSync would
+    // leak into every test after this one.
+    mocks.existsSync.mockReset();
+    mocks.readFileSync.mockReset();
+  });
+
   it('surfaces commit failures when there are staged data changes', () => {
     mocks.spawnSync
       .mockReturnValueOnce({ status: 0 })
