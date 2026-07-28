@@ -39,6 +39,27 @@ describe('claude pricing', () => {
     expect(consumeClaudeFallbackHits()).toEqual([]);
   });
 
+  it('prices the Claude 3 generation from its own rates, not the modern tier', () => {
+    consumeClaudeFallbackHits();
+
+    // The opus family fallback ($5/$25) undercharges these by 3x.
+    const opus3 = findClaudePricing('claude-3-opus-20240229');
+    expect(opus3.inputPerMillion).toBe(15);
+    expect(opus3.outputPerMillion).toBe(75);
+
+    // The haiku family fallback ($1/$5) overcharges these by 4x.
+    const haiku3 = findClaudePricing('claude-3-haiku-20240307');
+    expect(haiku3.inputPerMillion).toBe(0.25);
+    expect(haiku3.outputPerMillion).toBe(1.25);
+
+    const sonnet37 = findClaudePricing('claude-3-7-sonnet-20250219');
+    expect(sonnet37.inputPerMillion).toBe(3);
+    expect(sonnet37.outputPerMillion).toBe(15);
+
+    // Exact matches, so none of these should warn about a family fallback.
+    expect(consumeClaudeFallbackHits()).toEqual([]);
+  });
+
   it('falls back to family pricing for unknown models', () => {
     consumeClaudeFallbackHits();
     const opus = findClaudePricing('claude-opus-9-9');
