@@ -92,7 +92,6 @@ export async function initCommand(): Promise<void> {
 
   const isUrlChanged = existing !== null && existing.repoUrl !== repoUrl;
   const wasCloned = isCloned();
-  let hasClone = wasCloned;
 
   if (wasCloned && isUrlChanged) {
     const reclone = await promptReclone();
@@ -102,17 +101,16 @@ export async function initCommand(): Promise<void> {
     }
     console.log(`Removing existing clone at ${LOCAL_REPO}...`);
     removeLocalClone();
-    console.log(`Cloning ${repoUrl} into ${LOCAL_REPO}...`);
-    mkdirSync(dirname(LOCAL_REPO), { recursive: true });
-    cloneRepo(repoUrl);
-    hasClone = true;
-  } else if (wasCloned) {
+  }
+
+  // Every path below this point ends with a clone present: either one was
+  // already there and is being kept, or one is made here.
+  if (wasCloned && !isUrlChanged) {
     console.log(`Repo already cloned at ${LOCAL_REPO}. Skipping clone.`);
   } else {
     console.log(`Cloning ${repoUrl} into ${LOCAL_REPO}...`);
     mkdirSync(dirname(LOCAL_REPO), { recursive: true });
     cloneRepo(repoUrl);
-    hasClone = true;
   }
 
   const machineId = await promptMachineId(existing?.machineId ?? hostname());
@@ -121,15 +119,13 @@ export async function initCommand(): Promise<void> {
     return;
   }
 
+  // Adopt pre-clone staging under the identity that created it. Once a clone
+  // already exists, pending data may duplicate its synced current-machine file.
   let adopted = 0;
-  if (hasClone) {
-    // Adopt pre-clone staging under the identity that created it. Once a clone
-    // already exists, pending data may duplicate its synced current-machine file.
-    if (existing === null || !wasCloned) {
-      adopted = adoptPendingDataFiles(join(LOCAL_REPO, 'data'));
-    }
-    migrateMachineDataFiles(previousMachineId, machineId);
+  if (existing === null || !wasCloned) {
+    adopted = adoptPendingDataFiles(join(LOCAL_REPO, 'data'));
   }
+  migrateMachineDataFiles(previousMachineId, machineId);
 
   saveConfig({ repoUrl, machineId });
   if (adopted > 0) {
