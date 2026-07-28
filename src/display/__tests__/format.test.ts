@@ -10,6 +10,16 @@ describe('format helpers', () => {
     expect(fmt(3_200_000_000)).toBe('3.20B');
   });
 
+  it('promotes to the next unit instead of rounding past it', () => {
+    expect(fmt(999_999)).toBe('1.0M');
+    expect(fmt(999_999_999)).toBe('1.00B');
+  });
+
+  it('keeps values that round within their own unit', () => {
+    expect(fmt(999_949)).toBe('999.9K');
+    expect(fmt(999_949_999)).toBe('999.9M');
+  });
+
   it('formats USD amounts for tables', () => {
     expect(fmtUSD(null)).toBe('—');
     expect(fmtUSD(0)).toBe('—');

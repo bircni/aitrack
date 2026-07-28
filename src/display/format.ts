@@ -1,6 +1,15 @@
+/**
+ * Whether rounding at `divisor` lands on 1000, i.e. past what the unit holds.
+ * toFixed rounds up, so 999_999 scaled by 1e3 gives "1000.0" — which has to be
+ * shown as "1.0M" rather than "1000.0K".
+ */
+function roundsPastUnit(n: number, divisor: number): boolean {
+  return Number((n / divisor).toFixed(1)) >= 1000;
+}
+
 export function fmt(n: number): string {
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e9 || roundsPastUnit(n, 1e6)) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6 || roundsPastUnit(n, 1e3)) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return String(n);
 }
