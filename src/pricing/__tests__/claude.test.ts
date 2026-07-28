@@ -60,6 +60,16 @@ describe('claude pricing', () => {
     expect(consumeClaudeFallbackHits()).toEqual([]);
   });
 
+  it('returns the same pricing on repeated lookups of one id', () => {
+    // Canonicalization is memoized; make sure the cache does not blur ids that
+    // normalize differently.
+    expect(findClaudePricing('claude-opus-3').inputPerMillion).toBe(15);
+    expect(findClaudePricing('claude-3-opus-20240229').inputPerMillion).toBe(15);
+    expect(findClaudePricing('claude-opus-3').inputPerMillion).toBe(15);
+    expect(findClaudePricing('claude-haiku-3').inputPerMillion).toBe(0.25);
+    expect(findClaudePricing('CLAUDE-OPUS-3').inputPerMillion).toBe(15);
+  });
+
   it('falls back to family pricing for unknown models', () => {
     consumeClaudeFallbackHits();
     const opus = findClaudePricing('claude-opus-9-9');

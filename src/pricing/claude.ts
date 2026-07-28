@@ -81,13 +81,23 @@ export function consumeClaudeFallbackHits(): string[] {
   return xs;
 }
 
+// Called once per assistant entry while reading the JSONL corpus, which holds
+// only a handful of distinct model strings, so the lowercase plus two regexes
+// are worth caching.
+const canonicalIdCache = new Map<string, string>();
+
 function canonicalClaudeModelId(model: string): string {
+  const cached = canonicalIdCache.get(model);
+  if (cached !== undefined) return cached;
+
   const id = model.toLowerCase().replace(/-(?:latest|\d{8})$/, '');
   const legacy = /^claude-(\d+)(?:-(\d+))?-(opus|sonnet|haiku)$/.exec(id);
-  if (!legacy) return id;
-  const [, major, minor, family] = legacy;
-  if (!major || !family) return id;
-  return `claude-${family}-${major}${minor ? `-${minor}` : ''}`;
+  const [, major, minor, family] = legacy ?? [];
+  const canonical =
+    legacy && major && family ? `claude-${family}-${major}${minor ? `-${minor}` : ''}` : id;
+
+  canonicalIdCache.set(model, canonical);
+  return canonical;
 }
 
 export function findClaudePricing(model: string, usageDate?: string): ClaudePricing {
