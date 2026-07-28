@@ -23,7 +23,12 @@ export interface SyncDataOptions {
   dryRun?: boolean;
 }
 
-export async function syncData(options: SyncDataOptions = {}): Promise<void> {
+/**
+ * Push this machine's usage data. Returns the machine file built from the local
+ * logs so a caller that also needs it (the daemon renders right after syncing)
+ * can reuse it instead of parsing the whole JSONL corpus a second time.
+ */
+export async function syncData(options: SyncDataOptions = {}): Promise<MachineFile> {
   const config = loadConfig();
   const isQuiet = Boolean(options.quiet);
   const isDryRun = Boolean(options.dryRun);
@@ -49,6 +54,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
   }
   const { claude_code: claudeData, codex: codexData } = await readLocalProviderMaps();
 
+  const freshData = buildMachineData(host, { claude_code: claudeData, codex: codexData });
   const totalDays = new Set([...claudeData.keys(), ...codexData.keys()]).size;
 
   if (totalDays === 0) {
@@ -61,7 +67,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
           : 'No local data found (Claude Code or Codex).',
       );
     }
-    return;
+    return freshData;
   }
 
   if (!isQuiet) {
@@ -70,8 +76,6 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
     if (codexData.size > 0) sources.push(`Codex (${codexData.size} days)`);
     console.log(`Found: ${sources.join(', ')}`);
   }
-
-  const freshData = buildMachineData(host, { claude_code: claudeData, codex: codexData });
 
   // Only write if the usage data changed — avoids a spurious commit on every run
   // (lastUpdated would otherwise always make the file dirty).
@@ -108,7 +112,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
           : 'No changes to push — data is already up to date.',
       );
     }
-    return;
+    return freshData;
   }
 
   if (isDryRun) {
@@ -118,7 +122,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
         `Dry run: would ${action} data/${host}.json (${String(syncedDays)} days). No changes written.`,
       );
     }
-    return;
+    return freshData;
   }
 
   mkdirSync(dataDir, { recursive: true });
@@ -130,7 +134,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
     if (!isQuiet) {
       console.log('No changes to push — data is already up to date.');
     }
-    return;
+    return freshData;
   }
   if (!isQuiet) {
     console.log(`Done! Pushed data/${host}.json (${syncedDays} days)`);
@@ -145,6 +149,8 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
       '  These models may be wrong — please update src/pricing/ with the correct rates.',
     );
   }
+
+  return freshData;
 }
 
 export async function syncCommand(options: SyncDataOptions = {}): Promise<void> {

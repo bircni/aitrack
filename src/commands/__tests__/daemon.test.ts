@@ -222,6 +222,26 @@ describe('daemonCommand', () => {
     await daemonPromise.catch(() => undefined);
   });
 
+  it('reuses the machine file from sync instead of re-reading the logs', async () => {
+    const localMachine = { hostname: 'host', lastUpdated: 'now', days: {} };
+    mocks.isCloned.mockReturnValue(true);
+    mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
+    mocks.syncData.mockResolvedValue(localMachine);
+
+    const daemonPromise = daemonCommand({ port: 9089, interval: 120, sync: true });
+
+    // Without this the refresh parses the whole JSONL corpus a second time,
+    // once inside syncData and once inside loadMergedProviderData.
+    await vi.waitFor(() => {
+      expect(mocks.loadMergedProviderData).toHaveBeenCalledWith(
+        expect.objectContaining({ localMachine }),
+      );
+    });
+
+    process.emit('SIGTERM');
+    await daemonPromise.catch(() => undefined);
+  });
+
   it('reports a sync configuration error but still starts the dashboard server', async () => {
     const daemonPromise = daemonCommand({ port: 9089, interval: 120, sync: true });
 
