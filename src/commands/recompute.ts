@@ -9,16 +9,12 @@ import {
   readLocalProviderMaps,
 } from '../data/localData.js';
 import type { MachineFile } from '../data/types.js';
-import { parseMachineFile } from '../data/validate.js';
+import { approximatelyEqual, parseMachineFile } from '../data/validate.js';
 import { SYNCED_PROVIDERS } from '../display/providers.js';
 import { commitDataChanges, isCloned, listDataFiles } from '../git.js';
 import { consumeClaudeFallbackHits } from '../pricing/claude.js';
 import { consumeCodexFallbackHits } from '../pricing/codex.js';
 import { resolveModelCost } from '../pricing/resolve.js';
-
-function costsEqual(a: number, b: number): boolean {
-  return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
-}
 
 /**
  * Days serialized without their costs, for change detection.
@@ -94,7 +90,7 @@ export async function recomputeCostsCommand(): Promise<void> {
           // Tolerate the last float bits: the readers sum a cost per entry while
           // this derives it from the summed tokens, so an unchanged day would
           // otherwise look repriced on every run.
-          if (counts.costUSD === undefined || !costsEqual(counts.costUSD, cost)) {
+          if (counts.costUSD === undefined || !approximatelyEqual(counts.costUSD, cost)) {
             counts.costUSD = cost;
             isDayTouched = true;
           }
@@ -106,7 +102,7 @@ export async function recomputeCostsCommand(): Promise<void> {
           modelCount > 0 &&
           isCostComplete &&
           (providerDay.totals.costUSD === undefined ||
-            !costsEqual(providerDay.totals.costUSD, dayTotal))
+            !approximatelyEqual(providerDay.totals.costUSD, dayTotal))
         ) {
           providerDay.totals.costUSD = dayTotal;
           isTouched = true;

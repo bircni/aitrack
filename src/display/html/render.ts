@@ -154,7 +154,7 @@ export function renderToHtml(
     );
   }
 
-  const todayHtml = renderTodaySection(layoutData, dark);
+  const todayHtml = renderTodaySection(layoutData);
 
   const sections = providers
     .map((key) => {

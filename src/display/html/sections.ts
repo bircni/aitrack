@@ -8,7 +8,7 @@ import { displayModelName } from '../heatmap/modelNames.js';
 import { MONTHS } from '../heatmap/stats.js';
 import { getProviderTheme } from '../heatmap/themes.js';
 import { buildProviderSectionViewModel } from '../heatmap/viewModel.js';
-import { costColumnLabel } from '../providers.js';
+import { costColumnLabel, providerLabel } from '../providers.js';
 import { escapeHtml } from './escape.js';
 
 function renderMonthLabels(weeks: Array<Array<string | null>>): string {
@@ -61,7 +61,7 @@ function renderLegend(providerKey: string, dark: boolean): string {
     .join('');
 }
 
-export function renderTodaySection(providerData: ProviderData, dark: boolean): string {
+export function renderTodaySection(providerData: ProviderData): string {
   const today = toLocalDateString(new Date());
   interface TodayRow {
     name: string;
@@ -76,7 +76,7 @@ export function renderTodaySection(providerData: ProviderData, dark: boolean): s
     const day = dayMap.get(today);
     if (!day) continue;
     rows.push({
-      name: getProviderTheme(key, dark).name,
+      name: providerLabel(key),
       inputTokens: day.inputTokens,
       outputTokens: day.outputTokens,
       cost: day.costUSD ?? 0,
@@ -158,7 +158,7 @@ export function renderProviderSection(
   weeks: Array<Array<string | null>>,
   dark: boolean,
 ): string {
-  const vm = buildProviderSectionViewModel(providerKey, dayMap, dark);
+  const vm = buildProviderSectionViewModel(providerKey, dayMap);
 
   const statHtml = vm.headerStats
     .map(

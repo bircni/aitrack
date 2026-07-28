@@ -30,7 +30,7 @@ describe('renderTodaySection', () => {
   });
 
   it('renders an empty state when no provider has usage today', () => {
-    const html = renderTodaySection({}, false);
+    const html = renderTodaySection({});
     expect(html).toContain('No usage recorded yet today.');
     expect(html).toContain('2024-06-15');
   });
@@ -41,7 +41,7 @@ describe('renderTodaySection', () => {
       codex: new Map([['2024-06-15', makeDay(2000, 1000, 5)]]),
     };
 
-    const html = renderTodaySection(providerData, false);
+    const html = renderTodaySection(providerData);
     expect(html).toContain('Codex');
     expect(html).toContain('Claude Code');
     expect(html).toContain('tokens total');
@@ -53,7 +53,7 @@ describe('renderTodaySection', () => {
     const providerData: ProviderData = {
       codex: new Map([['2024-06-15', makeDay(100, 50)]]),
     };
-    const html = renderTodaySection(providerData, false);
+    const html = renderTodaySection(providerData);
     expect(html).toContain('—');
     expect(html).not.toContain('est. cost');
   });
