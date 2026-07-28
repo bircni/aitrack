@@ -252,11 +252,15 @@ export function commitAndPush(hostname: string): boolean {
   const machineId = normalizeMachineId(hostname);
   const path = `data/${machineDataFilename(machineId)}`;
   runGit(['add', '--', `:(literal)${path}`]);
-  const contents = readFileSync(join(LOCAL_REPO, path), 'utf8');
-  return commitStagedData(`sync: ${machineId} at ${new Date().toISOString()}`, {
-    path,
-    contents,
-  });
+  // The staged change can be a deletion (the user cleared their history), in
+  // which case there is nothing to read back and nothing to replay on a
+  // push-retry conflict. Reading unconditionally aborted the sync with a raw
+  // ENOENT instead of committing the deletion.
+  const absolute = join(LOCAL_REPO, path);
+  const conflict = existsSync(absolute)
+    ? { path, contents: readFileSync(absolute, 'utf8') }
+    : undefined;
+  return commitStagedData(`sync: ${machineId} at ${new Date().toISOString()}`, conflict);
 }
 
 /** Whether this machine's target file is modified, renamed, or untracked in the data repo. */
