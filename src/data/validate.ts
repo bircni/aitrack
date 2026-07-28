@@ -5,6 +5,8 @@ export interface MachineFileValidationOptions {
   allowInconsistentCostTotals?: boolean;
 }
 
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -112,6 +114,16 @@ export function validateMachineFile(
 
   const days: MachineFile['days'] = {};
   for (const [date, providers] of Object.entries(data.days)) {
+    // A day key that is not a date can only come from a reader that wrote one
+    // (an unparseable timestamp used to yield "NaN-NaN-NaN"). Such a day is
+    // skipped by every year and window filter yet still counted in all-time
+    // totals, and nothing removes it on its own: the sync merge carries
+    // persisted days forward forever. Drop it on read instead of failing the
+    // whole file, which would take the machine's real history with it.
+    if (!DAY_KEY.test(date)) {
+      console.warn(`Dropping day ${date} from machine file ${filePath}: not a YYYY-MM-DD date`);
+      continue;
+    }
     if (!isRecord(providers)) {
       console.warn(`Skipping invalid machine file ${filePath}: days.${date} must be an object`);
       return null;

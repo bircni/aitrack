@@ -17,6 +17,19 @@ export function toLocalDateString(ts: string | Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Day key for a timestamp, or null when it cannot be parsed.
+ *
+ * toLocalDateString on an unparseable value yields the string "NaN-NaN-NaN",
+ * which is a perfectly usable Map key: it would be written to the synced
+ * machine file, counted in all-time totals, and skipped by every year or
+ * window filter. Readers use this instead so bad input is dropped at the edge.
+ */
+export function tryLocalDateString(ts: string | Date): string | null {
+  const d = typeof ts === 'string' ? new Date(ts) : ts;
+  return Number.isNaN(d.getTime()) ? null : toLocalDateString(d);
+}
+
 export function filterDayMapByYear(dayMap: DayMap, year: number): DayMap {
   const prefix = `${year}-`;
   return new Map([...dayMap].filter(([date]) => date.startsWith(prefix)));
