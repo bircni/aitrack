@@ -1,6 +1,6 @@
 import { readClaudeData } from '../readers/claude.js';
 import { readCodexData } from '../readers/codex.js';
-import type { DayMap, MachineFile, TokenCounts } from './types.js';
+import type { DayMap, MachineFile, ProviderDay, TokenCounts } from './types.js';
 
 function tokenCountFields(counts: TokenCounts): TokenCounts {
   return {
@@ -38,6 +38,49 @@ export function buildMachineData(
 
 export function machineHasData(machine: MachineFile): boolean {
   return Object.keys(machine.days).length > 0;
+}
+
+function dayTokens(day: ProviderDay): number {
+  return day.totals.inputTokens + day.totals.outputTokens;
+}
+
+/**
+ * Union of the persisted days and the freshly read ones, preferring fresh data
+ * for any (date, provider) it covers — unless the persisted record holds more
+ * tokens, which means the local logs have been pruned out from under it.
+ *
+ * The tools that write the local logs prune them (Claude Code trims transcripts
+ * after ~30 days), so for older dates the synced file is the only remaining
+ * record. Replacing it wholesale with what the local logs still show would
+ * delete that history permanently on the next push.
+ *
+ * Pruning removes one session file at a time, so the oldest date the logs still
+ * reach is typically covered only in part: fresh has that (date, provider) but
+ * with fewer tokens than were synced from it earlier. Taking the larger of the
+ * two keeps that boundary day from being ratcheted down on every sync.
+ *
+ * Date and provider keys are sorted so the serialized file is stable and the
+ * caller's change detection does not trip on key ordering alone.
+ */
+export function mergePersistedDays(
+  persisted: MachineFile['days'] | null,
+  fresh: MachineFile['days'],
+): MachineFile['days'] {
+  const dates = new Set([...Object.keys(persisted ?? {}), ...Object.keys(fresh)]);
+  const days: MachineFile['days'] = {};
+  for (const date of [...dates].sort()) {
+    const providers: Record<string, ProviderDay> = { ...persisted?.[date] };
+    for (const [providerKey, freshDay] of Object.entries(fresh[date] ?? {})) {
+      const persistedDay = providers[providerKey];
+      if (persistedDay === undefined || dayTokens(freshDay) >= dayTokens(persistedDay)) {
+        providers[providerKey] = freshDay;
+      }
+    }
+    days[date] = Object.fromEntries(
+      Object.entries(providers).sort(([a], [b]) => a.localeCompare(b)),
+    );
+  }
+  return days;
 }
 
 export async function readLocalProviderMaps(): Promise<{

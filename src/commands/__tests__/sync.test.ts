@@ -26,7 +26,11 @@ vi.mock('../../config.js', () => ({
 }));
 vi.mock('../../readers/claude.js', () => ({ readClaudeData: mocks.readClaudeData }));
 vi.mock('../../readers/codex.js', () => ({ readCodexData: mocks.readCodexData }));
-vi.mock('../../data/localData.js', () => ({
+vi.mock('../../data/localData.js', async () => ({
+  // The real merge helper — this is what keeps pruned-away history in the file.
+  mergePersistedDays: (
+    await vi.importActual<typeof import('../../data/localData.js')>('../../data/localData.js')
+  ).mergePersistedDays,
   buildMachineData: (host: string, providers: Record<string, DayMap>) => {
     const days: Record<string, Record<string, unknown>> = {};
     for (const [providerKey, dayMap] of Object.entries(providers)) {
@@ -100,6 +104,32 @@ describe('syncCommand', () => {
       'utf8',
     );
     expect(mocks.commitAndPush).toHaveBeenCalledWith('host');
+  });
+
+  it('keeps persisted days that the local logs have already pruned', async () => {
+    // Local logs only reach back to 2024-01-01; the synced file is the only
+    // record of 2023-06-01 and must survive the write.
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify({
+        hostname: 'host',
+        lastUpdated: 'old',
+        days: {
+          '2023-06-01': {
+            codex: {
+              byModel: { 'gpt-5': { inputTokens: 900, outputTokens: 100 } },
+              totals: { inputTokens: 900, outputTokens: 100 },
+            },
+          },
+        },
+      }),
+    );
+
+    await syncCommand();
+
+    const written = mocks.writeFileSync.mock.calls[0]?.[1] as string;
+    const parsed = JSON.parse(written) as { days: Record<string, unknown> };
+    expect(Object.keys(parsed.days)).toEqual(['2023-06-01', '2024-01-01']);
   });
 
   it('pushes a pending machine migration when no local usage remains', async () => {

@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { loadConfig, resolveMachineId } from '../config.js';
-import { buildMachineData, readLocalProviderMaps } from '../data/localData.js';
+import { buildMachineData, mergePersistedDays, readLocalProviderMaps } from '../data/localData.js';
 import type { MachineFile } from '../data/types.js';
 import { parseMachineFile } from '../data/validate.js';
 import {
@@ -81,7 +81,15 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
     /* file doesn't exist yet */
   }
 
-  if (JSON.stringify(existingDays) === JSON.stringify(freshData.days)) {
+  // Keep days the local logs no longer cover — see mergePersistedDays.
+  const outgoingDays = mergePersistedDays(existingDays, freshData.days);
+  const outgoingData: MachineFile = { ...freshData, days: outgoingDays };
+  const syncedDays = Object.keys(outgoingDays).length;
+  // Normalize the persisted side through the same ordering so a file that is
+  // already up to date does not look changed purely because of key order.
+  const normalizedExisting = existingDays === null ? null : mergePersistedDays(existingDays, {});
+
+  if (JSON.stringify(normalizedExisting) === JSON.stringify(outgoingDays)) {
     let isPushed = false;
     if (!isDryRun) {
       removePendingMachineFile(host);
@@ -92,7 +100,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
     if (!isQuiet) {
       console.log(
         isPushed
-          ? `Done! Pushed data/${host}.json (${String(totalDays)} days)`
+          ? `Done! Pushed data/${host}.json (${String(syncedDays)} days)`
           : 'No changes to push — data is already up to date.',
       );
     }
@@ -103,14 +111,14 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
     if (!isQuiet) {
       const action = existingDays === null ? 'create' : 'update';
       console.log(
-        `Dry run: would ${action} data/${host}.json (${String(totalDays)} days). No changes written.`,
+        `Dry run: would ${action} data/${host}.json (${String(syncedDays)} days). No changes written.`,
       );
     }
     return;
   }
 
   mkdirSync(dataDir, { recursive: true });
-  writeFileSync(dataFilePath, JSON.stringify(freshData, null, 2), 'utf8');
+  writeFileSync(dataFilePath, JSON.stringify(outgoingData, null, 2), 'utf8');
   removePendingMachineFile(host);
 
   const isPushed = commitAndPush(host);
@@ -121,7 +129,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<void> {
     return;
   }
   if (!isQuiet) {
-    console.log(`Done! Pushed data/${host}.json (${totalDays} days)`);
+    console.log(`Done! Pushed data/${host}.json (${syncedDays} days)`);
   }
 
   const fb = [...consumeClaudeFallbackHits(), ...consumeCodexFallbackHits()];

@@ -100,23 +100,22 @@ function splitByProvider(machineFiles: MachineFile[]): ProviderData {
   return providers;
 }
 
-function machineProviderKeys(machine: MachineFile): Set<string> {
-  const providers = new Set<string>();
-  for (const dayProviders of Object.values(machine.days)) {
-    for (const providerKey of Object.keys(dayProviders)) providers.add(providerKey);
-  }
-  return providers;
-}
-
-function persistedProviderFallback(
-  machine: MachineFile,
-  freshProviders: ReadonlySet<string>,
-): MachineFile | null {
+/**
+ * Drop the parts of the current machine's persisted file that the freshly read
+ * local data will overlay anyway, so the two are not counted twice.
+ *
+ * Scoped per (date, provider) rather than per provider: local logs get pruned,
+ * so a persisted date the local logs no longer cover is the only record of that
+ * day and must survive.
+ */
+function persistedDayFallback(machine: MachineFile, fresh: MachineFile): MachineFile | null {
   const days: MachineFile['days'] = {};
   for (const [date, dayProviders] of Object.entries(machine.days)) {
     const fallbackProviders: Record<string, ProviderDay> = {};
     for (const [providerKey, providerDay] of Object.entries(dayProviders)) {
-      if (!freshProviders.has(providerKey)) fallbackProviders[providerKey] = providerDay;
+      if (fresh.days[date]?.[providerKey] === undefined) {
+        fallbackProviders[providerKey] = providerDay;
+      }
     }
     if (Object.keys(fallbackProviders).length > 0) days[date] = fallbackProviders;
   }
@@ -151,14 +150,13 @@ export async function loadMergedProviderData(
       );
     machineData = persisted.map((entry) => entry.machine);
 
-    const freshProviders = machineProviderKeys(localMachine);
     const reportMachines: MachineFile[] = [];
     for (const entry of persisted) {
-      if (basename(entry.filePath) !== currentFile || freshProviders.size === 0) {
+      if (basename(entry.filePath) !== currentFile || !machineHasData(localMachine)) {
         reportMachines.push(entry.machine);
         continue;
       }
-      const fallback = persistedProviderFallback(entry.machine, freshProviders);
+      const fallback = persistedDayFallback(entry.machine, localMachine);
       if (fallback) reportMachines.push(fallback);
     }
     providerData = splitByProvider(reportMachines);
