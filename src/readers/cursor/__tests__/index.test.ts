@@ -260,6 +260,29 @@ describe('readCursorData', () => {
     );
   });
 
+  it('returns an empty map when the CSV body fails mid-stream', async () => {
+    const databasePath = join(tmpDir, 'state.vscdb');
+    createStateDatabase(databasePath, { 'cursorAuth/accessToken': 'access-token' });
+    process.env.CURSOR_STATE_DB_PATH = databasePath;
+    setFetchMock((input) => {
+      if (toUrl(input).hostname === 'api2.cursor.sh') {
+        return Promise.resolve(new Response('{}', { status: 200 }));
+      }
+      // 200, then the connection drops while the body is being read.
+      const body = new ReadableStream({
+        start(controller) {
+          controller.error(new Error('socket hang up'));
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    });
+
+    // Must degrade like every other Cursor failure rather than rejecting and
+    // taking the whole usage run down with it.
+    await expect(readCursorData()).resolves.toEqual(new Map());
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Cursor skipped'));
+  });
+
   it('warns when the CSV export contains no usage rows', async () => {
     const databasePath = join(tmpDir, 'state.vscdb');
     createStateDatabase(databasePath, { 'cursorAuth/accessToken': 'access-token' });
