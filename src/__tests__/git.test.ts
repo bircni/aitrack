@@ -440,15 +440,19 @@ describe('git helpers', () => {
     );
   });
 
-  it('does not overwrite an existing file while adopting pending data', () => {
+  it('skips an already-synced file while adopting pending data instead of aborting', () => {
     mocks.existsSync.mockReturnValue(true);
     mocks.readdirSync.mockReturnValue(['host.json']);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    expect(() => adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toThrow(
-      'already exists',
-    );
+    // Aborting here used to brick init: it is the only command that writes the
+    // config back, so a stale staged file made every retry fail.
+    expect(adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toBe(0);
     expect(mocks.copyFileSync).not.toHaveBeenCalled();
     expect(mocks.rmSync).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('host.json'));
+    // The files are kept, so the warning has to say where they are.
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(join('pending', 'data')));
   });
 
   it('rejects an unsafe pending filename before adopting it', () => {

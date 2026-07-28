@@ -158,6 +158,34 @@ describe('loadMergedProviderData', () => {
     expect(mocks.writePendingMachineFile).not.toHaveBeenCalled();
   });
 
+  it('does not stage pending data once the repo is configured and cloned', async () => {
+    // A staged copy here has nothing to be adopted into later, and would
+    // collide with the synced file the next time init runs.
+    mocks.tryLoadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: 'host',
+    });
+    mocks.resolveMachineId.mockReturnValue('host');
+    mocks.isCloned.mockReturnValue(true);
+    mocks.listDataFiles.mockReturnValue([]);
+    mocks.buildLocalMachineFile.mockResolvedValue({
+      hostname: 'host',
+      lastUpdated: 'fresh',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { claude: { inputTokens: 10, outputTokens: 5 } },
+            totals: { inputTokens: 10, outputTokens: 5 },
+          },
+        },
+      },
+    });
+
+    await loadMergedProviderData({ providers: ['claude_code'], stagePending: true });
+
+    expect(mocks.writePendingMachineFile).not.toHaveBeenCalled();
+  });
+
   it('merges git data from other machines and overlays fresh local read', async () => {
     mocks.tryLoadConfig.mockReturnValue({
       repoUrl: 'git@example.com:me/data.git',
