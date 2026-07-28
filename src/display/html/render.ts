@@ -1,7 +1,7 @@
 import { formatUsageEmptyMessage } from '../../data/emptyState.js';
 import type { ProviderData, RenderOptions } from '../../data/types.js';
 import { resolveProviderLayout } from '../heatmap/layout.js';
-import { buildHeatmapWeeks } from '../heatmap/stats.js';
+import { buildDateGrid } from '../heatmap/stats.js';
 import { escapeHtml } from './escape.js';
 import { renderProviderSection, renderTodaySection } from './sections.js';
 import { pageStyles } from './styles.js';
@@ -129,7 +129,7 @@ export function renderToHtml(
   }: HtmlRenderOptions = {},
 ): string {
   const { layoutData, keys: providers } = resolveProviderLayout(providerData, { all, year });
-  const weeks = buildHeatmapWeeks(year);
+  const weeks = buildDateGrid(year);
 
   const title = year === undefined ? 'aitrack' : `aitrack (${String(year)})`;
   const metaLines: string[] = [];

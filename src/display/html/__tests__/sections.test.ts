@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DayEntry, ProviderData } from '../../../data/types.js';
-import { buildHeatmapWeeks } from '../../heatmap/stats.js';
+import { buildDateGrid } from '../../heatmap/stats.js';
 import { renderProviderSection, renderTodaySection } from '../sections.js';
 
 function makeDay(input: number, output: number, costUSD?: number): DayEntry {
@@ -65,7 +65,7 @@ describe('renderProviderSection', () => {
       ['2024-06-01', makeDay(1000, 500, 1.5)],
       ['2024-06-02', makeDay(2000, 1000, 3)],
     ]);
-    const weeks = buildHeatmapWeeks(2024);
+    const weeks = buildDateGrid(2024);
     const html = renderProviderSection('claude_code', dayMap, weeks, false);
 
     expect(html).toContain('Claude Code');
@@ -80,8 +80,8 @@ describe('renderProviderSection', () => {
   it('declares the column count so a 54-week year is not clipped', () => {
     const dayMap = new Map([['2028-12-31', makeDay(1000, 500)]]);
 
-    const ordinary = renderProviderSection('claude_code', dayMap, buildHeatmapWeeks(2027), false);
-    const fiftyFour = renderProviderSection('claude_code', dayMap, buildHeatmapWeeks(2028), false);
+    const ordinary = renderProviderSection('claude_code', dayMap, buildDateGrid(2027), false);
+    const fiftyFour = renderProviderSection('claude_code', dayMap, buildDateGrid(2028), false);
 
     // The stylesheet's repeat() reads --weeks; without it the 54th column
     // landed outside the fixed 53-column template.
@@ -91,7 +91,7 @@ describe('renderProviderSection', () => {
 
   it('omits the usage table when there is no model activity', () => {
     const dayMap = new Map<string, DayEntry>();
-    const weeks = buildHeatmapWeeks(2024);
+    const weeks = buildDateGrid(2024);
     const html = renderProviderSection('codex', dayMap, weeks, true);
 
     expect(html).toContain('Codex');
@@ -100,7 +100,7 @@ describe('renderProviderSection', () => {
 
   it('escapes tooltip content in heatmap cells', () => {
     const dayMap = new Map([['2024-06-01', makeDay(100, 50)]]);
-    const weeks = buildHeatmapWeeks(2024);
+    const weeks = buildDateGrid(2024);
     const html = renderProviderSection('claude_code', dayMap, weeks, false);
     expect(html).toContain('title="2024-06-01 — 150 tokens"');
   });

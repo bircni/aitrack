@@ -153,10 +153,6 @@ export function formatMonthLabel(month: string): string {
   return `${MONTHS[monthIndex] ?? m} ${y}`;
 }
 
-export function buildHeatmapWeeks(year?: number): Array<Array<string | null>> {
-  return buildDateGrid(year);
-}
-
 export function buildDateGrid(year?: number): Array<Array<string | null>> {
   if (year !== undefined) {
     return buildYearGrid(year);

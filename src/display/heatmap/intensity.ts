@@ -15,7 +15,7 @@ export function percentile(sorted: number[], p: number): number {
   return sortedAsc[index] ?? 0;
 }
 
-function intensityLevel(tokens: number, max: number): 0 | 1 | 2 | 3 | 4 {
+export function tokenIntensityLevel(tokens: number, max: number): 0 | 1 | 2 | 3 | 4 {
   if (!tokens || !max) return 0;
   const r = Math.min(tokens / max, 1);
   const [low, mid, high] = INTENSITY_THRESHOLDS;
@@ -23,8 +23,4 @@ function intensityLevel(tokens: number, max: number): 0 | 1 | 2 | 3 | 4 {
   if (r < mid) return 2;
   if (r < high) return 3;
   return 4;
-}
-
-export function tokenIntensityLevel(tokens: number, max: number): 0 | 1 | 2 | 3 | 4 {
-  return intensityLevel(tokens, max);
 }
