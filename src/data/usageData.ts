@@ -36,6 +36,7 @@ export function mergeProviderDay(
   }
 
   let summedModelCost = 0;
+  let backfilledModelCost = 0;
   let isAnyModelHadCost = false;
   for (const [model, counts] of Object.entries(pData.byModel)) {
     const m = (rec.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
@@ -56,10 +57,22 @@ export function mergeProviderDay(
       m.costUSD = (m.costUSD ?? 0) + cost;
       summedModelCost += cost;
       isAnyModelHadCost = true;
+      // In merge mode resolveModelCost returns the stored cost when there is
+      // one, so this is exactly the amount that was estimated just now.
+      if (counts.costUSD === undefined) backfilledModelCost += cost;
     }
   }
 
-  const dayCost = pData.totals.costUSD ?? (isAnyModelHadCost ? summedModelCost : undefined);
+  // A stored day total predates any per-model cost estimated above, so the
+  // model table would otherwise total more than the day it belongs to. Add the
+  // backfilled amount in rather than recomputing the whole day, which would
+  // silently reprice history that recompute-costs owns.
+  const dayCost =
+    pData.totals.costUSD === undefined
+      ? isAnyModelHadCost
+        ? summedModelCost
+        : undefined
+      : pData.totals.costUSD + backfilledModelCost;
   if (dayCost !== undefined) rec.costUSD = (rec.costUSD ?? 0) + dayCost;
 }
 
