@@ -30,6 +30,12 @@ export function currentStreak(dayMap: DayMap): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const current = new Date(today);
+  // Today is still in progress. Counting from it would report 0 all morning
+  // and then jump to the full streak after the first request of the day, so
+  // start from yesterday when today has no activity yet.
+  if (!hasActivity(dayMap, dateKey(current))) {
+    current.setDate(current.getDate() - 1);
+  }
   let streak = 0;
   while (hasActivity(dayMap, dateKey(current))) {
     streak++;
