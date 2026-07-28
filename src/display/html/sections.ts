@@ -185,7 +185,7 @@ export function renderProviderSection(
       <span style="grid-row:4">Wed</span>
       <span style="grid-row:6">Fri</span>
     </div>
-    <div class="heatmap-area">
+    <div class="heatmap-area" style="--weeks:${String(Math.max(53, weeks.length))}">
       <div class="month-row">${renderMonthLabels(weeks)}</div>
       <div class="heatmap-grid">${renderHeatmapCells(providerKey, dayMap, weeks, vm.maxTokens, dark)}</div>
       <div class="legend">
