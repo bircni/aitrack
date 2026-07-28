@@ -7,12 +7,8 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { CLAUDE_PRICING_BY_ID, type ClaudePricing } from '../src/pricing/claude.js';
-import {
-  CODEX_PRICING_BY_ID,
-  CODEX_PRICING_CURRENT,
-  type CodexPricing,
-} from '../src/pricing/codex.js';
+import { CLAUDE_PRICING_BY_ID } from '../src/pricing/claude.js';
+import { CODEX_PRICING_BY_ID, CODEX_PRICING_CURRENT } from '../src/pricing/codex.js';
 
 const CLAUDE_PRICING_URL = 'https://platform.claude.com/docs/en/about-claude/pricing';
 const CODEX_PRICING_URL = 'https://developers.openai.com/api/docs/pricing';
@@ -99,59 +95,89 @@ export function discoverClaudeModelsOnPage(html: string): string[] {
   return [...found].sort((a, b) => a.localeCompare(b));
 }
 
-function claudeSummary(p: ClaudePricing): string {
-  return `$${p.inputPerMillion}/${p.outputPerMillion}`;
+interface ProviderCheck<P extends { inputPerMillion: number; outputPerMillion: number }> {
+  label: string;
+  url: string;
+  /** Entries to verify against the docs page. */
+  table: Record<string, P>;
+  /** Every id the source file knows, used to spot models missing from it. */
+  knownIds: string[];
+  sourceFile: string;
+  /** Built once per fetched page, then asked for each model's prices. */
+  lookup: (html: string) => (modelId: string) => { prices: number[]; where: string };
+  discover: (html: string) => string[];
 }
 
-async function checkClaude(): Promise<{ drift: number; unverified: number; missing: number }> {
-  console.log(`\n── Claude (${CLAUDE_PRICING_URL}) ──`);
+interface CheckResult {
+  drift: number;
+  unverified: number;
+  missing: number;
+}
+
+async function checkProvider<P extends { inputPerMillion: number; outputPerMillion: number }>(
+  check: ProviderCheck<P>,
+): Promise<CheckResult> {
+  console.log(`\n── ${check.label} (${check.url}) ──`);
   let html: string;
   try {
-    html = await fetchHtml(CLAUDE_PRICING_URL);
+    html = await fetchHtml(check.url);
   } catch (error) {
     console.error('Fetch failed:', (error as Error).message);
     return { drift: 1, unverified: 0, missing: 0 };
   }
 
+  const pricesFor = check.lookup(html);
   let drift = 0;
   let unverified = 0;
   let missing = 0;
-  for (const [modelId, pricing] of Object.entries(CLAUDE_PRICING_BY_ID)) {
-    const heading = claudeHeading(modelId);
-    const hits = findHits(html, heading, (c) => !/[\d.]/.test(c));
-    const found = pricesAt(html, hits, 800);
-    if (found.length === 0) {
-      console.log(`? ${modelId.padEnd(22)} ${claudeSummary(pricing)}  — "${heading}" not on page`);
+
+  for (const [modelId, pricing] of Object.entries(check.table)) {
+    const summary = `$${pricing.inputPerMillion}/${pricing.outputPerMillion}`;
+    const { prices, where } = pricesFor(modelId);
+    if (prices.length === 0) {
+      console.log(`? ${modelId.padEnd(22)} ${summary}  — "${where}" not on page`);
       unverified++;
       continue;
     }
-    const isInOk = found.includes(pricing.inputPerMillion);
-    const isOutOk = found.includes(pricing.outputPerMillion);
+    const isInOk = prices.includes(pricing.inputPerMillion);
+    const isOutOk = prices.includes(pricing.outputPerMillion);
     if (isInOk && isOutOk) {
-      console.log(`✓ ${modelId.padEnd(22)} ${claudeSummary(pricing)}`);
+      console.log(`✓ ${modelId.padEnd(22)} ${summary}`);
     } else {
       console.log(
-        `✗ ${modelId.padEnd(22)} ${claudeSummary(pricing)}  — input=${isInOk ? 'ok' : 'MISS'} output=${isOutOk ? 'ok' : 'MISS'}  (saw: ${found.slice(0, 6).join(', ')})`,
+        `✗ ${modelId.padEnd(22)} ${summary}  — input=${isInOk ? 'ok' : 'MISS'} output=${isOutOk ? 'ok' : 'MISS'}  (saw: ${prices.slice(0, 6).join(', ')})`,
       );
       drift++;
     }
   }
 
-  const known = new Set(Object.keys(CLAUDE_PRICING_BY_ID));
-  for (const modelId of discoverClaudeModelsOnPage(html)) {
+  const known = new Set(check.knownIds);
+  for (const modelId of check.discover(html)) {
     if (known.has(modelId)) continue;
-    console.log(`+ ${modelId.padEnd(22)} — on docs page but missing from src/pricing/claude.ts`);
+    console.log(`+ ${modelId.padEnd(22)} — on docs page but missing from ${check.sourceFile}`);
     missing++;
   }
 
   return { drift, unverified, missing };
 }
 
-// ── Codex ─────────────────────────────────────────────────────────────────
-
-function codexSummary(p: CodexPricing): string {
-  return `$${p.inputPerMillion}/${p.outputPerMillion}`;
+function checkClaude(): Promise<CheckResult> {
+  return checkProvider({
+    label: 'Claude',
+    url: CLAUDE_PRICING_URL,
+    table: CLAUDE_PRICING_BY_ID,
+    knownIds: Object.keys(CLAUDE_PRICING_BY_ID),
+    sourceFile: 'src/pricing/claude.ts',
+    lookup: (html) => (modelId) => {
+      const heading = claudeHeading(modelId);
+      const hits = findHits(html, heading, (c) => !/[\d.]/.test(c));
+      return { prices: pricesAt(html, hits, 800), where: heading };
+    },
+    discover: discoverClaudeModelsOnPage,
+  });
 }
+
+// ── Codex ─────────────────────────────────────────────────────────────────
 
 interface CodexPricingRow {
   modelId: string;
@@ -216,46 +242,22 @@ export function discoverCodexModelsOnPage(html: string): string[] {
   ].sort((a, b) => a.localeCompare(b));
 }
 
-async function checkCodex(): Promise<{ drift: number; unverified: number; missing: number }> {
-  console.log(`\n── Codex (${CODEX_PRICING_URL}) ──`);
-  let html: string;
-  try {
-    html = await fetchHtml(CODEX_PRICING_URL);
-  } catch (error) {
-    console.error('Fetch failed:', (error as Error).message);
-    return { drift: 1, unverified: 0, missing: 0 };
-  }
-
-  let drift = 0;
-  let unverified = 0;
-  let missing = 0;
-  const rows = codexPricingRows(html);
-  for (const [modelId, pricing] of Object.entries(CODEX_PRICING_CURRENT)) {
-    const found = rows.find((row) => row.modelId === modelId)?.prices ?? [];
-    if (found.length === 0) {
-      console.log(`? ${modelId.padEnd(22)} ${codexSummary(pricing)}  — "${modelId}" not on page`);
-      unverified++;
-      continue;
-    }
-    const isInOk = found.includes(pricing.inputPerMillion);
-    const isOutOk = found.includes(pricing.outputPerMillion);
-    if (isInOk && isOutOk) {
-      console.log(`✓ ${modelId.padEnd(22)} ${codexSummary(pricing)}`);
-    } else {
-      console.log(
-        `✗ ${modelId.padEnd(22)} ${codexSummary(pricing)}  — input=${isInOk ? 'ok' : 'MISS'} output=${isOutOk ? 'ok' : 'MISS'}  (saw: ${found.slice(0, 6).join(', ')})`,
-      );
-      drift++;
-    }
-  }
-
-  const known = new Set(Object.keys(CODEX_PRICING_BY_ID));
-  for (const modelId of discoverCodexModelsOnPage(html)) {
-    if (known.has(modelId)) continue;
-    console.log(`+ ${modelId.padEnd(22)} — on docs page but missing from src/pricing/codex.ts`);
-    missing++;
-  }
-  return { drift, unverified, missing };
+function checkCodex(): Promise<CheckResult> {
+  return checkProvider({
+    label: 'Codex',
+    url: CODEX_PRICING_URL,
+    table: CODEX_PRICING_CURRENT,
+    knownIds: Object.keys(CODEX_PRICING_BY_ID),
+    sourceFile: 'src/pricing/codex.ts',
+    lookup: (html) => {
+      const rows = codexPricingRows(html);
+      return (modelId) => ({
+        prices: rows.find((row) => row.modelId === modelId)?.prices ?? [],
+        where: modelId,
+      });
+    },
+    discover: discoverCodexModelsOnPage,
+  });
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
