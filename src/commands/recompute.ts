@@ -2,7 +2,13 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
 import { loadConfig, resolveMachineId } from '../config.js';
-import { buildMachineData, machineHasData, readLocalProviderMaps } from '../data/localData.js';
+import {
+  buildMachineData,
+  machineHasData,
+  mergePersistedDays,
+  readLocalProviderMaps,
+} from '../data/localData.js';
+import type { MachineFile } from '../data/types.js';
 import { parseMachineFile } from '../data/validate.js';
 import { commitDataChanges, isCloned, listDataFiles } from '../git.js';
 import { consumeClaudeFallbackHits } from '../pricing/claude.js';
@@ -11,6 +17,19 @@ import { resolveModelCost } from '../pricing/resolve.js';
 
 function costsEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+}
+
+/**
+ * Days serialized without their costs, for change detection.
+ *
+ * The readers accumulate a cost per JSONL entry while the repricing loop below
+ * derives it once from the summed tokens. Those agree mathematically but not in
+ * the last float bits, so comparing costs here would mark an already normalized
+ * file as changed on every run. Costs are the loop's business; the merge only
+ * has to notice a token-level difference.
+ */
+function tokensJson(days: MachineFile['days']): string {
+  return JSON.stringify(days, (key, value: unknown) => (key === 'costUSD' ? undefined : value));
 }
 
 export async function recomputeCostsCommand(): Promise<void> {
@@ -39,16 +58,19 @@ export async function recomputeCostsCommand(): Promise<void> {
   for (const filePath of files) {
     const isCurrentMachine = basename(filePath) === `${machineId}.json`;
 
-    if (isCurrentMachine && machineHasData(localFresh)) {
-      writeFileSync(filePath, JSON.stringify(localFresh, null, 2), 'utf8');
-      changed++;
-      continue;
-    }
-
     const raw = readFileSync(filePath, 'utf8');
     const machine = parseMachineFile(raw, filePath, { allowInconsistentCostTotals: true });
     if (!machine) continue;
     let isTouched = false;
+
+    // Refresh the current machine's days from the local logs before repricing.
+    // Days the logs no longer reach stay as persisted and are repriced below
+    // like any other machine's, rather than being dropped.
+    if (isCurrentMachine && machineHasData(localFresh)) {
+      const refreshed = mergePersistedDays(machine.days, localFresh.days);
+      if (tokensJson(refreshed) !== tokensJson(machine.days)) isTouched = true;
+      machine.days = refreshed;
+    }
 
     for (const [date, providers] of Object.entries(machine.days)) {
       for (const providerKey of ['claude_code', 'codex'] as const) {
@@ -72,7 +94,10 @@ export async function recomputeCostsCommand(): Promise<void> {
             }
             continue;
           }
-          if (counts.costUSD !== cost) {
+          // Tolerate the last float bits: the readers sum a cost per entry while
+          // this derives it from the summed tokens, so an unchanged day would
+          // otherwise look repriced on every run.
+          if (counts.costUSD === undefined || !costsEqual(counts.costUSD, cost)) {
             counts.costUSD = cost;
             isDayTouched = true;
           }
