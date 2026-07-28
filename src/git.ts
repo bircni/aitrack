@@ -217,19 +217,6 @@ export function pull(): void {
   }
 }
 
-export function tryPull(options?: { quiet?: boolean }): void {
-  try {
-    const references = runGit(['ls-remote', '--heads', 'origin'], { stdio: 'pipe' });
-    if (!references) return;
-    if (!options?.quiet) {
-      console.log('Pulling latest from remote...');
-    }
-    runGit(['pull', '--ff-only', '--quiet']);
-  } catch {
-    // Offline or unreachable — continue with the local clone.
-  }
-}
-
 export function commitDataChanges(message: string): boolean {
   runGit(['add', 'data/']);
   return commitStagedData(message);

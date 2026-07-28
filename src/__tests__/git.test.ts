@@ -41,7 +41,6 @@ import {
   readDataFile,
   removeLocalClone,
   removePendingMachineFile,
-  tryPull,
   writePendingMachineFile,
 } from '../git.js';
 
@@ -190,29 +189,6 @@ describe('git helpers', () => {
     expect(() => {
       pull();
     }).toThrow('git pull --ff-only --quiet failed');
-  });
-
-  it('tryPull with quiet does not log when pulling', () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
-      .mockReturnValueOnce({ status: 0 });
-
-    tryPull({ quiet: true });
-
-    expect(console.log).not.toHaveBeenCalled();
-  });
-
-  it('tryPull continues silently when pull fails', () => {
-    mocks.spawnSync.mockImplementation(() => {
-      throw new Error('network down');
-    });
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-
-    tryPull();
-
-    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it('returns false when there are no staged data changes', () => {
