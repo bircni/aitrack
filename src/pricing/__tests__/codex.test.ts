@@ -29,6 +29,14 @@ describe('codex pricing', () => {
     // unknown -codex -> codex fallback
     const codex = findCodexPricing('gpt-5.9-codex');
     expect(codex?.inputPerMillion).toBe(1.25);
+    // unknown -nano -> nano fallback, which must win over the gpt-5 catch-all
+    const nano = findCodexPricing('gpt-5.9-nano');
+    expect(nano?.inputPerMillion).toBe(0.2);
+    expect(nano?.outputPerMillion).toBe(1.25);
+    // plain unknown gpt-5 variant -> the base gpt-5 rate
+    const bare = findCodexPricing('gpt-5.9');
+    expect(bare?.inputPerMillion).toBe(1.25);
+    expect(bare?.outputPerMillion).toBe(10);
   });
 
   it('bills cached input at 10% of base', () => {

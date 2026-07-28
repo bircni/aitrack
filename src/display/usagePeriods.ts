@@ -217,6 +217,14 @@ export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
   const today = new Date();
   const todayString = toLocalDateString(today);
 
+  /** The n days ending today, inclusive — what `last`, `week` and `month` all are. */
+  const rollingWindow = (n: number): UsageWindow => {
+    const from = new Date(today);
+    from.setDate(today.getDate() - (n - 1));
+    const start = toLocalDateString(from);
+    return { start, end: todayString, label: `last ${String(n)} days (${start} → ${todayString})` };
+  };
+
   switch (options.period) {
     case 'today': {
       const localDate = today.toLocaleDateString();
@@ -264,9 +272,7 @@ export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
     }
 
     case 'thismonth': {
-      const y = today.getFullYear();
-      const m = String(today.getMonth() + 1).padStart(2, '0');
-      const start = `${y}-${m}-01`;
+      const start = toLocalDateString(new Date(today.getFullYear(), today.getMonth(), 1));
       return { start, end: todayString, label: `this month (${start} → ${todayString})` };
     }
 
@@ -280,29 +286,14 @@ export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
 
     case 'last': {
       if (!options.n) throw new Error('n is required for last period');
-      const d = new Date(today);
-      d.setDate(today.getDate() - (options.n - 1));
-      const start = toLocalDateString(d);
-      return {
-        start,
-        end: todayString,
-        label: `last ${options.n} days (${start} → ${todayString})`,
-      };
+      return rollingWindow(options.n);
     }
 
-    case 'week': {
-      const d = new Date(today);
-      d.setDate(today.getDate() - 6);
-      const start = toLocalDateString(d);
-      return { start, end: todayString, label: `last 7 days (${start} → ${todayString})` };
-    }
+    case 'week':
+      return rollingWindow(7);
 
-    case 'month': {
-      const d = new Date(today);
-      d.setDate(today.getDate() - 29);
-      const start = toLocalDateString(d);
-      return { start, end: todayString, label: `last 30 days (${start} → ${todayString})` };
-    }
+    case 'month':
+      return rollingWindow(30);
 
     case 'year': {
       const year = today.getFullYear();
