@@ -35,15 +35,18 @@ export async function readCursorData(): Promise<DayMap> {
     return new Map();
   }
 
-  let response: Response;
+  // Reading the body is part of the request: the stream can still fail after a
+  // 200, and an escaping rejection would take down the whole usage run rather
+  // than degrading to an empty map like every other Cursor failure here.
+  let text: string;
   try {
-    response = await fetchCursorUsageCsv(authState.accessToken);
+    const response = await fetchCursorUsageCsv(authState.accessToken);
+    text = await response.text();
   } catch (error) {
     console.warn(`aitrack: Cursor skipped — ${errorMessage(error)}`);
     return new Map();
   }
 
-  const text = await response.text();
   const map = aggregateCursorCsvToDayMap(text);
   if (map.size === 0) {
     console.warn('aitrack: Cursor — no usage rows in CSV export.');
