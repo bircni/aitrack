@@ -51,6 +51,27 @@ describe('mergeProviderDay', () => {
     expect(rec.costUSD).toBe(1.7);
   });
 
+  it('adds a backfilled model cost to a stored day total', () => {
+    // The stored total covers m1 only; m2 has no cost yet and gets one
+    // estimated here. Leaving the day total alone made the model table total
+    // more than the day it belongs to, for the same underlying data.
+    const rec = emptyDay();
+    const pData: ProviderDay = {
+      byModel: {
+        m1: { inputTokens: 10, outputTokens: 5, costUSD: 0.5 },
+        'claude-sonnet-4-6': { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+      },
+      totals: { inputTokens: 1_000_010, outputTokens: 1_000_005, costUSD: 0.5 },
+    };
+
+    mergeProviderDay(rec, 'claude_code', pData);
+
+    const modelTotal =
+      (rec.byModel.m1?.costUSD ?? 0) + (rec.byModel['claude-sonnet-4-6']?.costUSD ?? 0);
+    expect(rec.costUSD).toBeCloseTo(18.5);
+    expect(rec.costUSD).toBeCloseTo(modelTotal);
+  });
+
   it('falls back to summed model costs when totals.costUSD is missing', () => {
     const rec = emptyDay();
     const pData: ProviderDay = {
