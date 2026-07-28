@@ -60,7 +60,7 @@ function drawSection(
 ): void {
   const C = PALETTE[mode];
   const isDark = mode === 'dark';
-  const vm = buildProviderSectionViewModel(providerKey, dayMap, isDark);
+  const vm = buildProviderSectionViewModel(providerKey, dayMap);
   const themeCells = getProviderTheme(providerKey, isDark).cells;
   const gridW = gridWidth(weeks.length);
 

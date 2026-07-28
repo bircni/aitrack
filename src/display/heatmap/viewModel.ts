@@ -1,7 +1,7 @@
 import { sumDayMap } from '../../data/aggregate.js';
 import type { DayMap } from '../../data/types.js';
 import { fmt, fmtUSDCost } from '../format.js';
-import { costColumnLabel } from '../providers.js';
+import { costColumnLabel, providerLabel } from '../providers.js';
 import { INTENSITY_PERCENTILE } from './constants.js';
 import { percentile } from './intensity.js';
 import { displayModelName } from './modelNames.js';
@@ -13,7 +13,6 @@ import {
   longestStreak,
   peakMonth,
 } from './stats.js';
-import { getProviderTheme } from './themes.js';
 
 export interface StatCell {
   label: string;
@@ -32,9 +31,7 @@ export interface ProviderSectionViewModel {
 export function buildProviderSectionViewModel(
   providerKey: string,
   dayMap: DayMap,
-  dark = false,
 ): ProviderSectionViewModel {
-  const theme = getProviderTheme(providerKey, dark);
   const {
     inputTokens: totalIn,
     outputTokens: totalOut,
@@ -92,7 +89,7 @@ export function buildProviderSectionViewModel(
   ];
 
   return {
-    name: theme.name,
+    name: providerLabel(providerKey),
     maxTokens,
     headerStats,
     bottomStats,

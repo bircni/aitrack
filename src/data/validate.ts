@@ -37,7 +37,8 @@ function validateTokenCounts(value: unknown, path: string): string | null {
   return null;
 }
 
-function approximatelyEqual(a: number, b: number): boolean {
+/** Float comparison with a relative epsilon, used for cost totals. */
+export function approximatelyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 }
 

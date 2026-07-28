@@ -3,7 +3,7 @@ import { InvalidArgumentError } from 'commander';
 import type { TopKind, TopSort } from '../commands/top.js';
 import { MAX_INTERVAL_SECONDS } from '../config.js';
 import type { UsageReportOptions } from '../data/usageReport.js';
-import { normalizeProviderKey, SELECTABLE_PROVIDERS } from '../display/providers.js';
+import { normalizeProviderKey, PROVIDER_ORDER } from '../display/providers.js';
 import {
   isNoArgPeriod,
   isUsagePeriod,
@@ -106,14 +106,14 @@ export function parseProviders(value: string): string[] {
     const key = normalizeProviderKey(name);
     if (key === null) {
       throw new InvalidArgumentError(
-        `Invalid provider: "${name}". Expected one of: ${SELECTABLE_PROVIDERS.join(', ')}.`,
+        `Invalid provider: "${name}". Expected one of: ${PROVIDER_ORDER.join(', ')}.`,
       );
     }
     seen.add(key);
   }
   if (seen.size === 0) {
     throw new InvalidArgumentError(
-      `No valid providers given. Expected one of: ${SELECTABLE_PROVIDERS.join(', ')}.`,
+      `No valid providers given. Expected one of: ${PROVIDER_ORDER.join(', ')}.`,
     );
   }
   return [...seen];
