@@ -1,4 +1,5 @@
 import { getOrCreateDay } from '../../data/dayMap.js';
+import { stripModelAliasSuffix } from '../../data/modelId.js';
 import type { DayMap } from '../../data/types.js';
 
 export interface CursorCsvRow {
@@ -88,10 +89,6 @@ function createCursorTokenTotals(row: CursorCsvRow): { input: number; output: nu
   return { input: total, output: 0 };
 }
 
-function normalizeModelName(raw: string): string {
-  return raw.replace(/-latest$/, '');
-}
-
 function processCursorCsvLines(lines: Iterable<string>, onRow: (row: CursorCsvRow) => void): void {
   let headers: string[] | null = null;
   for (const rawLine of lines) {
@@ -116,7 +113,7 @@ export function aggregateCursorCsvToDayMap(content: string): DayMap {
     const tokenTotals = createCursorTokenTotals(row);
     if (!dateString || !rawModel || !tokenTotals) return;
 
-    const model = normalizeModelName(rawModel);
+    const model = stripModelAliasSuffix(rawModel);
     const inputTokens = tokenTotals.input;
     const outputTokens = tokenTotals.output;
 

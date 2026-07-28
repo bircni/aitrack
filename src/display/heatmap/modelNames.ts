@@ -1,3 +1,5 @@
+import { stripModelVersionSuffixes } from '../../data/modelId.js';
+
 const CLAUDE_FAMILIES = ['opus', 'sonnet', 'haiku'];
 
 function titleCase(word: string): string {
@@ -8,10 +10,7 @@ function titleCase(word: string): string {
 // "Sonnet 4"; "claude-3-7-sonnet-20250219" -> "Sonnet 3.7";
 // "gpt-5.1-codex" -> "GPT-5.1 Codex"
 export function displayModelName(model: string): string {
-  const cleaned = model
-    .replace(/-\d{8}$/, '')
-    .replace(/-latest$/, '')
-    .replace(/^claude-/, '');
+  const cleaned = stripModelVersionSuffixes(model).replace(/^claude-/, '');
 
   for (const family of CLAUDE_FAMILIES) {
     // Both orderings ship in real ids — family-first ("sonnet-4-5") and the

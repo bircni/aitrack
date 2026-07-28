@@ -3,6 +3,8 @@
 // Keep entries keyed by normalized family-first id (with date/latest suffixes stripped).
 // Last updated: 2026-07. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
 
+import { stripModelVersionSuffixes } from '../data/modelId.js';
+
 export interface ClaudePricing {
   inputPerMillion: number;
   outputPerMillion: number;
@@ -90,7 +92,7 @@ function canonicalClaudeModelId(model: string): string {
   const cached = canonicalIdCache.get(model);
   if (cached !== undefined) return cached;
 
-  const id = model.toLowerCase().replace(/-(?:latest|\d{8})$/, '');
+  const id = stripModelVersionSuffixes(model.toLowerCase());
   const legacy = /^claude-(\d+)(?:-(\d+))?-(opus|sonnet|haiku)$/.exec(id);
   const [, major, minor, family] = legacy ?? [];
   const canonical =
