@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { toLocalDateString } from '../../../data/dayMap.js';
 import type { DayEntry } from '../../../data/types.js';
 import {
   buildDateGrid,
@@ -64,6 +65,40 @@ describe('longestStreak', () => {
     ]);
     expect(longestStreak(dayMap)).toBe(3);
     expect(currentStreak(dayMap)).toBe(0);
+  });
+});
+
+describe('currentStreak', () => {
+  const dayKey = (offsetDays: number): string => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - offsetDays);
+    return toLocalDateString(d);
+  };
+
+  it('counts a run that ends yesterday, before today has any usage', () => {
+    // Today is still in progress: counting from it reported 0 all morning and
+    // then jumped to the full streak after the first request.
+    const dayMap = new Map([
+      [dayKey(3), makeDay(1, 0)],
+      [dayKey(2), makeDay(1, 0)],
+      [dayKey(1), makeDay(1, 0)],
+    ]);
+
+    expect(currentStreak(dayMap)).toBe(3);
+  });
+
+  it('includes today once it has usage', () => {
+    const dayMap = new Map([
+      [dayKey(1), makeDay(1, 0)],
+      [dayKey(0), makeDay(1, 0)],
+    ]);
+
+    expect(currentStreak(dayMap)).toBe(2);
+  });
+
+  it('is zero when neither today nor yesterday was active', () => {
+    expect(currentStreak(new Map([[dayKey(2), makeDay(1, 0)]]))).toBe(0);
   });
 });
 
