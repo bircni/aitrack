@@ -141,6 +141,7 @@ describe('config', () => {
     { repoUrl: 'git@example.com:test/repo.git', daemon: { sync: 'yes' } },
     { repoUrl: 'git@example.com:test/repo.git', daemon: { interval: 0 } },
     { repoUrl: 'git@example.com:test/repo.git', daemon: { interval: 1.5 } },
+    { repoUrl: 'git@example.com:test/repo.git', daemon: { interval: 2_147_484 } },
   ])('returns null for invalid optional config values: %j', (config) => {
     writeRawConfig(JSON.stringify(config));
     expect(tryLoadConfig()).toBeNull();
