@@ -40,6 +40,14 @@ export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
   'claude-sonnet-4-0': priceFromBase(3, 15),
   'claude-sonnet-4': priceFromBase(3, 15),
   'claude-haiku-3-5': priceFromBase(0.8, 4),
+  // Claude 3 generation. Listed explicitly because the family fallback prices
+  // them at the modern tier, which is 3x too low for opus and 4x too high for
+  // haiku, and the wrong figure gets persisted as costUSD.
+  'claude-opus-3': priceFromBase(15, 75),
+  'claude-sonnet-3-7': priceFromBase(3, 15),
+  'claude-sonnet-3-5': priceFromBase(3, 15),
+  'claude-sonnet-3': priceFromBase(3, 15),
+  'claude-haiku-3': priceFromBase(0.25, 1.25),
 };
 
 // Historical pricing overrides. Each entry means "for usage dates strictly
