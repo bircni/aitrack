@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 
 import { tryLoadConfig } from '../config.js';
 import { isUsageNotConfigured, usageEmptyMessage } from '../data/emptyState.js';
-import type { ProviderData } from '../data/types.js';
+import type { MachineFile, ProviderData } from '../data/types.js';
 import { loadMergedProviderData } from '../data/usageData.js';
 import { type HtmlOperationalStatus, renderToHtml } from '../display/html/render.js';
 import { isCloned } from '../git.js';
@@ -94,11 +94,13 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
     renderCached();
     let phase: 'sync' | 'refresh' = settings.sync ? 'sync' : 'refresh';
     try {
+      // Reused below so a syncing refresh parses the JSONL corpus once, not twice.
+      let localMachine: MachineFile | undefined;
       if (settings.sync) {
         if (!isCloned()) {
           throw new Error('Sync enabled but repo not cloned. Run: npx aitrack init');
         }
-        await syncData({ quiet: true });
+        localMachine = await syncData({ quiet: true });
         status.lastSyncSuccessAt = new Date().toISOString();
       }
 
@@ -106,6 +108,7 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
       const loaded = await loadMergedProviderData({
         providers: renderOptions.providers,
         year: renderOptions.year,
+        ...(localMachine !== undefined && { localMachine }),
       });
 
       const lastUpdated = new Date();

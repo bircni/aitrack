@@ -8,7 +8,7 @@ import { resolveModelCost } from '../pricing/resolve.js';
 import { readCursorData } from '../readers/cursor/index.js';
 import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
 import { buildLocalMachineFile, machineHasData } from './localData.js';
-import type { DayEntry, MachineFile, ProviderData, ProviderDay } from './types.js';
+import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';
 
 export { usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
 
@@ -86,6 +86,12 @@ export interface LoadUsageOptions {
   year?: number;
   /** Stage local machine JSON under ~/.config/aitrack/pending/ for later init adoption. */
   stagePending?: boolean;
+  /**
+   * Reuse an already-built local machine file instead of re-reading the logs.
+   * The daemon syncs and renders back to back, and parsing a large JSONL corpus
+   * twice per tick is the bulk of a refresh.
+   */
+  localMachine?: MachineFile;
 }
 
 export interface LoadedUsageData {
@@ -140,7 +146,19 @@ export async function loadMergedProviderData(
 ): Promise<LoadedUsageData | null> {
   const config = tryLoadConfig();
   const machineId = resolveMachineId(config ?? { repoUrl: '' });
-  const localMachine = await buildLocalMachineFile(machineId);
+
+  // Cursor is an HTTPS round-trip and the rest of this is disk and CPU work, so
+  // start it now and collect it at the end rather than paying for it in series.
+  const providerFilter = options.providers ? new Set(options.providers) : undefined;
+  // The catch matters because the promise is started before the awaits below:
+  // if one of those threw first, an unguarded rejection here would surface as
+  // an unhandled rejection rather than the original error.
+  const cursorPending =
+    !providerFilter || providerFilter.has('cursor')
+      ? readCursorData().catch((): DayMap => new Map())
+      : undefined;
+
+  const localMachine = options.localMachine ?? (await buildLocalMachineFile(machineId));
 
   const isWarnedNotConfigured = !config || !isCloned();
 
@@ -183,10 +201,8 @@ export async function loadMergedProviderData(
     overlayMachineFile(providerData, localMachine);
   }
 
-  const providerFilter = options.providers ? new Set(options.providers) : undefined;
-
-  if (!providerFilter || providerFilter.has('cursor')) {
-    const cursorMap = await readCursorData();
+  if (cursorPending) {
+    const cursorMap = await cursorPending;
     if (cursorMap.size > 0) providerData.cursor = cursorMap;
   }
 
