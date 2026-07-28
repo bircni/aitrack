@@ -47,7 +47,6 @@ describe('daemon HTTP integration', () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: { claude_code: new Map([['2024-06-01', makeDay(100, 50)]]) },
       machineData: [],
-      fileCount: 0,
     });
     mocks.renderToHtml.mockImplementation(
       (_data: unknown, options?: { emptyMessage?: string }) =>

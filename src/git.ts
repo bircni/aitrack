@@ -146,20 +146,7 @@ function commitStagedData(message: string, conflict?: RetryConflict): boolean {
   const staged = runGit(['diff', '--cached', '--name-only', '--', 'data/'], { stdio: 'pipe' });
   if (!staged) return false;
 
-  const result = spawnSync('git', ['commit', '-m', message], {
-    cwd: LOCAL_REPO,
-    stdio: 'pipe',
-    encoding: 'utf8',
-  });
-  if (result.status !== 0) {
-    const stdout = typeof result.stdout === 'string' ? result.stdout.trim() : '';
-    const stderr = typeof result.stderr === 'string' ? result.stderr.trim() : '';
-    throw new GitCommandError(
-      ['commit', '-m', message],
-      result.status,
-      stderr === '' ? stdout : stderr,
-    );
-  }
+  runGit(['commit', '-m', message], { stdio: 'pipe' });
   pushWithRetry(conflict);
   return true;
 }

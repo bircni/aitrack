@@ -97,7 +97,6 @@ export interface LoadUsageOptions {
 export interface LoadedUsageData {
   providerData: ProviderData;
   machineData: MachineFile[];
-  fileCount: number;
   warnedNotConfigured?: boolean;
 }
 
@@ -172,11 +171,9 @@ export async function loadMergedProviderData(
 
   let machineData: MachineFile[] = [];
   let providerData: ProviderData = {};
-  let fileCount = 0;
 
   if (config && isCloned()) {
     const files = listDataFiles();
-    fileCount = files.length;
     const currentFile = machineDataFilename(machineId);
     const persisted = files
       .map((filePath) => ({ filePath, machine: readDataFile(filePath) }))
@@ -224,7 +221,6 @@ export async function loadMergedProviderData(
   return {
     providerData: filtered,
     machineData,
-    fileCount,
     warnedNotConfigured: isWarnedNotConfigured,
   };
 }

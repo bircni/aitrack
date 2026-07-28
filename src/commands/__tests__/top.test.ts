@@ -58,7 +58,6 @@ describe('topCommand', () => {
         codex: new Map([['2026-01-01', makeDay(500, 0, 5, 'gpt-5')]]),
       },
       machineData: [],
-      fileCount: 0,
     });
 
     await topCommand({ kind: 'days', limit: 2, sort: 'cost' });
@@ -80,7 +79,6 @@ describe('topCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 0,
     });
 
     await topCommand({ kind: 'models', limit: 5, sort: 'tokens' });
@@ -99,7 +97,6 @@ describe('topCommand', () => {
         claude_code: new Map([['2026-01-01', makeDay(900, 100, 5, 'opus')]]),
       },
       machineData: [],
-      fileCount: 0,
     });
 
     await topCommand({ kind: 'models', limit: 5, sort: 'tokens', json: true });
@@ -128,7 +125,6 @@ describe('topCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 0,
     });
 
     await topCommand({ kind: 'days', limit: 10, sort: 'tokens', year: 2026 });
@@ -147,7 +143,6 @@ describe('topCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 0,
     });
 
     await topCommand({ kind: 'days', limit: 5, sort: 'tokens', json: true, year: 2025 });
@@ -168,7 +163,6 @@ describe('topCommand', () => {
         claude_code: new Map([['2026-01-01', makeDay(100, 0, undefined, 'm1')]]),
       },
       machineData: [],
-      fileCount: 0,
     });
 
     await topCommand({ kind: 'days', limit: 5, sort: 'tokens', year: 2025 });
@@ -195,7 +189,6 @@ describe('topCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 0,
     });
 
     await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
@@ -218,7 +211,6 @@ describe('topCommand', () => {
         ]),
       },
       machineData: [],
-      fileCount: 0,
     });
     await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
 
