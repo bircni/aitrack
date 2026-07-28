@@ -50,7 +50,7 @@ function summarizeDayMap(dayMap: DayMap, providerKey: string): StatsRow {
   };
 }
 
-function totalRow(rows: StatsRow[]): StatsRow {
+function totalRow(rows: StatsRow[], dayMaps: DayMap[]): StatsRow {
   let input = 0;
   let output = 0;
   let cost = 0;
@@ -65,9 +65,20 @@ function totalRow(rows: StatsRow[]): StatsRow {
     }
   }
 
+  // Days are calendar dates, not a per-provider tally: a date on which two
+  // providers were both active is still one day. Summing the provider counts
+  // would report a month of daily two-provider usage as ~60 days, and would
+  // disagree with --all, which counts unique dates off the merged map.
+  const activeDates = new Set<string>();
+  for (const dayMap of dayMaps) {
+    for (const [date, day] of dayMap) {
+      if (day.inputTokens + day.outputTokens > 0) activeDates.add(date);
+    }
+  }
+
   return {
     provider: 'TOTAL',
-    days: rows.reduce((sum, row) => sum + row.days, 0),
+    days: activeDates.size,
     input: fmt(input),
     output: fmt(output),
     total: fmt(input + output),
@@ -91,13 +102,21 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
     const merged = layoutData.all;
     rows = merged && merged.size > 0 ? [summarizeDayMap(merged, 'all')] : [];
   } else {
-    rows = keys
+    const summarized = keys
       .map((key) => {
         const dayMap = layoutData[key];
-        return dayMap ? summarizeDayMap(dayMap, key) : null;
+        return dayMap ? { row: summarizeDayMap(dayMap, key), dayMap } : null;
       })
-      .filter((row): row is StatsRow => row !== null);
-    if (rows.length > 1) rows.push(totalRow(rows));
+      .filter((entry): entry is { row: StatsRow; dayMap: DayMap } => entry !== null);
+    rows = summarized.map((entry) => entry.row);
+    if (rows.length > 1) {
+      rows.push(
+        totalRow(
+          rows,
+          summarized.map((entry) => entry.dayMap),
+        ),
+      );
+    }
   }
 
   if (rows.length === 0) return '';
