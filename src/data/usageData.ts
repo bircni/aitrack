@@ -129,11 +129,15 @@ export async function loadMergedProviderData(
   const machineId = resolveMachineId(config ?? { repoUrl: '' });
   const localMachine = await buildLocalMachineFile(machineId);
 
-  if (options.stagePending) {
+  const isWarnedNotConfigured = !config || !isCloned();
+
+  // Staging exists so a later `init` can adopt usage recorded before the repo
+  // was set up. Once the machine is configured and cloned, sync writes into the
+  // repo directly and a staged copy would only collide with the synced file the
+  // next time init runs.
+  if (options.stagePending && isWarnedNotConfigured) {
     writePendingMachineFile(localMachine);
   }
-
-  const isWarnedNotConfigured = !config || !isCloned();
 
   let machineData: MachineFile[] = [];
   let providerData: ProviderData = {};
