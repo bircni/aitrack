@@ -4,6 +4,7 @@ import {
   filterDayMapByYear,
   filterProviderDataByYear,
   getOrCreateDay,
+  mergeDayMaps,
   toLocalDateString,
   tryLocalDateString,
 } from '../dayMap.js';
@@ -39,6 +40,44 @@ describe('dayMap helpers', () => {
   it('tryLocalDateString matches toLocalDateString for valid input', () => {
     const date = new Date(2024, 5, 15, 23, 30, 0);
     expect(tryLocalDateString(date)).toBe(toLocalDateString(date));
+  });
+
+  it('mergeDayMaps carries the cache token breakdown across', () => {
+    // The heatmap used to have its own copy of this merge that dropped these
+    // fields, so a merged view silently reported zero cached tokens.
+    const dst: DayMap = new Map();
+    const source: DayMap = new Map([
+      [
+        '2024-01-01',
+        {
+          inputTokens: 100,
+          outputTokens: 50,
+          cachedInputTokens: 80,
+          rawInputTokens: 15,
+          cacheCreationInputTokens: 5,
+          costUSD: 1.5,
+          byModel: {
+            m: {
+              inputTokens: 100,
+              outputTokens: 50,
+              cachedInputTokens: 80,
+              costUSD: 1.5,
+            },
+          },
+        },
+      ],
+    ]);
+
+    mergeDayMaps(dst, source);
+    mergeDayMaps(dst, source);
+
+    const day = dst.get('2024-01-01');
+    expect(day?.inputTokens).toBe(200);
+    expect(day?.cachedInputTokens).toBe(160);
+    expect(day?.rawInputTokens).toBe(30);
+    expect(day?.cacheCreationInputTokens).toBe(10);
+    expect(day?.costUSD).toBe(3);
+    expect(day?.byModel.m?.cachedInputTokens).toBe(160);
   });
 
   it('filterDayMapByYear keeps only matching dates', () => {

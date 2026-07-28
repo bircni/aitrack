@@ -1,4 +1,4 @@
-import type { DayEntry, DayMap, ProviderData } from './types.js';
+import type { DayEntry, DayMap, ProviderData, TokenCounts } from './types.js';
 
 export function getOrCreateDay(dayMap: DayMap, date: string): DayEntry {
   let day = dayMap.get(date);
@@ -28,6 +28,40 @@ export function toLocalDateString(ts: string | Date): string {
 export function tryLocalDateString(ts: string | Date): string | null {
   const d = typeof ts === 'string' ? new Date(ts) : ts;
   return Number.isNaN(d.getTime()) ? null : toLocalDateString(d);
+}
+
+/** Accumulate the optional cache/raw token breakdown fields. */
+export function mergeTokenBreakdown(dst: TokenCounts, source: TokenCounts): void {
+  if (source.rawInputTokens !== undefined) {
+    dst.rawInputTokens = (dst.rawInputTokens ?? 0) + source.rawInputTokens;
+  }
+  if (source.cachedInputTokens !== undefined) {
+    dst.cachedInputTokens = (dst.cachedInputTokens ?? 0) + source.cachedInputTokens;
+  }
+  if (source.cacheCreationInputTokens !== undefined) {
+    dst.cacheCreationInputTokens =
+      (dst.cacheCreationInputTokens ?? 0) + source.cacheCreationInputTokens;
+  }
+}
+
+/** Merge one DayMap into another, summing day totals, breakdowns and models. */
+export function mergeDayMaps(dst: DayMap, source: DayMap): void {
+  for (const [date, sourceDay] of source) {
+    const dstDay = getOrCreateDay(dst, date);
+    dstDay.inputTokens += sourceDay.inputTokens;
+    dstDay.outputTokens += sourceDay.outputTokens;
+    mergeTokenBreakdown(dstDay, sourceDay);
+    if (sourceDay.costUSD !== undefined) dstDay.costUSD = (dstDay.costUSD ?? 0) + sourceDay.costUSD;
+    for (const [model, counts] of Object.entries(sourceDay.byModel)) {
+      const modelTotals = (dstDay.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
+      modelTotals.inputTokens += counts.inputTokens;
+      modelTotals.outputTokens += counts.outputTokens;
+      mergeTokenBreakdown(modelTotals, counts);
+      if (counts.costUSD !== undefined) {
+        modelTotals.costUSD = (modelTotals.costUSD ?? 0) + counts.costUSD;
+      }
+    }
+  }
 }
 
 export function filterDayMapByYear(dayMap: DayMap, year: number): DayMap {

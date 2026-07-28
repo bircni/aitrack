@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
-import { getOrCreateDay, tryLocalDateString } from '../data/dayMap.js';
+import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
 import { estimateClaudeCostUSD } from '../pricing/claude.js';
 import { listJsonlFiles, resolveSourceRoots } from './paths.js';
@@ -48,19 +48,6 @@ function addClaudeUsageBreakdown(
   rec.rawInputTokens = (rec.rawInputTokens ?? 0) + raw;
   rec.cachedInputTokens = (rec.cachedInputTokens ?? 0) + cacheRead;
   rec.cacheCreationInputTokens = (rec.cacheCreationInputTokens ?? 0) + cacheCreate;
-}
-
-function mergeTokenBreakdown(dst: TokenCounts, source: TokenCounts): void {
-  if (source.rawInputTokens !== undefined) {
-    dst.rawInputTokens = (dst.rawInputTokens ?? 0) + source.rawInputTokens;
-  }
-  if (source.cachedInputTokens !== undefined) {
-    dst.cachedInputTokens = (dst.cachedInputTokens ?? 0) + source.cachedInputTokens;
-  }
-  if (source.cacheCreationInputTokens !== undefined) {
-    dst.cacheCreationInputTokens =
-      (dst.cacheCreationInputTokens ?? 0) + source.cacheCreationInputTokens;
-  }
 }
 
 export async function parseJsonlFile(filePath: string, seen: Set<string>): Promise<DayMap> {
@@ -115,25 +102,6 @@ export async function parseJsonlFile(filePath: string, seen: Set<string>): Promi
   }
 
   return result;
-}
-
-function mergeDayMaps(dst: DayMap, source: DayMap): void {
-  for (const [date, sourceDay] of source) {
-    const dstDay = getOrCreateDay(dst, date);
-    dstDay.inputTokens += sourceDay.inputTokens;
-    dstDay.outputTokens += sourceDay.outputTokens;
-    mergeTokenBreakdown(dstDay, sourceDay);
-    if (sourceDay.costUSD !== undefined) dstDay.costUSD = (dstDay.costUSD ?? 0) + sourceDay.costUSD;
-    for (const [model, counts] of Object.entries(sourceDay.byModel)) {
-      const modelTotals = (dstDay.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-      modelTotals.inputTokens += counts.inputTokens;
-      modelTotals.outputTokens += counts.outputTokens;
-      mergeTokenBreakdown(modelTotals, counts);
-      if (counts.costUSD !== undefined) {
-        modelTotals.costUSD = (modelTotals.costUSD ?? 0) + counts.costUSD;
-      }
-    }
-  }
 }
 
 export async function readClaudeData(): Promise<DayMap> {
