@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
+import { stripModelAliasSuffix } from '../data/modelId.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
 import { estimateClaudeCostUSD } from '../pricing/claude.js';
 import { listJsonlFiles, resolveSourceRoots } from './paths.js';
@@ -80,7 +81,7 @@ export async function parseJsonlFile(filePath: string, seen: Set<string>): Promi
     if (!ts) continue;
     const dateString = tryLocalDateString(ts);
     if (dateString === null) continue;
-    const model = (entry.message?.model ?? 'unknown').replace(/-latest$/, '');
+    const model = stripModelAliasSuffix(entry.message?.model ?? 'unknown');
 
     const inputTokens =
       (usage.input_tokens ?? 0) +
