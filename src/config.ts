@@ -8,6 +8,13 @@ import { normalizeMachineId } from './machineId.js';
 const CONFIG_DIR = join(homedir(), '.config', 'aitrack');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 
+/**
+ * Refresh interval ceiling in seconds. setInterval takes 32-bit milliseconds,
+ * so a larger value overflows and Node silently clamps the timer to 1ms,
+ * turning the daemon into a continuous refresh loop.
+ */
+export const MAX_INTERVAL_SECONDS = 2_147_483;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -40,7 +47,8 @@ function validateDaemon(value: unknown): Config['daemon'] | undefined {
     if (
       typeof value.interval !== 'number' ||
       !Number.isSafeInteger(value.interval) ||
-      value.interval < 1
+      value.interval < 1 ||
+      value.interval > MAX_INTERVAL_SECONDS
     ) {
       return undefined;
     }

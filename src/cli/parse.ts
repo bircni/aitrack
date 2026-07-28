@@ -1,6 +1,7 @@
 import { InvalidArgumentError } from 'commander';
 
 import type { TopKind, TopSort } from '../commands/top.js';
+import { MAX_INTERVAL_SECONDS } from '../config.js';
 import type { UsageReportOptions } from '../data/usageReport.js';
 import { normalizeProviderKey, SELECTABLE_PROVIDERS } from '../display/providers.js';
 import {
@@ -39,6 +40,16 @@ export function parsePositiveIntArg(value: string): number {
     throw new InvalidArgumentError(`Expected a positive integer, got: ${value}`);
   }
   return n;
+}
+
+export function parseIntervalArg(value: string): number {
+  const seconds = parsePositiveIntArg(value);
+  if (seconds > MAX_INTERVAL_SECONDS) {
+    throw new InvalidArgumentError(
+      `Expected an interval between 1 and ${String(MAX_INTERVAL_SECONDS)} seconds, got: ${value}`,
+    );
+  }
+  return seconds;
 }
 
 export function parsePortArg(value: string): number {

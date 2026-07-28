@@ -17,6 +17,7 @@ import {
   cliErrorMessage,
   parseIntArg as parseIntArgument,
   parsePortArg as parsePortArgument,
+  parseIntervalArg as parseIntervalArgument,
   parsePositiveIntArg as parsePositiveIntArgument,
   parseProviders,
   parseTopKind,
@@ -174,7 +175,7 @@ export function buildProgram(): Command {
     .command('daemon')
     .description('Run a local HTTP dashboard that refreshes usage data on an interval')
     .option('--port <port>', 'HTTP listen port', parsePortArgument)
-    .option('--interval <seconds>', 'seconds between data refresh ticks', parsePositiveIntArgument)
+    .option('--interval <seconds>', 'seconds between data refresh ticks', parseIntervalArgument)
     .option('--host <host>', 'bind address', '127.0.0.1')
     .option('--sync', 'pull and push local data on each refresh tick')
     .option('--no-sync', 'disable configured sync-on-refresh')
