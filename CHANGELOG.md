@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.3.0] - 2026-08-02
+
+
+### Bug Fixes
+
+- **sync:** Keep synced history that pruned local logs no longer cover
+- **recompute:** Only rewrite machine files that actually changed
+- **sync:** Push commits stranded by an earlier failed push
+- **init:** Stop a stale staged data file from bricking init
+- **tui:** Count calendar days once in the TOTAL row
+- **display:** Humanize single-version and version-first Claude model IDs
+- **format:** Promote to the next unit instead of rounding past it
+- **readers:** Drop Claude entries with an unparseable timestamp
+- **pricing:** Price the Claude 3 generation from its own rates
+- **cursor:** Degrade instead of crashing when the CSV body fails
+- **heatmap:** Use a nearest-rank percentile for the intensity ceiling
+- **heatmap:** Size the grid for years that need 54 week columns
+- **heatmap:** Let the current streak survive a day that has not started
+- **cursor:** Keep rows whose token breakdown is populated
+- **data:** Keep day cost consistent with the per-model costs
+- **git:** Commit a staged deletion instead of crashing on the missing file
+- **daemon:** Cap the refresh interval below the timer overflow
+- Keep persisted machine data from being under-reported or overwritten
+
+### Performance
+
+- **daemon:** Parse the local logs once per refresh, and overlap Cursor
+- **pricing:** Memoize Claude model-id canonicalization
+
+### Refactoring
+
+- **data:** Share one DayMap merge instead of two drifted copies
+- Drop dead fields and reuse existing helpers
+- **tui:** Build the TOTAL row from merged day maps
+- **git:** Delete the dead tryPull helper
+- **init:** Remove a conditional that could never be false
+- **display:** Keep provider names and keys in one place each
+- **heatmap:** Drop two pure alias functions
+- **scripts:** Share the pricing drift report between providers
+- Collapse three rolling-window cases and the codex gpt-5 special case
+- Write the model-id suffix rules down once
+
 ## [v1.2.0] - 2026-07-24
 
 
