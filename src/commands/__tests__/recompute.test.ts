@@ -160,6 +160,43 @@ describe('recomputeCostsCommand', () => {
     expect(parsed.days['2024-01-01']?.claude_code?.totals.inputTokens).toBe(2_000_000);
   });
 
+  it('rebuilds the current machine from the local logs when its file cannot be parsed', async () => {
+    // sync refuses to overwrite a file it cannot read back, so this is the only
+    // path that gets the machine unstuck.
+    mocks.readFileSync.mockReturnValue('{ not json');
+    mocks.buildMachineData.mockReturnValue({
+      hostname: 'host',
+      lastUpdated: 'now',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { 'claude-sonnet-4-6': { inputTokens: 1_000_000, outputTokens: 100_000 } },
+            totals: { inputTokens: 1_000_000, outputTokens: 100_000 },
+          },
+        },
+      },
+    });
+    mocks.machineHasData.mockReturnValue(true);
+
+    await recomputeCostsCommand();
+
+    const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
+    expect(mocks.writeFileSync.mock.calls[0]?.[0]).toBe('/repo/data/host.json');
+    expect(written.days['2024-01-01']?.claude_code?.totals.inputTokens).toBe(1_000_000);
+  });
+
+  it('leaves another machine unparseable file alone', async () => {
+    mocks.resolveMachineId.mockReturnValue('local-pc');
+    mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
+    mocks.readFileSync.mockReturnValue('{ not json');
+    mocks.machineHasData.mockReturnValue(true);
+
+    await recomputeCostsCommand();
+
+    // The local logs are not that machine's history, so nothing here can fix it.
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
   it('does not rewrite or commit the current machine when nothing changed', async () => {
     // The persisted file already matches the local logs and is correctly
     // priced, so a fresh lastUpdated alone must not force a commit.

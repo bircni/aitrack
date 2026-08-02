@@ -7,7 +7,7 @@ import { machineDataFilename } from '../machineId.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { readCursorData } from '../readers/cursor/index.js';
 import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
-import { buildLocalMachineFile, machineHasData } from './localData.js';
+import { buildLocalMachineFile, machineHasData, mergePersistedDays } from './localData.js';
 import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';
 
 export { usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
@@ -118,28 +118,6 @@ function splitByProvider(machineFiles: MachineFile[]): ProviderData {
   return providers;
 }
 
-/**
- * Drop the parts of the current machine's persisted file that the freshly read
- * local data will overlay anyway, so the two are not counted twice.
- *
- * Scoped per (date, provider) rather than per provider: local logs get pruned,
- * so a persisted date the local logs no longer cover is the only record of that
- * day and must survive.
- */
-function persistedDayFallback(machine: MachineFile, fresh: MachineFile): MachineFile | null {
-  const days: MachineFile['days'] = {};
-  for (const [date, dayProviders] of Object.entries(machine.days)) {
-    const fallbackProviders: Record<string, ProviderDay> = {};
-    for (const [providerKey, providerDay] of Object.entries(dayProviders)) {
-      if (fresh.days[date]?.[providerKey] === undefined) {
-        fallbackProviders[providerKey] = providerDay;
-      }
-    }
-    if (Object.keys(fallbackProviders).length > 0) days[date] = fallbackProviders;
-  }
-  return Object.keys(days).length > 0 ? { ...machine, days } : null;
-}
-
 export async function loadMergedProviderData(
   options: LoadUsageOptions = {},
 ): Promise<LoadedUsageData | null> {
@@ -171,6 +149,7 @@ export async function loadMergedProviderData(
 
   let machineData: MachineFile[] = [];
   let providerData: ProviderData = {};
+  let isLocalMerged = false;
 
   if (config && isCloned()) {
     const files = listDataFiles();
@@ -188,13 +167,21 @@ export async function loadMergedProviderData(
         reportMachines.push(entry.machine);
         continue;
       }
-      const fallback = persistedDayFallback(entry.machine, localMachine);
-      if (fallback) reportMachines.push(fallback);
+      // Merge the local logs into the current machine's persisted days through
+      // the same rule sync writes with, so what is displayed matches what the
+      // file holds — including a boundary day whose logs have been pruned down
+      // below what was synced from them earlier.
+      reportMachines.push({
+        ...entry.machine,
+        days: mergePersistedDays(entry.machine.days, localMachine.days),
+      });
+      isLocalMerged = true;
     }
     providerData = splitByProvider(reportMachines);
   }
 
-  if (machineHasData(localMachine)) {
+  // Only when no persisted file absorbed it above; merging already covers it.
+  if (!isLocalMerged && machineHasData(localMachine)) {
     overlayMachineFile(providerData, localMachine);
   }
 

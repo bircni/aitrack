@@ -20,10 +20,11 @@ vi.mock('../../git.js', () => ({
   readDataFile: mocks.readDataFile,
   writePendingMachineFile: mocks.writePendingMachineFile,
 }));
-vi.mock('../localData.js', () => ({
+// mergePersistedDays stays real: it is the rule sync persists with, and these
+// tests assert display agrees with it.
+vi.mock(import('../localData.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
   buildLocalMachineFile: mocks.buildLocalMachineFile,
-  machineHasData: (machine: { days: Record<string, unknown> }) =>
-    Object.keys(machine.days).length > 0,
 }));
 
 import type { DayEntry, MachineFile, ProviderDay } from '../types.js';
@@ -256,8 +257,8 @@ describe('loadMergedProviderData', () => {
             days: {
               '2024-01-02': {
                 codex: {
-                  byModel: { stale: { inputTokens: 999, outputTokens: 1 } },
-                  totals: { inputTokens: 999, outputTokens: 1 },
+                  byModel: { stale: { inputTokens: 9, outputTokens: 1 } },
+                  totals: { inputTokens: 9, outputTokens: 1 },
                 },
               },
               '2024-01-03': {
@@ -422,5 +423,47 @@ describe('loadMergedProviderData', () => {
     expect(loaded?.machineData[0]).toMatchObject({ hostname: 'host', lastUpdated: 'last-sync' });
     expect(loaded?.machineData[0]?.days).toHaveProperty('2024-01-01');
     expect(loaded?.machineData[0]?.days).toHaveProperty('2024-01-02');
+  });
+
+  it('keeps the persisted boundary day when the local logs were pruned below it', async () => {
+    mocks.tryLoadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: 'host',
+    });
+    mocks.resolveMachineId.mockReturnValue('host');
+    mocks.isCloned.mockReturnValue(true);
+    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
+    mocks.readDataFile.mockReturnValue({
+      hostname: 'host',
+      lastUpdated: 'last-sync',
+      days: {
+        '2024-01-02': {
+          claude_code: {
+            byModel: { claude: { inputTokens: 900_000, outputTokens: 100_000 } },
+            totals: { inputTokens: 900_000, outputTokens: 100_000 },
+          },
+        },
+      },
+    });
+    // Transcripts for that day have since been trimmed, so the logs only still
+    // show part of what was synced from them.
+    mocks.buildLocalMachineFile.mockResolvedValue({
+      hostname: 'host',
+      lastUpdated: 'fresh',
+      days: {
+        '2024-01-02': {
+          claude_code: {
+            byModel: { claude: { inputTokens: 180_000, outputTokens: 20_000 } },
+            totals: { inputTokens: 180_000, outputTokens: 20_000 },
+          },
+        },
+      },
+    });
+
+    const loaded = await loadMergedProviderData({ providers: ['claude_code'] });
+
+    // sync keeps the larger persisted record (mergePersistedDays); the display
+    // has to agree or the day renders below what the synced file holds.
+    expect(loaded?.providerData.claude_code?.get('2024-01-02')?.inputTokens).toBe(900_000);
   });
 });
