@@ -7,6 +7,9 @@ export interface MachineFileValidationOptions {
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Files already warned about below, so the message stays a one-shot per run. */
+const warnedBadDayKeys = new Set<string>();
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -121,8 +124,15 @@ export function validateMachineFile(
     // totals, and nothing removes it on its own: the sync merge carries
     // persisted days forward forever. Drop it on read instead of failing the
     // whole file, which would take the machine's real history with it.
+    //
+    // Warn once per file per process: only the current machine self-heals (sync
+    // rewrites it), so for another machine's file this would otherwise print on
+    // every command and every daemon tick with nothing the local user can do.
     if (!DAY_KEY.test(date)) {
-      console.warn(`Dropping day ${date} from machine file ${filePath}: not a YYYY-MM-DD date`);
+      if (!warnedBadDayKeys.has(filePath)) {
+        warnedBadDayKeys.add(filePath);
+        console.warn(`Dropping day ${date} from machine file ${filePath}: not a YYYY-MM-DD date`);
+      }
       continue;
     }
     if (!isRecord(providers)) {

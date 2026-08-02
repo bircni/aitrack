@@ -36,6 +36,22 @@ describe('validateMachineFile', () => {
     warn.mockRestore();
   });
 
+  it('warns about bad day keys once per file', () => {
+    // Only the current machine self-heals, so another machine's file would
+    // otherwise print this on every command and every daemon refresh tick.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const withGarbageDay = {
+      ...validMachine,
+      days: { 'NaN-NaN-NaN': validMachine.days['2026-01-15'], ...validMachine.days },
+    };
+
+    validateMachineFile(withGarbageDay, 'data/other-laptop.json');
+    validateMachineFile(withGarbageDay, 'data/other-laptop.json');
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
   it('accepts Claude cache breakdown fields on token counts', () => {
     const withBreakdown = {
       ...validMachine,

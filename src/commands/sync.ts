@@ -79,12 +79,28 @@ export async function syncData(options: SyncDataOptions = {}): Promise<MachineFi
 
   // Only write if the usage data changed — avoids a spurious commit on every run
   // (lastUpdated would otherwise always make the file dirty).
-  let existingDays: MachineFile['days'] | null = null;
+  let raw: string | null = null;
   try {
-    const raw = readFileSync(dataFilePath, 'utf8');
-    existingDays = parseMachineFile(raw, dataFilePath)?.days ?? null;
-  } catch {
-    /* file doesn't exist yet */
+    raw = readFileSync(dataFilePath, 'utf8');
+  } catch (error) {
+    // Anything other than "not synced yet" is a real read failure, and treating
+    // it as an empty file would push the local logs over whatever is there.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+
+  // parseMachineFile also returns null for a file that exists but is invalid.
+  // Merging against null there would silently replace the synced history with
+  // whatever the local logs still reach and push the loss.
+  let existingDays: MachineFile['days'] | null = null;
+  if (raw !== null) {
+    const existing = parseMachineFile(raw, dataFilePath);
+    if (!existing) {
+      throw new Error(
+        `Refusing to overwrite invalid data/${machineDataFilename(host)} (see the warning above).\n` +
+          "  Run: npx aitrack recompute-costs   (rebuilds this machine's file from the local logs)",
+      );
+    }
+    existingDays = existing.days;
   }
 
   // Keep days the local logs no longer cover — see mergePersistedDays.

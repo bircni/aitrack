@@ -84,7 +84,7 @@ describe('syncCommand', () => {
     mocks.hasMachineDataChanges.mockReturnValue(false);
     mocks.pushPendingCommits.mockReturnValue(false);
     mocks.readFileSync.mockImplementation(() => {
-      throw new Error('missing');
+      throw Object.assign(new Error('missing'), { code: 'ENOENT' });
     });
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
   });
@@ -133,6 +133,30 @@ describe('syncCommand', () => {
     const written = mocks.writeFileSync.mock.calls[0]?.[1] as string;
     const parsed = JSON.parse(written) as { days: Record<string, unknown> };
     expect(Object.keys(parsed.days)).toEqual(['2023-06-01', '2024-01-01']);
+  });
+
+  it('refuses to overwrite a persisted file that fails validation', async () => {
+    // The file exists but cannot be read back, so its days are unknown —
+    // writing the local logs over it would push away whatever it still holds.
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+    mocks.readFileSync.mockReturnValue('{ not json');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(syncCommand()).rejects.toThrow('Refusing to overwrite');
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.commitAndPush).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a read failure that is not a missing file', async () => {
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+    mocks.readFileSync.mockImplementation(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    });
+
+    await expect(syncCommand()).rejects.toThrow('permission denied');
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 
   it('pushes a pending machine migration when no local usage remains', async () => {

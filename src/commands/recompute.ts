@@ -52,14 +52,21 @@ export async function recomputeCostsCommand(): Promise<void> {
     const isCurrentMachine = basename(filePath) === `${machineId}.json`;
 
     const raw = readFileSync(filePath, 'utf8');
-    const machine = parseMachineFile(raw, filePath, { allowInconsistentCostTotals: true });
-    if (!machine) continue;
+    let machine = parseMachineFile(raw, filePath, { allowInconsistentCostTotals: true });
     let isTouched = false;
 
-    // Refresh the current machine's days from the local logs before repricing.
-    // Days the logs no longer reach stay as persisted and are repriced below
-    // like any other machine's, rather than being dropped.
-    if (isCurrentMachine && machineHasData(localFresh)) {
+    if (!machine) {
+      // parseMachineFile already warned why. Only the current machine can be
+      // repaired — the local logs are its source of truth — and this is the one
+      // command that can do it: sync refuses to overwrite a file it cannot read.
+      if (!isCurrentMachine || !machineHasData(localFresh)) continue;
+      console.warn(`  Rebuilding ${basename(filePath)} from the local logs.`);
+      machine = { ...localFresh, days: mergePersistedDays(null, localFresh.days) };
+      isTouched = true;
+    } else if (isCurrentMachine && machineHasData(localFresh)) {
+      // Refresh the current machine's days from the local logs before repricing.
+      // Days the logs no longer reach stay as persisted and are repriced below
+      // like any other machine's, rather than being dropped.
       const refreshed = mergePersistedDays(machine.days, localFresh.days);
       if (tokensJson(refreshed) !== tokensJson(machine.days)) isTouched = true;
       machine.days = refreshed;
