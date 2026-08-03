@@ -1,7 +1,7 @@
 // Per-model Claude pricing from https://platform.claude.com/docs/en/about-claude/pricing
 // Cache read = 0.10x input; cache create (5min) = 1.25x input.
 // Keep entries keyed by normalized family-first id (with date/latest suffixes stripped).
-// Last updated: 2026-07. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
+// Last updated: 2026-08-03. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
 
 import { stripModelVersionSuffixes } from '../data/modelId.js';
 
