@@ -5,7 +5,7 @@
 //   https://openrouter.ai/openai/gpt-5.1-codex
 // Codex sessions report aggregate input/output tokens plus a cached-input subset,
 // which is billed at 10% of the base input rate.
-// Last updated: 2026-07.
+// Last updated: 2026-08-03.
 
 export interface CodexPricing {
   inputPerMillion: number;
@@ -16,8 +16,8 @@ export interface CodexPricing {
 // Verified by `pnpm run pricing:check`.
 export const CODEX_PRICING_CURRENT: Record<string, CodexPricing> = {
   'gpt-5.6-sol': { inputPerMillion: 5, outputPerMillion: 30 },
-  'gpt-5.6-terra': { inputPerMillion: 2.5, outputPerMillion: 15 },
-  'gpt-5.6-luna': { inputPerMillion: 1, outputPerMillion: 6 },
+  'gpt-5.6-terra': { inputPerMillion: 2, outputPerMillion: 12 },
+  'gpt-5.6-luna': { inputPerMillion: 0.2, outputPerMillion: 1.2 },
   'gpt-5.5': { inputPerMillion: 5, outputPerMillion: 30 },
   'gpt-5.5-pro': { inputPerMillion: 30, outputPerMillion: 180 },
   'gpt-5.4': { inputPerMillion: 2.5, outputPerMillion: 15 },
@@ -49,7 +49,13 @@ export const CODEX_PRICING_BY_ID: Record<string, CodexPricing> = {
 export const CODEX_PRICING_OVERRIDES: Record<
   string,
   Array<{ before: string; pricing: CodexPricing }>
-> = {};
+> = {
+  // Launch pricing through 2026-07-29; cut rates from 2026-07-30 (Sol unchanged).
+  'gpt-5.6-terra': [
+    { before: '2026-07-30', pricing: { inputPerMillion: 2.5, outputPerMillion: 15 } },
+  ],
+  'gpt-5.6-luna': [{ before: '2026-07-30', pricing: { inputPerMillion: 1, outputPerMillion: 6 } }],
+};
 
 // Fallback by family slug — keeps cost reasonable for unknown future model ids.
 const FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> = [
