@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.3.1] - 2026-08-03
+
+
+### Bug Fixes
+
+- **pricing:** Apply the 2026-07-30 gpt-5.6 price cut by usage date (#60)
+
 ## [v1.3.0] - 2026-08-02
 
 
