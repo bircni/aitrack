@@ -5,7 +5,8 @@ import { mergeDayMaps } from '../data/dayMap.js';
 import type { DayMap, ProviderData } from '../data/types.js';
 import { fmt, fmtUSD } from './format.js';
 import { resolveProviderLayout } from './heatmap/layout.js';
-import { currentStreak, formatMonthLabel, longestStreak, peakMonth } from './heatmap/stats.js';
+import { providerStats } from './heatmap/providerStats.js';
+import { formatMonthLabel } from './heatmap/stats.js';
 import { providerLabel } from './providers.js';
 import { defaultTableStyle, renderTerminalTable } from './terminalTable.js';
 
@@ -27,21 +28,16 @@ interface StatsRow {
 }
 
 function summarizeDayMap(dayMap: DayMap, providerKey: string): StatsRow {
-  const { inputTokens, outputTokens, costUSD, hasCost, days } = sumDayMap(dayMap);
-
-  const cs = currentStreak(dayMap);
-  const ls = longestStreak(dayMap);
-  const peak = peakMonth(dayMap);
-
+  const stats = providerStats(dayMap);
   return {
     provider: providerLabel(providerKey),
-    days,
-    input: fmt(inputTokens),
-    output: fmt(outputTokens),
-    total: fmt(inputTokens + outputTokens),
-    cost: hasCost ? fmtUSD(costUSD) : '—',
-    streak: `${cs} / ${ls}`,
-    peak: peak ? formatMonthLabel(peak.month) : '—',
+    days: stats.activeDays,
+    input: fmt(stats.inputTokens),
+    output: fmt(stats.outputTokens),
+    total: fmt(stats.totalTokens),
+    cost: stats.hasCost ? fmtUSD(stats.costUSD) : '—',
+    streak: `${String(stats.currentStreak)} / ${String(stats.longestStreak)}`,
+    peak: stats.peakMonth ? formatMonthLabel(stats.peakMonth.month) : '—',
   };
 }
 
@@ -57,6 +53,8 @@ function totalRow(dayMaps: DayMap[]): StatsRow {
   for (const dayMap of dayMaps) mergeDayMaps(merged, dayMap);
   const { inputTokens, outputTokens, costUSD, hasCost, days } = sumDayMap(merged);
 
+  // Streak and peak month are per-provider figures; a merged row would need a
+  // different definition of each, so they are left blank rather than guessed.
   return {
     provider: 'TOTAL',
     days,
