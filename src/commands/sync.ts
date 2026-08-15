@@ -23,6 +23,43 @@ export interface SyncDataOptions {
   dryRun?: boolean;
 }
 
+const NO_CHANGES_MESSAGE = 'No changes to push — data is already up to date.';
+
+function pushedMessage(host: string, syncedDays: number): string {
+  return `Done! Pushed data/${host}.json (${String(syncedDays)} days)`;
+}
+
+/** Progress reporting, silenced by `quiet` — the daemon syncs on every tick. */
+function progressLogger(isQuiet: boolean): (message: string) => void {
+  if (isQuiet) return () => undefined;
+  return (message) => {
+    console.log(message);
+  };
+}
+
+/**
+ * Commit and push this machine's data file, reporting whether anything reached
+ * the remote.
+ *
+ * A machineId change shows up as a pending git rename rather than a content
+ * change, so it needs the same commit path as an update. pushPendingCommits
+ * then covers a commit whose earlier push failed: the working tree is clean
+ * again, so nothing else here would notice it never landed.
+ */
+function pushMachineData(host: string): boolean {
+  return (hasMachineDataChanges(host) && commitAndPush(host)) || pushPendingCommits();
+}
+
+/** Warn about models priced by family fallback, clearing the run's hits. */
+function reportFallbackPricing(): void {
+  const fallbacks = [...consumeClaudeFallbackHits(), ...consumeCodexFallbackHits()];
+  if (fallbacks.length === 0) return;
+  console.warn(
+    `\nWarning: priced via family fallback (no exact pricing in src/pricing/): ${fallbacks.join(', ')}`,
+  );
+  console.warn('  These models may be wrong — please update src/pricing/ with the correct rates.');
+}
+
 /**
  * Push this machine's usage data. Returns the machine file built from the local
  * logs so a caller that also needs it (the daemon renders right after syncing)
@@ -30,17 +67,15 @@ export interface SyncDataOptions {
  */
 export async function syncData(options: SyncDataOptions = {}): Promise<MachineFile> {
   const config = loadConfig();
-  const isQuiet = Boolean(options.quiet);
   const isDryRun = Boolean(options.dryRun);
+  const log = progressLogger(Boolean(options.quiet));
 
   if (!isCloned()) {
     throw new Error('Repo not cloned. Run: npx aitrack init');
   }
 
-  if (!isQuiet && !isDryRun) {
-    console.log('Pulling latest from remote...');
-  }
   if (!isDryRun) {
+    log('Pulling latest from remote...');
     pull();
   }
 
@@ -49,33 +84,26 @@ export async function syncData(options: SyncDataOptions = {}): Promise<MachineFi
   const dataFilePath = join(dataDir, machineDataFilename(host));
 
   // Cursor usage is loaded locally by report/display commands; it is never written to git.
-  if (!isQuiet) {
-    console.log('Reading local data...');
-  }
+  log('Reading local data...');
   const { claude_code: claudeData, codex: codexData } = await readLocalProviderMaps();
 
   const freshData = buildMachineData(host, { claude_code: claudeData, codex: codexData });
   const totalDays = new Set([...claudeData.keys(), ...codexData.keys()]).size;
 
   if (totalDays === 0) {
-    const isPushed =
-      !isDryRun && ((hasMachineDataChanges(host) && commitAndPush(host)) || pushPendingCommits());
-    if (!isQuiet) {
-      console.log(
-        isPushed
-          ? `Done! Pushed machine data migration for ${host}.`
-          : 'No local data found (Claude Code or Codex).',
-      );
-    }
+    const isPushed = !isDryRun && pushMachineData(host);
+    log(
+      isPushed
+        ? `Done! Pushed machine data migration for ${host}.`
+        : 'No local data found (Claude Code or Codex).',
+    );
     return freshData;
   }
 
-  if (!isQuiet) {
-    const sources: string[] = [];
-    if (claudeData.size > 0) sources.push(`Claude Code (${claudeData.size} days)`);
-    if (codexData.size > 0) sources.push(`Codex (${codexData.size} days)`);
-    console.log(`Found: ${sources.join(', ')}`);
-  }
+  const sources: string[] = [];
+  if (claudeData.size > 0) sources.push(`Claude Code (${String(claudeData.size)} days)`);
+  if (codexData.size > 0) sources.push(`Codex (${String(codexData.size)} days)`);
+  log(`Found: ${sources.join(', ')}`);
 
   // Only write if the usage data changed — avoids a spurious commit on every run
   // (lastUpdated would otherwise always make the file dirty).
@@ -115,29 +143,17 @@ export async function syncData(options: SyncDataOptions = {}): Promise<MachineFi
     let isPushed = false;
     if (!isDryRun) {
       removePendingMachineFile(host);
-      // A machineId change can leave a matching target file as a pending git
-      // rename. Give it the same commit/push path as a content update.
-      // pushPendingCommits covers a commit whose earlier push failed: the tree
-      // is clean again, so nothing else here would notice it never landed.
-      isPushed = (hasMachineDataChanges(host) && commitAndPush(host)) || pushPendingCommits();
+      isPushed = pushMachineData(host);
     }
-    if (!isQuiet) {
-      console.log(
-        isPushed
-          ? `Done! Pushed data/${host}.json (${String(syncedDays)} days)`
-          : 'No changes to push — data is already up to date.',
-      );
-    }
+    log(isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
     return freshData;
   }
 
   if (isDryRun) {
-    if (!isQuiet) {
-      const action = existingDays === null ? 'create' : 'update';
-      console.log(
-        `Dry run: would ${action} data/${host}.json (${String(syncedDays)} days). No changes written.`,
-      );
-    }
+    const action = existingDays === null ? 'create' : 'update';
+    log(
+      `Dry run: would ${action} data/${host}.json (${String(syncedDays)} days). No changes written.`,
+    );
     return freshData;
   }
 
@@ -146,25 +162,8 @@ export async function syncData(options: SyncDataOptions = {}): Promise<MachineFi
   removePendingMachineFile(host);
 
   const isPushed = commitAndPush(host);
-  if (!isPushed) {
-    if (!isQuiet) {
-      console.log('No changes to push — data is already up to date.');
-    }
-    return freshData;
-  }
-  if (!isQuiet) {
-    console.log(`Done! Pushed data/${host}.json (${syncedDays} days)`);
-  }
-
-  const fb = [...consumeClaudeFallbackHits(), ...consumeCodexFallbackHits()];
-  if (fb.length > 0) {
-    console.warn(
-      `\nWarning: priced via family fallback (no exact pricing in src/pricing/): ${fb.join(', ')}`,
-    );
-    console.warn(
-      '  These models may be wrong — please update src/pricing/ with the correct rates.',
-    );
-  }
+  log(isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
+  if (isPushed) reportFallbackPricing();
 
   return freshData;
 }
