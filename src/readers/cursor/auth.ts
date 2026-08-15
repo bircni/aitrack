@@ -229,7 +229,7 @@ export async function fetchCursorUsageCsv(accessToken: string): Promise<Response
 
   const summary = failures
     .map((f) => {
-      const line = `${f.label}: ${f.status} ${f.statusText}`.trim();
+      const line = `${f.label}: ${String(f.status)} ${f.statusText}`.trim();
       return f.body ? `${line} (${f.body})` : line;
     })
     .join('; ');

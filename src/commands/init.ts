@@ -129,7 +129,7 @@ export async function initCommand(): Promise<void> {
 
   saveConfig({ repoUrl, machineId });
   if (adopted > 0) {
-    console.log(`Adopted ${adopted} pending data file(s) into the repo.`);
+    console.log(`Adopted ${String(adopted)} pending data file(s) into the repo.`);
   }
 
   console.log('');

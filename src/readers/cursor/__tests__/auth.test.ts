@@ -44,7 +44,7 @@ function jwtWithSub(sub: string): string {
 
 describe('cursor auth', () => {
   beforeEach(() => {
-    tmpDir = join(tmpdir(), `cursor-auth-${Date.now()}-${Math.random()}`);
+    tmpDir = join(tmpdir(), `cursor-auth-${String(Date.now())}-${String(Math.random())}`);
     mkdirSync(tmpDir, { recursive: true });
     resetCursorEnvironment();
   });

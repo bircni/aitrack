@@ -65,7 +65,7 @@ export function parseCursorDateString(value?: string): string | null {
   const y = parsed.getFullYear();
   const m = String(parsed.getMonth() + 1).padStart(2, '0');
   const day = String(parsed.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return `${String(y)}-${m}-${day}`;
 }
 
 function createCursorTokenTotals(row: CursorCsvRow): { input: number; output: number } | null {

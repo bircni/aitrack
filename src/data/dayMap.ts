@@ -14,7 +14,7 @@ export function toLocalDateString(ts: string | Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return `${String(y)}-${m}-${day}`;
 }
 
 /**
@@ -65,7 +65,7 @@ export function mergeDayMaps(dst: DayMap, source: DayMap): void {
 }
 
 export function filterDayMapByYear(dayMap: DayMap, year: number): DayMap {
-  const prefix = `${year}-`;
+  const prefix = `${String(year)}-`;
   return new Map([...dayMap].filter(([date]) => date.startsWith(prefix)));
 }
 

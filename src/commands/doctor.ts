@@ -198,7 +198,7 @@ export function duplicateMachineCheck(): CheckResult {
     return {
       status: 'ok',
       label: 'Machine identities',
-      detail: `${machines.length} machine(s), no duplicated days`,
+      detail: `${String(machines.length)} machine(s), no duplicated days`,
     };
   }
 
@@ -207,7 +207,7 @@ export function duplicateMachineCheck(): CheckResult {
     status: 'warn',
     label: 'Machine identities',
     detail:
-      `${collidingDays.size} day(s) are recorded identically under multiple machines (${names}) — ` +
+      `${String(collidingDays.size)} day(s) are recorded identically under multiple machines (${names}) — ` +
       'totals are inflated. These are likely one machine synced under several ids; ' +
       'merge them into one data file.',
   };

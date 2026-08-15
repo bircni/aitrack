@@ -144,7 +144,7 @@ export function computeModelStats(dayMap: DayMap): ModelStats {
 export function formatPeakDate(date: string): string {
   const [y = '', m = '', d = ''] = date.split('-');
   const monthIndex = parseInt(m, 10) - 1;
-  return `${MONTHS[monthIndex] ?? m} ${parseInt(d, 10)}, ${y}`;
+  return `${MONTHS[monthIndex] ?? m} ${String(parseInt(d, 10))}, ${y}`;
 }
 
 export function formatMonthLabel(month: string): string {
