@@ -13,8 +13,7 @@ import { approximatelyEqual, parseMachineFile } from '../data/validate.js';
 import { SYNCED_PROVIDERS } from '../display/providers.js';
 import { commitDataChanges, isCloned, listDataFiles } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
-import { consumeClaudeFallbackHits } from '../pricing/claude.js';
-import { consumeCodexFallbackHits } from '../pricing/codex.js';
+import { reportFallbackPricing } from '../pricing/fallback.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 
 /**
@@ -194,13 +193,7 @@ export async function recomputeCostsCommand(): Promise<void> {
   console.log(`Recomputed costs in ${String(changed)} file(s).`);
   reportLegacySkipped(legacySkipped, 'left unchanged');
 
-  const fallbacks = [...consumeClaudeFallbackHits(), ...consumeCodexFallbackHits()];
-  if (fallbacks.length > 0) {
-    console.warn(
-      `\nWarning: priced via family fallback (no exact pricing in src/pricing/): ${fallbacks.join(', ')}`,
-    );
-    console.warn('  These costs may be wrong — update src/pricing/ with the correct rates.');
-  }
+  reportFallbackPricing();
 
   const isPushed = commitDataChanges(`recompute: refresh costs at ${new Date().toISOString()}`);
   if (!isPushed) {
