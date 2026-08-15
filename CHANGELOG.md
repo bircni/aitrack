@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.4.0] - 2026-08-15
+
+
+### Bug Fixes
+
+- **security:** Update dependencies
+- **sync:** Report family-fallback pricing however the push turns out
+
+### CI
+
+- Run the test suite once instead of twice
+
+### Documentation
+
+- **pricing:** Describe the live case in the overrides comment
+
+### Performance
+
+- **machines:** Skip the local JSONL parse
+- **readers:** Parse session files with bounded concurrency
+- **readers:** Cache parsed transcripts by mtime and size
+
+### Refactoring
+
+- **data:** Share the structural type guards
+- **readers:** Keep a single JSONL directory walker
+- **sync:** Extract the push, message and logging helpers
+- **recompute:** Split the repricing pass out of the command
+- **pricing:** Share the family-fallback warning
+- **cli:** Name the abbreviated exports at their definition
+- **display:** Put usage-period arithmetic on one clock
+- **display:** Share the provider stat figures
+- Let the linter enforce the numeric template style
+
+### Tests
+
+- Share the duplicated day fixtures and console capture
+- Make the date fixtures independent of the machine timezone
+
 ## [v1.3.1] - 2026-08-03
 
 
