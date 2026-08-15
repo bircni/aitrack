@@ -98,6 +98,53 @@ describe('readClaudeData', () => {
     expect(result.get('2024-01-15')?.inputTokens).toBe(10);
   });
 
+  it('still deduplicates across files when both are served from the parse cache', async () => {
+    // The cache stores each file's contribution in isolation, so a message that
+    // a resumed session copied into a second transcript looks new in both. The
+    // second file has to fall back to a re-read against the running key set.
+    const roots = [
+      join(TEST_HOME, '.config', 'claude', 'projects', 'project'),
+      join(TEST_HOME, '.claude', 'projects', 'project'),
+    ];
+    for (const root of roots) {
+      mkdirSync(root, { recursive: true });
+      jsonl(join(root, 'history.jsonl'), [assistantLine('same', 10, 5)]);
+    }
+
+    const cold = await readClaudeData();
+    const warm = await readClaudeData();
+
+    expect(cold.get('2024-01-15')?.inputTokens).toBe(10);
+    expect(warm.get('2024-01-15')?.inputTokens).toBe(10);
+  });
+
+  it('returns the same totals from a warm cache as from a cold one', async () => {
+    process.env.XDG_CONFIG_HOME = TEST_HOME;
+    const projectDir = join(TEST_HOME, 'claude', 'projects', 'project');
+    mkdirSync(projectDir, { recursive: true });
+    jsonl(join(projectDir, 'a.jsonl'), [assistantLine('a', 10, 5)]);
+    jsonl(join(projectDir, 'b.jsonl'), [assistantLine('b', 20, 8)]);
+
+    const cold = await readClaudeData();
+    const warm = await readClaudeData();
+
+    expect([...warm]).toEqual([...cold]);
+  });
+
+  it('picks up an appended message once the file changes', async () => {
+    process.env.XDG_CONFIG_HOME = TEST_HOME;
+    const projectDir = join(TEST_HOME, 'claude', 'projects', 'project');
+    mkdirSync(projectDir, { recursive: true });
+    const file = join(projectDir, 'a.jsonl');
+    jsonl(file, [assistantLine('a', 10, 5)]);
+
+    await readClaudeData();
+    jsonl(file, [assistantLine('a', 10, 5), assistantLine('b', 7, 3)]);
+    const updated = await readClaudeData();
+
+    expect(updated.get('2024-01-15')?.inputTokens).toBe(17);
+  });
+
   it('reads custom Claude project roots from the environment', async () => {
     const customRoot = join(TEST_HOME, 'custom-claude');
     process.env.AITRACK_CLAUDE_PROJECTS_DIRS = customRoot;

@@ -4,9 +4,10 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
-import { getOrCreateDay, tryLocalDateString } from '../data/dayMap.js';
+import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
 import type { DayMap } from '../data/types.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
+import { type CachedParse, openParseCache } from './cache.js';
 import { mapWithConcurrency } from './concurrency.js';
 import { listUniqueSourceFiles, resolveSourceRoots } from './paths.js';
 
@@ -170,13 +171,30 @@ function addSessionResult(allDays: DayMap, result: SessionResult): void {
   }
 }
 
+/**
+ * One session file's contribution, computed from its own bytes alone so it can
+ * be cached. Codex has no cross-file de-duplication, so there are no keys.
+ */
+async function parseCodexFile(filePath: string): Promise<CachedParse> {
+  const days: DayMap = new Map();
+  for (const result of await parseSessionFile(filePath)) addSessionResult(days, result);
+  return { days, keys: [] };
+}
+
 export async function readCodexData(): Promise<DayMap> {
   const files = await listUniqueSourceFiles(getCodexPaths());
-  const parsed = await mapWithConcurrency(files, (file) => parseSessionFile(file));
+  const cache = openParseCache('codex');
+
+  const parsed = await mapWithConcurrency(files, async (filePath) => {
+    const cached = await cache.lookup(filePath);
+    if (cached) return cached;
+    const fresh = await parseCodexFile(filePath);
+    await cache.record(filePath, fresh);
+    return fresh;
+  });
+  cache.save();
 
   const allDays: DayMap = new Map();
-  for (const results of parsed) {
-    for (const result of results) addSessionResult(allDays, result);
-  }
+  for (const entry of parsed) mergeDayMaps(allDays, entry.days);
   return allDays;
 }

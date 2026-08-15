@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { Command } from 'commander';
 
 import { CONFIG_KEYS, configCommand } from '../commands/config.js';
@@ -13,6 +10,7 @@ import { recomputeCostsCommand } from '../commands/recompute.js';
 import { showCommand } from '../commands/show.js';
 import { syncCommand } from '../commands/sync.js';
 import { topCommand } from '../commands/top.js';
+import { packageVersion } from '../version.js';
 import {
   cliErrorMessage,
   parseIntArg as parseIntArgument,
@@ -36,25 +34,6 @@ export function runAsync(function_: () => Promise<void>): void {
     console.error(cliErrorMessage(error));
     process.exit(1);
   });
-}
-
-function packageVersion(): string {
-  const packagePath = join(import.meta.dirname, '../../package.json');
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(packagePath, 'utf8'));
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'version' in parsed &&
-      typeof parsed.version === 'string' &&
-      parsed.version.length > 0
-    ) {
-      return parsed.version;
-    }
-  } catch {
-    // fall through to the placeholder below
-  }
-  return '0.0.0';
 }
 
 function runTop(
