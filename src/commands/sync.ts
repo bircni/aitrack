@@ -15,8 +15,7 @@ import {
   removePendingMachineFile,
 } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
-import { consumeClaudeFallbackHits } from '../pricing/claude.js';
-import { consumeCodexFallbackHits } from '../pricing/codex.js';
+import { reportFallbackPricing } from '../pricing/fallback.js';
 
 export interface SyncDataOptions {
   quiet?: boolean;
@@ -48,16 +47,6 @@ function progressLogger(isQuiet: boolean): (message: string) => void {
  */
 function pushMachineData(host: string): boolean {
   return (hasMachineDataChanges(host) && commitAndPush(host)) || pushPendingCommits();
-}
-
-/** Warn about models priced by family fallback, clearing the run's hits. */
-function reportFallbackPricing(): void {
-  const fallbacks = [...consumeClaudeFallbackHits(), ...consumeCodexFallbackHits()];
-  if (fallbacks.length === 0) return;
-  console.warn(
-    `\nWarning: priced via family fallback (no exact pricing in src/pricing/): ${fallbacks.join(', ')}`,
-  );
-  console.warn('  These models may be wrong — please update src/pricing/ with the correct rates.');
 }
 
 /**
