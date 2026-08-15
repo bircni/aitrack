@@ -8,7 +8,8 @@ import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap
 import { stripModelAliasSuffix } from '../data/modelId.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
 import { estimateClaudeCostUSD } from '../pricing/claude.js';
-import { listJsonlFiles, resolveSourceRoots } from './paths.js';
+import { mapWithConcurrency } from './concurrency.js';
+import { listUniqueSourceFiles, resolveSourceRoots } from './paths.js';
 
 export function getClaudePaths(): string[] {
   const xdg = process.env.XDG_CONFIG_HOME;
@@ -106,20 +107,17 @@ export async function parseJsonlFile(filePath: string, seen: Set<string>): Promi
 }
 
 export async function readClaudeData(): Promise<DayMap> {
-  const roots = getClaudePaths();
-  const seenPaths = new Set<string>();
+  const files = await listUniqueSourceFiles(getClaudePaths());
+
+  // seenMessages is shared across the parses so a message that a resumed
+  // session copied into a second transcript is still counted once. Which copy
+  // wins now depends on completion order rather than file order, but both are
+  // arbitrary already (readdir order is not stable across platforms) and the
+  // copies carry the same id, timestamp and usage.
   const seenMessages = new Set<string>();
+  const parsed = await mapWithConcurrency(files, (file) => parseJsonlFile(file, seenMessages));
+
   const allDays: DayMap = new Map();
-
-  for (const root of roots) {
-    const files = await listJsonlFiles(root);
-    for (const file of files) {
-      if (seenPaths.has(file)) continue;
-      seenPaths.add(file);
-      const dayData = await parseJsonlFile(file, seenMessages);
-      mergeDayMaps(allDays, dayData);
-    }
-  }
-
+  for (const dayData of parsed) mergeDayMaps(allDays, dayData);
   return allDays;
 }

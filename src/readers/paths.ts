@@ -29,6 +29,23 @@ export async function listJsonlFiles(root: string): Promise<string[]> {
   return files;
 }
 
+/**
+ * Every `.jsonl` file under any of `roots`, de-duplicated and in root order.
+ *
+ * Roots can overlap — the same directory can arrive from the env override, the
+ * config value and the built-in defaults, and one can nest inside another — and
+ * a file listed twice would double every token it holds.
+ */
+export async function listUniqueSourceFiles(roots: string[]): Promise<string[]> {
+  const perRoot = await Promise.all(roots.map((root) => listJsonlFiles(root)));
+  const seen = new Set<string>();
+  return perRoot.flat().filter((file) => {
+    if (seen.has(file)) return false;
+    seen.add(file);
+    return true;
+  });
+}
+
 export async function jsonlSourceSummary(
   roots: string[],
 ): Promise<{ existing: string[]; fileCount: number }> {
