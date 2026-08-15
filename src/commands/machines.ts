@@ -67,8 +67,11 @@ interface MachinesOptions {
 }
 
 export async function machinesCommand(options: MachinesOptions = {}): Promise<void> {
+  // Every summary below is derived from the persisted machine files, so there is
+  // nothing here for the local JSONL corpus to contribute.
   const loaded = await loadMergedProviderData({
     providers: [...SYNCED_PROVIDERS],
+    skipLocalLogs: true,
   });
 
   if (!loaded || loaded.machineData.length === 0) {
