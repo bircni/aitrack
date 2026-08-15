@@ -8,10 +8,11 @@ import {
   mergePersistedDays,
   readLocalProviderMaps,
 } from '../data/localData.js';
-import type { MachineFile } from '../data/types.js';
+import type { MachineFile, ProviderDay } from '../data/types.js';
 import { approximatelyEqual, parseMachineFile } from '../data/validate.js';
 import { SYNCED_PROVIDERS } from '../display/providers.js';
 import { commitDataChanges, isCloned, listDataFiles } from '../git.js';
+import { machineDataFilename } from '../machineId.js';
 import { consumeClaudeFallbackHits } from '../pricing/claude.js';
 import { consumeCodexFallbackHits } from '../pricing/codex.js';
 import { resolveModelCost } from '../pricing/resolve.js';
@@ -27,6 +28,125 @@ import { resolveModelCost } from '../pricing/resolve.js';
  */
 function tokensJson(days: MachineFile['days']): string {
   return JSON.stringify(days, (key, value: unknown) => (key === 'costUSD' ? undefined : value));
+}
+
+interface RepriceResult {
+  /** Whether any stored cost was replaced. */
+  isTouched: boolean;
+  /** Claude model-days left alone because they predate the cache breakdown. */
+  legacySkipped: number;
+}
+
+/**
+ * Recompute every model cost in one provider-day and re-derive the day total.
+ *
+ * Costs are only rewritten when they differ beyond float noise: the readers sum
+ * a cost per JSONL entry while this derives it from the summed tokens, so an
+ * unchanged day would otherwise look repriced on every run.
+ */
+function repriceProviderDay(
+  providerKey: string,
+  date: string,
+  providerDay: ProviderDay,
+): RepriceResult {
+  let dayTotal = 0;
+  let modelCount = 0;
+  let isCostComplete = true;
+  let isTouched = false;
+  let legacySkipped = 0;
+
+  for (const [model, counts] of Object.entries(providerDay.byModel)) {
+    modelCount++;
+    const cost = resolveModelCost(providerKey, model, counts, date, 'recompute');
+    if (cost === undefined) {
+      if (counts.costUSD === undefined) {
+        isCostComplete = false;
+      } else {
+        dayTotal += counts.costUSD;
+        if (providerKey === 'claude_code') legacySkipped++;
+      }
+      continue;
+    }
+    if (counts.costUSD === undefined || !approximatelyEqual(counts.costUSD, cost)) {
+      counts.costUSD = cost;
+      isTouched = true;
+    }
+    dayTotal += cost;
+  }
+
+  // A day total is only safe to re-derive once every model in it has a cost.
+  if (
+    modelCount > 0 &&
+    isCostComplete &&
+    (providerDay.totals.costUSD === undefined ||
+      !approximatelyEqual(providerDay.totals.costUSD, dayTotal))
+  ) {
+    providerDay.totals.costUSD = dayTotal;
+    isTouched = true;
+  }
+
+  return { isTouched, legacySkipped };
+}
+
+/** Reprice every synced provider-day in a machine file, in place. */
+function repriceMachineDays(days: MachineFile['days']): RepriceResult {
+  let isTouched = false;
+  let legacySkipped = 0;
+
+  for (const [date, providers] of Object.entries(days)) {
+    for (const providerKey of SYNCED_PROVIDERS) {
+      const providerDay = providers[providerKey];
+      if (!providerDay) continue;
+      const result = repriceProviderDay(providerKey, date, providerDay);
+      isTouched ||= result.isTouched;
+      legacySkipped += result.legacySkipped;
+    }
+  }
+
+  return { isTouched, legacySkipped };
+}
+
+/**
+ * The machine file to reprice, refreshed from the local logs when it is this
+ * machine's. Null when the file cannot be read and is not ours to rebuild;
+ * `isTouched` reports whether the refresh alone already changed it.
+ */
+function loadMachineForRecompute(
+  filePath: string,
+  isCurrentMachine: boolean,
+  localFresh: MachineFile,
+): { machine: MachineFile; isTouched: boolean } | null {
+  const raw = readFileSync(filePath, 'utf8');
+  const machine = parseMachineFile(raw, filePath, { allowInconsistentCostTotals: true });
+
+  if (!machine) {
+    // parseMachineFile already warned why. Only the current machine can be
+    // repaired — the local logs are its source of truth — and this is the one
+    // command that can do it: sync refuses to overwrite a file it cannot read.
+    if (!isCurrentMachine || !machineHasData(localFresh)) return null;
+    console.warn(`  Rebuilding ${basename(filePath)} from the local logs.`);
+    return {
+      machine: { ...localFresh, days: mergePersistedDays(null, localFresh.days) },
+      isTouched: true,
+    };
+  }
+
+  if (!isCurrentMachine || !machineHasData(localFresh)) return { machine, isTouched: false };
+
+  // Refresh the current machine's days from the local logs before repricing.
+  // Days the logs no longer reach stay as persisted and are repriced like any
+  // other machine's, rather than being dropped.
+  const refreshed = mergePersistedDays(machine.days, localFresh.days);
+  const isTouched = tokensJson(refreshed) !== tokensJson(machine.days);
+  machine.days = refreshed;
+  return { machine, isTouched };
+}
+
+function reportLegacySkipped(legacySkipped: number, state: 'skipped' | 'left unchanged'): void {
+  if (legacySkipped === 0) return;
+  console.log(
+    `  ${String(legacySkipped)} model-day(s) ${state} (legacy data without cache breakdown — re-sync from that machine).`,
+  );
 }
 
 export async function recomputeCostsCommand(): Promise<void> {
@@ -49,102 +169,35 @@ export async function recomputeCostsCommand(): Promise<void> {
   let legacySkipped = 0;
 
   for (const filePath of files) {
-    const isCurrentMachine = basename(filePath) === `${machineId}.json`;
+    const loaded = loadMachineForRecompute(
+      filePath,
+      basename(filePath) === machineDataFilename(machineId),
+      localFresh,
+    );
+    if (!loaded) continue;
 
-    const raw = readFileSync(filePath, 'utf8');
-    let machine = parseMachineFile(raw, filePath, { allowInconsistentCostTotals: true });
-    let isTouched = false;
+    const repriced = repriceMachineDays(loaded.machine.days);
+    legacySkipped += repriced.legacySkipped;
+    if (!loaded.isTouched && !repriced.isTouched) continue;
 
-    if (!machine) {
-      // parseMachineFile already warned why. Only the current machine can be
-      // repaired — the local logs are its source of truth — and this is the one
-      // command that can do it: sync refuses to overwrite a file it cannot read.
-      if (!isCurrentMachine || !machineHasData(localFresh)) continue;
-      console.warn(`  Rebuilding ${basename(filePath)} from the local logs.`);
-      machine = { ...localFresh, days: mergePersistedDays(null, localFresh.days) };
-      isTouched = true;
-    } else if (isCurrentMachine && machineHasData(localFresh)) {
-      // Refresh the current machine's days from the local logs before repricing.
-      // Days the logs no longer reach stay as persisted and are repriced below
-      // like any other machine's, rather than being dropped.
-      const refreshed = mergePersistedDays(machine.days, localFresh.days);
-      if (tokensJson(refreshed) !== tokensJson(machine.days)) isTouched = true;
-      machine.days = refreshed;
-    }
-
-    for (const [date, providers] of Object.entries(machine.days)) {
-      for (const providerKey of SYNCED_PROVIDERS) {
-        const providerDay = providers[providerKey];
-        if (!providerDay) continue;
-
-        let dayTotal = 0;
-        let modelCount = 0;
-        let isCostComplete = true;
-        let isDayTouched = false;
-
-        for (const [model, counts] of Object.entries(providerDay.byModel)) {
-          modelCount++;
-          const cost = resolveModelCost(providerKey, model, counts, date, 'recompute');
-          if (cost === undefined) {
-            if (counts.costUSD === undefined) {
-              isCostComplete = false;
-            } else {
-              dayTotal += counts.costUSD;
-              if (providerKey === 'claude_code') legacySkipped++;
-            }
-            continue;
-          }
-          // Tolerate the last float bits: the readers sum a cost per entry while
-          // this derives it from the summed tokens, so an unchanged day would
-          // otherwise look repriced on every run.
-          if (counts.costUSD === undefined || !approximatelyEqual(counts.costUSD, cost)) {
-            counts.costUSD = cost;
-            isDayTouched = true;
-          }
-          dayTotal += cost;
-        }
-
-        if (isDayTouched) isTouched = true;
-        if (
-          modelCount > 0 &&
-          isCostComplete &&
-          (providerDay.totals.costUSD === undefined ||
-            !approximatelyEqual(providerDay.totals.costUSD, dayTotal))
-        ) {
-          providerDay.totals.costUSD = dayTotal;
-          isTouched = true;
-        }
-      }
-    }
-
-    if (isTouched) {
-      machine.lastUpdated = new Date().toISOString();
-      writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
-      changed++;
-    }
+    loaded.machine.lastUpdated = new Date().toISOString();
+    writeFileSync(filePath, JSON.stringify(loaded.machine, null, 2), 'utf8');
+    changed++;
   }
 
   if (changed === 0) {
     console.log('Nothing to recompute — costs are already current.');
-    if (legacySkipped > 0) {
-      console.log(
-        `  ${legacySkipped} model-day(s) skipped (legacy data without cache breakdown — re-sync from that machine).`,
-      );
-    }
+    reportLegacySkipped(legacySkipped, 'skipped');
     return;
   }
 
-  console.log(`Recomputed costs in ${changed} file(s).`);
-  if (legacySkipped > 0) {
-    console.log(
-      `  ${legacySkipped} model-day(s) left unchanged (legacy data without cache breakdown — re-sync from that machine).`,
-    );
-  }
+  console.log(`Recomputed costs in ${String(changed)} file(s).`);
+  reportLegacySkipped(legacySkipped, 'left unchanged');
 
-  const fb = [...consumeClaudeFallbackHits(), ...consumeCodexFallbackHits()];
-  if (fb.length > 0) {
+  const fallbacks = [...consumeClaudeFallbackHits(), ...consumeCodexFallbackHits()];
+  if (fallbacks.length > 0) {
     console.warn(
-      `\nWarning: priced via family fallback (no exact pricing in src/pricing/): ${fb.join(', ')}`,
+      `\nWarning: priced via family fallback (no exact pricing in src/pricing/): ${fallbacks.join(', ')}`,
     );
     console.warn('  These costs may be wrong — update src/pricing/ with the correct rates.');
   }
