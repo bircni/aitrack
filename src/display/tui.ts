@@ -97,7 +97,7 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
   const title =
     options.year === undefined
       ? chalk.bold('aitrack stats')
-      : chalk.bold(`aitrack stats (${options.year})`);
+      : chalk.bold(`aitrack stats (${String(options.year)})`);
   const subtitle = chalk.dim('Streak = current / longest (days)');
 
   const table = renderTerminalTable(

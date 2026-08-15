@@ -97,7 +97,7 @@
         ],
         "typescript/restrict-template-expressions": [
           "error",
-          { "allowBoolean": true, "allowNumber": true }
+          { "allowBoolean": true, "allowNumber": false }
         ],
         "typescript/await-thenable": "error",
         "typescript/no-unsafe-argument": "error",

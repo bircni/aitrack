@@ -139,7 +139,7 @@ describe('parseSessionFile', () => {
     const y = firstDate.getFullYear();
     const m = String(firstDate.getMonth() + 1).padStart(2, '0');
     const d = String(firstDate.getDate()).padStart(2, '0');
-    const expected = `${y}-${m}-${d}`;
+    const expected = `${String(y)}-${m}-${d}`;
 
     jsonl(file, [
       { type: 'turn_context', timestamp: firstDate.toISOString(), payload: { model: 'gpt-4o' } },

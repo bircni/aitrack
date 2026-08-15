@@ -101,7 +101,7 @@ function listConfig(): void {
   console.log(chalk.bold('aitrack config'));
   for (const key of CONFIG_KEYS) {
     const value = configValue(config, key);
-    console.log(`  ${key} = ${value ?? chalk.dim('(unset)')}`);
+    console.log(`  ${key} = ${value === undefined ? chalk.dim('(unset)') : String(value)}`);
   }
   console.log(`  ${chalk.dim('resolved machineId')} = ${resolveMachineId(config)}`);
 }
@@ -150,7 +150,7 @@ function setConfig(key: string | undefined, value: string | undefined): void {
       }
     : { ...base, [key]: normalizedValue };
   saveConfig(next);
-  console.log(`Set ${key} = ${normalizedValue}`);
+  console.log(`Set ${key} = ${String(normalizedValue)}`);
   if (next.repoUrl.length === 0) {
     console.warn(chalk.yellow('Warning: repoUrl is not set. Run: npx aitrack init'));
   }

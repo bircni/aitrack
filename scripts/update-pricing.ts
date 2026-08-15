@@ -52,7 +52,7 @@ async function fetchHtml(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { 'user-agent': 'aitrack-update-pricing-script' },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`HTTP ${String(res.status)}`);
   return res.text();
 }
 
@@ -132,7 +132,7 @@ async function checkProvider<P extends { inputPerMillion: number; outputPerMilli
   let missing = 0;
 
   for (const [modelId, pricing] of Object.entries(check.table)) {
-    const summary = `$${pricing.inputPerMillion}/${pricing.outputPerMillion}`;
+    const summary = `$${String(pricing.inputPerMillion)}/${String(pricing.outputPerMillion)}`;
     const { prices, where } = pricesFor(modelId);
     if (prices.length === 0) {
       console.log(`? ${modelId.padEnd(22)} ${summary}  — "${where}" not on page`);
@@ -273,13 +273,13 @@ async function main(): Promise<number> {
   console.log('');
   if (totalMissing > 0) {
     console.log(
-      `${totalMissing} model(s) on docs page missing from src/pricing/*.ts — add them and re-run`,
+      `${String(totalMissing)} model(s) on docs page missing from src/pricing/*.ts — add them and re-run`,
     );
   }
   if (totalDrift > 0) {
-    console.log(`${totalDrift} model(s) drift from current docs — update src/pricing/*.ts`);
+    console.log(`${String(totalDrift)} model(s) drift from current docs — update src/pricing/*.ts`);
   } else if (totalMissing === 0 && totalUnverified > 0) {
-    console.log(`No drift, but ${totalUnverified} model(s) couldn't be found on the page.`);
+    console.log(`No drift, but ${String(totalUnverified)} model(s) couldn't be found on the page.`);
   } else if (totalMissing === 0 && totalDrift === 0) {
     console.log('All pricing matches docs.');
   }

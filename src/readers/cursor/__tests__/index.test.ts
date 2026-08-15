@@ -48,7 +48,7 @@ function createStateDatabase(path: string, rows: Record<string, string | Buffer>
 
 describe('parseCursorDateString', () => {
   beforeEach(() => {
-    tmpDir = join(tmpdir(), `cursor-test-${Date.now()}-${Math.random()}`);
+    tmpDir = join(tmpdir(), `cursor-test-${String(Date.now())}-${String(Math.random())}`);
     mkdirSync(tmpDir, { recursive: true });
     fetchCalls = [];
     resetCursorEnvironment();
@@ -131,7 +131,7 @@ describe('aggregateCursorCsvToDayMap', () => {
 
 describe('getCursorStateDatabasePath', () => {
   beforeEach(() => {
-    tmpDir = join(tmpdir(), `cursor-test-${Date.now()}-${Math.random()}`);
+    tmpDir = join(tmpdir(), `cursor-test-${String(Date.now())}-${String(Math.random())}`);
     mkdirSync(tmpDir, { recursive: true });
     resetCursorEnvironment();
   });
@@ -161,7 +161,7 @@ describe('getCursorStateDatabasePath', () => {
 
 describe('readCursorData', () => {
   beforeEach(() => {
-    tmpDir = join(tmpdir(), `cursor-test-${Date.now()}-${Math.random()}`);
+    tmpDir = join(tmpdir(), `cursor-test-${String(Date.now())}-${String(Math.random())}`);
     mkdirSync(tmpDir, { recursive: true });
     fetchCalls = [];
     resetCursorEnvironment();
