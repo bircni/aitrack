@@ -25,9 +25,18 @@ describe('dayMap helpers', () => {
   });
 
   it('toLocalDateString uses local calendar components', () => {
-    const date = new Date(2024, 5, 15, 23, 30, 0);
-    expect(toLocalDateString(date)).toBe('2024-06-15');
-    expect(toLocalDateString('2024-06-15T12:00:00.000Z')).toMatch(/^2024-06-1[45]$/);
+    // Two probes so the UTC and local dates disagree whichever side of UTC the
+    // machine runs on: just before local midnight the UTC date has already
+    // rolled over west of UTC, and just after it has not yet rolled over east
+    // of it. Pinning a single UTC instant only held for offsets near zero.
+    expect(toLocalDateString(new Date(2024, 5, 15, 23, 30, 0))).toBe('2024-06-15');
+    expect(toLocalDateString(new Date(2024, 5, 15, 0, 30, 0))).toBe('2024-06-15');
+  });
+
+  it('toLocalDateString treats a string and a Date the same', () => {
+    const iso = new Date(2024, 5, 15, 12).toISOString();
+    expect(toLocalDateString(iso)).toBe(toLocalDateString(new Date(iso)));
+    expect(toLocalDateString(iso)).toBe('2024-06-15');
   });
 
   it('tryLocalDateString rejects timestamps that cannot be parsed', () => {

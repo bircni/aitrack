@@ -10,6 +10,21 @@ import type { DayEntry, ProviderDay } from '../../data/types.js';
  * change to DayEntry meant editing nineteen near-duplicates.
  */
 
+/**
+ * An ISO instant that falls on the given **local** calendar date.
+ *
+ * Readers key usage by the local day a request happened on, so a fixture
+ * written as a fixed UTC instant does not mean a fixed day key: midday UTC on
+ * 2024-01-15 is already 2024-01-16 at UTC+14 and still 2024-01-14 at UTC-11.
+ * Building the instant from local components keeps the day key the same in
+ * every timezone, which is what assertions like `result.get('2024-01-15')`
+ * are actually claiming.
+ */
+export function localTimestamp(date: string, hour = 12): string {
+  const [year = 1970, month = 1, day = 1] = date.split('-').map(Number);
+  return new Date(year, month - 1, day, hour).toISOString();
+}
+
 /** A day whose tokens all sit on one model, which is what most assertions need. */
 export function makeDay(
   inputTokens: number,

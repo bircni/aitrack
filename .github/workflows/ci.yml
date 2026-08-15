@@ -62,6 +62,15 @@ jobs:
       - name: Test and coverage
         run: pnpm run coverage
 
+      # Usage is keyed by the local calendar day, so a fixture pinned to a UTC
+      # instant silently lands on the wrong day far from UTC. Runners are UTC,
+      # which hid that until someone ran the suite in NZ. These two are the
+      # extremes of the offset range (+14 and -11).
+      - name: Test at the edges of the timezone range
+        run: |
+          TZ=Pacific/Kiritimati pnpm run test
+          TZ=Pacific/Midway pnpm run test
+
       - name: Build
         run: pnpm run build
 

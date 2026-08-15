@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { localTimestamp } from '../../__tests__/helpers/fixtures.js';
 import { estimateClaudeCostFromStoredCounts, estimateClaudeCostUSD } from '../../pricing/claude.js';
 import { parseJsonlFile } from '../claude.js';
 
@@ -26,7 +27,7 @@ describe('parseJsonlFile', () => {
     jsonl(file, [
       {
         type: 'assistant',
-        timestamp: '2024-01-15T10:00:00Z',
+        timestamp: localTimestamp('2024-01-15'),
         requestId: 'r1',
         message: {
           id: 'msg1',
@@ -54,7 +55,7 @@ describe('parseJsonlFile', () => {
     jsonl(file, [
       {
         type: 'assistant',
-        timestamp: '2024-01-15T10:00:00Z',
+        timestamp: localTimestamp('2024-01-15'),
         requestId: 'r1',
         message: {
           id: 'msg1',
@@ -74,14 +75,14 @@ describe('parseJsonlFile', () => {
     jsonl(file, [
       {
         type: 'assistant',
-        timestamp: '2024-01-15T10:00:00Z',
+        timestamp: localTimestamp('2024-01-15'),
         requestId: 'r1',
         message: { id: 'msg1', model: 'claude', usage: { input_tokens: 100, output_tokens: 50 } },
       },
       // same msg1:r1 key — should be skipped
       {
         type: 'assistant',
-        timestamp: '2024-01-15T11:00:00Z',
+        timestamp: localTimestamp('2024-01-15', 13),
         requestId: 'r1',
         message: { id: 'msg1', model: 'claude', usage: { input_tokens: 100, output_tokens: 50 } },
       },
@@ -96,7 +97,7 @@ describe('parseJsonlFile', () => {
     jsonl(file, [
       {
         type: 'assistant',
-        timestamp: '2024-01-15T10:00:00Z',
+        timestamp: localTimestamp('2024-01-15'),
         requestId: 'r1',
         message: {
           id: 'msg1',
@@ -195,8 +196,8 @@ describe('parseJsonlFile', () => {
   it('skips non-assistant entries', async () => {
     const file = join(tmpDir, 'a.jsonl');
     jsonl(file, [
-      { type: 'user', timestamp: '2024-01-15T10:00:00Z' },
-      { type: 'summary', timestamp: '2024-01-15T10:00:00Z' },
+      { type: 'user', timestamp: localTimestamp('2024-01-15') },
+      { type: 'summary', timestamp: localTimestamp('2024-01-15') },
     ]);
 
     const result = await parseJsonlFile(file, new Set());
@@ -208,7 +209,7 @@ describe('parseJsonlFile', () => {
     jsonl(file, [
       {
         type: 'assistant',
-        timestamp: '2024-01-15T10:00:00Z',
+        timestamp: localTimestamp('2024-01-15'),
         requestId: 'r1',
         message: { id: 'msg1', model: 'claude', usage: { input_tokens: 100, output_tokens: 0 } },
       },
@@ -223,13 +224,13 @@ describe('parseJsonlFile', () => {
     jsonl(file, [
       {
         type: 'assistant',
-        timestamp: '2024-01-15T10:00:00Z',
+        timestamp: localTimestamp('2024-01-15'),
         requestId: 'r1',
         message: { id: 'msg1', model: 'claude', usage: { input_tokens: 100, output_tokens: 50 } },
       },
       {
         type: 'assistant',
-        timestamp: '2024-01-16T10:00:00Z',
+        timestamp: localTimestamp('2024-01-16'),
         requestId: 'r2',
         message: { id: 'msg2', model: 'claude', usage: { input_tokens: 200, output_tokens: 100 } },
       },

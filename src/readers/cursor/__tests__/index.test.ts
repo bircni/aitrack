@@ -67,7 +67,9 @@ describe('parseCursorDateString', () => {
   });
 
   it('parses timestamp-like dates and rejects blank or invalid dates', () => {
-    expect(parseCursorDateString('2024-03-15T12:00:00Z')).toBe('2024-03-15');
+    // A full timestamp resolves to the local calendar day it falls on, so the
+    // fixture is built from local components rather than a fixed UTC instant.
+    expect(parseCursorDateString(new Date(2024, 2, 15, 12).toISOString())).toBe('2024-03-15');
     expect(parseCursorDateString('')).toBeNull();
     expect(parseCursorDateString('not a date')).toBeNull();
   });

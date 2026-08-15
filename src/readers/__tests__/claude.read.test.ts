@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { localTimestamp } from '../../__tests__/helpers/fixtures.js';
+
 const TEST_HOME = vi.hoisted(() => {
   const temporary = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
   return `${temporary}/aitrack-claude-read-test`;
@@ -22,7 +24,7 @@ function jsonl(path: string, lines: object[]): void {
 function assistantLine(id: string, inputTokens: number, outputTokens: number): object {
   return {
     type: 'assistant',
-    timestamp: '2024-01-15T10:00:00Z',
+    timestamp: localTimestamp('2024-01-15'),
     requestId: `req-${id}`,
     message: {
       id,

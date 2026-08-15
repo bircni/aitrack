@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { localTimestamp } from '../../__tests__/helpers/fixtures.js';
+
 // vi.hoisted runs before module loading, so TEST_HOME is available in vi.mock factories below
 const TEST_HOME = vi.hoisted(() => {
   const temporary = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
@@ -90,8 +92,8 @@ describe('integration', () => {
 
   it('sync writes a machine JSON file and commits it to git', async () => {
     writeClaudeData([
-      assistantLine('msg1', '2024-06-01T12:00:00Z', 1000, 500),
-      assistantLine('msg2', '2024-06-02T12:00:00Z', 2000, 800),
+      assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500),
+      assistantLine('msg2', localTimestamp('2024-06-02'), 2000, 800),
     ]);
 
     await syncCommand();
@@ -117,7 +119,7 @@ describe('integration', () => {
   });
 
   it('sync is idempotent: second sync with identical data does not create a new commit', async () => {
-    writeClaudeData([assistantLine('msg1', '2024-06-01T12:00:00Z', 1000, 500)]);
+    writeClaudeData([assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500)]);
 
     await syncCommand();
     const commitsAfterFirst = execSync('git log --oneline', { cwd: LOCAL_REPO })
@@ -194,8 +196,8 @@ describe('integration', () => {
 
   it('show renders a PNG from synced data', async () => {
     writeClaudeData([
-      assistantLine('msg1', '2024-06-01T12:00:00Z', 1000, 500),
-      assistantLine('msg2', '2024-06-15T12:00:00Z', 500, 200),
+      assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500),
+      assistantLine('msg2', localTimestamp('2024-06-15'), 500, 200),
     ]);
 
     await syncCommand();
@@ -236,7 +238,7 @@ describe('integration', () => {
     execSync('git push', { cwd: LOCAL_REPO, stdio: 'pipe' });
 
     // Also sync this machine's data
-    writeClaudeData([assistantLine('msg1', '2024-06-01T12:00:00Z', 1000, 500)]);
+    writeClaudeData([assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500)]);
     await syncCommand();
 
     const outputPath = join(TEST_HOME, 'merged.png');
