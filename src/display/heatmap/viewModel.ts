@@ -1,18 +1,11 @@
-import { sumDayMap } from '../../data/aggregate.js';
 import type { DayMap } from '../../data/types.js';
 import { fmt, fmtUSDCost } from '../format.js';
 import { costColumnLabel, providerLabel } from '../providers.js';
 import { INTENSITY_PERCENTILE } from './constants.js';
 import { percentile } from './intensity.js';
 import { displayModelName } from './modelNames.js';
-import {
-  computeModelStats,
-  currentStreak,
-  formatMonthLabel,
-  formatPeakDate,
-  longestStreak,
-  peakMonth,
-} from './stats.js';
+import { providerStats } from './providerStats.js';
+import { computeModelStats, formatMonthLabel, formatPeakDate } from './stats.js';
 
 export interface StatCell {
   label: string;
@@ -32,15 +25,10 @@ export function buildProviderSectionViewModel(
   providerKey: string,
   dayMap: DayMap,
 ): ProviderSectionViewModel {
-  const {
-    inputTokens: totalIn,
-    outputTokens: totalOut,
-    costUSD: totalCost,
-    hasCost,
-  } = sumDayMap(dayMap);
+  const stats = providerStats(dayMap);
 
   // Only the per-day spread for the intensity percentile is specific to this
-  // view; the totals come from the same helper the terminal table uses.
+  // view; the headline figures come from the same helper the terminal table uses.
   const dayTotals: number[] = [];
   for (const v of dayMap.values()) {
     const total = v.inputTokens + v.outputTokens;
@@ -49,12 +37,10 @@ export function buildProviderSectionViewModel(
 
   const maxTokens = percentile(dayTotals, INTENSITY_PERCENTILE) || 1;
   const costLabel = costColumnLabel(providerKey, true);
-  const costValue = hasCost ? fmtUSDCost(totalCost) : '—';
+  const costValue = stats.hasCost ? fmtUSDCost(stats.costUSD) : '—';
 
   const { topAllTime, topRecent, peak } = computeModelStats(dayMap);
-  const cs = currentStreak(dayMap);
-  const ls = longestStreak(dayMap);
-  const peakMo = peakMonth(dayMap);
+  const { currentStreak, longestStreak, peakMonth } = stats;
 
   const bottomStats: StatCell[] = [
     {
@@ -74,17 +60,23 @@ export function buildProviderSectionViewModel(
     },
     {
       label: 'PEAK MONTH',
-      value: peakMo ? formatMonthLabel(peakMo.month) : '—',
-      sub: peakMo ? fmt(peakMo.tokens) : undefined,
+      value: peakMonth ? formatMonthLabel(peakMonth.month) : '—',
+      sub: peakMonth ? fmt(peakMonth.tokens) : undefined,
     },
-    { label: 'CURRENT STREAK', value: `${String(cs)} day${cs === 1 ? '' : 's'}` },
-    { label: 'LONGEST STREAK', value: `${String(ls)} day${ls === 1 ? '' : 's'}` },
+    {
+      label: 'CURRENT STREAK',
+      value: `${String(currentStreak)} day${currentStreak === 1 ? '' : 's'}`,
+    },
+    {
+      label: 'LONGEST STREAK',
+      value: `${String(longestStreak)} day${longestStreak === 1 ? '' : 's'}`,
+    },
   ];
 
   const headerStats: StatCell[] = [
-    { label: 'INPUT TOKENS', value: fmt(totalIn) },
-    { label: 'OUTPUT TOKENS', value: fmt(totalOut) },
-    { label: 'TOTAL TOKENS', value: fmt(totalIn + totalOut) },
+    { label: 'INPUT TOKENS', value: fmt(stats.inputTokens) },
+    { label: 'OUTPUT TOKENS', value: fmt(stats.outputTokens) },
+    { label: 'TOTAL TOKENS', value: fmt(stats.totalTokens) },
     { label: costLabel, value: costValue },
   ];
 
