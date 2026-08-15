@@ -66,6 +66,18 @@ function reportFallbackPricing(): void {
  * can reuse it instead of parsing the whole JSONL corpus a second time.
  */
 export async function syncData(options: SyncDataOptions = {}): Promise<MachineFile> {
+  try {
+    return await pushLocalUsage(options);
+  } finally {
+    // Fallback hits accumulate while the logs are read, so they exist however
+    // the push turns out. Reporting them only after a successful push hid the
+    // warning from every already-up-to-date run, and left the set uncleared —
+    // so a long-lived daemon carried one tick's models into the next.
+    reportFallbackPricing();
+  }
+}
+
+async function pushLocalUsage(options: SyncDataOptions): Promise<MachineFile> {
   const config = loadConfig();
   const isDryRun = Boolean(options.dryRun);
   const log = progressLogger(Boolean(options.quiet));
@@ -161,10 +173,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<MachineFi
   writeFileSync(dataFilePath, JSON.stringify(outgoingData, null, 2), 'utf8');
   removePendingMachineFile(host);
 
-  const isPushed = commitAndPush(host);
-  log(isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
-  if (isPushed) reportFallbackPricing();
-
+  log(commitAndPush(host) ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
   return freshData;
 }
 

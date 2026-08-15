@@ -61,6 +61,7 @@ vi.mock('../../git.js', () => ({
 }));
 
 import type { DayMap } from '../../data/types.js';
+import { findClaudePricing } from '../../pricing/claude.js';
 import { syncCommand, syncData } from '../sync.js';
 
 function dayMap(inputTokens: number, outputTokens: number, model = 'model'): DayMap {
@@ -87,6 +88,28 @@ describe('syncCommand', () => {
       throw Object.assign(new Error('missing'), { code: 'ENOENT' });
     });
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+
+  it('warns about family-fallback pricing even when there is nothing to push', async () => {
+    // The hits are produced while the logs are read, so gating the warning on a
+    // successful push hid it from every already-up-to-date machine and left the
+    // set uncleared for the next run to inherit.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    findClaudePricing('claude-opus-4242');
+
+    await syncData();
+
+    const warnings = vi
+      .mocked(console.warn)
+      .mock.calls.map((call) => String(call[0]))
+      .join('\n');
+    expect(mocks.commitAndPush).not.toHaveBeenCalled();
+    expect(warnings).toContain('claude-opus-4242');
+
+    // Cleared, so a second run does not repeat a model it has already reported.
+    vi.mocked(console.warn).mockClear();
+    await syncData();
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it('throws when the repo has not been cloned', async () => {
