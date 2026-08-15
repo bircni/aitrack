@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { localTimestamp } from '../../__tests__/helpers/fixtures.js';
+
 const TEST_HOME = vi.hoisted(() => {
   const temporary = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
   return `${temporary}/aitrack-codex-read-test`;
@@ -37,7 +39,11 @@ describe('readCodexData', () => {
     const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
     mkdirSync(sessionDir, { recursive: true });
     jsonl(join(sessionDir, 'a.jsonl'), [
-      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-5' } },
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-5' },
+      },
       {
         type: 'event_msg',
         payload: {
@@ -108,7 +114,11 @@ describe('readCodexData', () => {
     const sessionDir = join(TEST_HOME, '.codex', 'sessions');
     mkdirSync(sessionDir, { recursive: true });
     jsonl(join(sessionDir, 'a.jsonl'), [
-      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-5' } },
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-5' },
+      },
       {
         type: 'event_msg',
         payload: {
@@ -128,7 +138,11 @@ describe('readCodexData', () => {
     process.env.AITRACK_CODEX_SESSION_DIRS = customRoot;
     mkdirSync(customRoot, { recursive: true });
     jsonl(join(customRoot, 'session.jsonl'), [
-      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-5' } },
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-5' },
+      },
       {
         type: 'event_msg',
         payload: {
@@ -148,7 +162,11 @@ describe('readCodexData', () => {
     const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
     mkdirSync(sessionDir, { recursive: true });
     jsonl(join(sessionDir, 'a.jsonl'), [
-      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-5' } },
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-5' },
+      },
       {
         type: 'event_msg',
         payload: {

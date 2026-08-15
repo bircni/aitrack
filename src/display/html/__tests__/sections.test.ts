@@ -8,7 +8,9 @@ import { renderProviderSection, renderTodaySection } from '../sections.js';
 describe('renderTodaySection', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2024-06-15T12:00:00Z'));
+    // Local midday, not a UTC instant: "today" is a local calendar day, so a
+    // fixed instant is a different day either side of the date line.
+    vi.setSystemTime(new Date(2024, 5, 15, 12));
   });
 
   afterEach(() => {

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { localTimestamp } from '../../__tests__/helpers/fixtures.js';
 import { parseSessionFile } from '../codex.js';
 
 let tmpDir: string;
@@ -23,7 +24,11 @@ describe('parseSessionFile', () => {
   it('parses a session with cumulative total_token_usage', async () => {
     const file = join(tmpDir, 's.jsonl');
     jsonl(file, [
-      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-4o' } },
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-4o' },
+      },
       {
         type: 'event_msg',
         payload: {
@@ -46,7 +51,11 @@ describe('parseSessionFile', () => {
   it('tracks deltas across multiple token_count events', async () => {
     const file = join(tmpDir, 's.jsonl');
     jsonl(file, [
-      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-4o' } },
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-4o' },
+      },
       // cumulative after turn 1
       {
         type: 'event_msg',
@@ -73,7 +82,11 @@ describe('parseSessionFile', () => {
     // When total drops (new context window), the code uses last_token_usage for that turn
     const file = join(tmpDir, 's.jsonl');
     jsonl(file, [
-      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-4o' } },
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-4o' },
+      },
       // turn 1 — accumulated: 100 in, 50 out
       {
         type: 'event_msg',
@@ -102,7 +115,11 @@ describe('parseSessionFile', () => {
   it('falls back to last_token_usage when no total is present', async () => {
     const file = join(tmpDir, 's.jsonl');
     jsonl(file, [
-      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-4o' } },
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-4o' },
+      },
       {
         type: 'event_msg',
         payload: {
@@ -119,7 +136,11 @@ describe('parseSessionFile', () => {
   it('returns null for a session with no token events', async () => {
     const file = join(tmpDir, 's.jsonl');
     jsonl(file, [
-      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-4o' } },
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-4o' },
+      },
       { type: 'user_message', content: 'hello' },
     ]);
 

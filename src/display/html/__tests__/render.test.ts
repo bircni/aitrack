@@ -141,7 +141,7 @@ describe('renderToHtml', () => {
 
   it('uses year-filtered data for the today section', () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2024-06-01T12:00:00Z'));
+    vi.setSystemTime(new Date(2024, 5, 1, 12));
     try {
       const dayMap = new Map([
         ['2024-06-01', makeDay(100, 50)],
