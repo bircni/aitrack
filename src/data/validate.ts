@@ -1,3 +1,4 @@
+import { isFiniteNumber, isRecord } from './guards.js';
 import type { MachineFile, ProviderDay, TokenCounts } from './types.js';
 
 export interface MachineFileValidationOptions {
@@ -9,14 +10,6 @@ const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Files already warned about below, so the message stays a one-shot per run. */
 const warnedBadDayKeys = new Set<string>();
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
 
 function validateTokenCounts(value: unknown, path: string): string | null {
   if (!isRecord(value)) return `${path} must be an object`;
