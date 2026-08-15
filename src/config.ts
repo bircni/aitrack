@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
 
+import { isRecord } from './data/guards.js';
 import type { Config } from './data/types.js';
 import { normalizeMachineId } from './machineId.js';
 
@@ -14,10 +15,6 @@ const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
  * turning the daemon into a continuous refresh loop.
  */
 export const MAX_INTERVAL_SECONDS = 2_147_483;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function optionalString(value: unknown): string | undefined {
   if (value === undefined) return undefined;
