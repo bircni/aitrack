@@ -7,7 +7,8 @@ import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, tryLocalDateString } from '../data/dayMap.js';
 import type { DayMap } from '../data/types.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
-import { listJsonlFiles, resolveSourceRoots } from './paths.js';
+import { mapWithConcurrency } from './concurrency.js';
+import { listUniqueSourceFiles, resolveSourceRoots } from './paths.js';
 
 export function getCodexPaths(): string[] {
   const codexHome = process.env.CODEX_HOME;
@@ -151,42 +152,31 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult[
   return [...results.values()];
 }
 
-export async function readCodexData(): Promise<DayMap> {
-  const roots = getCodexPaths();
-  const seenPaths = new Set<string>();
-  const allDays: DayMap = new Map();
+function addSessionResult(allDays: DayMap, result: SessionResult): void {
+  const { dateStr, model, inputTokens, outputTokens, cachedInputTokens } = result;
+  const day = getOrCreateDay(allDays, dateStr);
+  const modelTotals = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
+  modelTotals.inputTokens += inputTokens;
+  modelTotals.outputTokens += outputTokens;
+  modelTotals.cachedInputTokens = (modelTotals.cachedInputTokens ?? 0) + cachedInputTokens;
+  day.inputTokens += inputTokens;
+  day.outputTokens += outputTokens;
+  day.cachedInputTokens = (day.cachedInputTokens ?? 0) + cachedInputTokens;
 
-  for (const root of roots) {
-    const files = await listJsonlFiles(root);
-    for (const file of files) {
-      if (seenPaths.has(file)) continue;
-      seenPaths.add(file);
-
-      const results = await parseSessionFile(file);
-      for (const { dateStr, model, inputTokens, outputTokens, cachedInputTokens } of results) {
-        const day = getOrCreateDay(allDays, dateStr);
-        const modelTotals = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-        modelTotals.inputTokens += inputTokens;
-        modelTotals.outputTokens += outputTokens;
-        modelTotals.cachedInputTokens = (modelTotals.cachedInputTokens ?? 0) + cachedInputTokens;
-        day.inputTokens += inputTokens;
-        day.outputTokens += outputTokens;
-        day.cachedInputTokens = (day.cachedInputTokens ?? 0) + cachedInputTokens;
-
-        const cost = estimateCodexCostUSD(
-          model,
-          inputTokens,
-          outputTokens,
-          cachedInputTokens,
-          dateStr,
-        );
-        if (cost !== undefined) {
-          modelTotals.costUSD = (modelTotals.costUSD ?? 0) + cost;
-          day.costUSD = (day.costUSD ?? 0) + cost;
-        }
-      }
-    }
+  const cost = estimateCodexCostUSD(model, inputTokens, outputTokens, cachedInputTokens, dateStr);
+  if (cost !== undefined) {
+    modelTotals.costUSD = (modelTotals.costUSD ?? 0) + cost;
+    day.costUSD = (day.costUSD ?? 0) + cost;
   }
+}
 
+export async function readCodexData(): Promise<DayMap> {
+  const files = await listUniqueSourceFiles(getCodexPaths());
+  const parsed = await mapWithConcurrency(files, (file) => parseSessionFile(file));
+
+  const allDays: DayMap = new Map();
+  for (const results of parsed) {
+    for (const result of results) addSessionResult(allDays, result);
+  }
   return allDays;
 }
