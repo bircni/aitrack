@@ -8,6 +8,7 @@ import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap
 import { stripModelAliasSuffix } from '../data/modelId.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
 import { estimateClaudeCostUSD } from '../pricing/claude.js';
+import { type CachedParse, openParseCache } from './cache.js';
 import { mapWithConcurrency } from './concurrency.js';
 import { listUniqueSourceFiles, resolveSourceRoots } from './paths.js';
 
@@ -106,18 +107,47 @@ export async function parseJsonlFile(filePath: string, seen: Set<string>): Promi
   return result;
 }
 
+/**
+ * Parse one transcript in isolation, collecting the dedup keys it holds.
+ *
+ * The per-file view is what the cache stores: it depends only on the file's own
+ * bytes, unlike a parse threaded through the corpus-wide `seen` set. Passing a
+ * fresh set both de-duplicates within the file and leaves the file's keys
+ * behind for the cross-file check in readClaudeData.
+ */
+async function parseClaudeFile(filePath: string): Promise<CachedParse> {
+  const keys = new Set<string>();
+  const days = await parseJsonlFile(filePath, keys);
+  return { days, keys: [...keys] };
+}
+
 export async function readClaudeData(): Promise<DayMap> {
   const files = await listUniqueSourceFiles(getClaudePaths());
+  const cache = openParseCache('claude');
 
-  // seenMessages is shared across the parses so a message that a resumed
-  // session copied into a second transcript is still counted once. Which copy
-  // wins now depends on completion order rather than file order, but both are
-  // arbitrary already (readdir order is not stable across platforms) and the
-  // copies carry the same id, timestamp and usage.
-  const seenMessages = new Set<string>();
-  const parsed = await mapWithConcurrency(files, (file) => parseJsonlFile(file, seenMessages));
+  const parsed = await mapWithConcurrency(files, async (filePath) => {
+    const cached = await cache.lookup(filePath);
+    if (cached) return cached;
+    const fresh = await parseClaudeFile(filePath);
+    await cache.record(filePath, fresh);
+    return fresh;
+  });
+  cache.save();
 
   const allDays: DayMap = new Map();
-  for (const dayData of parsed) mergeDayMaps(allDays, dayData);
+  const seenMessages = new Set<string>();
+  for (const [index, entry] of parsed.entries()) {
+    const filePath = files[index];
+    if (filePath !== undefined && entry.keys.some((key) => seenMessages.has(key))) {
+      // A message in this file was already counted from an earlier one — a
+      // resumed session copied another transcript's history into itself. The
+      // per-file parse cannot know that, so re-read this file against the
+      // running set, which is what an uncached run would have done.
+      mergeDayMaps(allDays, await parseJsonlFile(filePath, seenMessages));
+      continue;
+    }
+    for (const key of entry.keys) seenMessages.add(key);
+    mergeDayMaps(allDays, entry.days);
+  }
   return allDays;
 }

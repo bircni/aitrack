@@ -151,6 +151,9 @@ succeeded, and `GET /status.json` returns the full runtime status as JSON.
 ```text
 ~/.config/aitrack/
 ├── config.json          # remote, machine, source-root, and daemon settings
+├── cache/               # parsed-transcript cache, rebuildable at any time
+│   ├── claude.json
+│   └── codex.json
 ├── pending/
 │   └── data/            # staged machine JSON before init
 │       └── my-pc.json
@@ -165,6 +168,7 @@ succeeded, and `GET /status.json` returns the full runtime status as JSON.
 - Before `init`, local usage is staged in `~/.config/aitrack/pending/data/` and adopted by the next `init`.
 - **Cursor** is loaded only on the current machine when selected: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls the CSV usage export at `CURSOR_WEB_BASE_URL` (`https://cursor.com` by default). The endpoint is required to use HTTPS and contain no embedded credentials. Any configured HTTPS origin receives the Cursor token, so override it only with an endpoint you trust. The token is **never** written to your repo. Use `--providers` without `cursor` (for example, `--providers claude,codex`) to skip both the credential read and request.
 - **Heatmap intensity** anchors on the 90th-percentile day rather than the absolute max, so one huge day doesn't flatten the rest of the year.
+- **Parsed transcripts are cached** per file in `~/.config/aitrack/cache/`, keyed by path, size, and modification time, and invalidated whenever the aitrack version changes (costs are computed at parse time, so a pricing update must not be served from cache). Deleting the directory only costs one slower run. Set `AITRACK_NO_CACHE=1` to bypass it entirely.
 
 ### Cost handling
 

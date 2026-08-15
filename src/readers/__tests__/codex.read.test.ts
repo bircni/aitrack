@@ -143,4 +143,25 @@ describe('readCodexData', () => {
     expect(getCodexPaths()[0]).toBe(customRoot);
     expect(result.get('2024-01-15')?.inputTokens).toBe(30);
   });
+
+  it('returns the same totals from a warm cache as from a cold one', async () => {
+    const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
+    mkdirSync(sessionDir, { recursive: true });
+    jsonl(join(sessionDir, 'a.jsonl'), [
+      { type: 'turn_context', timestamp: '2024-01-15T10:00:00Z', payload: { model: 'gpt-5' } },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: { total_token_usage: { input_tokens: 20, output_tokens: 8 } },
+        },
+      },
+    ]);
+
+    const cold = await readCodexData();
+    const warm = await readCodexData();
+
+    expect([...warm]).toEqual([...cold]);
+    expect(warm.get('2024-01-15')?.inputTokens).toBe(20);
+  });
 });
