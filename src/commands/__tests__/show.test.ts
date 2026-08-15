@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { loggedOutput } from '../../__tests__/helpers/fixtures.js';
+
 const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   resolveMachineId: vi.fn(),
@@ -213,10 +215,7 @@ describe('showCommand', () => {
     expect(mocks.renderToPng).not.toHaveBeenCalled();
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
     expect(mocks.spawn).not.toHaveBeenCalled();
-    const out = vi
-      .mocked(console.log)
-      .mock.calls.map((call) => String(call[0]))
-      .join('\n');
+    const out = loggedOutput();
     expect(out).toContain('aitrack stats');
     expect(out).toContain('Claude Code');
   });

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
+import { makeDay } from '../../__tests__/helpers/fixtures.js';
+
 const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   isCloned: vi.fn(),
@@ -26,14 +28,6 @@ vi.mock('../../display/html/render.js', () => ({
 }));
 
 import { daemonCommand } from '../daemon.js';
-
-function makeDay(input: number, output: number) {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    byModel: { model: { inputTokens: input, outputTokens: output } },
-  };
-}
 
 describe('daemon HTTP integration', () => {
   const logs: string[] = [];

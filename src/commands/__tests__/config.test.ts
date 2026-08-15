@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { loggedOutput } from '../../__tests__/helpers/fixtures.js';
+
 const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   saveConfig: vi.fn(),
@@ -18,13 +20,6 @@ vi.mock('../../git.js', () => ({
 
 import { configCommand } from '../config.js';
 
-function output(): string {
-  return vi
-    .mocked(console.log)
-    .mock.calls.map((call) => String(call[0]))
-    .join('\n');
-}
-
 describe('configCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,7 +37,7 @@ describe('configCommand', () => {
     it('prints all keys and the resolved machineId', async () => {
       mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/d.git' });
       await configCommand({ action: 'list' });
-      const out = output();
+      const out = loggedOutput();
       expect(out).toContain('repoUrl = git@example.com:me/d.git');
       expect(out).toContain('machineId =');
       expect(out).toContain('claudeProjectsDir =');
@@ -56,7 +51,7 @@ describe('configCommand', () => {
     it('prints a hint when no config exists', async () => {
       mocks.tryLoadConfig.mockReturnValue(null);
       await configCommand({ action: 'list' });
-      expect(output()).toContain('aitrack init');
+      expect(loggedOutput()).toContain('aitrack init');
     });
   });
 
@@ -64,13 +59,13 @@ describe('configCommand', () => {
     it('prints a single value', async () => {
       mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/d.git' });
       await configCommand({ action: 'get', key: 'repoUrl' });
-      expect(output()).toBe('git@example.com:me/d.git');
+      expect(loggedOutput()).toBe('git@example.com:me/d.git');
     });
 
     it('prints empty for an unset value', async () => {
       mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x' });
       await configCommand({ action: 'get', key: 'machineId' });
-      expect(output()).toBe('');
+      expect(loggedOutput()).toBe('');
     });
 
     it('prints nested daemon values', async () => {
@@ -79,7 +74,7 @@ describe('configCommand', () => {
         daemon: { port: 9090, interval: 45, sync: false },
       });
       await configCommand({ action: 'get', key: 'daemon.port' });
-      expect(output()).toBe('9090');
+      expect(loggedOutput()).toBe('9090');
     });
 
     it('rejects an unknown key', async () => {
@@ -101,7 +96,7 @@ describe('configCommand', () => {
         repoUrl: 'git@example.com:me/d.git',
         claudeProjectsDir: '/tmp/claude-a,/tmp/claude-b',
       });
-      expect(output()).toContain('Set claudeProjectsDir = /tmp/claude-a,/tmp/claude-b');
+      expect(loggedOutput()).toContain('Set claudeProjectsDir = /tmp/claude-a,/tmp/claude-b');
     });
 
     it('creates a config when none exists and warns about empty repoUrl', async () => {

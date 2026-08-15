@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DayEntry } from '../../data/types.js';
+import { makeDay, loggedOutput } from '../../__tests__/helpers/fixtures.js';
 
 const mocks = vi.hoisted(() => ({
   loadMergedProviderData: vi.fn(),
@@ -22,29 +22,6 @@ import { usageCommand } from '../usage.js';
 const NOW = new Date('2026-06-15T10:00:00');
 const TODAY = '2026-06-15';
 const TODAY_LOCALE = `${NOW.toLocaleDateString()} ${NOW.toLocaleTimeString()}`;
-
-function makeDay(input: number, output: number, costUSD?: number, model = 'm1'): DayEntry {
-  const counts: Record<string, { inputTokens: number; outputTokens: number; costUSD?: number }> = {
-    [model]: {
-      inputTokens: input,
-      outputTokens: output,
-      ...(costUSD !== undefined && { costUSD }),
-    },
-  };
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    ...(costUSD !== undefined && { costUSD }),
-    byModel: counts,
-  };
-}
-
-function output(): string {
-  return vi
-    .mocked(console.log)
-    .mock.calls.map((call) => String(call[0]))
-    .join('\n');
-}
 
 describe('usageCommand', () => {
   beforeEach(() => {
@@ -83,7 +60,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain(`today (${TODAY_LOCALE})`);
     expect(out).toContain('Claude Code');
     expect(out).toContain('claude-opus-4-8');
@@ -102,7 +79,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'today', providers: ['claude_code'], json: true });
 
-    const parsed = JSON.parse(output()) as {
+    const parsed = JSON.parse(loggedOutput()) as {
       command: string;
       providers: Array<{ key: string; rows: Array<{ model: string; tokens: number }> }>;
       totals: { tokens: number; costUSD: number };
@@ -129,7 +106,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'thisweek', compare: true });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('Compared with previous week to date');
     expect(out).toContain('Per-model movement');
     expect(out).toContain('claude-opus');
@@ -151,7 +128,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'thisweek', compare: true, json: true });
 
-    const parsed = JSON.parse(output()) as {
+    const parsed = JSON.parse(loggedOutput()) as {
       comparison: {
         totals: { tokens: { delta: number; percentChange: number } };
         models: Array<{ model: string; costUSD: { delta: number } }>;
@@ -170,7 +147,7 @@ describe('usageCommand', () => {
   it('prints valid JSON for empty data and empty windows', async () => {
     mocks.loadMergedProviderData.mockResolvedValue(null);
     await usageCommand({ period: 'today', json: true });
-    expect(JSON.parse(output())).toMatchObject({
+    expect(JSON.parse(loggedOutput())).toMatchObject({
       command: 'usage',
       windowLabel: null,
       providers: [],
@@ -184,7 +161,7 @@ describe('usageCommand', () => {
       machineData: [],
     });
     await usageCommand({ period: 'today', json: true });
-    expect(JSON.parse(output())).toMatchObject({
+    expect(JSON.parse(loggedOutput())).toMatchObject({
       command: 'usage',
       providers: [],
       rowCount: 0,
@@ -201,7 +178,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
-    expect(output()).toContain(`No usage recorded for today (${TODAY_LOCALE}).`);
+    expect(loggedOutput()).toContain(`No usage recorded for today (${TODAY_LOCALE}).`);
   });
 
   it('week: aggregates rolling 7-day window ending today', async () => {
@@ -219,7 +196,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'week', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('last 7 days (2026-06-09 → 2026-06-15)');
     expect(out).toContain('$1.50');
     expect(out).not.toContain('$90');
@@ -240,7 +217,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'month', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('last 30 days (2026-05-17 → 2026-06-15)');
     expect(out).toContain('$1.50');
     expect(out).not.toContain('$90');
@@ -261,7 +238,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'year', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('aitrack usage 2026');
     expect(out).toContain('$3.00');
     expect(out).not.toContain('$90');
@@ -281,7 +258,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'all', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('aitrack usage all time');
     expect(out).toContain('$3.00');
   });
@@ -310,7 +287,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     const lines = out.split('\n');
     const priceyIndex = lines.findIndex((l) => l.includes('pricey'));
     const middleIndex = lines.findIndex((l) => l.includes('middle'));
@@ -341,7 +318,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     const lines = out.split('\n');
     const bigIndex = lines.findIndex((l) => l.includes('big'));
     const smallIndex = lines.findIndex((l) => l.includes('small'));
@@ -361,7 +338,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'yesterday', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('yesterday (2026-06-14)');
     expect(out).toContain('$1.00');
     expect(out).not.toContain('$2.00');
@@ -380,7 +357,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'date', from: '2026-03-10', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('2026-03-10');
     expect(out).toContain('$1.00');
     expect(out).not.toContain('$2.00');
@@ -406,7 +383,7 @@ describe('usageCommand', () => {
       providers: ['claude_code', 'codex'],
     });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('2026-05-01 → 2026-05-31');
     expect(out).toContain('$5.00');
     expect(out).not.toContain('$1.00');
@@ -427,7 +404,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'thisweek', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('this week (2026-06-15 → 2026-06-15)');
     expect(out).toContain('$2.00');
     expect(out).not.toContain('$1.00');
@@ -448,7 +425,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'lastweek', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('last week (2026-06-08 → 2026-06-14)');
     expect(out).toContain('$5.00');
     expect(out).not.toContain('$1.00');
@@ -469,7 +446,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'thismonth', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('this month (2026-06-01 → 2026-06-15)');
     expect(out).toContain('$5.00');
     expect(out).not.toContain('$1.00');
@@ -490,7 +467,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'lastmonth', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('last month (2026-05-01 → 2026-05-31)');
     expect(out).toContain('$5.00');
     expect(out).not.toContain('$1.00');
@@ -511,7 +488,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'last', n: 14, providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('last 14 days (2026-06-02 → 2026-06-15)');
     expect(out).toContain('$5.00');
     expect(out).not.toContain('$1.00');
@@ -550,7 +527,7 @@ describe('usageCommand', () => {
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('Claude Code');
     expect(out).toContain('Codex');
     expect(out).toContain('claude-x');

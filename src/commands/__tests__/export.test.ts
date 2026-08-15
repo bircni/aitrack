@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { loggedOutput } from '../../__tests__/helpers/fixtures.js';
 import type { UsageReport } from '../../data/usageReport.js';
 
 const mocks = vi.hoisted(() => ({
@@ -25,13 +26,6 @@ vi.mock('../../config.js', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
 vi.mock('../../git.js', () => ({ isCloned: mocks.isCloned }));
 
 import { exportCommand } from '../export.js';
-
-function output(): string {
-  return vi
-    .mocked(console.log)
-    .mock.calls.map((call) => String(call[0]))
-    .join('\n');
-}
 
 function report(rowCount: number): UsageReport {
   return {
@@ -83,7 +77,7 @@ describe('exportCommand', () => {
       expect.objectContaining({ period: 'month' }),
     );
     expect(mocks.writeFileSync).toHaveBeenCalledWith('r.pdf', expect.any(Buffer));
-    expect(output()).toContain('r.pdf');
+    expect(loggedOutput()).toContain('r.pdf');
   });
 
   it('exports date, range, and last windows', async () => {
@@ -113,13 +107,13 @@ describe('exportCommand', () => {
     mocks.tryLoadConfig.mockReturnValue(null);
     await exportCommand({ period: 'month', output: 'r.pdf' });
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(output()).toContain('No local usage data found');
+    expect(loggedOutput()).toContain('No local usage data found');
   });
 
   it('prints a no-usage message when the window is empty', async () => {
     mocks.buildUsageReport.mockResolvedValue(report(0));
     await exportCommand({ period: 'month', output: 'r.pdf' });
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(output()).toContain('No usage recorded');
+    expect(loggedOutput()).toContain('No usage recorded');
   });
 });

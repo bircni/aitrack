@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DayEntry } from '../../data/types.js';
+import { makeDay, loggedOutput } from '../../__tests__/helpers/fixtures.js';
 
 const mocks = vi.hoisted(() => ({
   loadMergedProviderData: vi.fn(),
@@ -17,28 +17,6 @@ vi.mock('../../config.js', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
 vi.mock('../../git.js', () => ({ isCloned: mocks.isCloned }));
 
 import { topCommand } from '../top.js';
-
-function makeDay(input: number, output: number, cost: number | undefined, model: string): DayEntry {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    ...(cost !== undefined && { costUSD: cost }),
-    byModel: {
-      [model]: {
-        inputTokens: input,
-        outputTokens: output,
-        ...(cost !== undefined && { costUSD: cost }),
-      },
-    },
-  };
-}
-
-function captured(): string {
-  return vi
-    .mocked(console.log)
-    .mock.calls.map((call) => String(call[0]))
-    .join('\n');
-}
 
 describe('topCommand', () => {
   beforeEach(() => {
@@ -62,7 +40,7 @@ describe('topCommand', () => {
 
     await topCommand({ kind: 'days', limit: 2, sort: 'cost' });
 
-    const out = captured();
+    const out = loggedOutput();
     expect(out).toContain('Top 2 days by cost');
     const jan1Index = out.indexOf('2026-01-01');
     const jan2Index = out.indexOf('2026-01-02');
@@ -83,7 +61,7 @@ describe('topCommand', () => {
 
     await topCommand({ kind: 'models', limit: 5, sort: 'tokens' });
 
-    const out = captured();
+    const out = loggedOutput();
     expect(out).toContain('Top 5 models by tokens');
     const opusIndex = out.indexOf('opus');
     const sonnetIndex = out.indexOf('sonnet');
@@ -101,7 +79,7 @@ describe('topCommand', () => {
 
     await topCommand({ kind: 'models', limit: 5, sort: 'tokens', json: true });
 
-    const parsed = JSON.parse(captured()) as {
+    const parsed = JSON.parse(loggedOutput()) as {
       command: string;
       kind: string;
       items: Array<{ rank: number; providerKey: string; model: string; tokens: number }>;
@@ -129,7 +107,7 @@ describe('topCommand', () => {
 
     await topCommand({ kind: 'days', limit: 10, sort: 'tokens', year: 2026 });
 
-    const out = captured();
+    const out = loggedOutput();
     expect(out).toContain('2026-01-01');
     expect(out).not.toContain('2025-01-01');
   });
@@ -147,7 +125,7 @@ describe('topCommand', () => {
 
     await topCommand({ kind: 'days', limit: 5, sort: 'tokens', json: true, year: 2025 });
 
-    const parsed = JSON.parse(captured()) as {
+    const parsed = JSON.parse(loggedOutput()) as {
       command: string;
       kind: string;
       year: number;
@@ -167,7 +145,7 @@ describe('topCommand', () => {
 
     await topCommand({ kind: 'days', limit: 5, sort: 'tokens', year: 2025 });
 
-    expect(captured()).toContain('No usage recorded.');
+    expect(loggedOutput()).toContain('No usage recorded.');
   });
 
   it('models: ranks by cost and prints no-usage when all rows are empty', async () => {
@@ -193,7 +171,7 @@ describe('topCommand', () => {
 
     await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
 
-    const out = captured();
+    const out = loggedOutput();
     expect(out.indexOf('expensive')).toBeLessThan(out.indexOf('cheap'));
 
     vi.mocked(console.log).mockClear();
@@ -214,7 +192,7 @@ describe('topCommand', () => {
     });
     await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
 
-    expect(captured()).toContain('No usage recorded.');
+    expect(loggedOutput()).toContain('No usage recorded.');
   });
 
   it('emits empty message on no data', async () => {
@@ -222,7 +200,7 @@ describe('topCommand', () => {
 
     await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
 
-    expect(captured()).toContain('No data.');
+    expect(loggedOutput()).toContain('No data.');
   });
 
   it('emits valid empty JSON on no data', async () => {
@@ -230,7 +208,7 @@ describe('topCommand', () => {
 
     await topCommand({ kind: 'models', limit: 5, sort: 'cost', json: true });
 
-    expect(JSON.parse(captured())).toMatchObject({
+    expect(JSON.parse(loggedOutput())).toMatchObject({
       command: 'top',
       kind: 'models',
       sort: 'cost',

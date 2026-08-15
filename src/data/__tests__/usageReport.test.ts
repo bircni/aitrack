@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DayEntry } from '../types.js';
+import { makeDay } from '../../__tests__/helpers/fixtures.js';
 
 const mocks = vi.hoisted(() => ({
   loadMergedProviderData: vi.fn(),
@@ -14,21 +14,6 @@ import { buildUsageComparison, buildUsageReport } from '../usageReport.js';
 
 const NOW = new Date('2026-06-15T10:00:00');
 const TODAY = '2026-06-15';
-
-function makeDay(input: number, output: number, costUSD?: number, model = 'm1'): DayEntry {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    ...(costUSD !== undefined && { costUSD }),
-    byModel: {
-      [model]: {
-        inputTokens: input,
-        outputTokens: output,
-        ...(costUSD !== undefined && { costUSD }),
-      },
-    },
-  };
-}
 
 describe('buildUsageReport', () => {
   beforeEach(() => {
