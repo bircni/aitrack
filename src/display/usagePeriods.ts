@@ -129,6 +129,22 @@ export interface UsageWindow {
   label: string;
 }
 
+/*
+ * Calendar arithmetic on YYYY-MM-DD strings.
+ *
+ * There is exactly one clock read in this module — `todayString()` — and every
+ * window is derived from date strings after that. The helpers below go through
+ * UTC purely because it has no DST discontinuities; the strings are local dates
+ * and are never re-interpreted against a wall clock. Reading local fields
+ * (today.getMonth()) while building with Date.UTC is what makes this kind of
+ * code drift by a day, so the two are kept apart.
+ */
+
+/** Today as a local calendar date — the only place this module reads the clock. */
+function todayString(): string {
+  return toLocalDateString(new Date());
+}
+
 function parseDateString(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
@@ -137,10 +153,55 @@ function formatDateString(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
+function yearOf(date: string): number {
+  return Number(date.slice(0, 4));
+}
+
+/** 1-based, to match how the string reads. */
+function monthOf(date: string): number {
+  return Number(date.slice(5, 7));
+}
+
+function dayOf(date: string): number {
+  return Number(date.slice(8, 10));
+}
+
 function shiftDate(value: string, days: number): string {
   const date = parseDateString(value);
   date.setUTCDate(date.getUTCDate() + days);
   return formatDateString(date);
+}
+
+/** First day of the month `offset` months from the one `date` falls in. */
+function shiftMonthStart(date: string, offset: number): string {
+  return formatDateString(new Date(Date.UTC(yearOf(date), monthOf(date) - 1 + offset, 1)));
+}
+
+/** Last day of the month `offset` months from the one `date` falls in. */
+function shiftMonthEnd(date: string, offset: number): string {
+  return formatDateString(new Date(Date.UTC(yearOf(date), monthOf(date) + offset, 0)));
+}
+
+/**
+ * The same day of the month, `offset` months away, clamped to that month's
+ * length — the 31st compared against a 30-day month lands on the 30th.
+ */
+function shiftMonthSameDay(date: string, offset: number): string {
+  const start = shiftMonthStart(date, offset);
+  const lastDay = dayOf(shiftMonthEnd(date, offset));
+  return `${start.slice(0, 8)}${String(Math.min(dayOf(date), lastDay)).padStart(2, '0')}`;
+}
+
+/** The same month and day in another year, clamped so Feb 29 survives. */
+function sameDayInYear(date: string, year: number): string {
+  const target = `${String(year).padStart(4, '0')}${date.slice(4)}`;
+  const lastDay = dayOf(shiftMonthEnd(target, 0));
+  return `${target.slice(0, 8)}${String(Math.min(dayOf(date), lastDay)).padStart(2, '0')}`;
+}
+
+/** Day of the week a calendar date falls on, 0 = Sunday. */
+function weekdayOf(date: string): number {
+  return parseDateString(date).getUTCDay();
 }
 
 function inclusiveDayCount(start: string, end: string): number {
@@ -164,47 +225,24 @@ export function computePreviousUsageWindow(
   }
 
   if (options.period === 'thismonth') {
-    const currentEnd = parseDateString(current.end);
-    const previousMonth = new Date(
-      Date.UTC(currentEnd.getUTCFullYear(), currentEnd.getUTCMonth() - 1, 1),
-    );
-    const previousMonthEnd = new Date(
-      Date.UTC(currentEnd.getUTCFullYear(), currentEnd.getUTCMonth(), 0),
-    );
-    const comparableDay = Math.min(currentEnd.getUTCDate(), previousMonthEnd.getUTCDate());
-    const end = formatDateString(
-      new Date(
-        Date.UTC(previousMonth.getUTCFullYear(), previousMonth.getUTCMonth(), comparableDay),
-      ),
-    );
-    const start = formatDateString(previousMonth);
+    const start = shiftMonthStart(current.end, -1);
+    const end = shiftMonthSameDay(current.end, -1);
     return { start, end, label: `previous month to date (${start} → ${end})` };
   }
 
   if (options.period === 'lastmonth') {
-    const currentStart = parseDateString(current.start);
-    const previousStart = new Date(
-      Date.UTC(currentStart.getUTCFullYear(), currentStart.getUTCMonth() - 1, 1),
-    );
-    const previousEnd = new Date(
-      Date.UTC(currentStart.getUTCFullYear(), currentStart.getUTCMonth(), 0),
-    );
-    const start = formatDateString(previousStart);
-    const end = formatDateString(previousEnd);
+    const start = shiftMonthStart(current.start, -1);
+    const end = shiftMonthEnd(current.start, -1);
     return { start, end, label: `month before (${start} → ${end})` };
   }
 
   if (options.period === 'year') {
-    const today = new Date();
-    const year = today.getFullYear() - 1;
-    const previousMonthEnd = new Date(Date.UTC(year, today.getMonth() + 1, 0)).getUTCDate();
-    const day = Math.min(today.getDate(), previousMonthEnd);
-    const end = formatDateString(new Date(Date.UTC(year, today.getMonth(), day)));
-    return {
-      start: `${String(year)}-01-01`,
-      end,
-      label: `previous year to date (${String(year)}-01-01 → ${end})`,
-    };
+    // The current window is the whole calendar year, so the comparable slice of
+    // the previous one has to come from today rather than from `current.end`.
+    const previousYear = yearOf(todayString()) - 1;
+    const start = `${String(previousYear)}-01-01`;
+    const end = sameDayInYear(todayString(), previousYear);
+    return { start, end, label: `previous year to date (${start} → ${end})` };
   }
 
   const days = inclusiveDayCount(current.start, current.end);
@@ -214,29 +252,28 @@ export function computePreviousUsageWindow(
 }
 
 export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
-  const today = new Date();
-  const todayString = toLocalDateString(today);
+  const today = todayString();
 
   /** The n days ending today, inclusive — what `last`, `week` and `month` all are. */
   const rollingWindow = (n: number): UsageWindow => {
-    const from = new Date(today);
-    from.setDate(today.getDate() - (n - 1));
-    const start = toLocalDateString(from);
-    return { start, end: todayString, label: `last ${String(n)} days (${start} → ${todayString})` };
+    const start = shiftDate(today, -(n - 1));
+    return { start, end: today, label: `last ${String(n)} days (${start} → ${today})` };
   };
+
+  /** Monday of the week `today` falls in. */
+  const thisMonday = (): string => shiftDate(today, -((weekdayOf(today) + 6) % 7));
 
   switch (options.period) {
     case 'today': {
-      const localDate = today.toLocaleDateString();
-      const localTime = today.toLocaleTimeString();
-      return { start: todayString, end: todayString, label: `today (${localDate} ${localTime})` };
+      // The only place a wall-clock time is shown rather than a calendar date.
+      const now = new Date();
+      const label = `today (${now.toLocaleDateString()} ${now.toLocaleTimeString()})`;
+      return { start: today, end: today, label };
     }
 
     case 'yesterday': {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 1);
-      const s = toLocalDateString(d);
-      return { start: s, end: s, label: `yesterday (${s})` };
+      const date = shiftDate(today, -1);
+      return { start: date, end: date, label: `yesterday (${date})` };
     }
 
     case 'date': {
@@ -251,36 +288,25 @@ export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
     }
 
     case 'thisweek': {
-      const daysFromMon = (today.getDay() + 6) % 7;
-      const mon = new Date(today);
-      mon.setDate(today.getDate() - daysFromMon);
-      const start = toLocalDateString(mon);
-      return { start, end: todayString, label: `this week (${start} → ${todayString})` };
+      const start = thisMonday();
+      return { start, end: today, label: `this week (${start} → ${today})` };
     }
 
     case 'lastweek': {
-      const daysFromMon = (today.getDay() + 6) % 7;
-      const thisMon = new Date(today);
-      thisMon.setDate(today.getDate() - daysFromMon);
-      const lastSun = new Date(thisMon);
-      lastSun.setDate(thisMon.getDate() - 1);
-      const lastMon = new Date(thisMon);
-      lastMon.setDate(thisMon.getDate() - 7);
-      const start = toLocalDateString(lastMon);
-      const end = toLocalDateString(lastSun);
+      const monday = thisMonday();
+      const start = shiftDate(monday, -7);
+      const end = shiftDate(monday, -1);
       return { start, end, label: `last week (${start} → ${end})` };
     }
 
     case 'thismonth': {
-      const start = toLocalDateString(new Date(today.getFullYear(), today.getMonth(), 1));
-      return { start, end: todayString, label: `this month (${start} → ${todayString})` };
+      const start = shiftMonthStart(today, 0);
+      return { start, end: today, label: `this month (${start} → ${today})` };
     }
 
     case 'lastmonth': {
-      const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
-      const start = toLocalDateString(firstDay);
-      const end = toLocalDateString(lastDay);
+      const start = shiftMonthStart(today, -1);
+      const end = shiftMonthEnd(today, -1);
       return { start, end, label: `last month (${start} → ${end})` };
     }
 
@@ -296,8 +322,8 @@ export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
       return rollingWindow(30);
 
     case 'year': {
-      const year = today.getFullYear();
-      return { start: `${year}-01-01`, end: `${year}-12-31`, label: String(year) };
+      const year = String(yearOf(today));
+      return { start: `${year}-01-01`, end: `${year}-12-31`, label: year };
     }
 
     case 'all':
