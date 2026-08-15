@@ -55,9 +55,12 @@ export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
 // Historical pricing overrides. Each entry means "for usage dates strictly
 // BEFORE `before`, this model was priced as `pricing` instead of the entry
 // in CLAUDE_PRICING_BY_ID". Sort each list ascending by `before`.
-// Empty today because Anthropic has never re-priced an existing model id —
-// they ship a new id at the new tier instead. Kept here so a future repricing
-// doesn't silently retroactively re-cost old data.
+//
+// Anthropic normally ships a new model id at a new tier rather than re-pricing
+// an existing one, so this table stays small. It exists for the exception:
+// claude-sonnet-5 launched at introductory rates and moved to the standard
+// tier later, and without the entry every day of sonnet-5 usage recorded
+// before that date would be silently re-costed at the higher rate.
 export const CLAUDE_PRICING_OVERRIDES: Record<
   string,
   Array<{ before: string; pricing: ClaudePricing }>
