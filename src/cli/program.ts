@@ -13,10 +13,10 @@ import { topCommand } from '../commands/top.js';
 import { packageVersion } from '../version.js';
 import {
   cliErrorMessage,
-  parseIntArg as parseIntArgument,
-  parsePortArg as parsePortArgument,
-  parseIntervalArg as parseIntervalArgument,
-  parsePositiveIntArg as parsePositiveIntArgument,
+  parseIntArgument,
+  parsePortArgument,
+  parseIntervalArgument,
+  parsePositiveIntArgument,
   parseProviders,
   parseTopKind,
   parseTopLimit,

@@ -12,7 +12,7 @@ import { CLAUDE_PRICING_BY_ID } from '../pricing/claude.js';
 import { CODEX_PRICING_BY_ID } from '../pricing/codex.js';
 import { getClaudePaths } from '../readers/claude.js';
 import { getCodexPaths } from '../readers/codex.js';
-import { getCursorStateDbPath, readCursorAuthState } from '../readers/cursor/auth.js';
+import { getCursorStateDatabasePath, readCursorAuthState } from '../readers/cursor/auth.js';
 import { jsonlSourceSummary } from '../readers/paths.js';
 
 interface DoctorOptions {
@@ -141,7 +141,7 @@ function pricingCheck(options: DoctorOptions): CheckResult {
 }
 
 async function cursorCheck(): Promise<CheckResult> {
-  const stateDb = getCursorStateDbPath();
+  const stateDb = getCursorStateDatabasePath();
   if (!stateDb) {
     return {
       status: 'warn',

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   aggregateCursorCsvToDayMap,
-  getCursorStateDbPath as getCursorStateDatabasePath,
+  getCursorStateDatabasePath,
   parseCursorDateString,
   readCursorData,
 } from '../index.js';
@@ -129,7 +129,7 @@ describe('aggregateCursorCsvToDayMap', () => {
   });
 });
 
-describe('getCursorStateDbPath', () => {
+describe('getCursorStateDatabasePath', () => {
   beforeEach(() => {
     tmpDir = join(tmpdir(), `cursor-test-${Date.now()}-${Math.random()}`);
     mkdirSync(tmpDir, { recursive: true });

@@ -2,12 +2,12 @@ import type { DayMap } from '../../data/types.js';
 import {
   errorMessage,
   fetchCursorUsageCsv,
-  getCursorStateDbPath as getCursorStateDatabasePath,
+  getCursorStateDatabasePath,
   readCursorAuthState,
 } from './auth.js';
 import { aggregateCursorCsvToDayMap } from './csv.js';
 
-export { getCursorStateDbPath } from './auth.js';
+export { getCursorStateDatabasePath } from './auth.js';
 export { aggregateCursorCsvToDayMap, parseCursorDateString } from './csv.js';
 
 /**

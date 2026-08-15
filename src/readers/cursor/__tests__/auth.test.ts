@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   errorMessage,
   fetchCursorUsageCsv,
-  getCursorStateDbPath as getCursorStateDatabasePath,
+  getCursorStateDatabasePath,
   readCursorAuthState,
 } from '../auth.js';
 
