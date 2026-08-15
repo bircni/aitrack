@@ -55,7 +55,7 @@ function getCursorStateDatabaseCandidates(): string[] {
     });
 }
 
-export function getCursorStateDbPath(): string | null {
+export function getCursorStateDatabasePath(): string | null {
   const seen = new Set<string>();
   for (const candidate of getCursorStateDatabaseCandidates()) {
     if (seen.has(candidate)) continue;

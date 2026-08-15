@@ -23,7 +23,7 @@ export function invalidDateMessage(date: string): string {
   return `Invalid date: "${date}". Expected YYYY-MM-DD.`;
 }
 
-export function parseIntArg(value: string): number {
+export function parseIntArgument(value: string): number {
   if (!/^-?\d+$/.test(value)) {
     throw new InvalidArgumentError(`Expected an integer, got: ${value}`);
   }
@@ -34,16 +34,16 @@ export function parseIntArg(value: string): number {
   return n;
 }
 
-export function parsePositiveIntArg(value: string): number {
-  const n = parseIntArg(value);
+export function parsePositiveIntArgument(value: string): number {
+  const n = parseIntArgument(value);
   if (n < 1) {
     throw new InvalidArgumentError(`Expected a positive integer, got: ${value}`);
   }
   return n;
 }
 
-export function parseIntervalArg(value: string): number {
-  const seconds = parsePositiveIntArg(value);
+export function parseIntervalArgument(value: string): number {
+  const seconds = parsePositiveIntArgument(value);
   if (seconds > MAX_INTERVAL_SECONDS) {
     throw new InvalidArgumentError(
       `Expected an interval between 1 and ${String(MAX_INTERVAL_SECONDS)} seconds, got: ${value}`,
@@ -52,8 +52,8 @@ export function parseIntervalArg(value: string): number {
   return seconds;
 }
 
-export function parsePortArg(value: string): number {
-  const port = parsePositiveIntArg(value);
+export function parsePortArgument(value: string): number {
+  const port = parsePositiveIntArgument(value);
   if (port > 65_535) {
     throw new InvalidArgumentError(`Expected a port between 1 and 65535, got: ${value}`);
   }

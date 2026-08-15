@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   readDataFile: vi.fn(),
   getClaudePaths: vi.fn(),
   getCodexPaths: vi.fn(),
-  getCursorStateDbPath: vi.fn(),
+  getCursorStateDatabasePath: vi.fn(),
   readCursorAuthState: vi.fn(),
 }));
 
@@ -31,7 +31,7 @@ vi.mock('../../git.js', () => ({
 vi.mock('../../readers/claude.js', () => ({ getClaudePaths: mocks.getClaudePaths }));
 vi.mock('../../readers/codex.js', () => ({ getCodexPaths: mocks.getCodexPaths }));
 vi.mock('../../readers/cursor/auth.js', () => ({
-  getCursorStateDbPath: mocks.getCursorStateDbPath,
+  getCursorStateDatabasePath: mocks.getCursorStateDatabasePath,
   readCursorAuthState: mocks.readCursorAuthState,
 }));
 
@@ -75,7 +75,7 @@ describe('doctorCommand', () => {
     mocks.isCloned.mockReturnValue(true);
     mocks.getClaudePaths.mockReturnValue(['/claude']);
     mocks.getCodexPaths.mockReturnValue(['/codex']);
-    mocks.getCursorStateDbPath.mockReturnValue('/cursor/state.vscdb');
+    mocks.getCursorStateDatabasePath.mockReturnValue('/cursor/state.vscdb');
     mocks.readCursorAuthState.mockResolvedValue({ accessToken: 'token' });
   });
 
@@ -98,7 +98,7 @@ describe('doctorCommand', () => {
     mocks.existsSync.mockReturnValue(false);
     mocks.getClaudePaths.mockReturnValue(['/missing']);
     mocks.getCodexPaths.mockReturnValue(['/missing']);
-    mocks.getCursorStateDbPath.mockReturnValue(null);
+    mocks.getCursorStateDatabasePath.mockReturnValue(null);
 
     await doctorCommand();
 
