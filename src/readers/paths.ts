@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
@@ -9,26 +9,13 @@ export function splitConfiguredPaths(value: string | undefined): string[] {
     .filter((v) => v.length > 0);
 }
 
-function walkJsonlFilesSync(dir: string, files: string[]): void {
-  if (!existsSync(dir)) return;
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walkJsonlFilesSync(full, files);
-    } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-      files.push(full);
-    }
-  }
-}
-
-async function walkJsonlFilesAsync(dir: string, files: string[]): Promise<void> {
+async function walkJsonlFiles(dir: string, files: string[]): Promise<void> {
   if (!existsSync(dir)) return;
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      await walkJsonlFilesAsync(full, files);
+      await walkJsonlFiles(full, files);
     } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
       files.push(full);
     }
@@ -36,23 +23,20 @@ async function walkJsonlFilesAsync(dir: string, files: string[]): Promise<void> 
 }
 
 /** List every `.jsonl` file under `root` (recursive). */
-export function listJsonlFilesSync(root: string): string[] {
-  const files: string[] = [];
-  walkJsonlFilesSync(root, files);
-  return files;
-}
-
-/** List every `.jsonl` file under `root` (recursive). */
 export async function listJsonlFiles(root: string): Promise<string[]> {
   const files: string[] = [];
-  await walkJsonlFilesAsync(root, files);
+  await walkJsonlFiles(root, files);
   return files;
 }
 
-export function jsonlSourceSummary(roots: string[]): { existing: string[]; fileCount: number } {
+export async function jsonlSourceSummary(
+  roots: string[],
+): Promise<{ existing: string[]; fileCount: number }> {
   const existing = roots.filter((root) => existsSync(root));
-  const fileCount = existing.reduce((sum, root) => sum + listJsonlFilesSync(root).length, 0);
-  return { existing, fileCount };
+  const counts = await Promise.all(
+    existing.map(async (root) => (await listJsonlFiles(root)).length),
+  );
+  return { existing, fileCount: counts.reduce((sum, count) => sum + count, 0) };
 }
 
 export function resolveSourceRoots(options: {

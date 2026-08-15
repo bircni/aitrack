@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   spawnSync: vi.fn(),
   existsSync: vi.fn(),
-  readdirSync: vi.fn(),
+  readdir: vi.fn(),
   tryLoadConfig: vi.fn(),
   resolveMachineId: vi.fn(),
   isCloned: vi.fn(),
@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('node:child_process', () => ({ spawnSync: mocks.spawnSync }));
-vi.mock('node:fs', () => ({ existsSync: mocks.existsSync, readdirSync: mocks.readdirSync }));
+vi.mock('node:fs', () => ({ existsSync: mocks.existsSync }));
+vi.mock('node:fs/promises', () => ({ readdir: mocks.readdir }));
 vi.mock('../../config.js', () => ({
   tryLoadConfig: mocks.tryLoadConfig,
   resolveMachineId: mocks.resolveMachineId,
@@ -63,11 +64,11 @@ describe('doctorCommand', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     mocks.spawnSync.mockReturnValue({ status: 0 });
     mocks.existsSync.mockImplementation((path: string) => path !== '/missing');
-    mocks.readdirSync.mockImplementation((path: string) => {
-      if (path === '/claude') return [dirent('project', 'dir')];
-      if (path === '/claude/project') return [dirent('history.jsonl', 'file')];
-      if (path === '/codex') return [dirent('session.jsonl', 'file')];
-      return [];
+    mocks.readdir.mockImplementation((path: string) => {
+      if (path === '/claude') return Promise.resolve([dirent('project', 'dir')]);
+      if (path === '/claude/project') return Promise.resolve([dirent('history.jsonl', 'file')]);
+      if (path === '/codex') return Promise.resolve([dirent('session.jsonl', 'file')]);
+      return Promise.resolve([]);
     });
     mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
     mocks.resolveMachineId.mockReturnValue('host');

@@ -84,8 +84,8 @@ function commandCheck(
   };
 }
 
-function sourceCheck(label: string, roots: string[]): CheckResult {
-  const { existing, fileCount } = jsonlSourceSummary(roots);
+async function sourceCheck(label: string, roots: string[]): Promise<CheckResult> {
+  const { existing, fileCount } = await jsonlSourceSummary(roots);
   if (fileCount > 0) {
     return {
       status: 'ok',
@@ -265,8 +265,8 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
     );
   }
 
-  checks.push(sourceCheck('Claude Code source', getClaudePaths()));
-  checks.push(sourceCheck('Codex source', getCodexPaths()));
+  checks.push(await sourceCheck('Claude Code source', getClaudePaths()));
+  checks.push(await sourceCheck('Codex source', getCodexPaths()));
   checks.push(await cursorCheck());
   checks.push(pricingCheck(options));
 
