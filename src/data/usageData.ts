@@ -92,6 +92,13 @@ export interface LoadUsageOptions {
    * twice per tick is the bulk of a refresh.
    */
   localMachine?: MachineFile;
+  /**
+   * Report only what is already synced to the repo, without reading this
+   * machine's JSONL logs at all. `machines` summarizes the persisted files and
+   * never looks at the merged day maps, and parsing a large corpus for data it
+   * then discards was the bulk of that command's runtime.
+   */
+  skipLocalLogs?: boolean;
 }
 
 export interface LoadedUsageData {
@@ -135,7 +142,9 @@ export async function loadMergedProviderData(
       ? readCursorData().catch((): DayMap => new Map())
       : undefined;
 
-  const localMachine = options.localMachine ?? (await buildLocalMachineFile(machineId));
+  const localMachine = options.skipLocalLogs
+    ? null
+    : (options.localMachine ?? (await buildLocalMachineFile(machineId)));
 
   const isWarnedNotConfigured = !config || !isCloned();
 
@@ -143,7 +152,7 @@ export async function loadMergedProviderData(
   // was set up. Once the machine is configured and cloned, sync writes into the
   // repo directly and a staged copy would only collide with the synced file the
   // next time init runs.
-  if (options.stagePending && isWarnedNotConfigured) {
+  if (localMachine && options.stagePending && isWarnedNotConfigured) {
     writePendingMachineFile(localMachine);
   }
 
@@ -163,7 +172,11 @@ export async function loadMergedProviderData(
 
     const reportMachines: MachineFile[] = [];
     for (const entry of persisted) {
-      if (basename(entry.filePath) !== currentFile || !machineHasData(localMachine)) {
+      if (
+        localMachine === null ||
+        basename(entry.filePath) !== currentFile ||
+        !machineHasData(localMachine)
+      ) {
         reportMachines.push(entry.machine);
         continue;
       }
@@ -181,7 +194,7 @@ export async function loadMergedProviderData(
   }
 
   // Only when no persisted file absorbed it above; merging already covers it.
-  if (!isLocalMerged && machineHasData(localMachine)) {
+  if (localMachine !== null && !isLocalMerged && machineHasData(localMachine)) {
     overlayMachineFile(providerData, localMachine);
   }
 
