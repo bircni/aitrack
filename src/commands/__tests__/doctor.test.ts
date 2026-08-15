@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { loggedOutput } from '../../__tests__/helpers/fixtures.js';
+
 const mocks = vi.hoisted(() => ({
   spawnSync: vi.fn(),
   existsSync: vi.fn(),
@@ -48,13 +50,6 @@ function dirent(
   };
 }
 
-function output(): string {
-  return vi
-    .mocked(console.log)
-    .mock.calls.map((call) => String(call[0]))
-    .join('\n');
-}
-
 describe('doctorCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -82,7 +77,7 @@ describe('doctorCommand', () => {
   it('prints healthy setup checks', async () => {
     await doctorCommand();
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('aitrack doctor');
     expect(out).toContain('Node.js');
     expect(out).toContain('Config: repoUrl=git@example.com:me/data.git, machineId=host');
@@ -102,7 +97,7 @@ describe('doctorCommand', () => {
 
     await doctorCommand();
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('no config found');
     expect(out).toContain('not cloned');
     expect(out).toContain('no source paths found');
@@ -117,7 +112,7 @@ describe('doctorCommand', () => {
 
     await doctorCommand();
 
-    expect(output()).toContain('git: not available on PATH');
+    expect(loggedOutput()).toContain('git: not available on PATH');
     expect(process.exitCode).toBe(1);
   });
 
@@ -130,7 +125,7 @@ describe('doctorCommand', () => {
 
     await doctorCommand({ pricingCheck: true });
 
-    const out = output();
+    const out = loggedOutput();
     expect(out).toContain('Cursor source: locked');
     expect(out).toContain('Pricing drift: pnpm run pricing:check failed: drift detected');
   });
@@ -138,7 +133,7 @@ describe('doctorCommand', () => {
   it('prints JSON when requested', async () => {
     await doctorCommand({ json: true });
 
-    const parsed = JSON.parse(output()) as {
+    const parsed = JSON.parse(loggedOutput()) as {
       command: string;
       checks: Array<{ status: string; label: string }>;
       hasFailures: boolean;

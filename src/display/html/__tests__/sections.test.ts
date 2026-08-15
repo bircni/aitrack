@@ -1,23 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { makeDay } from '../../../__tests__/helpers/fixtures.js';
 import type { DayEntry, ProviderData } from '../../../data/types.js';
 import { buildDateGrid } from '../../heatmap/stats.js';
 import { renderProviderSection, renderTodaySection } from '../sections.js';
-
-function makeDay(input: number, output: number, costUSD?: number): DayEntry {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    ...(costUSD !== undefined && { costUSD }),
-    byModel: {
-      model: {
-        inputTokens: input,
-        outputTokens: output,
-        ...(costUSD !== undefined && { costUSD }),
-      },
-    },
-  };
-}
 
 describe('renderTodaySection', () => {
   beforeEach(() => {

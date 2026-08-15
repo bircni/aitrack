@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { makeDay } from '../../../__tests__/helpers/fixtures.js';
 import { toLocalDateString } from '../../../data/dayMap.js';
 import type { DayEntry } from '../../../data/types.js';
 import {
@@ -9,14 +10,6 @@ import {
   longestStreak,
   peakMonth,
 } from '../stats.js';
-
-function makeDay(input: number, output: number): DayEntry {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    byModel: { m: { inputTokens: input, outputTokens: output } },
-  };
-}
 
 describe('computeModelStats', () => {
   it('returns top model + peak day in one pass', () => {

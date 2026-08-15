@@ -2,6 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { makeDay } from '../../__tests__/helpers/fixtures.js';
+
 const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
   isCloned: vi.fn(),
@@ -36,14 +38,6 @@ vi.mock('node:http', async (importOriginal) => {
 });
 
 import { daemonCommand } from '../daemon.js';
-
-function makeDay(input: number, output: number) {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    byModel: { model: { inputTokens: input, outputTokens: output } },
-  };
-}
 
 type RequestHandler = (request: IncomingMessage, res: ServerResponse) => void;
 

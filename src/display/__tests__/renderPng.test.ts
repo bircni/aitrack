@@ -1,15 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { makeDay } from '../../__tests__/helpers/fixtures.js';
 import type { DayEntry } from '../../data/types.js';
 import { renderToPng } from '../renderPng.js';
-
-function makeDay(input: number, output: number): DayEntry {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    byModel: { 'test-model': { inputTokens: input, outputTokens: output } },
-  };
-}
 
 describe('renderToPng', () => {
   it('returns a valid PNG buffer', () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { loggedOutput, makeProviderDay } from '../../__tests__/helpers/fixtures.js';
 import type { MachineFile } from '../../data/types.js';
 
 const mocks = vi.hoisted(() => ({
@@ -17,13 +18,6 @@ vi.mock('../../git.js', () => ({ isCloned: mocks.isCloned }));
 
 import { machinesCommand } from '../machines.js';
 
-function captured(): string {
-  return vi
-    .mocked(console.log)
-    .mock.calls.map((call) => String(call[0]))
-    .join('\n');
-}
-
 function makeMachine(
   hostname: string,
   days: Record<
@@ -37,24 +31,12 @@ function makeMachine(
     days: {},
   };
   for (const [date, items] of Object.entries(days)) {
-    const dayProviders: MachineFile['days'][string] = {};
-    for (const item of items) {
-      dayProviders[item.providerKey] = {
-        byModel: {
-          m: {
-            inputTokens: item.input,
-            outputTokens: item.output,
-            ...(item.cost !== undefined && { costUSD: item.cost }),
-          },
-        },
-        totals: {
-          inputTokens: item.input,
-          outputTokens: item.output,
-          ...(item.cost !== undefined && { costUSD: item.cost }),
-        },
-      };
-    }
-    out.days[date] = dayProviders;
+    out.days[date] = Object.fromEntries(
+      items.map((item) => [
+        item.providerKey,
+        makeProviderDay(item.input, item.output, item.cost, 'm'),
+      ]),
+    );
   }
   return out;
 }
@@ -81,7 +63,7 @@ describe('machinesCommand', () => {
 
     await machinesCommand();
 
-    const out = captured();
+    const out = loggedOutput();
     expect(out).toContain('aitrack machines (2)');
     const bigIndex = out.indexOf('big');
     const smallIndex = out.indexOf('small');
@@ -102,7 +84,7 @@ describe('machinesCommand', () => {
 
     await machinesCommand({ json: true });
 
-    const parsed = JSON.parse(captured()) as {
+    const parsed = JSON.parse(loggedOutput()) as {
       command: string;
       machines: Array<{ hostname: string; totalTokens: number; costUSD: number }>;
     };
@@ -122,7 +104,7 @@ describe('machinesCommand', () => {
 
     await machinesCommand();
 
-    expect(captured()).toContain('No data.');
+    expect(loggedOutput()).toContain('No data.');
   });
 
   it('prints valid JSON when no machine data exists', async () => {
@@ -133,7 +115,7 @@ describe('machinesCommand', () => {
 
     await machinesCommand({ json: true });
 
-    expect(JSON.parse(captured())).toMatchObject({
+    expect(JSON.parse(loggedOutput())).toMatchObject({
       command: 'machines',
       machines: [],
       message: 'No data.',

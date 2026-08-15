@@ -60,6 +60,7 @@ vi.mock('../../git.js', () => ({
   removePendingMachineFile: vi.fn(),
 }));
 
+import { loggedOutput } from '../../__tests__/helpers/fixtures.js';
 import type { DayMap } from '../../data/types.js';
 import { findClaudePricing } from '../../pricing/claude.js';
 import { syncCommand, syncData } from '../sync.js';
@@ -99,12 +100,8 @@ describe('syncCommand', () => {
 
     await syncData();
 
-    const warnings = vi
-      .mocked(console.warn)
-      .mock.calls.map((call) => String(call[0]))
-      .join('\n');
     expect(mocks.commitAndPush).not.toHaveBeenCalled();
-    expect(warnings).toContain('claude-opus-4242');
+    expect(loggedOutput('warn')).toContain('claude-opus-4242');
 
     // Cleared, so a second run does not repeat a model it has already reported.
     vi.mocked(console.warn).mockClear();

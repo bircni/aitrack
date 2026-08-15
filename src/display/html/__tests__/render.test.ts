@@ -1,22 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { DayEntry } from '../../../data/types.js';
+import { makeDay } from '../../../__tests__/helpers/fixtures.js';
 import { renderToHtml } from '../render.js';
-
-function makeDay(input: number, output: number, costUSD?: number): DayEntry {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    ...(costUSD !== undefined && { costUSD }),
-    byModel: {
-      model: {
-        inputTokens: input,
-        outputTokens: output,
-        ...(costUSD !== undefined && { costUSD }),
-      },
-    },
-  };
-}
 
 describe('renderToHtml', () => {
   it('renders provider sections with heatmap cells and stats', () => {
