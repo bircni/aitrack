@@ -2,8 +2,7 @@ import type { Command } from 'commander';
 
 import { usageCommand, type UsageOptions } from '../commands/usage.js';
 import { USAGE_PERIOD_DEFINITIONS } from '../display/usagePeriods.js';
-import { log } from '../output.js';
-import { cliErrorMessage, parseProviders, parseUsageReportOptions } from './parse.js';
+import { parseProviders, parseUsageReportOptions } from './parse.js';
 
 interface UsageCommonOptions {
   providers?: string[];
@@ -14,25 +13,24 @@ interface UsageCommonOptions {
 const PROVIDERS_FLAG = '--providers <list>';
 const PROVIDERS_DESC = 'comma-separated providers to show (claude, codex, cursor); default: all';
 
+/**
+ * Parsing happens inside the async body so a bad period travels through
+ * `runAsync` like every other failure, instead of duplicating its catch-and-exit.
+ */
 function runUsageFromPeriod(
   period: string,
   args: string[],
   options: UsageCommonOptions,
   runAsync: (function_: () => Promise<void>) => void,
 ): void {
-  let parsed: UsageOptions;
-  try {
-    parsed = {
+  runAsync(() => {
+    const parsed: UsageOptions = {
       ...parseUsageReportOptions({ period, args, providers: options.providers }),
       json: options.json,
       ...(options.compare !== undefined && { compare: options.compare }),
     };
-  } catch (error) {
-    log.error(cliErrorMessage(error));
-    process.exit(1);
-    return;
-  }
-  runAsync(() => usageCommand(parsed));
+    return usageCommand(parsed);
+  });
 }
 
 export function registerUsageCommands(

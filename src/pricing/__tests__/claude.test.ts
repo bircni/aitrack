@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  CLAUDE_PRICING_OVERRIDES,
-  consumeClaudeFallbackHits,
-  findClaudePricing,
-} from '../claude.js';
+import { CLAUDE_PRICING_OVERRIDES, findClaudePricing } from '../claude.js';
+import { createFallbackCollector } from '../fallback.js';
 
 describe('claude pricing', () => {
   it('finds exact pricing for known model ids', () => {
@@ -32,32 +29,32 @@ describe('claude pricing', () => {
     expect(dated.inputPerMillion).toBe(1);
     expect(dated.outputPerMillion).toBe(5);
 
-    consumeClaudeFallbackHits();
-    const legacyVersionFirst = findClaudePricing('claude-3-5-haiku-20241022');
+    const fallbacks = createFallbackCollector();
+    const legacyVersionFirst = findClaudePricing('claude-3-5-haiku-20241022', undefined, fallbacks);
     expect(legacyVersionFirst.inputPerMillion).toBe(0.8);
     expect(legacyVersionFirst.outputPerMillion).toBe(4);
-    expect(consumeClaudeFallbackHits()).toEqual([]);
+    expect(fallbacks.drain()).toEqual([]);
   });
 
   it('prices the Claude 3 generation from its own rates, not the modern tier', () => {
-    consumeClaudeFallbackHits();
+    const fallbacks = createFallbackCollector();
 
     // The opus family fallback ($5/$25) undercharges these by 3x.
-    const opus3 = findClaudePricing('claude-3-opus-20240229');
+    const opus3 = findClaudePricing('claude-3-opus-20240229', undefined, fallbacks);
     expect(opus3.inputPerMillion).toBe(15);
     expect(opus3.outputPerMillion).toBe(75);
 
     // The haiku family fallback ($1/$5) overcharges these by 4x.
-    const haiku3 = findClaudePricing('claude-3-haiku-20240307');
+    const haiku3 = findClaudePricing('claude-3-haiku-20240307', undefined, fallbacks);
     expect(haiku3.inputPerMillion).toBe(0.25);
     expect(haiku3.outputPerMillion).toBe(1.25);
 
-    const sonnet37 = findClaudePricing('claude-3-7-sonnet-20250219');
+    const sonnet37 = findClaudePricing('claude-3-7-sonnet-20250219', undefined, fallbacks);
     expect(sonnet37.inputPerMillion).toBe(3);
     expect(sonnet37.outputPerMillion).toBe(15);
 
     // Exact matches, so none of these should warn about a family fallback.
-    expect(consumeClaudeFallbackHits()).toEqual([]);
+    expect(fallbacks.drain()).toEqual([]);
   });
 
   it('returns the same pricing on repeated lookups of one id', () => {
@@ -71,24 +68,20 @@ describe('claude pricing', () => {
   });
 
   it('falls back to family pricing for unknown models', () => {
-    consumeClaudeFallbackHits();
-    const opus = findClaudePricing('claude-opus-9-9');
+    const fallbacks = createFallbackCollector();
+    const opus = findClaudePricing('claude-opus-9-9', undefined, fallbacks);
     expect(opus.inputPerMillion).toBe(5);
-    expect(consumeClaudeFallbackHits()).toEqual(['claude-opus-9-9']);
+    expect(fallbacks.drain()).toEqual(['claude-opus-9-9']);
   });
 
   it('keeps unknown fable and mythos models on the top tier, not sonnet', () => {
-    consumeClaudeFallbackHits();
+    const fallbacks = createFallbackCollector();
     for (const model of ['claude-fable-5-1', 'claude-fable-6', 'claude-mythos-5-1']) {
-      const pricing = findClaudePricing(model);
+      const pricing = findClaudePricing(model, undefined, fallbacks);
       expect(pricing.inputPerMillion).toBe(10);
       expect(pricing.outputPerMillion).toBe(50);
     }
-    expect(consumeClaudeFallbackHits()).toEqual([
-      'claude-fable-5-1',
-      'claude-fable-6',
-      'claude-mythos-5-1',
-    ]);
+    expect(fallbacks.drain()).toEqual(['claude-fable-5-1', 'claude-fable-6', 'claude-mythos-5-1']);
   });
 
   it('honors date-versioned pricing overrides', () => {

@@ -3,7 +3,9 @@
 // Keep entries keyed by normalized family-first id (with date/latest suffixes stripped).
 // Last updated: 2026-08-03. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
 
+import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
 import { stripModelVersionSuffixes } from '../data/modelId.js';
+import type { FallbackCollector } from './fallback.js';
 
 export interface ClaudePricing {
   inputPerMillion: number;
@@ -16,7 +18,7 @@ function priceFromBase(input: number, output: number): ClaudePricing {
   return {
     inputPerMillion: input,
     outputPerMillion: output,
-    cacheReadPerMillion: input * 0.1,
+    cacheReadPerMillion: input * CACHE_READ_RATE_MULTIPLIER,
     cacheCreatePerMillion: input * 1.25,
   };
 }
@@ -78,14 +80,6 @@ const FAMILY_FALLBACK: Record<'fable' | 'mythos' | 'opus' | 'sonnet' | 'haiku', 
   haiku: priceFromBase(1, 5),
 };
 
-// Tracks ids that fell through to family fallback so callers can warn at end-of-run.
-const fallbackHits = new Set<string>();
-export function consumeClaudeFallbackHits(): string[] {
-  const xs = [...fallbackHits].sort((a, b) => a.localeCompare(b));
-  fallbackHits.clear();
-  return xs;
-}
-
 // Called once per assistant entry while reading the JSONL corpus, which holds
 // only a handful of distinct model strings, so the lowercase plus two regexes
 // are worth caching.
@@ -105,7 +99,11 @@ function canonicalClaudeModelId(model: string): string {
   return canonical;
 }
 
-export function findClaudePricing(model: string, usageDate?: string): ClaudePricing {
+export function findClaudePricing(
+  model: string,
+  usageDate?: string,
+  fallbacks?: FallbackCollector,
+): ClaudePricing {
   const id = canonicalClaudeModelId(model);
   if (usageDate) {
     const overrides = CLAUDE_PRICING_OVERRIDES[id];
@@ -122,11 +120,29 @@ export function findClaudePricing(model: string, usageDate?: string): ClaudePric
       continue;
     }
 
-    fallbackHits.add(id);
+    fallbacks?.record(id);
     return FAMILY_FALLBACK[family];
   }
-  fallbackHits.add(id);
+  // Unrecognized entirely — still a guess, so it counts as a fallback hit.
+  fallbacks?.record(id);
   return FAMILY_FALLBACK.sonnet;
+}
+
+/**
+ * The one weighted-sum formula behind all three estimators below, which
+ * previously each spelled out the same `(a*in + b*out + …)/1_000_000`.
+ */
+function claudeCost(
+  pricing: ClaudePricing,
+  tokens: { raw: number; output: number; cacheRead: number; cacheCreate: number },
+): number {
+  return (
+    (tokens.raw * pricing.inputPerMillion +
+      tokens.output * pricing.outputPerMillion +
+      tokens.cacheRead * pricing.cacheReadPerMillion +
+      tokens.cacheCreate * pricing.cacheCreatePerMillion) /
+    1_000_000
+  );
 }
 
 export interface ClaudeMessageUsage {
@@ -140,15 +156,14 @@ export function estimateClaudeCostUSD(
   model: string,
   usage: ClaudeMessageUsage,
   usageDate?: string,
+  fallbacks?: FallbackCollector,
 ): number {
-  const pricing = findClaudePricing(model, usageDate);
-  return (
-    ((usage.input_tokens ?? 0) * pricing.inputPerMillion +
-      (usage.output_tokens ?? 0) * pricing.outputPerMillion +
-      (usage.cache_read_input_tokens ?? 0) * pricing.cacheReadPerMillion +
-      (usage.cache_creation_input_tokens ?? 0) * pricing.cacheCreatePerMillion) /
-    1_000_000
-  );
+  return claudeCost(findClaudePricing(model, usageDate, fallbacks), {
+    raw: usage.input_tokens ?? 0,
+    output: usage.output_tokens ?? 0,
+    cacheRead: usage.cache_read_input_tokens ?? 0,
+    cacheCreate: usage.cache_creation_input_tokens ?? 0,
+  });
 }
 
 // Backfill estimator for synced rows that lack a costUSD value (older data).
@@ -159,11 +174,14 @@ export function estimateClaudeCostFromAggregateTokens(
   inputTokens: number,
   outputTokens: number,
   usageDate?: string,
+  fallbacks?: FallbackCollector,
 ): number {
-  const pricing = findClaudePricing(model, usageDate);
-  return (
-    (inputTokens * pricing.inputPerMillion + outputTokens * pricing.outputPerMillion) / 1_000_000
-  );
+  return claudeCost(findClaudePricing(model, usageDate, fallbacks), {
+    raw: inputTokens,
+    output: outputTokens,
+    cacheRead: 0,
+    cacheCreate: 0,
+  });
 }
 
 export function claudeCountsHaveCostBreakdown(counts: {
@@ -188,17 +206,15 @@ export function estimateClaudeCostFromStoredCounts(
     cacheCreationInputTokens?: number;
   },
   usageDate?: string,
+  fallbacks?: FallbackCollector,
 ): number | undefined {
   if (!claudeCountsHaveCostBreakdown(counts)) return undefined;
-  const pricing = findClaudePricing(model, usageDate);
   const cacheRead = counts.cachedInputTokens ?? 0;
   const cacheCreate = counts.cacheCreationInputTokens ?? 0;
-  const raw = counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheCreate);
-  return (
-    (raw * pricing.inputPerMillion +
-      counts.outputTokens * pricing.outputPerMillion +
-      cacheRead * pricing.cacheReadPerMillion +
-      cacheCreate * pricing.cacheCreatePerMillion) /
-    1_000_000
-  );
+  return claudeCost(findClaudePricing(model, usageDate, fallbacks), {
+    raw: counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheCreate),
+    output: counts.outputTokens,
+    cacheRead,
+    cacheCreate,
+  });
 }

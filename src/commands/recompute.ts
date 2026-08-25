@@ -15,7 +15,11 @@ import { SYNCED_PROVIDERS } from '../display/providers.js';
 import { commitDataChanges, isCloned, listDataFiles } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
 import { log } from '../output.js';
-import { reportFallbackPricing } from '../pricing/fallback.js';
+import {
+  createFallbackCollector,
+  type FallbackCollector,
+  reportFallbackPricing,
+} from '../pricing/fallback.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 
 /**
@@ -49,6 +53,7 @@ function repriceProviderDay(
   providerKey: string,
   date: string,
   providerDay: ProviderDay,
+  fallbacks: FallbackCollector,
 ): RepriceResult {
   let dayTotal = 0;
   let modelCount = 0;
@@ -58,7 +63,7 @@ function repriceProviderDay(
 
   for (const [model, counts] of Object.entries(providerDay.byModel)) {
     modelCount++;
-    const cost = resolveModelCost(providerKey, model, counts, date, 'recompute');
+    const cost = resolveModelCost(providerKey, model, counts, date, 'recompute', fallbacks);
     if (cost === undefined) {
       if (counts.costUSD === undefined) {
         isCostComplete = false;
@@ -90,7 +95,10 @@ function repriceProviderDay(
 }
 
 /** Reprice every synced provider-day in a machine file, in place. */
-function repriceMachineDays(days: MachineFile['days']): RepriceResult {
+function repriceMachineDays(
+  days: MachineFile['days'],
+  fallbacks: FallbackCollector,
+): RepriceResult {
   let isTouched = false;
   let legacySkipped = 0;
 
@@ -98,7 +106,7 @@ function repriceMachineDays(days: MachineFile['days']): RepriceResult {
     for (const providerKey of SYNCED_PROVIDERS) {
       const providerDay = providers[providerKey];
       if (!providerDay) continue;
-      const result = repriceProviderDay(providerKey, date, providerDay);
+      const result = repriceProviderDay(providerKey, date, providerDay, fallbacks);
       isTouched ||= result.isTouched;
       legacySkipped += result.legacySkipped;
     }
@@ -151,6 +159,7 @@ function reportLegacySkipped(legacySkipped: number, state: 'skipped' | 'left unc
 }
 
 export async function recomputeCostsCommand(): Promise<void> {
+  const fallbacks = createFallbackCollector();
   const config = loadConfig();
   const machineId = resolveMachineId(config);
 
@@ -164,7 +173,7 @@ export async function recomputeCostsCommand(): Promise<void> {
     return;
   }
 
-  const localFresh = buildMachineData(machineId, await readLocalProviderMaps());
+  const localFresh = buildMachineData(machineId, await readLocalProviderMaps(fallbacks));
 
   let changed = 0;
   let legacySkipped = 0;
@@ -177,7 +186,7 @@ export async function recomputeCostsCommand(): Promise<void> {
     );
     if (!loaded) continue;
 
-    const repriced = repriceMachineDays(loaded.machine.days);
+    const repriced = repriceMachineDays(loaded.machine.days, fallbacks);
     legacySkipped += repriced.legacySkipped;
     if (!loaded.isTouched && !repriced.isTouched) continue;
 
@@ -195,7 +204,7 @@ export async function recomputeCostsCommand(): Promise<void> {
   log.info(`Recomputed costs in ${String(changed)} file(s).`);
   reportLegacySkipped(legacySkipped, 'left unchanged');
 
-  reportFallbackPricing();
+  reportFallbackPricing(fallbacks);
 
   const isPushed = commitDataChanges(`recompute: refresh costs at ${new Date().toISOString()}`);
   if (!isPushed) {

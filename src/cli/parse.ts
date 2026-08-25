@@ -2,6 +2,7 @@ import { InvalidArgumentError } from 'commander';
 
 import type { TopKind, TopSort } from '../commands/top.js';
 import { MAX_INTERVAL_SECONDS } from '../config.js';
+import { isDayKey, MAX_PORT } from '../constants.js';
 import type { UsageReportOptions } from '../data/usageReport.js';
 import { normalizeProviderKey, PROVIDER_ORDER } from '../display/providers.js';
 import {
@@ -11,12 +12,8 @@ import {
   type UsagePeriod,
 } from '../display/usagePeriods.js';
 
-export function cliErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export function isValidDateString(date: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(date);
+  return isDayKey(date);
 }
 
 export function invalidDateMessage(date: string): string {
@@ -54,8 +51,10 @@ export function parseIntervalArgument(value: string): number {
 
 export function parsePortArgument(value: string): number {
   const port = parsePositiveIntArgument(value);
-  if (port > 65_535) {
-    throw new InvalidArgumentError(`Expected a port between 1 and 65535, got: ${value}`);
+  if (port > MAX_PORT) {
+    throw new InvalidArgumentError(
+      `Expected a port between 1 and ${String(MAX_PORT)}, got: ${value}`,
+    );
   }
   return port;
 }

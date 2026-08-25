@@ -1,3 +1,4 @@
+import type { FallbackCollector } from '../pricing/fallback.js';
 import { readClaudeData } from '../readers/claude.js';
 import { readCodexData } from '../readers/codex.js';
 import type { DayMap, MachineFile, ProviderDay, TokenCounts } from './types.js';
@@ -83,15 +84,21 @@ export function mergePersistedDays(
   return days;
 }
 
-export async function readLocalProviderMaps(): Promise<{
+export async function readLocalProviderMaps(fallbacks?: FallbackCollector): Promise<{
   claude_code: DayMap;
   codex: DayMap;
 }> {
-  const [claude_code, codex] = await Promise.all([readClaudeData(), readCodexData()]);
+  const [claude_code, codex] = await Promise.all([
+    readClaudeData(fallbacks),
+    readCodexData(fallbacks),
+  ]);
   return { claude_code, codex };
 }
 
-export async function buildLocalMachineFile(machineId: string): Promise<MachineFile> {
-  const maps = await readLocalProviderMaps();
+export async function buildLocalMachineFile(
+  machineId: string,
+  fallbacks?: FallbackCollector,
+): Promise<MachineFile> {
+  const maps = await readLocalProviderMaps(fallbacks);
   return buildMachineData(machineId, maps);
 }

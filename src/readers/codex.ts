@@ -7,6 +7,7 @@ import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
 import type { DayMap } from '../data/types.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
+import type { FallbackCollector } from '../pricing/fallback.js';
 import { type CachedParse, openParseCache } from './cache.js';
 import { mapWithConcurrency } from './concurrency.js';
 import { listUniqueSourceFiles, resolveSourceRoots } from './paths.js';
@@ -153,7 +154,11 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult[
   return [...results.values()];
 }
 
-function addSessionResult(allDays: DayMap, result: SessionResult): void {
+function addSessionResult(
+  allDays: DayMap,
+  result: SessionResult,
+  fallbacks?: FallbackCollector,
+): void {
   const { dateStr, model, inputTokens, outputTokens, cachedInputTokens } = result;
   const day = getOrCreateDay(allDays, dateStr);
   const modelTotals = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
@@ -164,7 +169,14 @@ function addSessionResult(allDays: DayMap, result: SessionResult): void {
   day.outputTokens += outputTokens;
   day.cachedInputTokens = (day.cachedInputTokens ?? 0) + cachedInputTokens;
 
-  const cost = estimateCodexCostUSD(model, inputTokens, outputTokens, cachedInputTokens, dateStr);
+  const cost = estimateCodexCostUSD(
+    model,
+    inputTokens,
+    outputTokens,
+    cachedInputTokens,
+    dateStr,
+    fallbacks,
+  );
   if (cost !== undefined) {
     modelTotals.costUSD = (modelTotals.costUSD ?? 0) + cost;
     day.costUSD = (day.costUSD ?? 0) + cost;
@@ -175,20 +187,25 @@ function addSessionResult(allDays: DayMap, result: SessionResult): void {
  * One session file's contribution, computed from its own bytes alone so it can
  * be cached. Codex has no cross-file de-duplication, so there are no keys.
  */
-async function parseCodexFile(filePath: string): Promise<CachedParse> {
+async function parseCodexFile(
+  filePath: string,
+  fallbacks?: FallbackCollector,
+): Promise<CachedParse> {
   const days: DayMap = new Map();
-  for (const result of await parseSessionFile(filePath)) addSessionResult(days, result);
+  for (const result of await parseSessionFile(filePath)) {
+    addSessionResult(days, result, fallbacks);
+  }
   return { days, keys: [] };
 }
 
-export async function readCodexData(): Promise<DayMap> {
+export async function readCodexData(fallbacks?: FallbackCollector): Promise<DayMap> {
   const files = await listUniqueSourceFiles(getCodexPaths());
   const cache = openParseCache('codex');
 
   const parsed = await mapWithConcurrency(files, async (filePath) => {
     const cached = await cache.lookup(filePath);
     if (cached) return cached;
-    const fresh = await parseCodexFile(filePath);
+    const fresh = await parseCodexFile(filePath, fallbacks);
     await cache.record(filePath, fresh);
     return fresh;
   });

@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 
 import { resolveMachineId, saveConfig, tryLoadConfig } from '../config.js';
+import { MAX_PORT } from '../constants.js';
 import { NO_CONFIG_MESSAGE, REPO_URL_UNSET_MESSAGE } from '../data/messages.js';
 import type { Config } from '../data/types.js';
 import { migrateMachineDataFiles } from '../git.js';
@@ -56,8 +57,8 @@ function parseDaemonInteger(key: 'daemon.port' | 'daemon.interval', value: strin
   if (!Number.isSafeInteger(parsed) || parsed < 1) {
     throw new Error(`${key} must be a positive integer.`);
   }
-  if (key === 'daemon.port' && parsed > 65_535) {
-    throw new Error('daemon.port must be between 1 and 65535.');
+  if (key === 'daemon.port' && parsed > MAX_PORT) {
+    throw new Error(`daemon.port must be between 1 and ${String(MAX_PORT)}.`);
   }
   return parsed;
 }

@@ -45,9 +45,11 @@ vi.mock('../../data/localData.js', async () => ({
     }
     return { hostname: host, lastUpdated: 'now', days };
   },
-  readLocalProviderMaps: async (): Promise<{ claude_code: DayMap; codex: DayMap }> => ({
-    claude_code: (await mocks.readClaudeData()) as DayMap,
-    codex: (await mocks.readCodexData()) as DayMap,
+  readLocalProviderMaps: async (
+    fallbacks?: FallbackCollector,
+  ): Promise<{ claude_code: DayMap; codex: DayMap }> => ({
+    claude_code: (await mocks.readClaudeData(fallbacks)) as DayMap,
+    codex: (await mocks.readCodexData(fallbacks)) as DayMap,
   }),
 }));
 vi.mock('../../git.js', () => ({
@@ -62,7 +64,7 @@ vi.mock('../../git.js', () => ({
 
 import { loggedOutput } from '../../__tests__/helpers/fixtures.js';
 import type { DayMap } from '../../data/types.js';
-import { findClaudePricing } from '../../pricing/claude.js';
+import type { FallbackCollector } from '../../pricing/fallback.js';
 import { syncCommand, syncData } from '../sync.js';
 
 function dayMap(inputTokens: number, outputTokens: number, model = 'model'): DayMap {
@@ -93,17 +95,20 @@ describe('syncCommand', () => {
 
   it('warns about family-fallback pricing even when there is nothing to push', async () => {
     // The hits are produced while the logs are read, so gating the warning on a
-    // successful push hid it from every already-up-to-date machine and left the
-    // set uncleared for the next run to inherit.
+    // successful push hid it from every already-up-to-date machine.
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    findClaudePricing('claude-opus-4242');
+    mocks.readClaudeData.mockImplementationOnce((fallbacks?: FallbackCollector) => {
+      fallbacks?.record('claude-opus-4242');
+      return Promise.resolve(new Map());
+    });
 
     await syncData();
 
     expect(mocks.commitAndPush).not.toHaveBeenCalled();
     expect(loggedOutput('warn')).toContain('claude-opus-4242');
 
-    // Cleared, so a second run does not repeat a model it has already reported.
+    // Each run collects its own hits, so a run that prices nothing by fallback
+    // does not inherit the previous run's models.
     vi.mocked(console.warn).mockClear();
     await syncData();
     expect(console.warn).not.toHaveBeenCalled();

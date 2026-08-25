@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  CODEX_PRICING_OVERRIDES,
-  consumeCodexFallbackHits,
-  estimateCodexCostUSD,
-  findCodexPricing,
-} from '../codex.js';
+import { CODEX_PRICING_OVERRIDES, estimateCodexCostUSD, findCodexPricing } from '../codex.js';
+import { createFallbackCollector } from '../fallback.js';
 
 describe('codex pricing', () => {
   it('costs 1M+1M tokens correctly for known models', () => {
@@ -82,12 +78,23 @@ describe('codex pricing', () => {
   });
 
   it('records fallback hits for unknown models', () => {
-    consumeCodexFallbackHits(); // clear
-    findCodexPricing('gpt-5.9-codex-mini');
-    findCodexPricing('gpt-5.9');
-    expect(consumeCodexFallbackHits()).toEqual(['gpt-5.9', 'gpt-5.9-codex-mini']);
-    // consumed → empty next time
-    expect(consumeCodexFallbackHits()).toEqual([]);
+    const fallbacks = createFallbackCollector();
+    findCodexPricing('gpt-5.9-codex-mini', undefined, fallbacks);
+    findCodexPricing('gpt-5.9', undefined, fallbacks);
+    expect(fallbacks.drain()).toEqual(['gpt-5.9', 'gpt-5.9-codex-mini']);
+    // drained → empty next time
+    expect(fallbacks.drain()).toEqual([]);
+  });
+
+  it("keeps each run's fallback hits to itself", () => {
+    // The old module-level Set leaked hits between runs, so a long-lived daemon
+    // reported one tick's unknown models on the next tick.
+    const first = createFallbackCollector();
+    findCodexPricing('gpt-5.9', undefined, first);
+    expect(first.drain()).toEqual(['gpt-5.9']);
+
+    const second = createFallbackCollector();
+    expect(second.drain()).toEqual([]);
   });
 
   it('returns undefined for non-gpt-5 models', () => {

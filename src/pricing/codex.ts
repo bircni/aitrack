@@ -1,3 +1,6 @@
+import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
+import type { FallbackCollector } from './fallback.js';
+
 // Per-model OpenAI (Codex) pricing.
 // Sources:
 //   https://developers.openai.com/api/docs/pricing
@@ -69,14 +72,11 @@ const FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> = [
   { match: /^gpt-5/, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
 ];
 
-const fallbackHits = new Set<string>();
-export function consumeCodexFallbackHits(): string[] {
-  const xs = [...fallbackHits].sort((a, b) => a.localeCompare(b));
-  fallbackHits.clear();
-  return xs;
-}
-
-export function findCodexPricing(model: string, usageDate?: string): CodexPricing | undefined {
+export function findCodexPricing(
+  model: string,
+  usageDate?: string,
+  fallbacks?: FallbackCollector,
+): CodexPricing | undefined {
   const id = model.toLowerCase();
   if (usageDate) {
     const overrides = CODEX_PRICING_OVERRIDES[id];
@@ -93,7 +93,7 @@ export function findCodexPricing(model: string, usageDate?: string): CodexPricin
       continue;
     }
 
-    fallbackHits.add(id);
+    fallbacks?.record(id);
     return pricing;
   }
   return undefined;
@@ -108,14 +108,15 @@ export function estimateCodexCostUSD(
   outputTokens: number,
   cachedInputTokens = 0,
   usageDate?: string,
+  fallbacks?: FallbackCollector,
 ): number | undefined {
-  const p = findCodexPricing(model, usageDate);
+  const p = findCodexPricing(model, usageDate, fallbacks);
   if (!p) return undefined;
   const fresh = Math.max(0, inputTokens - cachedInputTokens);
   const cached = Math.min(cachedInputTokens, inputTokens);
   return (
     (fresh * p.inputPerMillion +
-      cached * p.inputPerMillion * 0.1 +
+      cached * p.inputPerMillion * CACHE_READ_RATE_MULTIPLIER +
       outputTokens * p.outputPerMillion) /
     1_000_000
   );

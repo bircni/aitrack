@@ -1,3 +1,4 @@
+import { isDayKey } from '../constants.js';
 import { isFiniteNumber, isRecord } from './guards.js';
 import type { MachineFile, ProviderDay, TokenCounts } from './types.js';
 
@@ -5,8 +6,6 @@ export interface MachineFileValidationOptions {
   /** Let recompute-costs load a file whose aggregate cost is the value being repaired. */
   allowInconsistentCostTotals?: boolean;
 }
-
-const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Files already warned about below, so the message stays a one-shot per run. */
 const warnedBadDayKeys = new Set<string>();
@@ -121,7 +120,7 @@ export function validateMachineFile(
     // Warn once per file per process: only the current machine self-heals (sync
     // rewrites it), so for another machine's file this would otherwise print on
     // every command and every daemon tick with nothing the local user can do.
-    if (!DAY_KEY.test(date)) {
+    if (!isDayKey(date)) {
       if (!warnedBadDayKeys.has(filePath)) {
         warnedBadDayKeys.add(filePath);
         console.warn(`Dropping day ${date} from machine file ${filePath}: not a YYYY-MM-DD date`);
