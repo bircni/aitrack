@@ -9,9 +9,9 @@ import { isRecord } from '../data/guards.js';
 import type { DayMap } from '../data/types.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
-import { type CachedParse, openParseCache } from './cache.js';
-import { mapWithConcurrency } from './concurrency.js';
-import { listUniqueSourceFiles, resolveSourceRoots } from './paths.js';
+import type { CachedParse } from './cache.js';
+import { resolveSourceRoots } from './paths.js';
+import { parseProviderSources } from './pipeline.js';
 
 export function getCodexPaths(): string[] {
   const codexHome = process.env.CODEX_HOME;
@@ -206,17 +206,12 @@ async function parseCodexFile(
 }
 
 export async function readCodexData(fallbacks?: FallbackCollector): Promise<DayMap> {
-  const files = await listUniqueSourceFiles(getCodexPaths());
-  const cache = openParseCache('codex');
-
-  const parsed = await mapWithConcurrency(files, async (filePath) => {
-    const cached = await cache.lookup(filePath);
-    if (cached) return cached;
-    const fresh = await parseCodexFile(filePath, fallbacks);
-    await cache.record(filePath, fresh);
-    return fresh;
+  const { parsed } = await parseProviderSources({
+    cacheName: 'codex',
+    roots: getCodexPaths(),
+    parseFile: parseCodexFile,
+    fallbacks,
   });
-  cache.save();
 
   const allDays: DayMap = new Map();
   for (const entry of parsed) mergeDayMaps(allDays, entry.days);

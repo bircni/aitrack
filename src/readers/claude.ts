@@ -10,9 +10,9 @@ import { stripModelAliasSuffix } from '../data/modelId.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
 import { estimateClaudeCostUSD } from '../pricing/claude.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
-import { type CachedParse, openParseCache } from './cache.js';
-import { mapWithConcurrency } from './concurrency.js';
-import { listUniqueSourceFiles, resolveSourceRoots } from './paths.js';
+import type { CachedParse } from './cache.js';
+import { resolveSourceRoots } from './paths.js';
+import { parseProviderSources } from './pipeline.js';
 
 export function getClaudePaths(): string[] {
   const xdg = process.env.XDG_CONFIG_HOME;
@@ -137,17 +137,12 @@ async function parseClaudeFile(
 }
 
 export async function readClaudeData(fallbacks?: FallbackCollector): Promise<DayMap> {
-  const files = await listUniqueSourceFiles(getClaudePaths());
-  const cache = openParseCache('claude');
-
-  const parsed = await mapWithConcurrency(files, async (filePath) => {
-    const cached = await cache.lookup(filePath);
-    if (cached) return cached;
-    const fresh = await parseClaudeFile(filePath, fallbacks);
-    await cache.record(filePath, fresh);
-    return fresh;
+  const { files, parsed } = await parseProviderSources({
+    cacheName: 'claude',
+    roots: getClaudePaths(),
+    parseFile: parseClaudeFile,
+    fallbacks,
   });
-  cache.save();
 
   const allDays: DayMap = new Map();
   const seenMessages = new Set<string>();
