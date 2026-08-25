@@ -150,9 +150,10 @@ describe('buildProgram', () => {
 
   it('maps daemon options including an explicit sync override', async () => {
     await run('daemon');
-    expect(mocks.daemonCommand).toHaveBeenLastCalledWith(
-      expect.objectContaining({ sync: undefined }),
-    );
+    // Commander omits an unset flag rather than passing it as undefined; the
+    // daemon reads `options.sync ?? config`, so both mean "not overridden".
+    const daemonArgs = mocks.daemonCommand.mock.lastCall?.[0] as { sync?: boolean } | undefined;
+    expect(daemonArgs?.sync).toBeUndefined();
 
     await run('daemon', '--port', '9089', '--interval', '30', '--no-sync');
     expect(mocks.daemonCommand).toHaveBeenCalledWith(

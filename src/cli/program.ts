@@ -1,13 +1,13 @@
 import { Command } from 'commander';
 
 import { CONFIG_KEYS, configCommand } from '../commands/config.js';
-import { daemonCommand } from '../commands/daemon.js';
+import { daemonCommand, type DaemonOptions } from '../commands/daemon.js';
 import { doctorCommand } from '../commands/doctor.js';
-import { exportCommand } from '../commands/export.js';
+import { exportCommand, type ExportOptions } from '../commands/export.js';
 import { initCommand } from '../commands/init.js';
 import { machinesCommand } from '../commands/machines.js';
 import { recomputeCostsCommand } from '../commands/recompute.js';
-import { showCommand } from '../commands/show.js';
+import { showCommand, type ShowOptions } from '../commands/show.js';
 import { syncCommand } from '../commands/sync.js';
 import { topCommand } from '../commands/top.js';
 import { errorMessage } from '../errors.js';
@@ -106,29 +106,9 @@ export function buildProgram(): Command {
     .option('--no-open', 'do not auto-open the generated PNG (useful for scripts / CI)')
     .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
     .option('--tui', 'render a stats table in the terminal instead of a PNG')
-    .action(
-      (options: {
-        output: string;
-        dark?: boolean;
-        providers?: string[];
-        all?: boolean;
-        open?: boolean;
-        year?: number;
-        tui?: boolean;
-      }) => {
-        runAsync(() =>
-          showCommand({
-            output: options.output,
-            dark: options.dark,
-            all: options.all,
-            open: options.open,
-            providers: options.providers,
-            year: options.year,
-            tui: options.tui,
-          }),
-        );
-      },
-    );
+    .action((options: ShowOptions) => {
+      runAsync(() => showCommand(options));
+    });
 
   const usage = program
     .command('usage')
@@ -140,22 +120,9 @@ export function buildProgram(): Command {
     .description('Export an itemized PDF usage receipt for a period (default: month)')
     .option('-o, --output <path>', 'output PDF path', 'aitrack-receipt.pdf')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
-    .action(
-      (
-        period: string | undefined,
-        args: string[],
-        options: { output: string; providers?: string[] },
-      ) => {
-        runAsync(() =>
-          exportCommand({
-            period,
-            args,
-            output: options.output,
-            providers: options.providers,
-          }),
-        );
-      },
-    );
+    .action((period: string | undefined, args: string[], options: ExportOptions) => {
+      runAsync(() => exportCommand({ ...options, period, args }));
+    });
 
   program
     .command('daemon')
@@ -169,31 +136,9 @@ export function buildProgram(): Command {
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
     .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
-    .action(
-      (options: {
-        port?: number;
-        interval?: number;
-        host?: string;
-        sync?: boolean;
-        dark?: boolean;
-        providers?: string[];
-        all?: boolean;
-        year?: number;
-      }) => {
-        runAsync(() =>
-          daemonCommand({
-            port: options.port,
-            interval: options.interval,
-            host: options.host,
-            sync: options.sync,
-            dark: options.dark,
-            all: options.all,
-            providers: options.providers,
-            year: options.year,
-          }),
-        );
-      },
-    );
+    .action((options: DaemonOptions) => {
+      runAsync(() => daemonCommand(options));
+    });
 
   program
     .command('top [kind]')

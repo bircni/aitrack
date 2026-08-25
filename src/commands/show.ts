@@ -22,7 +22,7 @@ function openFile(filePath: string): void {
   spawn(opener, [filePath], { detached: true, stdio: 'ignore' }).unref();
 }
 
-interface ShowOptions {
+export interface ShowOptions {
   output?: string;
   dark?: boolean;
   providers?: string[];
