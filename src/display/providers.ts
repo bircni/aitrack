@@ -1,41 +1,39 @@
 import type { ProviderData } from '../data/types.js';
+import { PROVIDER_BY_ALIAS, PROVIDER_BY_KEY, PROVIDERS } from '../providers.js';
+
+/**
+ * Display-facing view of the provider registry in `src/providers.ts`.
+ *
+ * Every list here is derived from that one table rather than restated, so
+ * adding a provider is a single entry.
+ */
 
 /**
  * Canonical provider keys, in display order. Doubles as the set the
  * `--providers` flag can select — the two lists were identical.
  */
-export const PROVIDER_ORDER = ['claude_code', 'codex', 'cursor'] as const;
+export const PROVIDER_ORDER: readonly string[] = PROVIDERS.map((provider) => provider.key);
 
 export const PROVIDER_LABELS: Record<string, string> = {
-  claude_code: 'Claude Code',
-  codex: 'Codex',
-  cursor: 'Cursor',
+  ...Object.fromEntries(PROVIDERS.map((provider) => [provider.key, provider.label])),
   all: 'All providers',
 };
 
 /** Providers written to git during sync; Cursor stays local-only. */
-export const SYNCED_PROVIDERS = ['claude_code', 'codex'] as const;
+export const SYNCED_PROVIDERS: readonly string[] = PROVIDERS.filter(
+  (provider) => provider.synced,
+).map((provider) => provider.key);
 
 export function isSyncedProvider(providerKey: string): boolean {
-  return (SYNCED_PROVIDERS as readonly string[]).includes(providerKey);
+  return PROVIDER_BY_KEY[providerKey]?.synced ?? false;
 }
-
-/** Friendly spellings accepted on the CLI, mapped to their canonical key. */
-const PROVIDER_ALIASES: Record<string, string> = {
-  claude: 'claude_code',
-  'claude-code': 'claude_code',
-  claude_code: 'claude_code',
-  claudecode: 'claude_code',
-  codex: 'codex',
-  cursor: 'cursor',
-};
 
 /**
  * Normalize a user-supplied provider name (case-insensitive, friendly aliases)
  * to its canonical key, or return null when it is not a known provider.
  */
 export function normalizeProviderKey(input: string): string | null {
-  return PROVIDER_ALIASES[input.trim().toLowerCase()] ?? null;
+  return PROVIDER_BY_ALIAS[input.trim().toLowerCase()]?.key ?? null;
 }
 
 export function providerLabel(providerKey: string): string {
@@ -43,7 +41,7 @@ export function providerLabel(providerKey: string): string {
 }
 
 export function costColumnLabel(providerKey: string, uppercase = false): string {
-  const label = providerKey === 'cursor' ? 'Cost' : 'Est. cost';
+  const label = PROVIDER_BY_KEY[providerKey]?.costLabel ?? 'Est. cost';
   return uppercase ? label.toUpperCase() : label;
 }
 
@@ -66,8 +64,8 @@ export function orderedProviderKeys(providerData: ProviderData): string[] {
 
 export function sortProviderKeys(keys: string[]): string[] {
   return [...keys].sort((a, b) => {
-    const ai = PROVIDER_ORDER.indexOf(a as (typeof PROVIDER_ORDER)[number]);
-    const bi = PROVIDER_ORDER.indexOf(b as (typeof PROVIDER_ORDER)[number]);
+    const ai = PROVIDER_ORDER.indexOf(a);
+    const bi = PROVIDER_ORDER.indexOf(b);
     if (ai === -1 && bi === -1) return a.localeCompare(b);
     if (ai === -1) return 1;
     if (bi === -1) return -1;

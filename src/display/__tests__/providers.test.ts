@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProviderData } from '../../data/types.js';
+import { PROVIDERS } from '../../providers.js';
 import {
   activeProviderKeys,
   costColumnLabel,
+  isSyncedProvider,
+  normalizeProviderKey,
   orderedProviderKeys,
+  PROVIDER_ORDER,
   providerLabel,
   sortProviderKeys,
+  SYNCED_PROVIDERS,
 } from '../providers.js';
 
 describe('provider helpers', () => {
@@ -44,5 +49,27 @@ describe('provider helpers', () => {
       'alpha',
       'zebra',
     ]);
+  });
+});
+
+describe('provider registry', () => {
+  it('derives every list from one table, so they cannot drift', () => {
+    // These were five separate declarations; adding a provider meant finding
+    // all of them.
+    for (const provider of PROVIDERS) {
+      expect(PROVIDER_ORDER).toContain(provider.key);
+      expect(providerLabel(provider.key)).toBe(provider.label);
+      expect(isSyncedProvider(provider.key)).toBe(provider.synced);
+      expect(costColumnLabel(provider.key)).toBe(provider.costLabel);
+      for (const alias of provider.aliases) {
+        expect(normalizeProviderKey(alias.toUpperCase())).toBe(provider.key);
+      }
+    }
+  });
+
+  it('keeps Cursor out of the synced set', () => {
+    // Cursor is fetched live on every command and never written to git.
+    expect(SYNCED_PROVIDERS).not.toContain('cursor');
+    expect(SYNCED_PROVIDERS).toEqual(['claude_code', 'codex']);
   });
 });
