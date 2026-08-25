@@ -179,6 +179,54 @@ describe('git helpers', () => {
     );
   });
 
+  it('aborts a conflicted rebase so the repo is not left mid-rebase', () => {
+    // A failed `pull --rebase` can stop with conflicts applied and the branch
+    // detached. Leaving that behind makes every later aitrack command fail with
+    // a confusing git error the user never asked for.
+    mocks.spawnSync
+      // ls-remote
+      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
+      // pull --ff-only rejects the diverged branch
+      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'Not possible to fast-forward' })
+      // hasUnpushedCommits: hasUpstream, then rev-list
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      .mockReturnValueOnce({ status: 0, stdout: '1\n' })
+      // pull --rebase hits a conflict
+      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'could not apply' })
+      // rebase --abort
+      .mockReturnValueOnce({ status: 0, stdout: '' });
+    // isRebaseInProgress reads .git/rebase-merge from disk, not git.
+    mocks.existsSync.mockImplementation((path: string) => path.includes('rebase-'));
+
+    expect(() => {
+      pull();
+    }).toThrow('git pull --rebase --quiet failed');
+
+    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+      'git',
+      ['rebase', '--abort'],
+      expect.objectContaining({ stdio: 'pipe' }),
+    );
+  });
+
+  it('still reports the rebase failure when the abort itself fails', () => {
+    // Nothing can be done about a failed abort, but the original rebase error
+    // is what explains the situation, so it must not be replaced.
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
+      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'Not possible to fast-forward' })
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      .mockReturnValueOnce({ status: 0, stdout: '1\n' })
+      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'could not apply' })
+      // rebase --abort fails too
+      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'abort failed' });
+    mocks.existsSync.mockImplementation((path: string) => path.includes('rebase-'));
+
+    expect(() => {
+      pull();
+    }).toThrow('git pull --rebase --quiet failed');
+  });
+
   it('surfaces a fast-forward failure that no local commit explains', () => {
     mocks.spawnSync
       .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
@@ -482,6 +530,101 @@ describe('git helpers', () => {
     removePendingMachineFile('host');
 
     expect(mocks.rmSync).not.toHaveBeenCalled();
+  });
+
+  it('refuses to migrate a source file that is not a valid machine file', () => {
+    // Renaming rewrites the hostname inside the file, so a file that cannot be
+    // parsed cannot be rewritten either. Better to stop than to move a file the
+    // rest of the tool will then skip.
+    mocks.existsSync.mockImplementation((path: string) => path.endsWith(join('data', 'old.json')));
+    mocks.readFileSync.mockReturnValue('{not json');
+
+    expect(() => {
+      migrateMachineDataFiles('old', 'new');
+    }).toThrow('is invalid');
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.rmSync).not.toHaveBeenCalled();
+  });
+
+  it('reports both failures when the rollback itself fails', () => {
+    // The worst case: the migration failed AND the restore failed. Losing the
+    // rollback error here would leave the user with a half-migrated data
+    // directory and only the original error to explain it.
+    const repoOld = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'old.json');
+    const pendingNew = join('/home/test', '.config', 'aitrack', 'pending', 'data', 'new.json');
+    const original = JSON.stringify({ hostname: 'old', lastUpdated: 'now', days: {} });
+    const files = new Map<string, string>([
+      [repoOld, original],
+      [join('/home/test', '.config', 'aitrack', 'pending', 'data', 'old.json'), original],
+    ]);
+
+    mocks.existsSync.mockImplementation((path: string) => files.has(path));
+    mocks.readFileSync.mockImplementation((path: string) => {
+      const contents = files.get(path);
+      if (contents === undefined) throw new Error(`missing ${path}`);
+      return contents;
+    });
+    mocks.writeFileSync.mockImplementation((path: string, contents: string) => {
+      if (path === pendingNew) throw new Error('pending write failed');
+      // The restore of the repo source is what fails during rollback.
+      if (path === repoOld) throw new Error('restore failed');
+      files.set(path, contents);
+    });
+    mocks.rmSync.mockImplementation((path: string) => {
+      files.delete(path);
+    });
+
+    let thrown: unknown;
+    try {
+      migrateMachineDataFiles('old', 'new');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(AggregateError);
+    const aggregate = thrown as AggregateError;
+    expect(aggregate.message).toContain('rollback failed');
+    expect((aggregate.errors[0] as Error).message).toBe('pending write failed');
+    expect((aggregate.errors[1] as Error).message).toBe('restore failed');
+  });
+
+  it('does not leave a restored source behind when removing the target fails', () => {
+    // rollbackMachineFileMigration writes the source back before removing the
+    // target. If that removal fails, both files would exist and the next sync
+    // would see two machines; the restored source has to come back off disk.
+    const repoOld = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'old.json');
+    const repoNew = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'new.json');
+    const pendingNew = join('/home/test', '.config', 'aitrack', 'pending', 'data', 'new.json');
+    const original = JSON.stringify({ hostname: 'old', lastUpdated: 'now', days: {} });
+    const files = new Map<string, string>([
+      [repoOld, original],
+      [join('/home/test', '.config', 'aitrack', 'pending', 'data', 'old.json'), original],
+    ]);
+
+    mocks.existsSync.mockImplementation((path: string) => files.has(path));
+    mocks.readFileSync.mockImplementation((path: string) => {
+      const contents = files.get(path);
+      if (contents === undefined) throw new Error(`missing ${path}`);
+      return contents;
+    });
+    mocks.writeFileSync.mockImplementation((path: string, contents: string) => {
+      if (path === pendingNew) throw new Error('pending write failed');
+      files.set(path, contents);
+    });
+    const forcedRemovals: string[] = [];
+    mocks.rmSync.mockImplementation((path: string, options?: { force?: boolean }) => {
+      // Removing the migrated repo target during rollback is what fails.
+      if (path === repoNew && options?.force !== true) throw new Error('target removal failed');
+      if (options?.force === true) forcedRemovals.push(path);
+      files.delete(path);
+    });
+
+    expect(() => {
+      migrateMachineDataFiles('old', 'new');
+    }).toThrow(AggregateError);
+
+    // The source it had just restored is force-removed rather than left as a duplicate.
+    expect(forcedRemovals).toContain(repoOld);
   });
 
   it('rolls back a completed repo migration when the pending migration fails', () => {
