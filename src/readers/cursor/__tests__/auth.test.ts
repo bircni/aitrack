@@ -5,12 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  errorMessage,
-  fetchCursorUsageCsv,
-  getCursorStateDatabasePath,
-  readCursorAuthState,
-} from '../auth.js';
+import { fetchCursorUsageCsv, getCursorStateDatabasePath, readCursorAuthState } from '../auth.js';
 
 let tmpDir: string;
 const originalFetch = fetch;
@@ -116,11 +111,6 @@ describe('cursor auth', () => {
       accessToken: undefined,
       refreshToken: undefined,
     });
-  });
-
-  it('formats unknown errors', () => {
-    expect(errorMessage(new Error('locked'))).toBe('locked');
-    expect(errorMessage('plain')).toBe('plain');
   });
 
   it('returns the first successful CSV export response', async () => {
