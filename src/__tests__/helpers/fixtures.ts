@@ -1,3 +1,5 @@
+import { writeFileSync } from 'node:fs';
+
 import { vi } from 'vitest';
 
 import type { DayEntry, ProviderDay } from '../../data/types.js';
@@ -9,6 +11,15 @@ import type { DayEntry, ProviderDay } from '../../data/types.js';
  * console-capture helper, all identical bar the default model name — so a
  * change to DayEntry meant editing nineteen near-duplicates.
  */
+
+/**
+ * Write a JSONL file, one object per line.
+ *
+ * Four reader tests had each grown an identical copy of this.
+ */
+export function writeJsonl(path: string, lines: object[]): void {
+  writeFileSync(path, lines.map((line) => JSON.stringify(line)).join('\n'));
+}
 
 /**
  * An ISO instant that falls on the given **local** calendar date.

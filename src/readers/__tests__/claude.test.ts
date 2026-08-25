@@ -1,10 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { localTimestamp } from '../../__tests__/helpers/fixtures.js';
+import { localTimestamp, writeJsonl } from '../../__tests__/helpers/fixtures.js';
 import { estimateClaudeCostFromStoredCounts, estimateClaudeCostUSD } from '../../pricing/claude.js';
 import { parseJsonlFile } from '../claude.js';
 
@@ -17,14 +17,10 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-function jsonl(path: string, lines: object[]): void {
-  writeFileSync(path, lines.map((l) => JSON.stringify(l)).join('\n'));
-}
-
 describe('parseJsonlFile', () => {
   it('parses a basic assistant message', async () => {
     const file = join(tmpDir, 'a.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'assistant',
         timestamp: localTimestamp('2024-01-15'),
@@ -52,7 +48,7 @@ describe('parseJsonlFile', () => {
 
   it('strips -latest suffix from model names', async () => {
     const file = join(tmpDir, 'a.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'assistant',
         timestamp: localTimestamp('2024-01-15'),
@@ -72,7 +68,7 @@ describe('parseJsonlFile', () => {
 
   it('deduplicates by message+request ID across calls', async () => {
     const file = join(tmpDir, 'a.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'assistant',
         timestamp: localTimestamp('2024-01-15'),
@@ -94,7 +90,7 @@ describe('parseJsonlFile', () => {
 
   it('adds cache tokens to their respective counters', async () => {
     const file = join(tmpDir, 'a.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'assistant',
         timestamp: localTimestamp('2024-01-15'),
@@ -195,7 +191,7 @@ describe('parseJsonlFile', () => {
 
   it('skips non-assistant entries', async () => {
     const file = join(tmpDir, 'a.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       { type: 'user', timestamp: localTimestamp('2024-01-15') },
       { type: 'summary', timestamp: localTimestamp('2024-01-15') },
     ]);
@@ -206,7 +202,7 @@ describe('parseJsonlFile', () => {
 
   it('skips assistant entries with zero output tokens', async () => {
     const file = join(tmpDir, 'a.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'assistant',
         timestamp: localTimestamp('2024-01-15'),
@@ -221,7 +217,7 @@ describe('parseJsonlFile', () => {
 
   it('accumulates multiple messages across different days', async () => {
     const file = join(tmpDir, 'a.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'assistant',
         timestamp: localTimestamp('2024-01-15'),
