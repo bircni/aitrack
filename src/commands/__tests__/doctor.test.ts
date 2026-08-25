@@ -1,6 +1,13 @@
+import chalk from 'chalk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loggedOutput } from '../../__tests__/helpers/fixtures.js';
+
+/** Strip SGR color codes so a rendered line can be measured as the user sees it. */
+function stripAnsi(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replaceAll(/\u001B\[\d+m/g, '');
+}
 
 const mocks = vi.hoisted(() => ({
   spawnSync: vi.fn(),
@@ -85,6 +92,32 @@ describe('doctorCommand', () => {
     expect(out).toContain('Codex source: 1 JSONL file(s)');
     expect(out).toContain('Cursor source: auth token found');
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it('aligns the status column when color is enabled', async () => {
+    // The status label is colored, so padding the colored string measured the
+    // ANSI escapes as content: padEnd was a no-op on a TTY and the column only
+    // lined up with color disabled.
+    const previousLevel = chalk.level;
+    chalk.level = 1;
+    try {
+      mocks.getCursorStateDatabasePath.mockReturnValue(null); // a WARN beside the OK rows
+      await doctorCommand();
+
+      const rows = loggedOutput()
+        .split('\n')
+        .map((line) => stripAnsi(line))
+        .filter((line) => /^(OK|WARN|FAIL) /.test(line));
+
+      expect(rows.some((line) => line.startsWith('OK'))).toBe(true);
+      expect(rows.some((line) => line.startsWith('WARN'))).toBe(true);
+
+      // Every row's label starts in the same column, whatever its status.
+      const labelStarts = new Set(rows.map((line) => line.search(/(?<=^(OK|WARN|FAIL) +)\S/)));
+      expect(labelStarts.size).toBe(1);
+    } finally {
+      chalk.level = previousLevel;
+    }
   });
 
   it('warns for missing optional setup and cursor auth', async () => {

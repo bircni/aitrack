@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
+import { mapWithConcurrency } from './concurrency.js';
+
 export function splitConfiguredPaths(value: string | undefined): string[] {
   return (value ?? '')
     .split(',')
@@ -9,24 +11,29 @@ export function splitConfiguredPaths(value: string | undefined): string[] {
     .filter((v) => v.length > 0);
 }
 
-async function walkJsonlFiles(dir: string, files: string[]): Promise<void> {
-  if (!existsSync(dir)) return;
+/**
+ * Every `.jsonl` path under `dir`, depth-first in directory-entry order.
+ *
+ * Sibling directories are walked concurrently — the walk was sequential inside
+ * an otherwise-parallel module. Results are reassembled in entry order rather
+ * than completion order: the Claude reader resolves cross-file key collisions
+ * by file order, so a nondeterministic listing would make its output depend on
+ * disk timing.
+ */
+async function walkJsonlFiles(dir: string): Promise<string[]> {
+  if (!existsSync(dir)) return [];
   const entries = await readdir(dir, { withFileTypes: true });
-  for (const entry of entries) {
+  const perEntry = await mapWithConcurrency(entries, (entry) => {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      await walkJsonlFiles(full, files);
-    } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-      files.push(full);
-    }
-  }
+    if (entry.isDirectory()) return walkJsonlFiles(full);
+    return Promise.resolve(entry.isFile() && entry.name.endsWith('.jsonl') ? [full] : []);
+  });
+  return perEntry.flat();
 }
 
 /** List every `.jsonl` file under `root` (recursive). */
-export async function listJsonlFiles(root: string): Promise<string[]> {
-  const files: string[] = [];
-  await walkJsonlFiles(root, files);
-  return files;
+export function listJsonlFiles(root: string): Promise<string[]> {
+  return walkJsonlFiles(root);
 }
 
 /**
