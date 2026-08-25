@@ -1,10 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 
+import type { Config } from './configTypes.js';
 import { MAX_PORT } from './constants.js';
 import { isRecord } from './data/guards.js';
 import { INIT_HINT, NO_CONFIG_MESSAGE } from './data/messages.js';
-import type { Config } from './data/types.js';
 import { errorMessage } from './errors.js';
 import { normalizeMachineId } from './machineId.js';
 import { APP_DIR, CONFIG_PATH } from './paths.js';

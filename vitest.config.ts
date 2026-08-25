@@ -8,7 +8,15 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/__tests__/**', 'src/data/types.ts', 'src/cli.ts'],
+      // Type-only modules: no statements to cover, so including them would
+      // only dilute the ratios.
+      exclude: [
+        'src/**/__tests__/**',
+        'src/data/types.ts',
+        'src/configTypes.ts',
+        'src/display/renderOptions.ts',
+        'src/cli.ts',
+      ],
       thresholds: {
         lines: 90,
         functions: 90,

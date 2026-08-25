@@ -1,5 +1,6 @@
 import { formatUsageEmptyMessage } from '../../data/emptyState.js';
-import type { ProviderData, RenderOptions } from '../../data/types.js';
+import type { ProviderData } from '../../data/types.js';
+import type { RenderOptions } from '../../display/renderOptions.js';
 import { resolveProviderLayout } from '../heatmap/layout.js';
 import { buildDateGrid } from '../heatmap/stats.js';
 import { escapeHtml } from './escape.js';
