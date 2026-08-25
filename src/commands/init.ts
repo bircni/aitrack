@@ -14,6 +14,7 @@ import {
   removeLocalClone,
 } from '../git.js';
 import { machineIdValidationError, normalizeMachineId } from '../machineId.js';
+import { log } from '../output.js';
 
 async function promptOverwrite(): Promise<boolean | undefined> {
   const answers = await prompts<'overwrite'>({
@@ -71,22 +72,22 @@ export async function initCommand(): Promise<void> {
   }
 
   if (existing) {
-    console.log(`Current config: repo=${existing.repoUrl}`);
+    log.info(`Current config: repo=${existing.repoUrl}`);
     const overwrite = await promptOverwrite();
     if (!overwrite) {
-      console.log('Aborted.');
+      log.info('Aborted.');
       return;
     }
   }
   const previousMachineId = resolveMachineId(existing ?? { repoUrl: '' });
 
-  console.log('First, create an empty GitHub repository (or any git remote) for storing data.');
-  console.log('Example: https://github.com/new — name it something like "aitrack-data".');
-  console.log('');
+  log.info('First, create an empty GitHub repository (or any git remote) for storing data.');
+  log.info('Example: https://github.com/new — name it something like "aitrack-data".');
+  log.info('');
 
   const repoUrl = await promptRepoUrl();
   if (!repoUrl) {
-    console.log('Aborted.');
+    log.info('Aborted.');
     return;
   }
 
@@ -96,26 +97,26 @@ export async function initCommand(): Promise<void> {
   if (wasCloned && isUrlChanged) {
     const reclone = await promptReclone();
     if (!reclone) {
-      console.log('Aborted.');
+      log.info('Aborted.');
       return;
     }
-    console.log(`Removing existing clone at ${LOCAL_REPO}...`);
+    log.info(`Removing existing clone at ${LOCAL_REPO}...`);
     removeLocalClone();
   }
 
   // Every path below this point ends with a clone present: either one was
   // already there and is being kept, or one is made here.
   if (wasCloned && !isUrlChanged) {
-    console.log(`Repo already cloned at ${LOCAL_REPO}. Skipping clone.`);
+    log.info(`Repo already cloned at ${LOCAL_REPO}. Skipping clone.`);
   } else {
-    console.log(`Cloning ${repoUrl} into ${LOCAL_REPO}...`);
+    log.info(`Cloning ${repoUrl} into ${LOCAL_REPO}...`);
     mkdirSync(dirname(LOCAL_REPO), { recursive: true });
     cloneRepo(repoUrl);
   }
 
   const machineId = await promptMachineId(existing?.machineId ?? hostname());
   if (!machineId) {
-    console.log('Aborted.');
+    log.info('Aborted.');
     return;
   }
 
@@ -129,11 +130,11 @@ export async function initCommand(): Promise<void> {
 
   saveConfig({ repoUrl, machineId });
   if (adopted > 0) {
-    console.log(`Adopted ${String(adopted)} pending data file(s) into the repo.`);
+    log.info(`Adopted ${String(adopted)} pending data file(s) into the repo.`);
   }
 
-  console.log('');
-  console.log('Done! Next steps:');
-  console.log('  npx aitrack sync   # push your local AI usage data');
-  console.log('  npx aitrack show   # render heatmap PNG');
+  log.info('');
+  log.info('Done! Next steps:');
+  log.info('  npx aitrack sync   # push your local AI usage data');
+  log.info('  npx aitrack show   # render heatmap PNG');
 }

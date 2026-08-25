@@ -8,11 +8,13 @@ import {
   mergePersistedDays,
   readLocalProviderMaps,
 } from '../data/localData.js';
+import { REPO_NOT_CLONED_MESSAGE } from '../data/messages.js';
 import type { MachineFile, ProviderDay } from '../data/types.js';
 import { approximatelyEqual, parseMachineFile } from '../data/validate.js';
 import { SYNCED_PROVIDERS } from '../display/providers.js';
 import { commitDataChanges, isCloned, listDataFiles } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
+import { log } from '../output.js';
 import { reportFallbackPricing } from '../pricing/fallback.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 
@@ -123,7 +125,7 @@ function loadMachineForRecompute(
     // repaired — the local logs are its source of truth — and this is the one
     // command that can do it: sync refuses to overwrite a file it cannot read.
     if (!isCurrentMachine || !machineHasData(localFresh)) return null;
-    console.warn(`  Rebuilding ${basename(filePath)} from the local logs.`);
+    log.warn(`  Rebuilding ${basename(filePath)} from the local logs.`);
     return {
       machine: { ...localFresh, days: mergePersistedDays(null, localFresh.days) },
       isTouched: true,
@@ -143,7 +145,7 @@ function loadMachineForRecompute(
 
 function reportLegacySkipped(legacySkipped: number, state: 'skipped' | 'left unchanged'): void {
   if (legacySkipped === 0) return;
-  console.log(
+  log.info(
     `  ${String(legacySkipped)} model-day(s) ${state} (legacy data without cache breakdown — re-sync from that machine).`,
   );
 }
@@ -153,12 +155,12 @@ export async function recomputeCostsCommand(): Promise<void> {
   const machineId = resolveMachineId(config);
 
   if (!isCloned()) {
-    throw new Error('Repo not cloned. Run: npx aitrack init');
+    throw new Error(REPO_NOT_CLONED_MESSAGE);
   }
 
   const files = listDataFiles();
   if (files.length === 0) {
-    console.log('No synced data files found.');
+    log.info('No synced data files found.');
     return;
   }
 
@@ -185,20 +187,20 @@ export async function recomputeCostsCommand(): Promise<void> {
   }
 
   if (changed === 0) {
-    console.log('Nothing to recompute — costs are already current.');
+    log.info('Nothing to recompute — costs are already current.');
     reportLegacySkipped(legacySkipped, 'skipped');
     return;
   }
 
-  console.log(`Recomputed costs in ${String(changed)} file(s).`);
+  log.info(`Recomputed costs in ${String(changed)} file(s).`);
   reportLegacySkipped(legacySkipped, 'left unchanged');
 
   reportFallbackPricing();
 
   const isPushed = commitDataChanges(`recompute: refresh costs at ${new Date().toISOString()}`);
   if (!isPushed) {
-    console.log('No file actually changed on disk — pricing already current.');
+    log.info('No file actually changed on disk — pricing already current.');
     return;
   }
-  console.log('Pushed updated costs.');
+  log.info('Pushed updated costs.');
 }

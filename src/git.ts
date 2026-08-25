@@ -9,15 +9,16 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 
 import type { MachineFile } from './data/types.js';
 import { parseMachineFile } from './data/validate.js';
+import { errorMessage } from './errors.js';
 import { machineDataFilename, normalizeMachineId } from './machineId.js';
+import { log } from './output.js';
+import { DATA_DIR, LOCAL_REPO, PENDING_DATA_DIR } from './paths.js';
 
-export const LOCAL_REPO = join(homedir(), '.config', 'aitrack', 'repo');
-export const PENDING_DATA_DIR = join(homedir(), '.config', 'aitrack', 'pending', 'data');
+export { LOCAL_REPO, PENDING_DATA_DIR };
 const MAX_PUSH_ATTEMPTS = 3;
 
 class GitCommandError extends Error {
@@ -119,7 +120,7 @@ function rebaseForPushRetry(conflict: RetryConflict | undefined, branch: string 
       }
     }
     throw new Error(
-      `Concurrent sync detected, but the local commit could not be replayed safely. ${error instanceof Error ? error.message : String(error)}`,
+      `Concurrent sync detected, but the local commit could not be replayed safely. ${errorMessage(error)}`,
       { cause: error },
     );
   }
@@ -244,11 +245,10 @@ export function hasMachineDataChanges(machineId: string): boolean {
 }
 
 export function listDataFiles(): string[] {
-  const dataDir = join(LOCAL_REPO, 'data');
-  if (!existsSync(dataDir)) return [];
-  return readdirSync(dataDir)
+  if (!existsSync(DATA_DIR)) return [];
+  return readdirSync(DATA_DIR)
     .filter((f: string) => f.endsWith('.json'))
-    .map((f: string) => join(dataDir, f));
+    .map((f: string) => join(DATA_DIR, f));
 }
 
 export function readDataFile(filePath: string): MachineFile | null {
@@ -306,7 +306,7 @@ function planMachineFileMigration(
     sourceContents,
     contents: JSON.stringify({ ...machine, hostname: nextMachineId }, null, 2),
     repositoryPaths:
-      directory === join(LOCAL_REPO, 'data')
+      directory === DATA_DIR
         ? [
             `data/${machineDataFilename(previousMachineId)}`,
             `data/${machineDataFilename(nextMachineId)}`,
@@ -332,7 +332,7 @@ export function migrateMachineDataFiles(previousId: string, nextId: string): voi
   if (previousMachineId === nextMachineId) return;
 
   const plans = [
-    planMachineFileMigration(join(LOCAL_REPO, 'data'), previousMachineId, nextMachineId),
+    planMachineFileMigration(DATA_DIR, previousMachineId, nextMachineId),
     planMachineFileMigration(PENDING_DATA_DIR, previousMachineId, nextMachineId),
   ].filter((plan): plan is MachineFileMigration => plan !== null);
 
@@ -412,12 +412,10 @@ export function adoptPendingDataFiles(targetDataDir: string): number {
     // it is not necessarily a superset of what was staged, so deleting them
     // here could drop history. Name the directory instead: nothing else clears
     // it, so this warning repeats on every init until the user does.
-    console.warn(
+    log.warn(
       `Skipped ${String(skipped.length)} staged data file(s) already synced in the repo: ${skipped.join(', ')}`,
     );
-    console.warn(
-      `  Kept in ${PENDING_DATA_DIR} — delete them once the synced data looks complete.`,
-    );
+    log.warn(`  Kept in ${PENDING_DATA_DIR} — delete them once the synced data looks complete.`);
   } else {
     rmSync(PENDING_DATA_DIR, { recursive: true, force: true });
   }

@@ -1,9 +1,11 @@
 import chalk from 'chalk';
 
 import { resolveMachineId, saveConfig, tryLoadConfig } from '../config.js';
+import { NO_CONFIG_MESSAGE, REPO_URL_UNSET_MESSAGE } from '../data/messages.js';
 import type { Config } from '../data/types.js';
 import { migrateMachineDataFiles } from '../git.js';
 import { normalizeMachineId } from '../machineId.js';
+import { log } from '../output.js';
 
 /** Configuration keys that can be read/written via the CLI. */
 export const CONFIG_KEYS = [
@@ -95,15 +97,15 @@ export async function configCommand(options: ConfigCommandOptions): Promise<void
 function listConfig(): void {
   const config = tryLoadConfig();
   if (!config) {
-    console.log('No config found. Run: npx aitrack init');
+    log.info(NO_CONFIG_MESSAGE);
     return;
   }
-  console.log(chalk.bold('aitrack config'));
+  log.info(chalk.bold('aitrack config'));
   for (const key of CONFIG_KEYS) {
     const value = configValue(config, key);
-    console.log(`  ${key} = ${value === undefined ? chalk.dim('(unset)') : String(value)}`);
+    log.info(`  ${key} = ${value === undefined ? chalk.dim('(unset)') : String(value)}`);
   }
-  console.log(`  ${chalk.dim('resolved machineId')} = ${resolveMachineId(config)}`);
+  log.info(`  ${chalk.dim('resolved machineId')} = ${resolveMachineId(config)}`);
 }
 
 function getConfig(key: string | undefined): void {
@@ -113,10 +115,10 @@ function getConfig(key: string | undefined): void {
   const config = tryLoadConfig();
   const value = configValue(config, key);
   if (value === undefined) {
-    console.log('');
+    log.info('');
     return;
   }
-  console.log(value);
+  log.info(String(value));
 }
 
 function setConfig(key: string | undefined, value: string | undefined): void {
@@ -150,8 +152,8 @@ function setConfig(key: string | undefined, value: string | undefined): void {
       }
     : { ...base, [key]: normalizedValue };
   saveConfig(next);
-  console.log(`Set ${key} = ${String(normalizedValue)}`);
+  log.info(`Set ${key} = ${String(normalizedValue)}`);
   if (next.repoUrl.length === 0) {
-    console.warn(chalk.yellow('Warning: repoUrl is not set. Run: npx aitrack init'));
+    log.warn(chalk.yellow(REPO_URL_UNSET_MESSAGE));
   }
 }

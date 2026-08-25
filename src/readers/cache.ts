@@ -1,13 +1,11 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { isFiniteNumber, isRecord } from '../data/guards.js';
 import type { DayEntry, DayMap, TokenCounts } from '../data/types.js';
+import { CACHE_DIR } from '../paths.js';
 import { packageVersion } from '../version.js';
-
-const CACHE_DIR = join(homedir(), '.config', 'aitrack', 'cache');
 
 /**
  * Bump when the cached shape changes. Entries written by another format are

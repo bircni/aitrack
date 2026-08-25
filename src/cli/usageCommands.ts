@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 
 import { usageCommand, type UsageOptions } from '../commands/usage.js';
 import { USAGE_PERIOD_DEFINITIONS } from '../display/usagePeriods.js';
+import { log } from '../output.js';
 import { cliErrorMessage, parseProviders, parseUsageReportOptions } from './parse.js';
 
 interface UsageCommonOptions {
@@ -27,7 +28,7 @@ function runUsageFromPeriod(
       ...(options.compare !== undefined && { compare: options.compare }),
     };
   } catch (error) {
-    console.error(cliErrorMessage(error));
+    log.error(cliErrorMessage(error));
     process.exit(1);
     return;
   }

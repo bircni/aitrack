@@ -10,6 +10,7 @@ import { recomputeCostsCommand } from '../commands/recompute.js';
 import { showCommand } from '../commands/show.js';
 import { syncCommand } from '../commands/sync.js';
 import { topCommand } from '../commands/top.js';
+import { log } from '../output.js';
 import { packageVersion } from '../version.js';
 import {
   cliErrorMessage,
@@ -31,7 +32,7 @@ import { PROVIDERS_DESC, PROVIDERS_FLAG, registerUsageCommands } from './usageCo
  */
 export function runAsync(function_: () => Promise<void>): void {
   function_().catch((error: unknown) => {
-    console.error(cliErrorMessage(error));
+    log.error(cliErrorMessage(error));
     process.exit(1);
   });
 }
@@ -57,7 +58,7 @@ function runTop(
       json: options.json,
     };
   } catch (error) {
-    console.error(cliErrorMessage(error));
+    log.error(cliErrorMessage(error));
     process.exit(1);
     return;
   }

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { loadConfig, resolveMachineId } from '../config.js';
 import { buildMachineData, mergePersistedDays, readLocalProviderMaps } from '../data/localData.js';
+import { REPO_NOT_CLONED_MESSAGE } from '../data/messages.js';
 import type { MachineFile } from '../data/types.js';
 import { parseMachineFile } from '../data/validate.js';
 import {
@@ -15,6 +16,7 @@ import {
   removePendingMachineFile,
 } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
+import { log } from '../output.js';
 import { reportFallbackPricing } from '../pricing/fallback.js';
 
 export interface SyncDataOptions {
@@ -32,7 +34,7 @@ function pushedMessage(host: string, syncedDays: number): string {
 function progressLogger(isQuiet: boolean): (message: string) => void {
   if (isQuiet) return () => undefined;
   return (message) => {
-    console.log(message);
+    log.info(message);
   };
 }
 
@@ -72,7 +74,7 @@ async function pushLocalUsage(options: SyncDataOptions): Promise<MachineFile> {
   const log = progressLogger(Boolean(options.quiet));
 
   if (!isCloned()) {
-    throw new Error('Repo not cloned. Run: npx aitrack init');
+    throw new Error(REPO_NOT_CLONED_MESSAGE);
   }
 
   if (!isDryRun) {

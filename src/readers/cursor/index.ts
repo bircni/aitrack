@@ -1,4 +1,5 @@
 import type { DayMap } from '../../data/types.js';
+import { log } from '../../output.js';
 import {
   errorMessage,
   fetchCursorUsageCsv,
@@ -24,14 +25,12 @@ export async function readCursorData(): Promise<DayMap> {
   try {
     authState = await readCursorAuthState(databasePath);
   } catch (error) {
-    console.warn(
-      `aitrack: Cursor skipped — could not read ${databasePath}: ${errorMessage(error)}`,
-    );
+    log.warn(`aitrack: Cursor skipped — could not read ${databasePath}: ${errorMessage(error)}`);
     return new Map();
   }
 
   if (!authState.accessToken) {
-    console.warn('aitrack: Cursor skipped — no cursorAuth/accessToken in state.vscdb.');
+    log.warn('aitrack: Cursor skipped — no cursorAuth/accessToken in state.vscdb.');
     return new Map();
   }
 
@@ -43,13 +42,13 @@ export async function readCursorData(): Promise<DayMap> {
     const response = await fetchCursorUsageCsv(authState.accessToken);
     text = await response.text();
   } catch (error) {
-    console.warn(`aitrack: Cursor skipped — ${errorMessage(error)}`);
+    log.warn(`aitrack: Cursor skipped — ${errorMessage(error)}`);
     return new Map();
   }
 
   const map = aggregateCursorCsvToDayMap(text);
   if (map.size === 0) {
-    console.warn('aitrack: Cursor — no usage rows in CSV export.');
+    log.warn('aitrack: Cursor — no usage rows in CSV export.');
   }
   return map;
 }

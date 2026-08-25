@@ -1,13 +1,13 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir, hostname } from 'node:os';
-import { join } from 'node:path';
+import { hostname } from 'node:os';
 
+import { MAX_PORT } from './constants.js';
 import { isRecord } from './data/guards.js';
+import { INIT_HINT, NO_CONFIG_MESSAGE } from './data/messages.js';
 import type { Config } from './data/types.js';
+import { errorMessage } from './errors.js';
 import { normalizeMachineId } from './machineId.js';
-
-const CONFIG_DIR = join(homedir(), '.config', 'aitrack');
-const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
+import { APP_DIR, CONFIG_PATH } from './paths.js';
 
 /**
  * Refresh interval ceiling in seconds. setInterval takes 32-bit milliseconds,
@@ -34,7 +34,7 @@ function validateDaemon(value: unknown): Config['daemon'] | undefined {
       typeof value.port !== 'number' ||
       !Number.isSafeInteger(value.port) ||
       value.port < 1 ||
-      value.port > 65_535
+      value.port > MAX_PORT
     ) {
       return undefined;
     }
@@ -87,22 +87,53 @@ function validateConfig(parsed: unknown): Config | null {
   };
 }
 
-export function loadConfig(): Config {
-  const config = tryLoadConfig();
-  if (!config) {
-    throw new Error('No config found. Run: npx aitrack init');
+/**
+ * Outcome of reading the config file.
+ *
+ * `missing` and `invalid` used to collapse into the same `null`, so a config
+ * that existed but was corrupt was reported as "No config found. Run: npx
+ * aitrack init" — advice that would overwrite the very file the user needed to
+ * fix, and that hid the real problem.
+ */
+export type ConfigLoad =
+  | { status: 'ok'; config: Config }
+  | { status: 'missing' }
+  | { status: 'invalid'; reason: string };
+
+export function readConfig(): ConfigLoad {
+  let raw: string;
+  try {
+    raw = readFileSync(CONFIG_PATH, 'utf8');
+  } catch {
+    return { status: 'missing' };
   }
-  return config;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return { status: 'invalid', reason: `not valid JSON (${errorMessage(error)})` };
+  }
+
+  const config = validateConfig(parsed);
+  if (!config) {
+    return { status: 'invalid', reason: 'missing or malformed fields' };
+  }
+  return { status: 'ok', config };
+}
+
+export function loadConfig(): Config {
+  const loaded = readConfig();
+  if (loaded.status === 'ok') return loaded.config;
+  if (loaded.status === 'invalid') {
+    throw new Error(`Config at ${CONFIG_PATH} is ${loaded.reason}. Fix it or re-run: ${INIT_HINT}`);
+  }
+  throw new Error(NO_CONFIG_MESSAGE);
 }
 
 export function tryLoadConfig(): Config | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
-  } catch {
-    return null;
-  }
-  return validateConfig(parsed);
+  const loaded = readConfig();
+  return loaded.status === 'ok' ? loaded.config : null;
 }
 
 export function saveConfig(config: Config): void {
@@ -110,7 +141,7 @@ export function saveConfig(config: Config): void {
     ...config,
     ...(config.machineId !== undefined && { machineId: normalizeMachineId(config.machineId) }),
   };
-  mkdirSync(CONFIG_DIR, { recursive: true });
+  mkdirSync(APP_DIR, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf8');
 }
 

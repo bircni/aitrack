@@ -17,6 +17,7 @@ import {
   renderTerminalTable,
   type TerminalTableColumn,
 } from '../display/terminalTable.js';
+import { log } from '../output.js';
 
 export type TopKind = 'days' | 'models';
 export type TopSort = 'tokens' | 'cost';
@@ -174,13 +175,13 @@ function renderTopOutput<T>(
   }
 
   if (items.length === 0) {
-    console.log(usageEmptyWindowMessage());
+    log.info(usageEmptyWindowMessage());
     return;
   }
 
   const rows = items.map((item, index) => toRow(item, index));
-  console.log(chalk.bold(title));
-  console.log(renderTerminalTable(rows, columns, { style: defaultTableStyle() }));
+  log.info(chalk.bold(title));
+  log.info(renderTerminalTable(rows, columns, { style: defaultTableStyle() }));
 }
 
 export async function topCommand(options: TopOptions): Promise<void> {
@@ -201,7 +202,7 @@ export async function topCommand(options: TopOptions): Promise<void> {
         message,
       });
     } else {
-      console.log(message);
+      log.info(message);
     }
     return;
   }
