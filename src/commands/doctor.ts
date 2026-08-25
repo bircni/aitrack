@@ -1,12 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
-import { resolveMachineId, tryLoadConfig } from '../config.js';
+import { type ConfigLoad, readConfig, resolveMachineId } from '../config.js';
 import { findDuplicateMachineDays } from '../data/duplicateMachines.js';
+import { isRecord } from '../data/guards.js';
 import { INIT_HINT } from '../data/messages.js';
 import type { MachineFile } from '../data/types.js';
 import { pad } from '../display/format.js';
@@ -127,6 +128,19 @@ async function sourceCheck(label: string, roots: string[]): Promise<CheckResult>
   };
 }
 
+/** Whether `directory` is the aitrack repo, which is what carries the script. */
+function isAitrackCheckout(directory: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'));
+    if (!isRecord(parsed)) return false;
+    return (
+      parsed.name === 'aitrack' && isRecord(parsed.scripts) && 'pricing:check' in parsed.scripts
+    );
+  } catch {
+    return false;
+  }
+}
+
 function pricingCheck(options: DoctorOptions): CheckResult {
   if (!options.pricingCheck) {
     return {
@@ -138,13 +152,16 @@ function pricingCheck(options: DoctorOptions): CheckResult {
     };
   }
 
-  const packagePath = join(process.cwd(), 'package.json');
-  if (!existsSync(packagePath)) {
+  // The drift check shells out to `pnpm run pricing:check`, which only exists
+  // in a source checkout. A published install has neither the script nor
+  // necessarily pnpm, and any unrelated project's package.json would previously
+  // get this far and fail with a confusing pnpm error.
+  if (!isAitrackCheckout(process.cwd())) {
     return {
       status: 'warn',
       label: 'Pricing drift',
       detail:
-        'package.json not found in current directory; run doctor --pricing-check from the aitrack repo root',
+        'not an aitrack source checkout; run doctor --pricing-check from the aitrack repo root',
     };
   }
 
@@ -213,8 +230,35 @@ export function duplicateMachineCheck(): CheckResult {
   };
 }
 
+/**
+ * Report the config, distinguishing a file that is absent from one that is
+ * present but broken — which used to look identical here, so a corrupt config
+ * was diagnosed as "no config found" and the advice was to re-run init.
+ */
+function configCheck(loaded: ConfigLoad): CheckResult {
+  if (loaded.status === 'ok') {
+    return {
+      status: 'ok',
+      label: 'Config',
+      detail: `repoUrl=${loaded.config.repoUrl || '(empty)'}, machineId=${resolveMachineId(loaded.config)}`,
+    };
+  }
+  if (loaded.status === 'invalid') {
+    return {
+      status: 'fail',
+      label: 'Config',
+      detail: `config file is ${loaded.reason}; fix it or re-run ${INIT_HINT}`,
+    };
+  }
+  return {
+    status: 'warn',
+    label: 'Config',
+    detail: `no config found; run ${INIT_HINT} for sync`,
+  };
+}
+
 async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
-  const config = tryLoadConfig();
+  const loadedConfig = readConfig();
   const checks: CheckResult[] = [];
 
   checks.push({
@@ -228,13 +272,7 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
       failDetail: 'not available on PATH',
     }),
   );
-  checks.push({
-    status: config ? 'ok' : 'warn',
-    label: 'Config',
-    detail: config
-      ? `repoUrl=${config.repoUrl || '(empty)'}, machineId=${resolveMachineId(config)}`
-      : `no config found; run ${INIT_HINT} for sync`,
-  });
+  checks.push(configCheck(loadedConfig));
   checks.push({
     status: isCloned() ? 'ok' : 'warn',
     label: 'Local repo',

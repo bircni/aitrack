@@ -4,7 +4,7 @@ import {
   claudeHeading,
   discoverClaudeModelsOnPage,
   discoverCodexModelsOnPage,
-} from '../../../scripts/update-pricing.js';
+} from '../update-pricing.js';
 
 describe('pricing checker discovery', () => {
   it('converts every tracked Claude family slug to its docs heading', () => {

@@ -2,12 +2,14 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['src/**/__tests__/**/*.test.ts'],
+    include: ['src/**/__tests__/**/*.test.ts', 'scripts/__tests__/**/*.test.ts'],
     testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
-      include: ['src/**/*.ts'],
+      // scripts/ is partly covered via src/pricing/__tests__/checker.test.ts;
+      // without it that coverage was invisible.
+      include: ['src/**/*.ts', 'scripts/**/*.ts'],
       // Type-only modules: no statements to cover, so including them would
       // only dilute the ratios.
       exclude: [

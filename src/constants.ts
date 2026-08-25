@@ -7,7 +7,7 @@
  */
 
 /** Calendar-day key format used for every date in the data files. */
-export const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isDayKey(value: string): boolean {
   return DAY_KEY_PATTERN.test(value);
