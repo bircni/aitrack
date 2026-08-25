@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { isFiniteNumber, isRecord } from '../data/guards.js';
 import type { DayEntry, DayMap, TokenCounts } from '../data/types.js';
+import { environmentValue } from '../env.js';
 import { CACHE_DIR } from '../paths.js';
 import { packageVersion } from '../version.js';
 
@@ -110,7 +111,7 @@ function disabledCache(): ParseCache {
  * shared file would have them clobbering each other's writes.
  */
 export function openParseCache(name: string): ParseCache {
-  if (process.env.AITRACK_NO_CACHE) return disabledCache();
+  if (environmentValue('AITRACK_NO_CACHE')) return disabledCache();
 
   const cachePath = join(CACHE_DIR, `${name}.json`);
   const previous = readCacheFile(cachePath);

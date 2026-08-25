@@ -7,6 +7,7 @@ import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
 import { isRecord } from '../data/guards.js';
 import type { DayMap } from '../data/types.js';
+import { environmentValue } from '../env.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedParse } from './cache.js';
@@ -14,9 +15,9 @@ import { resolveSourceRoots } from './paths.js';
 import { parseProviderSources } from './pipeline.js';
 
 export function getCodexPaths(): string[] {
-  const codexHome = process.env.CODEX_HOME;
+  const codexHome = environmentValue('CODEX_HOME');
   return resolveSourceRoots({
-    envValue: process.env.AITRACK_CODEX_SESSION_DIRS,
+    envValue: environmentValue('AITRACK_CODEX_SESSION_DIRS'),
     configValue: tryLoadConfig()?.codexSessionsDir,
     defaults: [
       ...(codexHome ? [join(codexHome, 'sessions')] : []),
