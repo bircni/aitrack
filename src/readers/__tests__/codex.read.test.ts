@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { localTimestamp } from '../../__tests__/helpers/fixtures.js';
+import { localTimestamp, writeJsonl } from '../../__tests__/helpers/fixtures.js';
 
 const TEST_HOME = vi.hoisted(() => {
   const temporary = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
@@ -16,10 +16,6 @@ vi.mock('os', async (importOriginal) => {
 });
 
 import { getCodexPaths, readCodexData } from '../codex.js';
-
-function jsonl(path: string, lines: object[]): void {
-  writeFileSync(path, lines.map((l) => JSON.stringify(l)).join('\n'));
-}
 
 describe('readCodexData', () => {
   beforeEach(() => {
@@ -38,7 +34,7 @@ describe('readCodexData', () => {
   it('walks session directories and aggregates parsed sessions by day and model', async () => {
     const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
     mkdirSync(sessionDir, { recursive: true });
-    jsonl(join(sessionDir, 'a.jsonl'), [
+    writeJsonl(join(sessionDir, 'a.jsonl'), [
       {
         type: 'turn_context',
         timestamp: localTimestamp('2024-01-15'),
@@ -68,7 +64,7 @@ describe('readCodexData', () => {
   it('keeps model and day transitions separate within one session', async () => {
     const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
     mkdirSync(sessionDir, { recursive: true });
-    jsonl(join(sessionDir, 'a.jsonl'), [
+    writeJsonl(join(sessionDir, 'a.jsonl'), [
       {
         type: 'turn_context',
         timestamp: new Date(2024, 0, 15, 10).toISOString(),
@@ -113,7 +109,7 @@ describe('readCodexData', () => {
     process.env.CODEX_HOME = join(TEST_HOME, '.codex');
     const sessionDir = join(TEST_HOME, '.codex', 'sessions');
     mkdirSync(sessionDir, { recursive: true });
-    jsonl(join(sessionDir, 'a.jsonl'), [
+    writeJsonl(join(sessionDir, 'a.jsonl'), [
       {
         type: 'turn_context',
         timestamp: localTimestamp('2024-01-15'),
@@ -137,7 +133,7 @@ describe('readCodexData', () => {
     const customRoot = join(TEST_HOME, 'custom-codex');
     process.env.AITRACK_CODEX_SESSION_DIRS = customRoot;
     mkdirSync(customRoot, { recursive: true });
-    jsonl(join(customRoot, 'session.jsonl'), [
+    writeJsonl(join(customRoot, 'session.jsonl'), [
       {
         type: 'turn_context',
         timestamp: localTimestamp('2024-01-15'),
@@ -161,7 +157,7 @@ describe('readCodexData', () => {
   it('returns the same totals from a warm cache as from a cold one', async () => {
     const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
     mkdirSync(sessionDir, { recursive: true });
-    jsonl(join(sessionDir, 'a.jsonl'), [
+    writeJsonl(join(sessionDir, 'a.jsonl'), [
       {
         type: 'turn_context',
         timestamp: localTimestamp('2024-01-15'),

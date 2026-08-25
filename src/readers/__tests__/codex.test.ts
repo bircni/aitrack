@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { localTimestamp } from '../../__tests__/helpers/fixtures.js';
+import { localTimestamp, writeJsonl } from '../../__tests__/helpers/fixtures.js';
 import { parseSessionFile } from '../codex.js';
 
 let tmpDir: string;
@@ -16,14 +16,10 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-function jsonl(path: string, lines: object[]): void {
-  writeFileSync(path, lines.map((l) => JSON.stringify(l)).join('\n'));
-}
-
 describe('parseSessionFile', () => {
   it('parses a session with cumulative total_token_usage', async () => {
     const file = join(tmpDir, 's.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'turn_context',
         timestamp: localTimestamp('2024-01-15'),
@@ -50,7 +46,7 @@ describe('parseSessionFile', () => {
 
   it('tracks deltas across multiple token_count events', async () => {
     const file = join(tmpDir, 's.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'turn_context',
         timestamp: localTimestamp('2024-01-15'),
@@ -81,7 +77,7 @@ describe('parseSessionFile', () => {
   it('detects context window rollback and adds last_token_usage', async () => {
     // When total drops (new context window), the code uses last_token_usage for that turn
     const file = join(tmpDir, 's.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'turn_context',
         timestamp: localTimestamp('2024-01-15'),
@@ -114,7 +110,7 @@ describe('parseSessionFile', () => {
 
   it('falls back to last_token_usage when no total is present', async () => {
     const file = join(tmpDir, 's.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'turn_context',
         timestamp: localTimestamp('2024-01-15'),
@@ -135,7 +131,7 @@ describe('parseSessionFile', () => {
 
   it('returns null for a session with no token events', async () => {
     const file = join(tmpDir, 's.jsonl');
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'turn_context',
         timestamp: localTimestamp('2024-01-15'),
@@ -162,7 +158,7 @@ describe('parseSessionFile', () => {
     const d = String(firstDate.getDate()).padStart(2, '0');
     const expected = `${String(y)}-${m}-${d}`;
 
-    jsonl(file, [
+    writeJsonl(file, [
       { type: 'turn_context', timestamp: firstDate.toISOString(), payload: { model: 'gpt-4o' } },
       {
         type: 'event_msg',
@@ -181,7 +177,7 @@ describe('parseSessionFile', () => {
     const file = join(tmpDir, 's.jsonl');
     const firstDay = new Date(2024, 0, 15, 10, 0, 0);
     const secondDay = new Date(2024, 0, 16, 10, 0, 0);
-    jsonl(file, [
+    writeJsonl(file, [
       {
         type: 'turn_context',
         timestamp: firstDay.toISOString(),
