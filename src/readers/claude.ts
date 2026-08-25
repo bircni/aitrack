@@ -8,6 +8,7 @@ import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap
 import { isRecord } from '../data/guards.js';
 import { stripModelAliasSuffix } from '../data/modelId.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
+import { environmentValue } from '../env.js';
 import { estimateClaudeCostUSD } from '../pricing/claude.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedParse } from './cache.js';
@@ -15,9 +16,9 @@ import { resolveSourceRoots } from './paths.js';
 import { parseProviderSources } from './pipeline.js';
 
 export function getClaudePaths(): string[] {
-  const xdg = process.env.XDG_CONFIG_HOME;
+  const xdg = environmentValue('XDG_CONFIG_HOME');
   return resolveSourceRoots({
-    envValue: process.env.AITRACK_CLAUDE_PROJECTS_DIRS,
+    envValue: environmentValue('AITRACK_CLAUDE_PROJECTS_DIRS'),
     configValue: tryLoadConfig()?.claudeProjectsDir,
     defaults: [
       ...(xdg ? [join(xdg, 'claude', 'projects')] : []),
