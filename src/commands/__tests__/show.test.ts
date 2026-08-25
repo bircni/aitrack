@@ -38,7 +38,8 @@ vi.mock('../../data/localData.js', () => ({
 vi.mock('../../readers/cursor/index.js', () => ({ readCursorData: mocks.readCursorData }));
 vi.mock('../../display/renderPng.js', () => ({ renderToPng: mocks.renderToPng }));
 
-import type { MachineFile, ProviderData, RenderOptions } from '../../data/types.js';
+import type { MachineFile, ProviderData } from '../../data/types.js';
+import type { RenderOptions } from '../../display/renderOptions.js';
 import { showCommand } from '../show.js';
 
 function emptyLocalMachine(host = 'host'): MachineFile {

@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 
 import { usageCommand, type UsageOptions } from '../commands/usage.js';
-import { USAGE_PERIOD_DEFINITIONS } from '../display/usagePeriods.js';
+import { USAGE_PERIOD_DEFINITIONS } from '../data/usagePeriods.js';
 import { parseProviders, parseUsageReportOptions } from './parse.js';
 
 interface UsageCommonOptions {

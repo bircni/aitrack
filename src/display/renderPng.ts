@@ -1,6 +1,7 @@
 import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
 
-import type { DayMap, ProviderData, RenderOptions } from '../data/types.js';
+import type { DayMap, ProviderData } from '../data/types.js';
+import type { RenderOptions } from '../display/renderOptions.js';
 import { tokenIntensityLevel } from './heatmap/intensity.js';
 import { resolveProviderLayout } from './heatmap/layout.js';
 import { buildDateGrid, MONTHS } from './heatmap/stats.js';

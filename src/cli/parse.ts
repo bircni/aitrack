@@ -3,14 +3,14 @@ import { InvalidArgumentError } from 'commander';
 import type { TopKind, TopSort } from '../commands/top.js';
 import { MAX_INTERVAL_SECONDS } from '../config.js';
 import { isDayKey, MAX_PORT } from '../constants.js';
-import type { UsageReportOptions } from '../data/usageReport.js';
-import { normalizeProviderKey, PROVIDER_ORDER } from '../display/providers.js';
 import {
   isNoArgPeriod,
   isUsagePeriod,
   USAGE_PERIOD_DEFINITIONS,
   type UsagePeriod,
-} from '../display/usagePeriods.js';
+} from '../data/usagePeriods.js';
+import type { UsageReportOptions } from '../data/usageReport.js';
+import { normalizeProviderKey, PROVIDER_ORDER } from '../display/providers.js';
 
 export function isValidDateString(date: string): boolean {
   return isDayKey(date);

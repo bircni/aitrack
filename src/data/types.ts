@@ -34,34 +34,3 @@ export interface MachineFile {
   lastUpdated: string;
   days: Record<string, Record<string, ProviderDay>>;
 }
-
-interface DaemonConfig {
-  /** When true, run sync (pull + push) on each daemon refresh tick. */
-  sync?: boolean;
-  /** HTTP listen port for the daemon dashboard. */
-  port?: number;
-  /** Seconds between data refresh ticks. */
-  interval?: number;
-}
-
-export interface Config {
-  repoUrl: string;
-  /** Stable machine identifier for data/{machineId}.json; defaults to os.hostname(). */
-  machineId?: string;
-  /** Comma-separated Claude Code project roots; defaults to the standard Claude locations. */
-  claudeProjectsDir?: string;
-  /** Comma-separated Codex session roots; defaults to the standard Codex locations. */
-  codexSessionsDir?: string;
-  daemon?: DaemonConfig;
-}
-
-export interface RenderOptions {
-  dark?: boolean;
-  /**
-   * When false (default), one heatmap row per provider.
-   * When true, a single merged heatmap across all providers.
-   */
-  all?: boolean;
-  /** When set, only include days from this calendar year. */
-  year?: number;
-}

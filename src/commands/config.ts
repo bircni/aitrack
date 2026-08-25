@@ -1,9 +1,9 @@
 import chalk from 'chalk';
 
 import { resolveMachineId, saveConfig, tryLoadConfig } from '../config.js';
+import type { Config } from '../configTypes.js';
 import { MAX_PORT } from '../constants.js';
 import { NO_CONFIG_MESSAGE, REPO_URL_UNSET_MESSAGE } from '../data/messages.js';
-import type { Config } from '../data/types.js';
 import { migrateMachineDataFiles } from '../git.js';
 import { normalizeMachineId } from '../machineId.js';
 import { log } from '../output.js';

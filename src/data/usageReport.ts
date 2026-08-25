@@ -1,15 +1,15 @@
 import { orderedProviderKeys, providerLabel } from '../display/providers.js';
-import {
-  computePreviousUsageWindow,
-  computeUsageWindow,
-  type UsagePeriod,
-  type UsageWindow,
-} from '../display/usagePeriods.js';
 import { aggregateModelsByDayMap } from './aggregate.js';
 import { isUsageNotConfigured, usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
 import { compareByCostThenTokens } from './sort.js';
 import type { ProviderData } from './types.js';
 import { loadMergedProviderData } from './usageData.js';
+import {
+  computePreviousUsageWindow,
+  computeUsageWindow,
+  type UsagePeriod,
+  type UsageWindow,
+} from './usagePeriods.js';
 
 export interface UsageReportOptions {
   period: UsagePeriod;
