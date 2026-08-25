@@ -8,6 +8,7 @@ import { printJsonCommand } from '../cli/json.js';
 import { resolveMachineId, tryLoadConfig } from '../config.js';
 import { INIT_HINT } from '../data/messages.js';
 import type { MachineFile } from '../data/types.js';
+import { pad } from '../display/format.js';
 import { isCloned, listDataFiles, LOCAL_REPO, readDataFile } from '../git.js';
 import { log } from '../output.js';
 import { CLAUDE_PRICING_BY_ID } from '../pricing/claude.js';
@@ -30,10 +31,26 @@ interface CheckResult {
   detail: string;
 }
 
+/**
+ * Status text and its color, kept apart so the column can be padded on the
+ * plain text.
+ *
+ * Padding the colored string instead measured the ANSI escapes as content, so
+ * `padEnd` was a no-op on a TTY and the columns only lined up when color was
+ * disabled. `display/terminalTable.ts` already pads before styling.
+ */
+const STATUS_STYLE: Record<CheckStatus, { text: string; color: (value: string) => string }> = {
+  ok: { text: 'OK', color: (value) => chalk.green(value) },
+  warn: { text: 'WARN', color: (value) => chalk.yellow(value) },
+  fail: { text: 'FAIL', color: (value) => chalk.red(value) },
+};
+
+/** Width of the widest status text, so every row's label starts in one column. */
+const STATUS_COLUMN_WIDTH = 4;
+
 function statusLabel(status: CheckStatus): string {
-  if (status === 'ok') return chalk.green('OK');
-  if (status === 'warn') return chalk.yellow('WARN');
-  return chalk.red('FAIL');
+  const style = STATUS_STYLE[status];
+  return style.color(pad(style.text, STATUS_COLUMN_WIDTH, 'left'));
 }
 
 function parseMajor(version: string): number {
@@ -267,9 +284,14 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
     );
   }
 
-  checks.push(await sourceCheck('Claude Code source', getClaudePaths()));
-  checks.push(await sourceCheck('Codex source', getCodexPaths()));
-  checks.push(await cursorCheck());
+  // Three independent probes that each hit the filesystem or Cursor's database.
+  checks.push(
+    ...(await Promise.all([
+      sourceCheck('Claude Code source', getClaudePaths()),
+      sourceCheck('Codex source', getCodexPaths()),
+      cursorCheck(),
+    ])),
+  );
   checks.push(pricingCheck(options));
 
   return checks;
@@ -290,7 +312,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
   } else {
     log.info(chalk.bold('aitrack doctor'));
     for (const check of checks) {
-      log.info(`${statusLabel(check.status).padEnd(9)} ${check.label}: ${check.detail}`);
+      log.info(`${statusLabel(check.status)}  ${check.label}: ${check.detail}`);
     }
   }
 
