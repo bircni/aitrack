@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
+import { isRecord } from '../data/guards.js';
 import { stripModelAliasSuffix } from '../data/modelId.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
 import { estimateClaudeCostUSD } from '../pricing/claude.js';
@@ -68,12 +69,18 @@ export async function parseJsonlFile(
 
   for await (const line of rl) {
     if (!line.trim()) continue;
-    let entry: ClaudeEntry;
+    let parsed: unknown;
     try {
-      entry = JSON.parse(line) as ClaudeEntry;
+      parsed = JSON.parse(line);
     } catch {
+      // A truncated or half-written line — the transcript is appended to while
+      // it is being read. Skip it rather than failing the whole file.
       continue;
     }
+    // A JSONL line is only interesting when it is an object; a bare number or
+    // string parses fine and would otherwise be cast to a shape it never had.
+    if (!isRecord(parsed)) continue;
+    const entry = parsed as unknown as ClaudeEntry;
 
     if (entry.type !== 'assistant') continue;
     const usage = entry.message?.usage;
