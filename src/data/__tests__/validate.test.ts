@@ -1,6 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { parseMachineFile, validateMachineFile } from '../validate.js';
+import { resetMachineFileDiagnostics } from '../diagnostics.js';
+import {
+  checkMachineFile,
+  checkRawMachineFile,
+  parseMachineFile,
+  validateMachineFile,
+} from '../validate.js';
 
 const validMachine = {
   hostname: 'laptop',
@@ -16,6 +22,12 @@ const validMachine = {
     },
   },
 };
+
+beforeEach(() => {
+  // The reporter remembers which files it has warned about, so tests would
+  // otherwise depend on the order they ran in.
+  resetMachineFileDiagnostics();
+});
 
 describe('validateMachineFile', () => {
   it('accepts a valid machine file', () => {
@@ -224,6 +236,63 @@ describe('validateMachineFile', () => {
       expect.stringContaining('days.2026-01-15.claude_code.totals.cachedInputTokens'),
     );
     warn.mockRestore();
+  });
+});
+
+describe('checkMachineFile', () => {
+  it('returns findings instead of printing them', () => {
+    // The whole point of the pure form: a caller can inspect what was wrong
+    // without spying on the console, and decide for itself how to report.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const checked = checkMachineFile({ hostname: '' }, 'data/bad.json');
+
+    expect(checked.machine).toBeNull();
+    expect(checked.diagnostics).toEqual([
+      {
+        kind: 'file-skipped',
+        filePath: 'data/bad.json',
+        reason: 'hostname must be a non-empty string',
+      },
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('reports a dropped day every time, leaving de-duplication to the reporter', () => {
+    const withGarbageDay = {
+      ...validMachine,
+      days: { 'NaN-NaN-NaN': validMachine.days['2026-01-15'], ...validMachine.days },
+    };
+
+    for (const _ of [0, 1]) {
+      const checked = checkMachineFile(withGarbageDay, 'data/laptop.json');
+      expect(checked.diagnostics).toEqual([
+        {
+          kind: 'day-dropped',
+          filePath: 'data/laptop.json',
+          date: 'NaN-NaN-NaN',
+          reason: 'not a YYYY-MM-DD date',
+        },
+      ]);
+      expect(Object.keys(checked.machine?.days ?? {})).toEqual(['2026-01-15']);
+    }
+  });
+
+  it('keeps the objects it was given, so a round-trip is byte-identical', () => {
+    // sync writes back what it read; rebuilding these would reorder keys and
+    // produce a spurious diff on every already-up-to-date machine.
+    const raw = JSON.stringify(validMachine);
+    const checked = checkRawMachineFile(raw, 'data/laptop.json');
+    expect(JSON.stringify(checked.machine)).toBe(raw);
+  });
+
+  it('reports malformed JSON as a skipped file', () => {
+    const checked = checkRawMachineFile('{not json', 'data/broken.json');
+    expect(checked.machine).toBeNull();
+    const [diagnostic] = checked.diagnostics;
+    expect(diagnostic?.kind).toBe('file-skipped');
+    expect(diagnostic?.reason).toContain('invalid JSON');
   });
 });
 

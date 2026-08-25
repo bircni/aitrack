@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
+import { isRecord } from '../data/guards.js';
 import type { DayMap } from '../data/types.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
@@ -98,12 +99,18 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult[
 
   for await (const line of rl) {
     if (!line.trim()) continue;
-    let entry: CodexEntry;
+    let parsed: unknown;
     try {
-      entry = JSON.parse(line) as CodexEntry;
+      parsed = JSON.parse(line);
     } catch {
+      // A truncated or half-written line — the transcript is appended to while
+      // it is being read. Skip it rather than failing the whole file.
       continue;
     }
+    // A JSONL line is only interesting when it is an object; a bare number or
+    // string parses fine and would otherwise be cast to a shape it never had.
+    if (!isRecord(parsed)) continue;
+    const entry = parsed as unknown as CodexEntry;
 
     if (entry.timestamp) {
       currentDate = tryLocalDateString(entry.timestamp) ?? currentDate;
