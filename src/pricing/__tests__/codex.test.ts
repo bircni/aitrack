@@ -9,7 +9,7 @@ import {
 
 describe('codex pricing', () => {
   it('costs 1M+1M tokens correctly for known models', () => {
-    expect(estimateCodexCostUSD('gpt-5.6-sol', 1_000_000, 1_000_000)).toBe(35);
+    expect(estimateCodexCostUSD('gpt-5.6-sol', 1_000_000, 1_000_000)).toBe(24);
     expect(estimateCodexCostUSD('gpt-5.6-terra', 1_000_000, 1_000_000)).toBe(14);
     expect(estimateCodexCostUSD('gpt-5.6-luna', 1_000_000, 1_000_000)).toBe(1.4);
     expect(estimateCodexCostUSD('gpt-5.5', 1_000_000, 1_000_000)).toBe(35);
@@ -70,13 +70,15 @@ describe('codex pricing', () => {
   });
 
   it('prices gpt-5.6 sessions at the rate in effect on the usage date', () => {
-    // OpenAI cut Terra and Luna on 2026-07-30; Sol was unchanged.
-    // Terra: $2.50/$15 -> $2/$12, Luna: $1/$6 -> $0.20/$1.20.
+    // OpenAI cut Terra and Luna on 2026-07-30, then Sol on 2026-08-21.
+    // Terra: $2.50/$15 -> $2/$12, Luna: $1/$6 -> $0.20/$1.20, Sol: $5/$30 -> $4/$20.
     expect(estimateCodexCostUSD('gpt-5.6-terra', 1_000_000, 1_000_000, 0, '2026-07-29')).toBe(17.5);
     expect(estimateCodexCostUSD('gpt-5.6-terra', 1_000_000, 1_000_000, 0, '2026-07-30')).toBe(14);
     expect(estimateCodexCostUSD('gpt-5.6-luna', 1_000_000, 1_000_000, 0, '2026-07-29')).toBe(7);
     expect(estimateCodexCostUSD('gpt-5.6-luna', 1_000_000, 1_000_000, 0, '2026-07-30')).toBe(1.4);
     expect(estimateCodexCostUSD('gpt-5.6-sol', 1_000_000, 1_000_000, 0, '2026-07-29')).toBe(35);
+    expect(estimateCodexCostUSD('gpt-5.6-sol', 1_000_000, 1_000_000, 0, '2026-08-20')).toBe(35);
+    expect(estimateCodexCostUSD('gpt-5.6-sol', 1_000_000, 1_000_000, 0, '2026-08-21')).toBe(24);
   });
 
   it('records fallback hits for unknown models', () => {

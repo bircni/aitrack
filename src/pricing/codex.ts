@@ -5,7 +5,7 @@
 //   https://openrouter.ai/openai/gpt-5.1-codex
 // Codex sessions report aggregate input/output tokens plus a cached-input subset,
 // which is billed at 10% of the base input rate.
-// Last updated: 2026-08-03.
+// Last updated: 2026-08-25.
 
 export interface CodexPricing {
   inputPerMillion: number;
@@ -15,7 +15,7 @@ export interface CodexPricing {
 // Models currently listed on developers.openai.com/api/docs/pricing.
 // Verified by `pnpm run pricing:check`.
 export const CODEX_PRICING_CURRENT: Record<string, CodexPricing> = {
-  'gpt-5.6-sol': { inputPerMillion: 5, outputPerMillion: 30 },
+  'gpt-5.6-sol': { inputPerMillion: 4, outputPerMillion: 20 },
   'gpt-5.6-terra': { inputPerMillion: 2, outputPerMillion: 12 },
   'gpt-5.6-luna': { inputPerMillion: 0.2, outputPerMillion: 1.2 },
   'gpt-5.5': { inputPerMillion: 5, outputPerMillion: 30 },
@@ -50,7 +50,9 @@ export const CODEX_PRICING_OVERRIDES: Record<
   string,
   Array<{ before: string; pricing: CodexPricing }>
 > = {
-  // Launch pricing through 2026-07-29; cut rates from 2026-07-30 (Sol unchanged).
+  // Sol kept its launch rates until 2026-08-20; promotional rates from 2026-08-21.
+  'gpt-5.6-sol': [{ before: '2026-08-21', pricing: { inputPerMillion: 5, outputPerMillion: 30 } }],
+  // Launch pricing through 2026-07-29; cut rates from 2026-07-30.
   'gpt-5.6-terra': [
     { before: '2026-07-30', pricing: { inputPerMillion: 2.5, outputPerMillion: 15 } },
   ],
