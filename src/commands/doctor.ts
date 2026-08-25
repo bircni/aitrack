@@ -6,6 +6,7 @@ import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
 import { resolveMachineId, tryLoadConfig } from '../config.js';
+import { findDuplicateMachineDays } from '../data/duplicateMachines.js';
 import { INIT_HINT } from '../data/messages.js';
 import type { MachineFile } from '../data/types.js';
 import { pad } from '../display/format.js';
@@ -193,27 +194,8 @@ export function duplicateMachineCheck(): CheckResult {
     .map((filePath) => readDataFile(filePath))
     .filter((machine): machine is MachineFile => machine !== null);
 
-  const byDay = new Map<string, Map<string, string[]>>();
-  for (const machine of machines) {
-    for (const [date, providers] of Object.entries(machine.days)) {
-      const payloads = byDay.get(date) ?? new Map<string, string[]>();
-      const payload = JSON.stringify(providers);
-      payloads.set(payload, [...(payloads.get(payload) ?? []), machine.hostname]);
-      byDay.set(date, payloads);
-    }
-  }
-
-  const collidingDays = new Set<string>();
-  const collidingMachines = new Set<string>();
-  for (const [date, payloads] of byDay) {
-    for (const hostnames of payloads.values()) {
-      if (hostnames.length < 2) continue;
-      collidingDays.add(date);
-      for (const host of hostnames) collidingMachines.add(host);
-    }
-  }
-
-  if (collidingDays.size === 0) {
+  const duplicates = findDuplicateMachineDays(machines);
+  if (duplicates.days.length === 0) {
     return {
       status: 'ok',
       label: 'Machine identities',
@@ -221,12 +203,11 @@ export function duplicateMachineCheck(): CheckResult {
     };
   }
 
-  const names = [...collidingMachines].sort((a, b) => a.localeCompare(b)).join(', ');
   return {
     status: 'warn',
     label: 'Machine identities',
     detail:
-      `${String(collidingDays.size)} day(s) are recorded identically under multiple machines (${names}) — ` +
+      `${String(duplicates.days.length)} day(s) are recorded identically under multiple machines (${duplicates.machines.join(', ')}) — ` +
       'totals are inflated. These are likely one machine synced under several ids; ' +
       'merge them into one data file.',
   };

@@ -1,10 +1,15 @@
 import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
-import { aggregateModelsByDayMap } from '../data/aggregate.js';
 import { isUsageNotConfigured } from '../data/emptyState.js';
-import { compareByCostThenTokens } from '../data/sort.js';
-import type { DayMap, ProviderData } from '../data/types.js';
+import {
+  type DayEntryAccumulator,
+  type ModelAccumulator,
+  topDays,
+  topModels,
+  topProviderKey,
+  type TopSort,
+} from '../data/topUsage.js';
 import {
   loadMergedProviderData,
   usageEmptyMessage,
@@ -20,7 +25,7 @@ import {
 import { log } from '../output.js';
 
 export type TopKind = 'days' | 'models';
-export type TopSort = 'tokens' | 'cost';
+export type { TopSort } from '../data/topUsage.js';
 
 export interface TopOptions {
   kind: TopKind;
@@ -39,23 +44,6 @@ interface Row {
   cost: string;
 }
 
-interface TopSortable {
-  tokens: number;
-  cost: number | null;
-}
-
-interface DayEntryAccumulator extends TopSortable {
-  date: string;
-  byProvider: Record<string, number>;
-}
-
-interface ModelAccumulator extends TopSortable {
-  providerKey: string;
-  provider: string;
-  model: string;
-  days: number;
-}
-
 interface TopJsonItem {
   rank: number;
   tokens: number;
@@ -63,75 +51,15 @@ interface TopJsonItem {
   [key: string]: unknown;
 }
 
-function compareTopEntries(a: TopSortable, b: TopSortable, sort: TopSort): number {
-  if (sort === 'tokens') {
-    return b.tokens - a.tokens || (b.cost ?? 0) - (a.cost ?? 0);
-  }
-  return compareByCostThenTokens(
-    { tokens: a.tokens, cost: a.cost },
-    { tokens: b.tokens, cost: b.cost },
-  );
-}
-
-function topProviderKey(byProvider: Record<string, number>): string | null {
-  const top = Object.entries(byProvider).sort((a, b) => b[1] - a[1])[0];
-  return top ? top[0] : null;
-}
-
-function topDays(
-  providerData: ProviderData,
-  limit: number,
-  sort: TopSort,
-  year?: number,
-): DayEntryAccumulator[] {
-  const byDate = new Map<string, DayEntryAccumulator>();
-  for (const [providerKey, dayMap] of Object.entries(providerData)) {
-    for (const [date, day] of dayMap) {
-      if (year !== undefined && !date.startsWith(`${String(year)}-`)) continue;
-      let accumulator = byDate.get(date);
-      if (!accumulator) {
-        accumulator = { date, tokens: 0, cost: null, byProvider: {} };
-        byDate.set(date, accumulator);
-      }
-      const dayTokens = day.inputTokens + day.outputTokens;
-      accumulator.tokens += dayTokens;
-      accumulator.byProvider[providerKey] = (accumulator.byProvider[providerKey] ?? 0) + dayTokens;
-      if (day.costUSD !== undefined) {
-        accumulator.cost = (accumulator.cost ?? 0) + day.costUSD;
-      }
-    }
-  }
-  const all = [...byDate.values()];
-  all.sort((a, b) => compareTopEntries(a, b, sort));
-  return all.slice(0, limit);
-}
-
-function aggregateModels(dayMap: DayMap, providerKey: string, year?: number): ModelAccumulator[] {
-  const byModel = aggregateModelsByDayMap(dayMap, { year });
-  return [...byModel]
-    .filter(([, agg]) => agg.inputTokens + agg.outputTokens > 0 || agg.hasCost)
-    .map(([model, agg]) => ({
-      providerKey,
-      provider: providerLabel(providerKey),
-      model,
-      tokens: agg.inputTokens + agg.outputTokens,
-      cost: agg.hasCost ? agg.costUSD : null,
-      days: agg.days,
-    }));
-}
-
-function topModels(
-  providerData: ProviderData,
-  limit: number,
-  sort: TopSort,
-  year?: number,
-): ModelAccumulator[] {
-  const all: ModelAccumulator[] = [];
-  for (const [providerKey, dayMap] of Object.entries(providerData)) {
-    all.push(...aggregateModels(dayMap, providerKey, year));
-  }
-  all.sort((a, b) => compareTopEntries(a, b, sort));
-  return all.slice(0, limit);
+/** The two tables differ only in these two headings. */
+function topColumns(labelHeader: string, subHeader: string): Array<TerminalTableColumn<Row>> {
+  return [
+    { header: '#', align: 'right', cell: (r) => r.rank },
+    { header: labelHeader, align: 'left', cell: (r) => r.label },
+    { header: subHeader, align: 'left', cell: (r) => r.sub },
+    { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
+    { header: 'Cost', align: 'right', cell: (r) => r.cost },
+  ];
 }
 
 function dayToRow(d: DayEntryAccumulator, index: number): Row {
@@ -224,13 +152,7 @@ export async function topCommand(options: TopOptions): Promise<void> {
         byProvider: d.byProvider,
       }),
       dayToRow,
-      [
-        { header: '#', align: 'right', cell: (r) => r.rank },
-        { header: 'Date', align: 'left', cell: (r) => r.label },
-        { header: 'Top provider', align: 'left', cell: (r) => r.sub },
-        { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
-        { header: 'Cost', align: 'right', cell: (r) => r.cost },
-      ],
+      topColumns('Date', 'Top provider'),
     );
     return;
   }
@@ -250,12 +172,6 @@ export async function topCommand(options: TopOptions): Promise<void> {
       days: m.days,
     }),
     modelToRow,
-    [
-      { header: '#', align: 'right', cell: (r) => r.rank },
-      { header: 'Model', align: 'left', cell: (r) => r.label },
-      { header: 'Provider', align: 'left', cell: (r) => r.sub },
-      { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
-      { header: 'Cost', align: 'right', cell: (r) => r.cost },
-    ],
+    topColumns('Model', 'Provider'),
   );
 }
