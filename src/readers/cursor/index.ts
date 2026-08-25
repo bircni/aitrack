@@ -1,11 +1,7 @@
 import type { DayMap } from '../../data/types.js';
+import { errorMessage } from '../../errors.js';
 import { log } from '../../output.js';
-import {
-  errorMessage,
-  fetchCursorUsageCsv,
-  getCursorStateDatabasePath,
-  readCursorAuthState,
-} from './auth.js';
+import { fetchCursorUsageCsv, getCursorStateDatabasePath, readCursorAuthState } from './auth.js';
 import { aggregateCursorCsvToDayMap } from './csv.js';
 
 export { getCursorStateDatabasePath } from './auth.js';

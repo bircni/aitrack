@@ -6,6 +6,7 @@ import { SYNC_REPO_NOT_CLONED_MESSAGE } from '../data/messages.js';
 import type { MachineFile, ProviderData } from '../data/types.js';
 import { loadMergedProviderData } from '../data/usageData.js';
 import { type HtmlOperationalStatus, renderToHtml } from '../display/html/render.js';
+import { errorMessage } from '../errors.js';
 import { isCloned } from '../git.js';
 import { log } from '../output.js';
 import { syncData } from './sync.js';
@@ -132,7 +133,7 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
       status.providers = Object.keys(loaded.providerData);
       hasRendered = true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       status.lastError = {
         phase,
         message,

@@ -11,6 +11,7 @@ import { isRecord } from '../data/guards.js';
 import { INIT_HINT } from '../data/messages.js';
 import type { MachineFile } from '../data/types.js';
 import { pad } from '../display/format.js';
+import { errorMessage } from '../errors.js';
 import { isCloned, listDataFiles, LOCAL_REPO, readDataFile } from '../git.js';
 import { log } from '../output.js';
 import { CLAUDE_PRICING_BY_ID } from '../pricing/claude.js';
@@ -197,7 +198,7 @@ async function cursorCheck(): Promise<CheckResult> {
           detail: `state DB found but no access token was present: ${stateDb}`,
         };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     return { status: 'warn', label: 'Cursor source', detail: message };
   }
 }
