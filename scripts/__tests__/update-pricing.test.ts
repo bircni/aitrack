@@ -4,6 +4,8 @@ import {
   claudeHeading,
   discoverClaudeModelsOnPage,
   discoverCodexModelsOnPage,
+  compareProviderPricing,
+  tallyFindings,
 } from '../update-pricing.js';
 
 describe('pricing checker discovery', () => {
@@ -43,5 +45,69 @@ describe('pricing checker discovery', () => {
       '</div>',
     ].join('');
     expect(discoverCodexModelsOnPage(html)).toEqual(['gpt-5.6-priced']);
+  });
+});
+
+describe('compareProviderPricing', () => {
+  const check = {
+    label: 'Test',
+    url: 'https://example.test/pricing',
+    table: {
+      'model-ok': { inputPerMillion: 3, outputPerMillion: 15 },
+      'model-drift': { inputPerMillion: 1, outputPerMillion: 2 },
+      'model-absent': { inputPerMillion: 9, outputPerMillion: 9 },
+    },
+    knownIds: ['model-ok', 'model-drift', 'model-absent'],
+    sourceFile: 'src/pricing/test.ts',
+    lookup: () => (modelId: string) => {
+      if (modelId === 'model-ok') return { prices: [3, 15], where: 'Test' };
+      if (modelId === 'model-drift') return { prices: [4, 20, 99], where: 'Test' };
+      return { prices: [], where: 'Model Absent' };
+    },
+    discover: () => ['model-ok', 'brand-new-model'],
+  };
+
+  it('classifies matching, drifted, and unfindable models', () => {
+    const findings = compareProviderPricing(check, '<html></html>');
+    const byId = new Map(findings.map((f) => [f.modelId, f]));
+
+    expect(byId.get('model-ok')?.kind).toBe('ok');
+    expect(byId.get('model-drift')?.kind).toBe('drift');
+    // Not on the page at all is different from wrong on the page: one needs a
+    // scraper fix, the other needs a price update.
+    expect(byId.get('model-absent')?.kind).toBe('unverified');
+  });
+
+  it('reports which side drifted and what it saw', () => {
+    const drift = compareProviderPricing(check, '').find((f) => f.kind === 'drift');
+    expect(drift).toMatchObject({ isInOk: false, isOutOk: false, saw: [4, 20, 99] });
+  });
+
+  it('flags a model on the page that the pricing table does not know', () => {
+    const findings = compareProviderPricing(check, '');
+    expect(findings.filter((f) => f.kind === 'missing').map((f) => f.modelId)).toEqual([
+      'brand-new-model',
+    ]);
+  });
+
+  it('counts each category for the exit status', () => {
+    // main() exits non-zero on drift or missing, but not on unverified alone.
+    expect(tallyFindings(compareProviderPricing(check, ''))).toEqual({
+      drift: 1,
+      unverified: 1,
+      missing: 1,
+    });
+  });
+
+  it('treats a half-correct price as drift', () => {
+    const halfRight = {
+      ...check,
+      table: { 'model-half': { inputPerMillion: 3, outputPerMillion: 999 } },
+      knownIds: ['model-half'],
+      lookup: () => () => ({ prices: [3, 15], where: 'Test' }),
+      discover: () => [],
+    };
+    const [finding] = compareProviderPricing(halfRight, '');
+    expect(finding).toMatchObject({ kind: 'drift', isInOk: true, isOutOk: false });
   });
 });
