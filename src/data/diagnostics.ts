@@ -13,7 +13,7 @@ import type { MachineFileDiagnostic } from './validate.js';
  */
 const warnedDroppedDays = new Set<string>();
 
-export function formatMachineFileDiagnostic(diagnostic: MachineFileDiagnostic): string {
+function formatMachineFileDiagnostic(diagnostic: MachineFileDiagnostic): string {
   return diagnostic.kind === 'file-skipped'
     ? `Skipping invalid machine file ${diagnostic.filePath}: ${diagnostic.reason}`
     : `Dropping day ${diagnostic.date} from machine file ${diagnostic.filePath}: ${diagnostic.reason}`;

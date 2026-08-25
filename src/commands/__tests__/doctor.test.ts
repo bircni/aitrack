@@ -12,8 +12,9 @@ function stripAnsi(value: string): string {
 const mocks = vi.hoisted(() => ({
   spawnSync: vi.fn(),
   existsSync: vi.fn(),
+  readFileSync: vi.fn(),
   readdir: vi.fn(),
-  tryLoadConfig: vi.fn(),
+  readConfig: vi.fn(),
   resolveMachineId: vi.fn(),
   isCloned: vi.fn(),
   listDataFiles: vi.fn(),
@@ -25,10 +26,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('node:child_process', () => ({ spawnSync: mocks.spawnSync }));
-vi.mock('node:fs', () => ({ existsSync: mocks.existsSync }));
+vi.mock('node:fs', () => ({
+  existsSync: mocks.existsSync,
+  readFileSync: mocks.readFileSync,
+}));
 vi.mock('node:fs/promises', () => ({ readdir: mocks.readdir }));
 vi.mock('../../config.js', () => ({
-  tryLoadConfig: mocks.tryLoadConfig,
+  readConfig: mocks.readConfig,
   resolveMachineId: mocks.resolveMachineId,
 }));
 vi.mock('../../git.js', () => ({
@@ -66,13 +70,20 @@ describe('doctorCommand', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     mocks.spawnSync.mockReturnValue({ status: 0 });
     mocks.existsSync.mockImplementation((path: string) => path !== '/missing');
+    // --pricing-check shells out to a script only the source checkout has.
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify({ name: 'aitrack', scripts: { 'pricing:check': 'tsx scripts/x.ts' } }),
+    );
     mocks.readdir.mockImplementation((path: string) => {
       if (path === '/claude') return Promise.resolve([dirent('project', 'dir')]);
       if (path === '/claude/project') return Promise.resolve([dirent('history.jsonl', 'file')]);
       if (path === '/codex') return Promise.resolve([dirent('session.jsonl', 'file')]);
       return Promise.resolve([]);
     });
-    mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
+    mocks.readConfig.mockReturnValue({
+      status: 'ok',
+      config: { repoUrl: 'git@example.com:me/data.git' },
+    });
     mocks.resolveMachineId.mockReturnValue('host');
     mocks.isCloned.mockReturnValue(true);
     mocks.getClaudePaths.mockReturnValue(['/claude']);
@@ -92,6 +103,36 @@ describe('doctorCommand', () => {
     expect(out).toContain('Codex source: 1 JSONL file(s)');
     expect(out).toContain('Cursor source: auth token found');
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it('skips the pricing drift check outside an aitrack checkout', async () => {
+    // The check shells out to `pnpm run pricing:check`, which a published
+    // install does not have; any unrelated package.json used to get as far as
+    // a confusing pnpm error.
+    mocks.readFileSync.mockReturnValue(JSON.stringify({ name: 'some-other-project' }));
+
+    await doctorCommand({ pricingCheck: true });
+
+    expect(loggedOutput()).toContain('not an aitrack source checkout');
+    expect(mocks.spawnSync).not.toHaveBeenCalledWith(
+      'pnpm',
+      expect.arrayContaining(['pricing:check']),
+      expect.anything(),
+    );
+  });
+
+  it('distinguishes a corrupt config from a missing one', () => {
+    // Both used to render as "no config found", so the advice was to re-run
+    // init — which would overwrite the very file the user needed to fix.
+    mocks.readConfig.mockReturnValue({ status: 'invalid', reason: 'not valid JSON (boom)' });
+
+    return doctorCommand().then(() => {
+      const out = loggedOutput();
+      expect(out).toContain('config file is not valid JSON (boom)');
+      expect(out).not.toContain('no config found');
+      expect(process.exitCode).toBe(1);
+      process.exitCode = undefined;
+    });
   });
 
   it('aligns the status column when color is enabled', async () => {
@@ -121,7 +162,7 @@ describe('doctorCommand', () => {
   });
 
   it('warns for missing optional setup and cursor auth', async () => {
-    mocks.tryLoadConfig.mockReturnValue(null);
+    mocks.readConfig.mockReturnValue({ status: 'missing' });
     mocks.isCloned.mockReturnValue(false);
     mocks.existsSync.mockReturnValue(false);
     mocks.getClaudePaths.mockReturnValue(['/missing']);
