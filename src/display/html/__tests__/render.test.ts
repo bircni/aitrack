@@ -139,6 +139,63 @@ describe('renderToHtml', () => {
     expect(html).not.toContain('remote <offline>');
   });
 
+  it('renders every daemon state the dashboard can show', () => {
+    // Only the degraded path was exercised, so the three states a healthy
+    // daemon actually spends its time in went unchecked.
+    const base = {
+      refreshInProgress: false,
+      syncEnabled: true,
+      lastRefreshSuccessAt: '2024-06-01T12:00:00.000Z',
+      lastSyncSuccessAt: '2024-06-01T11:59:00.000Z',
+      nextRefreshAt: '2024-06-01T12:02:00.000Z',
+      lastError: null,
+    };
+    const data = { claude_code: new Map([['2024-06-01', makeDay(100, 50)]]) };
+
+    const healthy = renderToHtml(data, { operationalStatus: base });
+    expect(healthy).toContain('Healthy');
+    expect(healthy).toContain('daemon-status-healthy');
+    expect(healthy).not.toContain('role="alert"');
+
+    const refreshing = renderToHtml(data, {
+      operationalStatus: { ...base, refreshInProgress: true },
+    });
+    expect(refreshing).toContain('Refreshing');
+    expect(refreshing).toContain('daemon-status-active');
+
+    // Before the first successful refresh there is nothing to report yet.
+    const starting = renderToHtml(data, {
+      operationalStatus: {
+        ...base,
+        lastRefreshSuccessAt: null,
+        lastSyncSuccessAt: null,
+        nextRefreshAt: null,
+      },
+    });
+    expect(starting).toContain('Starting');
+    expect(starting).not.toContain('Last refresh:');
+    expect(starting).toContain('Sync: waiting for first success');
+  });
+
+  it('says so when sync is switched off', () => {
+    const html = renderToHtml(
+      { claude_code: new Map([['2024-06-01', makeDay(100, 50)]]) },
+      {
+        operationalStatus: {
+          refreshInProgress: false,
+          syncEnabled: false,
+          lastRefreshSuccessAt: '2024-06-01T12:00:00.000Z',
+          lastSyncSuccessAt: null,
+          nextRefreshAt: null,
+          lastError: null,
+        },
+      },
+    );
+
+    expect(html).toContain('Sync: disabled');
+    expect(html).not.toContain('Last sync:');
+  });
+
   it('uses year-filtered data for the today section', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2024, 5, 1, 12));

@@ -7,6 +7,7 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { errorMessage } from '../src/errors.js';
 import { CLAUDE_PRICING_BY_ID } from '../src/pricing/claude.js';
 import { CODEX_PRICING_BY_ID, CODEX_PRICING_CURRENT } from '../src/pricing/codex.js';
 
@@ -95,7 +96,7 @@ export function discoverClaudeModelsOnPage(html: string): string[] {
   return [...found].sort((a, b) => a.localeCompare(b));
 }
 
-interface ProviderCheck<P extends { inputPerMillion: number; outputPerMillion: number }> {
+export interface ProviderCheck<P extends { inputPerMillion: number; outputPerMillion: number }> {
   label: string;
   url: string;
   /** Entries to verify against the docs page. */
@@ -108,10 +109,88 @@ interface ProviderCheck<P extends { inputPerMillion: number; outputPerMillion: n
   discover: (html: string) => string[];
 }
 
-interface CheckResult {
+export interface CheckResult {
   drift: number;
   unverified: number;
   missing: number;
+}
+
+/**
+ * One model's verdict against the docs page.
+ *
+ * Comparison is kept apart from fetching and printing so it can be tested — it
+ * is the part that decides whether a release ships wrong prices, and it used to
+ * be welded to `fetchHtml` and `console.log`.
+ */
+export type PricingFinding =
+  | { kind: 'ok'; modelId: string; summary: string }
+  | {
+      kind: 'drift';
+      modelId: string;
+      summary: string;
+      isInOk: boolean;
+      isOutOk: boolean;
+      saw: number[];
+    }
+  | { kind: 'unverified'; modelId: string; summary: string; where: string }
+  | { kind: 'missing'; modelId: string };
+
+export function compareProviderPricing<
+  P extends { inputPerMillion: number; outputPerMillion: number },
+>(check: ProviderCheck<P>, html: string): PricingFinding[] {
+  const findings: PricingFinding[] = [];
+  const pricesFor = check.lookup(html);
+
+  for (const [modelId, pricing] of Object.entries(check.table)) {
+    const summary = `$${String(pricing.inputPerMillion)}/${String(pricing.outputPerMillion)}`;
+    const { prices, where } = pricesFor(modelId);
+    if (prices.length === 0) {
+      findings.push({ kind: 'unverified', modelId, summary, where });
+      continue;
+    }
+    const isInOk = prices.includes(pricing.inputPerMillion);
+    const isOutOk = prices.includes(pricing.outputPerMillion);
+    findings.push(
+      isInOk && isOutOk
+        ? { kind: 'ok', modelId, summary }
+        : { kind: 'drift', modelId, summary, isInOk, isOutOk, saw: prices.slice(0, 6) },
+    );
+  }
+
+  const known = new Set(check.knownIds);
+  for (const modelId of check.discover(html)) {
+    if (!known.has(modelId)) findings.push({ kind: 'missing', modelId });
+  }
+
+  return findings;
+}
+
+export function tallyFindings(findings: PricingFinding[]): CheckResult {
+  return {
+    drift: findings.filter((f) => f.kind === 'drift').length,
+    unverified: findings.filter((f) => f.kind === 'unverified').length,
+    missing: findings.filter((f) => f.kind === 'missing').length,
+  };
+}
+
+function reportFinding(finding: PricingFinding, sourceFile: string): void {
+  const id = finding.modelId.padEnd(22);
+  switch (finding.kind) {
+    case 'ok':
+      console.log(`\u2713 ${id} ${finding.summary}`);
+      break;
+    case 'drift':
+      console.log(
+        `\u2717 ${id} ${finding.summary}  — input=${finding.isInOk ? 'ok' : 'MISS'} output=${finding.isOutOk ? 'ok' : 'MISS'}  (saw: ${finding.saw.join(', ')})`,
+      );
+      break;
+    case 'unverified':
+      console.log(`? ${id} ${finding.summary}  — "${finding.where}" not on page`);
+      break;
+    case 'missing':
+      console.log(`+ ${id} — on docs page but missing from ${sourceFile}`);
+      break;
+  }
 }
 
 async function checkProvider<P extends { inputPerMillion: number; outputPerMillion: number }>(
@@ -122,43 +201,13 @@ async function checkProvider<P extends { inputPerMillion: number; outputPerMilli
   try {
     html = await fetchHtml(check.url);
   } catch (error) {
-    console.error('Fetch failed:', (error as Error).message);
+    console.error('Fetch failed:', errorMessage(error));
     return { drift: 1, unverified: 0, missing: 0 };
   }
 
-  const pricesFor = check.lookup(html);
-  let drift = 0;
-  let unverified = 0;
-  let missing = 0;
-
-  for (const [modelId, pricing] of Object.entries(check.table)) {
-    const summary = `$${String(pricing.inputPerMillion)}/${String(pricing.outputPerMillion)}`;
-    const { prices, where } = pricesFor(modelId);
-    if (prices.length === 0) {
-      console.log(`? ${modelId.padEnd(22)} ${summary}  — "${where}" not on page`);
-      unverified++;
-      continue;
-    }
-    const isInOk = prices.includes(pricing.inputPerMillion);
-    const isOutOk = prices.includes(pricing.outputPerMillion);
-    if (isInOk && isOutOk) {
-      console.log(`✓ ${modelId.padEnd(22)} ${summary}`);
-    } else {
-      console.log(
-        `✗ ${modelId.padEnd(22)} ${summary}  — input=${isInOk ? 'ok' : 'MISS'} output=${isOutOk ? 'ok' : 'MISS'}  (saw: ${prices.slice(0, 6).join(', ')})`,
-      );
-      drift++;
-    }
-  }
-
-  const known = new Set(check.knownIds);
-  for (const modelId of check.discover(html)) {
-    if (known.has(modelId)) continue;
-    console.log(`+ ${modelId.padEnd(22)} — on docs page but missing from ${check.sourceFile}`);
-    missing++;
-  }
-
-  return { drift, unverified, missing };
+  const findings = compareProviderPricing(check, html);
+  for (const finding of findings) reportFinding(finding, check.sourceFile);
+  return tallyFindings(findings);
 }
 
 function checkClaude(): Promise<CheckResult> {
