@@ -178,24 +178,42 @@ describe('buildProgram', () => {
       vi.spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('exit');
       });
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      process.exitCode = undefined;
     });
 
+    afterEach(() => {
+      process.exitCode = undefined;
+    });
+
+    /**
+     * Argument errors route through runAsync, which sets exitCode rather than
+     * calling process.exit, so stdout can flush before Node leaves.
+     */
+    async function runAndSettle(...argv: string[]): Promise<typeof process.exitCode> {
+      await run(...argv);
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+      return process.exitCode;
+    }
+
     it('rejects an invalid top kind', async () => {
-      await expect(run('top', 'weeks')).rejects.toThrow('exit');
+      expect(await runAndSettle('top', 'weeks')).toBe(1);
       expect(mocks.topCommand).not.toHaveBeenCalled();
     });
 
     it('rejects an invalid date', async () => {
-      await expect(run('usage', 'date', 'nope')).rejects.toThrow('exit');
+      expect(await runAndSettle('usage', 'date', 'nope')).toBe(1);
       expect(mocks.usageCommand).not.toHaveBeenCalled();
     });
 
     it('rejects a reversed range', async () => {
-      await expect(run('usage', 'range', '2026-06-02', '2026-06-01')).rejects.toThrow('exit');
+      expect(await runAndSettle('usage', 'range', '2026-06-02', '2026-06-01')).toBe(1);
     });
 
     it('rejects invalid usage last days', async () => {
-      await expect(run('usage', 'last', '0')).rejects.toThrow('exit');
+      expect(await runAndSettle('usage', 'last', '0')).toBe(1);
     });
 
     it('rejects malformed and non-positive numeric options', async () => {
@@ -211,15 +229,29 @@ describe('buildProgram', () => {
   });
 
   describe('runAsync', () => {
+    afterEach(() => {
+      process.exitCode = undefined;
+    });
+
     it('exits non-zero and prints the error when the handler rejects', async () => {
-      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
       const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      process.exitCode = undefined;
       runAsync(() => Promise.reject(new Error('boom')));
       await new Promise((resolve) => {
         setImmediate(resolve);
       });
       expect(error).toHaveBeenCalledWith('boom');
-      expect(exit).toHaveBeenCalledWith(1);
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('reports a handler that throws synchronously', () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      process.exitCode = undefined;
+      runAsync(() => {
+        throw new Error('sync boom');
+      });
+      expect(error).toHaveBeenCalledWith('sync boom');
+      expect(process.exitCode).toBe(1);
     });
   });
 });

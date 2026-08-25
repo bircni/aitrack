@@ -1,3 +1,4 @@
+import { isDayKey } from '../../constants.js';
 import { getOrCreateDay } from '../../data/dayMap.js';
 import { stripModelAliasSuffix } from '../../data/modelId.js';
 import type { DayMap } from '../../data/types.js';
@@ -59,7 +60,7 @@ function parseCursorNumber(value?: string): number | null {
 export function parseCursorDateString(value?: string): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  if (isDayKey(trimmed)) return trimmed;
   const parsed = new Date(trimmed);
   if (Number.isNaN(parsed.getTime())) return null;
   const y = parsed.getFullYear();

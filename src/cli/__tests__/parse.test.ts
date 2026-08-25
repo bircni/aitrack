@@ -2,7 +2,6 @@ import { InvalidArgumentError } from 'commander';
 import { describe, expect, it } from 'vitest';
 
 import {
-  cliErrorMessage,
   invalidDateMessage,
   isValidDateString,
   parseIntArgument,
@@ -18,11 +17,6 @@ import {
 } from '../parse.js';
 
 describe('cli parse helpers', () => {
-  it('formats errors from Error and non-Error values', () => {
-    expect(cliErrorMessage(new Error('boom'))).toBe('boom');
-    expect(cliErrorMessage('plain')).toBe('plain');
-  });
-
   it('validates YYYY-MM-DD date strings', () => {
     expect(isValidDateString('2024-06-01')).toBe(true);
     expect(isValidDateString('2024-6-01')).toBe(false);

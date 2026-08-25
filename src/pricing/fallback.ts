@@ -1,21 +1,44 @@
-import { consumeClaudeFallbackHits } from './claude.js';
-import { consumeCodexFallbackHits } from './codex.js';
+import { log } from '../output.js';
 
 /**
- * Warn about models priced by family fallback, clearing the run's hits.
+ * Records model ids that were priced by family fallback during one run.
  *
  * A fallback price is a guess: the model id had no exact entry, so the cost
- * written to the data file can be off by a whole tier. Clearing matters for the
- * daemon, which reads the logs on every tick and would otherwise re-report the
- * same models forever.
+ * written to the data file can be off by a whole tier, and the user needs to
+ * know which models are affected.
  *
- * Shared by the two commands that persist costs — sync and recompute-costs.
+ * This used to be two module-level `Set`s inside the pricing tables, drained by
+ * a `consume*FallbackHits()` pair. That made pricing lookups impure and
+ * order-dependent, and it leaked across the daemon's refresh ticks — the
+ * "consume" step existed only to paper over the shared state. Passing a
+ * collector explicitly makes each run's hits its own.
  */
-export function reportFallbackPricing(): void {
-  const fallbacks = [...consumeClaudeFallbackHits(), ...consumeCodexFallbackHits()];
-  if (fallbacks.length === 0) return;
-  console.warn(
-    `\nWarning: priced via family fallback (no exact pricing in src/pricing/): ${fallbacks.join(', ')}`,
+export interface FallbackCollector {
+  record: (modelId: string) => void;
+  /** Recorded ids, sorted, clearing them. */
+  drain: () => string[];
+}
+
+export function createFallbackCollector(): FallbackCollector {
+  const hits = new Set<string>();
+  return {
+    record: (modelId) => {
+      hits.add(modelId);
+    },
+    drain: () => {
+      const ids = [...hits].sort((a, b) => a.localeCompare(b));
+      hits.clear();
+      return ids;
+    },
+  };
+}
+
+/** Warn about models priced by family fallback. Shared by sync and recompute. */
+export function reportFallbackPricing(fallbacks: FallbackCollector): void {
+  const ids = fallbacks.drain();
+  if (ids.length === 0) return;
+  log.warn(
+    `\nWarning: priced via family fallback (no exact pricing in src/pricing/): ${ids.join(', ')}`,
   );
-  console.warn('  These costs may be wrong — update src/pricing/ with the correct rates.');
+  log.warn('  These costs may be wrong — update src/pricing/ with the correct rates.');
 }

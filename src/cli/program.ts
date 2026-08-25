@@ -10,10 +10,10 @@ import { recomputeCostsCommand } from '../commands/recompute.js';
 import { showCommand } from '../commands/show.js';
 import { syncCommand } from '../commands/sync.js';
 import { topCommand } from '../commands/top.js';
+import { errorMessage } from '../errors.js';
 import { log } from '../output.js';
 import { packageVersion } from '../version.js';
 import {
-  cliErrorMessage,
   parseIntArgument,
   parsePortArgument,
   parseIntervalArgument,
@@ -31,12 +31,24 @@ import { PROVIDERS_DESC, PROVIDERS_FLAG, registerUsageCommands } from './usageCo
  * by every CLI action.
  */
 export function runAsync(function_: () => Promise<void>): void {
-  function_().catch((error: unknown) => {
-    log.error(cliErrorMessage(error));
-    process.exit(1);
-  });
+  // `exitCode` rather than `exit`: it lets buffered stdout flush before Node
+  // leaves, which `process.exit` can truncate.
+  try {
+    function_().catch(fail);
+  } catch (error) {
+    fail(error);
+  }
 }
 
+function fail(error: unknown): void {
+  log.error(errorMessage(error));
+  process.exitCode = 1;
+}
+
+/**
+ * Parsing happens inside the async body so a bad argument travels through
+ * `runAsync` like every other failure, instead of duplicating its catch-and-exit.
+ */
 function runTop(
   kind: string | undefined,
   options: {
@@ -47,22 +59,16 @@ function runTop(
     json?: boolean;
   },
 ): void {
-  let parsed: Parameters<typeof topCommand>[0];
-  try {
-    parsed = {
+  runAsync(() =>
+    topCommand({
       kind: parseTopKind(kind),
       limit: parseTopLimit(options.limit),
       sort: parseTopSort(options.sort),
       providers: options.providers,
       year: options.year,
       json: options.json,
-    };
-  } catch (error) {
-    log.error(cliErrorMessage(error));
-    process.exit(1);
-    return;
-  }
-  runAsync(() => topCommand(parsed));
+    }),
+  );
 }
 
 export function buildProgram(): Command {

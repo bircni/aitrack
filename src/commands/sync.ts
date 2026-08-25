@@ -16,8 +16,12 @@ import {
   removePendingMachineFile,
 } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
-import { log } from '../output.js';
-import { reportFallbackPricing } from '../pricing/fallback.js';
+import { createLogger } from '../output.js';
+import {
+  createFallbackCollector,
+  type FallbackCollector,
+  reportFallbackPricing,
+} from '../pricing/fallback.js';
 
 export interface SyncDataOptions {
   quiet?: boolean;
@@ -28,14 +32,6 @@ const NO_CHANGES_MESSAGE = 'No changes to push — data is already up to date.';
 
 function pushedMessage(host: string, syncedDays: number): string {
   return `Done! Pushed data/${host}.json (${String(syncedDays)} days)`;
-}
-
-/** Progress reporting, silenced by `quiet` — the daemon syncs on every tick. */
-function progressLogger(isQuiet: boolean): (message: string) => void {
-  if (isQuiet) return () => undefined;
-  return (message) => {
-    log.info(message);
-  };
 }
 
 /**
@@ -57,28 +53,34 @@ function pushMachineData(host: string): boolean {
  * can reuse it instead of parsing the whole JSONL corpus a second time.
  */
 export async function syncData(options: SyncDataOptions = {}): Promise<MachineFile> {
+  // One collector per run, so a long-lived daemon never carries one tick's
+  // models into the next.
+  const fallbacks = createFallbackCollector();
   try {
-    return await pushLocalUsage(options);
+    return await pushLocalUsage(options, fallbacks);
   } finally {
     // Fallback hits accumulate while the logs are read, so they exist however
     // the push turns out. Reporting them only after a successful push hid the
-    // warning from every already-up-to-date run, and left the set uncleared —
-    // so a long-lived daemon carried one tick's models into the next.
-    reportFallbackPricing();
+    // warning from every already-up-to-date run.
+    reportFallbackPricing(fallbacks);
   }
 }
 
-async function pushLocalUsage(options: SyncDataOptions): Promise<MachineFile> {
+async function pushLocalUsage(
+  options: SyncDataOptions,
+  fallbacks: FallbackCollector,
+): Promise<MachineFile> {
   const config = loadConfig();
   const isDryRun = Boolean(options.dryRun);
-  const log = progressLogger(Boolean(options.quiet));
+  // Silenced by `quiet` — the daemon syncs on every refresh tick.
+  const progress = createLogger({ quiet: Boolean(options.quiet) });
 
   if (!isCloned()) {
     throw new Error(REPO_NOT_CLONED_MESSAGE);
   }
 
   if (!isDryRun) {
-    log('Pulling latest from remote...');
+    progress.info('Pulling latest from remote...');
     pull();
   }
 
@@ -87,15 +89,15 @@ async function pushLocalUsage(options: SyncDataOptions): Promise<MachineFile> {
   const dataFilePath = join(dataDir, machineDataFilename(host));
 
   // Cursor usage is loaded locally by report/display commands; it is never written to git.
-  log('Reading local data...');
-  const { claude_code: claudeData, codex: codexData } = await readLocalProviderMaps();
+  progress.info('Reading local data...');
+  const { claude_code: claudeData, codex: codexData } = await readLocalProviderMaps(fallbacks);
 
   const freshData = buildMachineData(host, { claude_code: claudeData, codex: codexData });
   const totalDays = new Set([...claudeData.keys(), ...codexData.keys()]).size;
 
   if (totalDays === 0) {
     const isPushed = !isDryRun && pushMachineData(host);
-    log(
+    progress.info(
       isPushed
         ? `Done! Pushed machine data migration for ${host}.`
         : 'No local data found (Claude Code or Codex).',
@@ -106,7 +108,7 @@ async function pushLocalUsage(options: SyncDataOptions): Promise<MachineFile> {
   const sources: string[] = [];
   if (claudeData.size > 0) sources.push(`Claude Code (${String(claudeData.size)} days)`);
   if (codexData.size > 0) sources.push(`Codex (${String(codexData.size)} days)`);
-  log(`Found: ${sources.join(', ')}`);
+  progress.info(`Found: ${sources.join(', ')}`);
 
   // Only write if the usage data changed — avoids a spurious commit on every run
   // (lastUpdated would otherwise always make the file dirty).
@@ -148,13 +150,13 @@ async function pushLocalUsage(options: SyncDataOptions): Promise<MachineFile> {
       removePendingMachineFile(host);
       isPushed = pushMachineData(host);
     }
-    log(isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
+    progress.info(isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
     return freshData;
   }
 
   if (isDryRun) {
     const action = existingDays === null ? 'create' : 'update';
-    log(
+    progress.info(
       `Dry run: would ${action} data/${host}.json (${String(syncedDays)} days). No changes written.`,
     );
     return freshData;
@@ -164,7 +166,7 @@ async function pushLocalUsage(options: SyncDataOptions): Promise<MachineFile> {
   writeFileSync(dataFilePath, JSON.stringify(outgoingData, null, 2), 'utf8');
   removePendingMachineFile(host);
 
-  log(commitAndPush(host) ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
+  progress.info(commitAndPush(host) ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
   return freshData;
 }
 
