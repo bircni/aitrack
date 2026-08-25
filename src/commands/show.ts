@@ -6,6 +6,7 @@ import { isUsageNotConfigured, usageEmptyMessage } from '../data/emptyState.js';
 import { loadMergedProviderData } from '../data/usageData.js';
 import { renderToPng } from '../display/renderPng.js';
 import { renderTui } from '../display/tui.js';
+import { log } from '../output.js';
 
 function openFile(filePath: string): void {
   if (process.platform === 'win32') {
@@ -39,7 +40,7 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
   });
 
   if (!loaded) {
-    console.log(usageEmptyMessage(isUsageNotConfigured()));
+    log.info(usageEmptyMessage(isUsageNotConfigured()));
     return;
   }
 
@@ -49,7 +50,7 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
       all: options.all,
       year: options.year,
     });
-    console.log(output || usageEmptyMessage(loaded.warnedNotConfigured));
+    log.info(output || usageEmptyMessage(loaded.warnedNotConfigured));
     return;
   }
 
@@ -61,6 +62,6 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
   });
   writeFileSync(outputPath, png);
 
-  console.log(`Saved: ${outputPath}`);
+  log.info(`Saved: ${outputPath}`);
   if (options.open !== false) openFile(outputPath);
 }

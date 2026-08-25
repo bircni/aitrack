@@ -2,10 +2,12 @@ import { createServer, type Server } from 'node:http';
 
 import { tryLoadConfig } from '../config.js';
 import { isUsageNotConfigured, usageEmptyMessage } from '../data/emptyState.js';
+import { SYNC_REPO_NOT_CLONED_MESSAGE } from '../data/messages.js';
 import type { MachineFile, ProviderData } from '../data/types.js';
 import { loadMergedProviderData } from '../data/usageData.js';
 import { type HtmlOperationalStatus, renderToHtml } from '../display/html/render.js';
 import { isCloned } from '../git.js';
+import { log } from '../output.js';
 import { syncData } from './sync.js';
 
 const DEFAULT_PORT = 9089;
@@ -98,7 +100,7 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
       let localMachine: MachineFile | undefined;
       if (settings.sync) {
         if (!isCloned()) {
-          throw new Error('Sync enabled but repo not cloned. Run: npx aitrack init');
+          throw new Error(SYNC_REPO_NOT_CLONED_MESSAGE);
         }
         localMachine = await syncData({ quiet: true });
         status.lastSyncSuccessAt = new Date().toISOString();
@@ -136,7 +138,7 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
         message,
         at: new Date().toISOString(),
       };
-      console.error(`aitrack daemon refresh failed: ${message}`);
+      log.error(`aitrack daemon refresh failed: ${message}`);
     } finally {
       status.refreshInProgress = false;
       status.nextRefreshAt = new Date(Date.now() + settings.interval * 1000).toISOString();
@@ -204,7 +206,7 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
     server.listen(settings.port, settings.host, () => {
       const address = server.address();
       const port = typeof address === 'object' && address !== null ? address.port : settings.port;
-      console.log(
+      log.info(
         `aitrack daemon listening on http://${settings.host}:${String(port)} (refresh every ${String(settings.interval)}s)`,
       );
       resolve();

@@ -6,8 +6,10 @@ import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
 import { resolveMachineId, tryLoadConfig } from '../config.js';
+import { INIT_HINT } from '../data/messages.js';
 import type { MachineFile } from '../data/types.js';
 import { isCloned, listDataFiles, LOCAL_REPO, readDataFile } from '../git.js';
+import { log } from '../output.js';
 import { CLAUDE_PRICING_BY_ID } from '../pricing/claude.js';
 import { CODEX_PRICING_BY_ID } from '../pricing/codex.js';
 import { getClaudePaths } from '../readers/claude.js';
@@ -233,7 +235,7 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
     label: 'Config',
     detail: config
       ? `repoUrl=${config.repoUrl || '(empty)'}, machineId=${resolveMachineId(config)}`
-      : 'no config found; run npx aitrack init for sync',
+      : `no config found; run ${INIT_HINT} for sync`,
   });
   checks.push({
     status: isCloned() ? 'ok' : 'warn',
@@ -286,9 +288,9 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
       hasFailures: checks.some((check) => check.status === 'fail'),
     });
   } else {
-    console.log(chalk.bold('aitrack doctor'));
+    log.info(chalk.bold('aitrack doctor'));
     for (const check of checks) {
-      console.log(`${statusLabel(check.status).padEnd(9)} ${check.label}: ${check.detail}`);
+      log.info(`${statusLabel(check.status).padEnd(9)} ${check.label}: ${check.detail}`);
     }
   }
 

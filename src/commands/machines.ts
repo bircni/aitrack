@@ -11,6 +11,7 @@ import {
   renderTerminalTable,
   type TerminalTableColumn,
 } from '../display/terminalTable.js';
+import { log } from '../output.js';
 
 interface MachineSummary {
   hostname: string;
@@ -79,7 +80,7 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
     if (options.json) {
       printJsonCommand('machines', { machines: [], message });
     } else {
-      console.log(message);
+      log.info(message);
     }
     return;
   }
@@ -106,6 +107,6 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
     },
   ];
 
-  console.log(chalk.bold(`aitrack machines (${String(summaries.length)})`));
-  console.log(renderTerminalTable(summaries, columns, { style: defaultTableStyle() }));
+  log.info(chalk.bold(`aitrack machines (${String(summaries.length)})`));
+  log.info(renderTerminalTable(summaries, columns, { style: defaultTableStyle() }));
 }

@@ -12,6 +12,7 @@ import {
 } from '../data/usageReport.js';
 import { fmt, fmtUSD, fmtUSDCost } from '../display/format.js';
 import { defaultTableStyle, renderTerminalTable } from '../display/terminalTable.js';
+import { log } from '../output.js';
 
 export type UsageOptions = UsageReportOptions & { json?: boolean; compare?: boolean };
 
@@ -57,8 +58,8 @@ function renderUsageReport(report: UsageReport): void {
     isTotal: true,
   };
 
-  console.log(chalk.bold(`aitrack usage ${report.windowLabel}`));
-  console.log(
+  log.info(chalk.bold(`aitrack usage ${report.windowLabel}`));
+  log.info(
     renderTerminalTable(
       [...rows, totalRow],
       [
@@ -94,9 +95,9 @@ function renderComparison(report: UsageComparisonReport): void {
     },
   ];
 
-  console.log('');
-  console.log(chalk.bold(`Compared with ${comparison.previousWindowLabel}`));
-  console.log(
+  log.info('');
+  log.info(chalk.bold(`Compared with ${comparison.previousWindowLabel}`));
+  log.info(
     renderTerminalTable(
       summaryRows,
       [
@@ -118,13 +119,13 @@ function renderComparison(report: UsageComparisonReport): void {
       cost: model.hasCost ? formatDelta(model.costUSD, fmtUSDCost) : '—',
     }));
   if (movementRows.length === 0) {
-    console.log('\nNo per-model movement.');
+    log.info('\nNo per-model movement.');
     return;
   }
 
-  console.log('');
-  console.log(chalk.bold('Per-model movement'));
-  console.log(
+  log.info('');
+  log.info(chalk.bold('Per-model movement'));
+  log.info(
     renderTerminalTable(
       movementRows,
       [
@@ -164,16 +165,13 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
     return;
   }
 
-  if (!report) {
-    console.log(emptyReportMessage(report));
+  if (!report || report.rowCount === 0) {
+    const message = emptyReportMessage(report);
+    if (message !== null) log.info(message);
     return;
   }
 
-  if (report.rowCount === 0) {
-    console.log(emptyReportMessage(report));
-  } else {
-    renderUsageReport(report);
-  }
+  renderUsageReport(report);
 
   if (comparisonReport) renderComparison(comparisonReport);
 }
