@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.4.1] - 2026-08-25
+
+
+### Bug Fixes
+
+- **pricing:** Apply the 2026-08-21 gpt-5.6 Sol price cut (#68)
+
 ## [v1.4.0] - 2026-08-15
 
 
