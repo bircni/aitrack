@@ -88,17 +88,24 @@ describe('aggregateCursorCsvToDayMap', () => {
 
     expect(map.get('2024-06-01')?.inputTokens).toBe(900);
     expect(map.get('2024-06-01')?.outputTokens).toBe(600);
+    // gpt-4 is not one of the GPT-5-family ids we price, so it stays cost-free.
     expect(map.get('2024-06-01')?.byModel['gpt-4']).toEqual({
       inputTokens: 900,
       outputTokens: 600,
     });
+    expect(map.get('2024-06-01')?.costUSD).toBeUndefined();
 
     expect(map.get('2024-06-02')?.inputTokens).toBe(800);
     expect(map.get('2024-06-02')?.outputTokens).toBe(1200);
-    expect(map.get('2024-06-02')?.byModel['claude-3-opus']).toEqual({
+    // claude-3-opus maps to a tracked list price, so the row is estimated.
+    expect(map.get('2024-06-02')?.byModel['claude-3-opus']).toMatchObject({
       inputTokens: 800,
       outputTokens: 1200,
     });
+    expect(map.get('2024-06-02')?.byModel['claude-3-opus']?.costUSD).toBeGreaterThan(0);
+    expect(map.get('2024-06-02')?.costUSD).toBe(
+      map.get('2024-06-02')?.byModel['claude-3-opus']?.costUSD,
+    );
   });
 
   it('uses Tokens column when Total Tokens header is absent', () => {
