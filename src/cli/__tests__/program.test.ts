@@ -44,6 +44,11 @@ import { buildProgram, runAsync } from '../program.js';
 /** Parse user-level args (no node/script prefix) through a fresh program. */
 async function run(...arguments_: string[]): Promise<void> {
   await buildProgram().parseAsync(arguments_, { from: 'user' });
+  // `show` and `export` load their command module via dynamic import, so the
+  // handler completes a few microtasks after parseAsync resolves.
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
 }
 
 describe('buildProgram', () => {

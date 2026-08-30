@@ -3,11 +3,11 @@ import { Command } from 'commander';
 import { CONFIG_KEYS, configCommand } from '../commands/config.js';
 import { daemonCommand, type DaemonOptions } from '../commands/daemon.js';
 import { doctorCommand } from '../commands/doctor.js';
-import { exportCommand, type ExportOptions } from '../commands/export.js';
+import type { ExportOptions } from '../commands/export.js';
 import { initCommand } from '../commands/init.js';
 import { machinesCommand } from '../commands/machines.js';
 import { recomputeCostsCommand } from '../commands/recompute.js';
-import { showCommand, type ShowOptions } from '../commands/show.js';
+import type { ShowOptions } from '../commands/show.js';
 import { syncCommand } from '../commands/sync.js';
 import { topCommand } from '../commands/top.js';
 import { errorMessage } from '../errors.js';
@@ -107,7 +107,12 @@ export function buildProgram(): Command {
     .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
     .option('--tui', 'render a stats table in the terminal instead of a PNG')
     .action((options: ShowOptions) => {
-      runAsync(() => showCommand(options));
+      runAsync(async () => {
+        // Loaded on demand so `@napi-rs/canvas` (a native binding) stays off
+        // the startup path of every other command.
+        const { showCommand } = await import('../commands/show.js');
+        await showCommand(options);
+      });
     });
 
   const usage = program
@@ -121,7 +126,12 @@ export function buildProgram(): Command {
     .option('-o, --output <path>', 'output PDF path', 'aitrack-receipt.pdf')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .action((period: string | undefined, args: string[], options: ExportOptions) => {
-      runAsync(() => exportCommand({ ...options, period, args }));
+      runAsync(async () => {
+        // Loaded on demand so `pdfkit` stays off the startup path of every
+        // other command.
+        const { exportCommand } = await import('../commands/export.js');
+        await exportCommand({ ...options, period, args });
+      });
     });
 
   program
