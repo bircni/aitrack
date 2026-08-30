@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProviderData } from '../../data/types.js';
-import { PROVIDERS } from '../../providers.js';
+import { PROVIDERS } from '../../providers/index.js';
 import {
   activeProviderKeys,
   costColumnLabel,
@@ -56,13 +56,13 @@ describe('provider registry', () => {
   it('derives every list from one table, so they cannot drift', () => {
     // These were five separate declarations; adding a provider meant finding
     // all of them.
-    for (const provider of PROVIDERS) {
-      expect(PROVIDER_ORDER).toContain(provider.key);
-      expect(providerLabel(provider.key)).toBe(provider.label);
-      expect(isSyncedProvider(provider.key)).toBe(provider.synced);
-      expect(costColumnLabel(provider.key)).toBe(provider.costLabel);
-      for (const alias of provider.aliases) {
-        expect(normalizeProviderKey(alias.toUpperCase())).toBe(provider.key);
+    for (const { descriptor } of PROVIDERS) {
+      expect(PROVIDER_ORDER).toContain(descriptor.key);
+      expect(providerLabel(descriptor.key)).toBe(descriptor.label);
+      expect(isSyncedProvider(descriptor.key)).toBe(descriptor.synced);
+      expect(costColumnLabel(descriptor.key)).toBe(descriptor.costLabel);
+      for (const alias of descriptor.aliases) {
+        expect(normalizeProviderKey(alias.toUpperCase())).toBe(descriptor.key);
       }
     }
   });

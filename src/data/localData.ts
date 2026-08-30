@@ -1,6 +1,5 @@
 import type { FallbackCollector } from '../pricing/fallback.js';
-import { readClaudeData } from '../readers/claude.js';
-import { readCodexData } from '../readers/codex.js';
+import { syncedProviders } from '../providers/index.js';
 import type { DayMap, MachineFile, ProviderDay, TokenCounts } from './types.js';
 
 function tokenCountFields(counts: TokenCounts): TokenCounts {
@@ -84,15 +83,23 @@ export function mergePersistedDays(
   return days;
 }
 
-export async function readLocalProviderMaps(fallbacks?: FallbackCollector): Promise<{
-  claude_code: DayMap;
-  codex: DayMap;
-}> {
-  const [claude_code, codex] = await Promise.all([
-    readClaudeData(fallbacks),
-    readCodexData(fallbacks),
-  ]);
-  return { claude_code, codex };
+/**
+ * Read every synced provider's local logs into a `{ providerKey: DayMap }` map,
+ * in parallel. Driven by the registry, so a new synced provider is picked up
+ * without touching this function.
+ */
+export async function readLocalProviderMaps(
+  fallbacks?: FallbackCollector,
+): Promise<Record<string, DayMap>> {
+  const entries = await Promise.all(
+    syncedProviders().map(async (provider) => {
+      if (!provider.reader) {
+        throw new Error(`provider ${provider.descriptor.key} is synced but has no reader`);
+      }
+      return [provider.descriptor.key, await provider.reader.readData(fallbacks)] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
 }
 
 export async function buildLocalMachineFile(

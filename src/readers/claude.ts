@@ -1,17 +1,15 @@
-import { createReadStream } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
-import { isRecord } from '../data/guards.js';
 import { stripModelAliasSuffix } from '../data/modelId.js';
 import type { DayMap, TokenCounts } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { estimateClaudeCostUSD } from '../pricing/claude.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedParse } from './cache.js';
+import { streamJsonlObjects } from './jsonl.js';
 import { resolveSourceRoots } from './paths.js';
 import { parseProviderSources } from './pipeline.js';
 
@@ -63,24 +61,7 @@ export async function parseJsonlFile(
 ): Promise<DayMap> {
   const result: DayMap = new Map();
 
-  const rl = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
-  });
-
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      // A truncated or half-written line — the transcript is appended to while
-      // it is being read. Skip it rather than failing the whole file.
-      continue;
-    }
-    // A JSONL line is only interesting when it is an object; a bare number or
-    // string parses fine and would otherwise be cast to a shape it never had.
-    if (!isRecord(parsed)) continue;
+  for await (const parsed of streamJsonlObjects(filePath)) {
     const entry = parsed as unknown as ClaudeEntry;
 
     if (entry.type !== 'assistant') continue;
@@ -128,13 +109,35 @@ export async function parseJsonlFile(
  * fresh set both de-duplicates within the file and leaves the file's keys
  * behind for the cross-file check in readClaudeData.
  */
-async function parseClaudeFile(
+export async function parseClaudeFile(
   filePath: string,
   fallbacks?: FallbackCollector,
 ): Promise<CachedParse> {
   const keys = new Set<string>();
   const days = await parseJsonlFile(filePath, keys, fallbacks);
   return { days, keys: [...keys] };
+}
+
+/**
+ * Fold the per-file parses into one DayMap, re-reading any file whose messages
+ * an earlier file already counted (a resumed session copies another
+ * transcript's history into itself, which the per-file parse cannot see).
+ */
+export async function mergeClaudeParsed(parsed: CachedParse[], files: string[]): Promise<DayMap> {
+  const allDays: DayMap = new Map();
+  const seenMessages = new Set<string>();
+  for (const [index, entry] of parsed.entries()) {
+    const filePath = files[index];
+    if (filePath !== undefined && entry.keys.some((key) => seenMessages.has(key))) {
+      // Re-read this file against the running set, which is what an uncached
+      // run would have done.
+      mergeDayMaps(allDays, await parseJsonlFile(filePath, seenMessages));
+      continue;
+    }
+    for (const key of entry.keys) seenMessages.add(key);
+    mergeDayMaps(allDays, entry.days);
+  }
+  return allDays;
 }
 
 export async function readClaudeData(fallbacks?: FallbackCollector): Promise<DayMap> {
@@ -144,21 +147,5 @@ export async function readClaudeData(fallbacks?: FallbackCollector): Promise<Day
     parseFile: parseClaudeFile,
     fallbacks,
   });
-
-  const allDays: DayMap = new Map();
-  const seenMessages = new Set<string>();
-  for (const [index, entry] of parsed.entries()) {
-    const filePath = files[index];
-    if (filePath !== undefined && entry.keys.some((key) => seenMessages.has(key))) {
-      // A message in this file was already counted from an earlier one — a
-      // resumed session copied another transcript's history into itself. The
-      // per-file parse cannot know that, so re-read this file against the
-      // running set, which is what an uncached run would have done.
-      mergeDayMaps(allDays, await parseJsonlFile(filePath, seenMessages));
-      continue;
-    }
-    for (const key of entry.keys) seenMessages.add(key);
-    mergeDayMaps(allDays, entry.days);
-  }
-  return allDays;
+  return mergeClaudeParsed(parsed, files);
 }

@@ -1,8 +1,8 @@
 import type { ProviderData } from '../data/types.js';
-import { PROVIDER_BY_ALIAS, PROVIDER_BY_KEY, PROVIDERS } from '../providers.js';
+import { PROVIDER_BY_ALIAS, PROVIDER_BY_KEY, PROVIDERS, providerKeys } from '../providers/index.js';
 
 /**
- * Display-facing view of the provider registry in `src/providers.ts`.
+ * Display-facing view of the provider registry in `src/providers/`.
  *
  * Every list here is derived from that one table rather than restated, so
  * adding a provider is a single entry.
@@ -12,20 +12,22 @@ import { PROVIDER_BY_ALIAS, PROVIDER_BY_KEY, PROVIDERS } from '../providers.js';
  * Canonical provider keys, in display order. Doubles as the set the
  * `--providers` flag can select — the two lists were identical.
  */
-export const PROVIDER_ORDER: readonly string[] = PROVIDERS.map((provider) => provider.key);
+export const PROVIDER_ORDER: readonly string[] = providerKeys();
 
 export const PROVIDER_LABELS: Record<string, string> = {
-  ...Object.fromEntries(PROVIDERS.map((provider) => [provider.key, provider.label])),
+  ...Object.fromEntries(
+    PROVIDERS.map((provider) => [provider.descriptor.key, provider.descriptor.label]),
+  ),
   all: 'All providers',
 };
 
 /** Providers written to git during sync; Cursor stays local-only. */
 export const SYNCED_PROVIDERS: readonly string[] = PROVIDERS.filter(
-  (provider) => provider.synced,
-).map((provider) => provider.key);
+  (provider) => provider.descriptor.synced,
+).map((provider) => provider.descriptor.key);
 
 export function isSyncedProvider(providerKey: string): boolean {
-  return PROVIDER_BY_KEY[providerKey]?.synced ?? false;
+  return PROVIDER_BY_KEY[providerKey]?.descriptor.synced ?? false;
 }
 
 /**
@@ -33,7 +35,7 @@ export function isSyncedProvider(providerKey: string): boolean {
  * to its canonical key, or return null when it is not a known provider.
  */
 export function normalizeProviderKey(input: string): string | null {
-  return PROVIDER_BY_ALIAS[input.trim().toLowerCase()]?.key ?? null;
+  return PROVIDER_BY_ALIAS[input.trim().toLowerCase()]?.descriptor.key ?? null;
 }
 
 export function providerLabel(providerKey: string): string {
@@ -41,7 +43,7 @@ export function providerLabel(providerKey: string): string {
 }
 
 export function costColumnLabel(providerKey: string, uppercase = false): string {
-  const label = PROVIDER_BY_KEY[providerKey]?.costLabel ?? 'Est. cost';
+  const label = PROVIDER_BY_KEY[providerKey]?.descriptor.costLabel ?? 'Est. cost';
   return uppercase ? label.toUpperCase() : label;
 }
 

@@ -1,27 +1,38 @@
+import { PROVIDERS } from '../../providers/index.js';
+
 interface ProviderTheme {
   cells: [string, string, string, string, string];
 }
 type ThemeSet = Record<string, ProviderTheme> & { _default: ProviderTheme };
 
-const THEMES: Record<'light' | 'dark', ThemeSet> = {
+/** Cell ramps aitrack ships regardless of the registry: the merged view and
+ * the fallback for a provider that declared no colours. */
+const BUILTIN_RAMPS: Record<'light' | 'dark', { all: ProviderTheme; _default: ProviderTheme }> = {
   light: {
-    claude_code: {
-      cells: ['#ebedf0', '#fde8cf', '#fbba77', '#e87820', '#b04b10'],
-    },
-    codex: { cells: ['#ebedf0', '#cde4f8', '#7db9ea', '#2472c8', '#0b3d7a'] },
-    cursor: { cells: ['#ebedf0', '#fde8c8', '#f8a855', '#e56b10', '#8b2e00'] },
     all: { cells: ['#ebedf0', '#d4e8f4', '#8ab8d4', '#4a8ab8', '#1e4a6e'] },
     _default: { cells: ['#ebedf0', '#c6e48b', '#7bc96f', '#239a3b', '#196127'] },
   },
   dark: {
-    claude_code: {
-      cells: ['#1e1e24', '#3d1a06', '#7c3610', '#c4621a', '#f08030'],
-    },
-    codex: { cells: ['#1e1e24', '#0c2240', '#0d4a8a', '#1a7fd4', '#4db8ff'] },
-    cursor: { cells: ['#1e1e24', '#3a1800', '#7a3200', '#c45a00', '#f08820'] },
     all: { cells: ['#1e1e24', '#0c2438', '#1a4a6e', '#2e7ab0', '#5cb8e8'] },
     _default: { cells: ['#1e1e24', '#0e4429', '#006d32', '#26a641', '#39d353'] },
   },
+};
+
+function themeSet(mode: 'light' | 'dark'): ThemeSet {
+  return {
+    ...Object.fromEntries(
+      PROVIDERS.map((provider) => [
+        provider.descriptor.key,
+        { cells: [...provider.heatmap[mode]] as ProviderTheme['cells'] },
+      ]),
+    ),
+    ...BUILTIN_RAMPS[mode],
+  };
+}
+
+const THEMES: Record<'light' | 'dark', ThemeSet> = {
+  light: themeSet('light'),
+  dark: themeSet('dark'),
 };
 
 export interface Palette {

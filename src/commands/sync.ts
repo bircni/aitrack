@@ -22,6 +22,7 @@ import {
   type FallbackCollector,
   reportFallbackPricing,
 } from '../pricing/fallback.js';
+import { syncedProviders } from '../providers/index.js';
 
 export interface SyncDataOptions {
   quiet?: boolean;
@@ -90,24 +91,30 @@ async function pushLocalUsage(
 
   // Cursor usage is loaded locally by report/display commands; it is never written to git.
   progress.info('Reading local data...');
-  const { claude_code: claudeData, codex: codexData } = await readLocalProviderMaps(fallbacks);
+  const maps = await readLocalProviderMaps(fallbacks);
 
-  const freshData = buildMachineData(host, { claude_code: claudeData, codex: codexData });
-  const totalDays = new Set([...claudeData.keys(), ...codexData.keys()]).size;
+  const freshData = buildMachineData(host, maps);
+  const totalDays = new Set(Object.values(maps).flatMap((map) => [...map.keys()])).size;
 
   if (totalDays === 0) {
     const isPushed = !isDryRun && pushMachineData(host);
     progress.info(
       isPushed
         ? `Done! Pushed machine data migration for ${host}.`
-        : 'No local data found (Claude Code or Codex).',
+        : `No local data found (${syncedProviders()
+            .map((provider) => provider.descriptor.label)
+            .join(' or ')}).`,
     );
     return freshData;
   }
 
-  const sources: string[] = [];
-  if (claudeData.size > 0) sources.push(`Claude Code (${String(claudeData.size)} days)`);
-  if (codexData.size > 0) sources.push(`Codex (${String(codexData.size)} days)`);
+  const sources = syncedProviders()
+    .map((provider) => ({
+      label: provider.descriptor.label,
+      size: maps[provider.descriptor.key]?.size ?? 0,
+    }))
+    .filter((source) => source.size > 0)
+    .map((source) => `${source.label} (${String(source.size)} days)`);
   progress.info(`Found: ${sources.join(', ')}`);
 
   // Only write if the usage data changed — avoids a spurious commit on every run

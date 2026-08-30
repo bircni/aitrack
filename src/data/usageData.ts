@@ -5,7 +5,7 @@ import { isSyncedProvider } from '../display/providers.js';
 import { isCloned, listDataFiles, readDataFile, writePendingMachineFile } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
 import { resolveModelCost } from '../pricing/resolve.js';
-import { readCursorData } from '../readers/cursor/index.js';
+import { liveProviders } from '../providers/index.js';
 import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
 import { buildLocalMachineFile, machineHasData, mergePersistedDays } from './localData.js';
 import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';
@@ -131,16 +131,21 @@ export async function loadMergedProviderData(
   const config = tryLoadConfig();
   const machineId = resolveMachineId(config ?? { repoUrl: '' });
 
-  // Cursor is an HTTPS round-trip and the rest of this is disk and CPU work, so
-  // start it now and collect it at the end rather than paying for it in series.
+  // A live provider (Cursor) is an HTTPS round-trip and the rest of this is disk
+  // and CPU work, so start it now and collect it at the end rather than paying
+  // for it in series.
   const providerFilter = options.providers ? new Set(options.providers) : undefined;
   // The catch matters because the promise is started before the awaits below:
   // if one of those threw first, an unguarded rejection here would surface as
   // an unhandled rejection rather than the original error.
-  const cursorPending =
-    !providerFilter || providerFilter.has('cursor')
-      ? readCursorData().catch((): DayMap => new Map())
-      : undefined;
+  const livePending = liveProviders()
+    .filter((provider) => !providerFilter || providerFilter.has(provider.descriptor.key))
+    .map((provider) => ({
+      key: provider.descriptor.key,
+      pending: (provider.live?.liveFetch() ?? Promise.resolve<DayMap>(new Map())).catch(
+        (): DayMap => new Map(),
+      ),
+    }));
 
   const localMachine = options.skipLocalLogs
     ? null
@@ -198,9 +203,9 @@ export async function loadMergedProviderData(
     overlayMachineFile(providerData, localMachine);
   }
 
-  if (cursorPending) {
-    const cursorMap = await cursorPending;
-    if (cursorMap.size > 0) providerData.cursor = cursorMap;
+  for (const { key, pending } of livePending) {
+    const liveMap = await pending;
+    if (liveMap.size > 0) providerData[key] = liveMap;
   }
 
   if (providerFilter) {
