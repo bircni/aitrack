@@ -126,7 +126,9 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 **Provider selection:** `--providers <list>` accepts comma-separated `claude`, `codex`, and `cursor` values and works with `show`, every `usage` window, `export`, `top`, and `daemon`. All three are selected by default. Excluding `cursor` prevents the Cursor credential read and HTTPS export request.
 
-**`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), and `--year <year>` (filter to one calendar year).
+**Live data refresh:** Cursor's CSV export is cached at `~/.config/aitrack/cache/cursor.json` (default 6 h, `AITRACK_CURSOR_CACHE_TTL` seconds to change, `AITRACK_NO_CACHE=1` to disable), so `show` / `usage` / `top` / the daemon no longer hit the network on every run. Pass `--refresh` to `show` or any `usage` window to force a fresh fetch; the daemon refreshes Cursor at most once per its own interval.
+
+**`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year), and `--refresh` (re-fetch Cursor, ignoring the cache).
 
 **JSON output:** add `--json` to `usage`, `top`, `machines`, or `doctor` for scripting.
 
@@ -171,6 +173,7 @@ succeeded, and `GET /status.json` returns the full runtime status as JSON.
 - **Cursor** is loaded only on the current machine when selected: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls the CSV usage export at `CURSOR_WEB_BASE_URL` (`https://cursor.com` by default). The endpoint is required to use HTTPS and contain no embedded credentials. Any configured HTTPS origin receives the Cursor token, so override it only with an endpoint you trust. The token is **never** written to your repo. Use `--providers` without `cursor` (for example, `--providers claude,codex`) to skip both the credential read and request.
 - **Heatmap intensity** anchors on the 90th-percentile day rather than the absolute max, so one huge day doesn't flatten the rest of the year.
 - **Parsed transcripts are cached** per file in `~/.config/aitrack/cache/`, keyed by path, size, and modification time, and invalidated whenever the aitrack version changes (costs are computed at parse time, so a pricing update must not be served from cache). Deleting the directory only costs one slower run. Set `AITRACK_NO_CACHE=1` to bypass it entirely.
+- **Machine files carry a `schemaVersion` and the producing machine's `timezone`.** Day keys are still that machine's local calendar day (unchanged from 1.x); the timezone is recorded so data merged across machines in different zones can be understood later. These fields are metadata — nothing in a report reads them — so they are tolerated rather than required: a file written by aitrack 1.x (or by a machine still running it) is read normally and upgraded in memory, silently, and the header lands on disk the next time that machine's usage actually changes. A file written by a _newer_ aitrack than the one reading it is skipped with a clear message so the rest of the fleet still loads.
 
 ### Cost handling
 
