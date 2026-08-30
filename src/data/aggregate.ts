@@ -42,7 +42,7 @@ export interface AggregateModelsFilter {
   year?: number;
 }
 
-function dateInFilter(date: string, filter?: AggregateModelsFilter): boolean {
+export function dateInFilter(date: string, filter?: AggregateModelsFilter): boolean {
   if (!filter) return true;
   if (filter.year !== undefined && !date.startsWith(`${String(filter.year)}-`)) return false;
   if (filter.start !== undefined && date < filter.start) return false;

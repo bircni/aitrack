@@ -14,6 +14,7 @@ import { errorMessage } from '../errors.js';
 import { log } from '../output.js';
 import { packageVersion } from '../version.js';
 import {
+  parseDateOption,
   parseIntArgument,
   parsePortArgument,
   parseIntervalArgument,
@@ -45,20 +46,21 @@ function fail(error: unknown): void {
   process.exitCode = 1;
 }
 
+interface TopCliOptions {
+  limit: number;
+  sort: string;
+  providers?: string[];
+  year?: number;
+  since?: string;
+  until?: string;
+  json?: boolean;
+}
+
 /**
  * Parsing happens inside the async body so a bad argument travels through
  * `runAsync` like every other failure, instead of duplicating its catch-and-exit.
  */
-function runTop(
-  kind: string | undefined,
-  options: {
-    limit: number;
-    sort: string;
-    providers?: string[];
-    year?: number;
-    json?: boolean;
-  },
-): void {
+function runTop(kind: string | undefined, options: TopCliOptions): void {
   runAsync(() =>
     topCommand({
       kind: parseTopKind(kind),
@@ -66,6 +68,8 @@ function runTop(
       sort: parseTopSort(options.sort),
       providers: options.providers,
       year: options.year,
+      since: options.since,
+      until: options.until,
       json: options.json,
     }),
   );
@@ -159,21 +163,20 @@ export function buildProgram(): Command {
     .option('--sort <field>', 'sort by "tokens" or "cost"', 'cost')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
+    .option(
+      '--since <date>',
+      'only include days on or after this date (YYYY-MM-DD)',
+      parseDateOption,
+    )
+    .option(
+      '--until <date>',
+      'only include days on or before this date (YYYY-MM-DD)',
+      parseDateOption,
+    )
     .option('--json', 'print machine-readable JSON')
-    .action(
-      (
-        kind: string | undefined,
-        options: {
-          limit: number;
-          sort: string;
-          providers?: string[];
-          year?: number;
-          json?: boolean;
-        },
-      ) => {
-        runTop(kind, options);
-      },
-    );
+    .action((kind: string | undefined, options: TopCliOptions) => {
+      runTop(kind, options);
+    });
 
   program
     .command('machines')

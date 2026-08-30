@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
+import type { AggregateModelsFilter } from '../data/aggregate.js';
 import { isUsageNotConfigured } from '../data/emptyState.js';
 import {
   type DayEntryAccumulator,
@@ -33,7 +34,25 @@ export interface TopOptions {
   sort: TopSort;
   providers?: string[];
   year?: number;
+  /** Inclusive lower bound, YYYY-MM-DD. */
+  since?: string;
+  /** Inclusive upper bound, YYYY-MM-DD. */
+  until?: string;
   json?: boolean;
+}
+
+function dateFilter(options: TopOptions): AggregateModelsFilter | undefined {
+  if (options.year === undefined && options.since === undefined && options.until === undefined) {
+    return undefined;
+  }
+  return { year: options.year, start: options.since, end: options.until };
+}
+
+function windowSuffix(options: TopOptions): string {
+  if (options.since !== undefined || options.until !== undefined) {
+    return ` (${options.since ?? '…'} → ${options.until ?? '…'})`;
+  }
+  return options.year === undefined ? '' : ` (${String(options.year)})`;
 }
 
 interface Row {
@@ -83,6 +102,17 @@ function modelToRow(m: ModelAccumulator, index: number): Row {
   };
 }
 
+function topJsonEnvelope(options: TopOptions): Record<string, unknown> {
+  return {
+    kind: options.kind,
+    sort: options.sort,
+    limit: options.limit,
+    year: options.year ?? null,
+    since: options.since ?? null,
+    until: options.until ?? null,
+  };
+}
+
 function renderTopOutput<T>(
   options: TopOptions,
   title: string,
@@ -93,10 +123,7 @@ function renderTopOutput<T>(
 ): void {
   if (options.json) {
     printJsonCommand('top', {
-      kind: options.kind,
-      sort: options.sort,
-      limit: options.limit,
-      year: options.year ?? null,
+      ...topJsonEnvelope(options),
       items: items.map((item, index) => toJsonItem(item, index)),
     });
     return;
@@ -113,35 +140,35 @@ function renderTopOutput<T>(
 }
 
 export async function topCommand(options: TopOptions): Promise<void> {
+  if (options.since !== undefined && options.until !== undefined && options.since > options.until) {
+    throw new Error(`--since "${options.since}" must not be after --until "${options.until}".`);
+  }
+
   const loaded = await loadMergedProviderData({
     providers: options.providers,
-    year: options.year,
+    // Skip the load-time year prune when an explicit range is set: the range,
+    // not the calendar year, is what bounds the result.
+    year: options.since === undefined && options.until === undefined ? options.year : undefined,
   });
 
   if (!loaded) {
     const message = usageEmptyMessage(isUsageNotConfigured());
     if (options.json) {
-      printJsonCommand('top', {
-        kind: options.kind,
-        sort: options.sort,
-        limit: options.limit,
-        year: options.year ?? null,
-        items: [],
-        message,
-      });
+      printJsonCommand('top', { ...topJsonEnvelope(options), items: [], message });
     } else {
       log.info(message);
     }
     return;
   }
 
-  const yearSuffix = options.year === undefined ? '' : ` (${String(options.year)})`;
+  const filter = dateFilter(options);
+  const suffix = windowSuffix(options);
 
   if (options.kind === 'days') {
-    const items = topDays(loaded.providerData, options.limit, options.sort, options.year);
+    const items = topDays(loaded.providerData, options.limit, options.sort, filter);
     renderTopOutput(
       options,
-      `Top ${String(options.limit)} days by ${options.sort}${yearSuffix}`,
+      `Top ${String(options.limit)} days by ${options.sort}${suffix}`,
       items,
       (d, index) => ({
         rank: index + 1,
@@ -157,10 +184,10 @@ export async function topCommand(options: TopOptions): Promise<void> {
     return;
   }
 
-  const items = topModels(loaded.providerData, options.limit, options.sort, options.year);
+  const items = topModels(loaded.providerData, options.limit, options.sort, filter);
   renderTopOutput(
     options,
-    `Top ${String(options.limit)} models by ${options.sort}${yearSuffix}`,
+    `Top ${String(options.limit)} models by ${options.sort}${suffix}`,
     items,
     (m, index) => ({
       rank: index + 1,
