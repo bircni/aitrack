@@ -1,4 +1,6 @@
-export default {
+import type { UserConfig } from '@commitlint/types';
+
+const config: UserConfig = {
   extends: ['@commitlint/config-conventional'],
   rules: {
     // Match git-cliff config: chore, feat, fix, docs, refactor, perf, test, ci, build, revert.
@@ -13,3 +15,5 @@ export default {
     'footer-max-line-length': [0],
   },
 };
+
+export default config;

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const RELEASE_NOTES_SCRIPT = fileURLToPath(
-  new URL('../../scripts/release-notes.mjs', import.meta.url),
+  new URL('../../scripts/release-notes.ts', import.meta.url),
 );
 const temporaryDirectories: string[] = [];
 

@@ -50,11 +50,15 @@ jobs:
         with:
           sparse-checkout: |
             CHANGELOG.md
-            scripts/release-notes.mjs
+            scripts/release-notes.ts
           sparse-checkout-cone-mode: false
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
       - name: Extract GitHub release notes
-        run: node scripts/release-notes.mjs "$GITHUB_REF_NAME" CHANGELOG.md > release-notes.md
+        run: node --experimental-strip-types scripts/release-notes.ts "$GITHUB_REF_NAME" CHANGELOG.md > release-notes.md
 
       - name: Create GitHub release
         shell: bash
