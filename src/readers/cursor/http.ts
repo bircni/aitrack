@@ -46,7 +46,7 @@ function getCursorFetchAttempts(accessToken: string): FetchAttempt[] {
   const pushAttempt = (label: string, headers: Record<string, string>) => {
     const signature = JSON.stringify({
       label,
-      headers: Object.entries(headers).sort(([a], [b]) => a.localeCompare(b)),
+      headers: Object.entries(headers).toSorted(([a], [b]) => a.localeCompare(b)),
     });
     if (seen.has(signature)) return;
     seen.add(signature);

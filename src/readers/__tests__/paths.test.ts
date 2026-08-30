@@ -36,7 +36,7 @@ afterAll(() => {
 describe('listJsonlFiles', () => {
   it('finds every .jsonl file recursively and ignores other extensions', async () => {
     const files = await listJsonlFiles(root);
-    expect(files.map((f) => f.replace(`${root}/`, '')).sort()).toEqual([
+    expect(files.map((f) => f.replace(`${root}/`, '')).toSorted()).toEqual([
       'a.jsonl',
       'nested/b.jsonl',
       'nested/deep/c.jsonl',

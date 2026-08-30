@@ -9,7 +9,7 @@ import { INTENSITY_THRESHOLDS } from './constants.js';
  */
 export function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
-  const sortedAsc = [...sorted].sort((a, b) => a - b);
+  const sortedAsc = sorted.toSorted((a, b) => a - b);
   const rank = Math.ceil(p * sortedAsc.length) - 1;
   const index = Math.min(sortedAsc.length - 1, Math.max(0, rank));
   return sortedAsc[index] ?? 0;

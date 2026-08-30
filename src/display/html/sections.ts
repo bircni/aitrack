@@ -126,7 +126,7 @@ function renderUsageTable(providerKey: string, dayMap: DayMap): string {
       hasCost: agg.hasCost,
     }))
     .filter((r) => r.tokens > 0 || r.hasCost)
-    .sort((a, b) => compareByCostThenTokens(a, b));
+    .toSorted((a, b) => compareByCostThenTokens(a, b));
 
   if (rows.length === 0) return '';
 

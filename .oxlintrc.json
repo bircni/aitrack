@@ -22,7 +22,7 @@
     "unicorn/switch-case-braces": "error",
     "unicorn/no-useless-undefined": "off",
     "unicorn/import-style": "off",
-    "unicorn/no-array-sort": "off",
+    "unicorn/no-array-sort": "error",
     "unicorn/prefer-single-call": "off",
     "unicorn/no-immediate-mutation": "off",
     "unicorn/consistent-function-scoping": "error",

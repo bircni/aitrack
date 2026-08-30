@@ -26,7 +26,7 @@ export function createFallbackCollector(): FallbackCollector {
       hits.add(modelId);
     },
     drain: () => {
-      const ids = [...hits].sort((a, b) => a.localeCompare(b));
+      const ids = [...hits].toSorted((a, b) => a.localeCompare(b));
       hits.clear();
       return ids;
     },

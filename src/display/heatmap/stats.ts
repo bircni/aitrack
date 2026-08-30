@@ -48,7 +48,7 @@ export function longestStreak(dayMap: DayMap): number {
   const activeDates = [...dayMap]
     .filter(([, v]) => v.inputTokens + v.outputTokens > 0)
     .map(([d]) => d)
-    .sort((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => a.localeCompare(b));
   if (activeDates.length === 0) return 0;
 
   let longest = 1;
