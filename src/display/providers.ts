@@ -4,15 +4,13 @@ import { PROVIDER_BY_ALIAS, PROVIDER_BY_KEY, PROVIDERS, providerKeys } from '../
 /**
  * Display-facing view of the provider registry in `src/providers/`.
  *
- * Every list here is derived from that one table rather than restated, so
- * adding a provider is a single entry.
+ * Formatting and ordering only. Which providers exist, and which are synced,
+ * are registry questions — ask `providerKeys()` / `syncedProviderKeys()` /
+ * `isSyncedProvider()` there rather than keeping a second spelling here.
  */
 
-/**
- * Canonical provider keys, in display order. Doubles as the set the
- * `--providers` flag can select — the two lists were identical.
- */
-export const PROVIDER_ORDER: readonly string[] = providerKeys();
+/** Canonical provider keys, in display order. */
+const PROVIDER_ORDER: readonly string[] = providerKeys();
 
 export const PROVIDER_LABELS: Record<string, string> = {
   ...Object.fromEntries(
@@ -20,15 +18,6 @@ export const PROVIDER_LABELS: Record<string, string> = {
   ),
   all: 'All providers',
 };
-
-/** Providers written to git during sync; Cursor stays local-only. */
-export const SYNCED_PROVIDERS: readonly string[] = PROVIDERS.filter(
-  (provider) => provider.descriptor.synced,
-).map((provider) => provider.descriptor.key);
-
-export function isSyncedProvider(providerKey: string): boolean {
-  return PROVIDER_BY_KEY[providerKey]?.descriptor.synced ?? false;
-}
 
 /**
  * Normalize a user-supplied provider name (case-insensitive, friendly aliases)

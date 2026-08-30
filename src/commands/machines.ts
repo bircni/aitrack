@@ -5,13 +5,14 @@ import { isUsageNotConfigured } from '../data/emptyState.js';
 import type { MachineFile } from '../data/types.js';
 import { loadMergedProviderData, usageEmptyMessage } from '../data/usageData.js';
 import { fmt, fmtUSD } from '../display/format.js';
-import { providerLabel, sortProviderKeys, SYNCED_PROVIDERS } from '../display/providers.js';
+import { providerLabel, sortProviderKeys } from '../display/providers.js';
 import {
   defaultTableStyle,
   renderTerminalTable,
   type TerminalTableColumn,
 } from '../display/terminalTable.js';
 import { log } from '../output.js';
+import { syncedProviderKeys } from '../providers/index.js';
 
 interface MachineSummary {
   hostname: string;
@@ -71,7 +72,7 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
   // Every summary below is derived from the persisted machine files, so there is
   // nothing here for the local JSONL corpus to contribute.
   const loaded = await loadMergedProviderData({
-    providers: [...SYNCED_PROVIDERS],
+    providers: syncedProviderKeys(),
     skipLocalLogs: true,
   });
 

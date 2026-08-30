@@ -57,7 +57,7 @@ function parseCursorNumber(value?: string): number | null {
   return Math.round(numeric);
 }
 
-/** Parse Cursor CSV date column to YYYY-MM-DD (local calendar day). */
+/** Parse a Cursor CSV date cell to a YYYY-MM-DD local calendar day key. */
 export function parseCursorDateString(value?: string): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;

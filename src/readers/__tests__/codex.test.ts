@@ -151,15 +151,11 @@ describe('parseSessionFile', () => {
 
   it('uses the timestamp of the first entry as the session date', async () => {
     const file = join(tmpDir, 's.jsonl');
-    // Use noon UTC so local-date conversion is unambiguous in any timezone (UTC-12 to UTC+14)
-    const firstDate = new Date('2024-06-01T12:00:00Z');
-    const y = firstDate.getFullYear();
-    const m = String(firstDate.getMonth() + 1).padStart(2, '0');
-    const d = String(firstDate.getDate()).padStart(2, '0');
-    const expected = `${String(y)}-${m}-${d}`;
+    const firstDate = localTimestamp('2024-06-01');
+    const expected = '2024-06-01';
 
     writeJsonl(file, [
-      { type: 'turn_context', timestamp: firstDate.toISOString(), payload: { model: 'gpt-4o' } },
+      { type: 'turn_context', timestamp: firstDate, payload: { model: 'gpt-4o' } },
       {
         type: 'event_msg',
         payload: {
@@ -175,17 +171,15 @@ describe('parseSessionFile', () => {
 
   it('splits cumulative usage by the active model and local day', async () => {
     const file = join(tmpDir, 's.jsonl');
-    const firstDay = new Date(2024, 0, 15, 10, 0, 0);
-    const secondDay = new Date(2024, 0, 16, 10, 0, 0);
     writeJsonl(file, [
       {
         type: 'turn_context',
-        timestamp: firstDay.toISOString(),
+        timestamp: localTimestamp('2024-01-15', 10),
         payload: { model: 'gpt-5.1-codex' },
       },
       {
         type: 'event_msg',
-        timestamp: new Date(2024, 0, 15, 10, 1, 0).toISOString(),
+        timestamp: localTimestamp('2024-01-15', 10),
         payload: {
           type: 'token_count',
           info: { total_token_usage: { input_tokens: 100, output_tokens: 10 } },
@@ -193,12 +187,12 @@ describe('parseSessionFile', () => {
       },
       {
         type: 'turn_context',
-        timestamp: secondDay.toISOString(),
+        timestamp: localTimestamp('2024-01-16', 10),
         payload: { model: 'gpt-5.4' },
       },
       {
         type: 'event_msg',
-        timestamp: new Date(2024, 0, 16, 10, 1, 0).toISOString(),
+        timestamp: localTimestamp('2024-01-16', 10),
         payload: {
           type: 'token_count',
           info: { total_token_usage: { input_tokens: 250, output_tokens: 25 } },

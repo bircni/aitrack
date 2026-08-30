@@ -10,7 +10,13 @@ body = """
 {% else %}
 ## [unreleased]
 {% endif %}
-{% for group, commits in commits | group_by(attribute="group") %}
+{%- set breaking = commits | filter(attribute="breaking", value=true) %}
+{% if breaking | length > 0 %}
+### ⚠ Breaking Changes
+{% for commit in breaking %}
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.breaking_description | default(value=commit.message) | upper_first }}{% endfor %}
+{% endif %}
+{% for group, commits in commits | filter(attribute="breaking", value=false) | group_by(attribute="group") %}
 ### {{ group | upper_first }}
 {% for commit in commits %}
 - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}{% endfor %}
@@ -35,6 +41,9 @@ commit_parsers = [
   { message = "^chore", skip = true },
   { message = "^revert", skip = true },
 ]
+# Left off deliberately. It overrides the `skip = true` parsers above, so a
+# `chore!` or `revert!` would survive filtering with no group assigned and then
+# reach `group_by(attribute="group")` in the template.
 protect_breaking_commits = false
 filter_commits = true
 tag_pattern = "v[0-9]*"

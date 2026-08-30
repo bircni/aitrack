@@ -9,7 +9,10 @@ import {
 } from '../validate.js';
 
 const validMachine = {
+  schemaVersion: 2,
   hostname: 'laptop',
+  timezone: 'UTC',
+  dayBucket: 'utc',
   lastUpdated: '2026-01-01T00:00:00.000Z',
   days: {
     '2026-01-15': {
@@ -292,7 +295,7 @@ describe('checkMachineFile', () => {
     expect(checked.machine).toBeNull();
     const [diagnostic] = checked.diagnostics;
     expect(diagnostic?.kind).toBe('file-skipped');
-    expect(diagnostic?.reason).toContain('invalid JSON');
+    expect(diagnostic && 'reason' in diagnostic ? diagnostic.reason : '').toContain('invalid JSON');
   });
 });
 
@@ -308,5 +311,55 @@ describe('parseMachineFile', () => {
     expect(parseMachineFile('{not json', 'data/broken.json')).toBeNull();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('invalid JSON'));
     warn.mockRestore();
+  });
+});
+
+describe('schema migration on read', () => {
+  const v1 = {
+    hostname: 'laptop',
+    lastUpdated: '2026-01-01T00:00:00.000Z',
+    days: {
+      '2026-01-15': {
+        codex: {
+          byModel: { 'gpt-5': { inputTokens: 10, outputTokens: 5 } },
+          totals: { inputTokens: 10, outputTokens: 5 },
+        },
+      },
+    },
+  };
+
+  it('auto-migrates a v1 file without warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const machine = parseMachineFile(JSON.stringify(v1), 'data/laptop.json');
+    expect(machine?.schemaVersion).toBe(2);
+    expect(machine?.dayBucket).toBe('local');
+    expect(machine?.days['2026-01-15']?.codex?.totals.inputTokens).toBe(10);
+    // The header is metadata nothing reads; an older file is not something the
+    // user has to act on, so reading one is silent.
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('skips a file whose schemaVersion is from the future', () => {
+    const checked = checkRawMachineFile(
+      JSON.stringify({ ...validMachine, schemaVersion: 999 }),
+      'data/laptop.json',
+    );
+    expect(checked.machine).toBeNull();
+    expect(checked.diagnostics[0]?.kind).toBe('file-skipped');
+  });
+
+  it('tolerates an unusable header field instead of dropping the machine', () => {
+    // Failing the whole file here would take that machine's entire history out
+    // of every report over metadata nothing reads, and there is no repair path
+    // for another machine's file.
+    const checked = checkRawMachineFile(
+      JSON.stringify({ ...validMachine, dayBucket: 'sideways', timezone: '' }),
+      'data/laptop.json',
+    );
+    expect(checked.machine?.dayBucket).toBe('local');
+    expect(checked.machine?.timezone).toBe('unknown');
+    expect(checked.machine?.days).toEqual(validMachine.days);
+    expect(checked.diagnostics).toEqual([]);
   });
 });

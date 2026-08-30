@@ -41,7 +41,16 @@ describe('localData', () => {
   });
 
   it('machineHasData is false for empty days', () => {
-    expect(machineHasData({ hostname: 'host', lastUpdated: 'now', days: {} })).toBe(false);
+    expect(
+      machineHasData({
+        schemaVersion: 2,
+        hostname: 'host',
+        timezone: 'UTC',
+        dayBucket: 'utc',
+        lastUpdated: 'now',
+        days: {},
+      }),
+    ).toBe(false);
     expect(
       machineHasData(buildMachineData('host', { claude_code: dayMap(1, 1), codex: new Map() })),
     ).toBe(true);

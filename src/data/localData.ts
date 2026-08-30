@@ -1,6 +1,16 @@
 import type { FallbackCollector } from '../pricing/fallback.js';
 import { syncedProviders } from '../providers/index.js';
+import { CURRENT_SCHEMA_VERSION } from './schema.js';
 import type { DayMap, MachineFile, ProviderDay, TokenCounts } from './types.js';
+
+/** IANA zone of this machine, for the machine file's `timezone` field. */
+export function machineTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
 
 function tokenCountFields(counts: TokenCounts): TokenCounts {
   return {
@@ -33,7 +43,16 @@ export function buildMachineData(
       };
     }
   }
-  return { hostname: machineId, lastUpdated: new Date().toISOString(), days };
+  return {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    hostname: machineId,
+    // Day keys are this machine's local calendar days; the zone is recorded so
+    // data merged across machines in different zones can be understood.
+    timezone: machineTimezone(),
+    dayBucket: 'local',
+    lastUpdated: new Date().toISOString(),
+    days,
+  };
 }
 
 export function machineHasData(machine: MachineFile): boolean {

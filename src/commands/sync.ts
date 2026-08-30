@@ -2,10 +2,11 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { loadConfig, resolveMachineId } from '../config.js';
+import { reportMachineFileDiagnostics } from '../data/diagnostics.js';
 import { buildMachineData, mergePersistedDays, readLocalProviderMaps } from '../data/localData.js';
 import { REPO_NOT_CLONED_MESSAGE } from '../data/messages.js';
 import type { MachineFile } from '../data/types.js';
-import { parseMachineFile } from '../data/validate.js';
+import { checkRawMachineFile } from '../data/validate.js';
 import {
   commitAndPush,
   hasMachineDataChanges,
@@ -128,19 +129,20 @@ async function pushLocalUsage(
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
 
-  // parseMachineFile also returns null for a file that exists but is invalid.
+  // The check also returns a null machine for a file that exists but is invalid.
   // Merging against null there would silently replace the synced history with
   // whatever the local logs still reach and push the loss.
   let existingDays: MachineFile['days'] | null = null;
   if (raw !== null) {
-    const existing = parseMachineFile(raw, dataFilePath);
-    if (!existing) {
+    const existing = checkRawMachineFile(raw, dataFilePath);
+    reportMachineFileDiagnostics(existing.diagnostics);
+    if (!existing.machine) {
       throw new Error(
         `Refusing to overwrite invalid data/${machineDataFilename(host)} (see the warning above).\n` +
           "  Run: npx aitrack recompute-costs   (rebuilds this machine's file from the local logs)",
       );
     }
-    existingDays = existing.days;
+    existingDays = existing.machine.days;
   }
 
   // Keep days the local logs no longer cover — see mergePersistedDays.
@@ -151,6 +153,9 @@ async function pushLocalUsage(
   // already up to date does not look changed purely because of key order.
   const normalizedExisting = existingDays === null ? null : mergePersistedDays(existingDays, {});
 
+  // Usage only. The schema header is metadata nothing reads, so a file that is
+  // otherwise up to date is not worth a commit just to stamp it — it lands on
+  // this machine's next real change.
   if (JSON.stringify(normalizedExisting) === JSON.stringify(outgoingDays)) {
     let isPushed = false;
     if (!isDryRun) {

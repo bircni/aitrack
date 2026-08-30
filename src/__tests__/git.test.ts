@@ -405,7 +405,14 @@ describe('git helpers', () => {
     mocks.existsSync.mockReturnValue(true);
     mocks.readdirSync.mockReturnValue(['host.json', 'notes.txt']);
     mocks.readFileSync.mockReturnValue(
-      JSON.stringify({ hostname: 'host', lastUpdated: 'now', days: {} }),
+      JSON.stringify({
+        schemaVersion: 2,
+        hostname: 'host',
+        timezone: 'UTC',
+        dayBucket: 'utc',
+        lastUpdated: 'now',
+        days: {},
+      }),
     );
 
     const files = listDataFiles();
@@ -415,14 +422,28 @@ describe('git helpers', () => {
     const file = files[0];
     expect(file).toBeDefined();
     if (file === undefined) throw new Error('expected one data file');
-    expect(readDataFile(file)).toEqual({ hostname: 'host', lastUpdated: 'now', days: {} });
+    expect(readDataFile(file)).toEqual({
+      schemaVersion: 2,
+      hostname: 'host',
+      timezone: 'UTC',
+      dayBucket: 'utc',
+      lastUpdated: 'now',
+      days: {},
+    });
   });
 
   it('writes and lists pending machine files for a legitimate custom id', () => {
     mocks.existsSync.mockReturnValue(true);
     mocks.readdirSync.mockReturnValue(['Work Laptop_01.2.json']);
 
-    writePendingMachineFile({ hostname: 'Work Laptop_01.2', lastUpdated: 'now', days: {} });
+    writePendingMachineFile({
+      schemaVersion: 2,
+      hostname: 'Work Laptop_01.2',
+      timezone: 'UTC',
+      dayBucket: 'utc',
+      lastUpdated: 'now',
+      days: {},
+    });
 
     expect(mocks.mkdirSync).toHaveBeenCalled();
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
@@ -437,7 +458,14 @@ describe('git helpers', () => {
     'rejects unsafe pending machine id %j before touching the filesystem',
     (hostname) => {
       expect(() => {
-        writePendingMachineFile({ hostname, lastUpdated: 'now', days: {} });
+        writePendingMachineFile({
+          schemaVersion: 2,
+          hostname,
+          timezone: 'UTC',
+          dayBucket: 'utc',
+          lastUpdated: 'now',
+          days: {},
+        });
       }).toThrow('Machine name');
       expect(mocks.mkdirSync).not.toHaveBeenCalled();
       expect(mocks.writeFileSync).not.toHaveBeenCalled();

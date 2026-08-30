@@ -44,7 +44,10 @@ import type { MachineFile } from '../../data/types.js';
 import { resolveModelCost } from '../../pricing/resolve.js';
 import { recomputeCostsCommand } from '../recompute.js';
 
+const SCHEMA_FIELDS = { schemaVersion: 2, timezone: 'UTC', dayBucket: 'utc' } as const;
+
 const machineJson = {
+  ...SCHEMA_FIELDS,
   hostname: 'host',
   lastUpdated: 'old',
   days: {
@@ -288,7 +291,12 @@ describe('recomputeCostsCommand', () => {
       },
     });
     mocks.readFileSync.mockReturnValue(
-      JSON.stringify({ hostname: 'host', lastUpdated: 'old', days: day(derived) }),
+      JSON.stringify({
+        ...SCHEMA_FIELDS,
+        hostname: 'host',
+        lastUpdated: 'old',
+        days: day(derived),
+      }),
     );
     mocks.buildMachineData.mockReturnValue({
       hostname: 'host',
@@ -308,6 +316,7 @@ describe('recomputeCostsCommand', () => {
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
     mocks.readFileSync.mockReturnValue(
       JSON.stringify({
+        ...SCHEMA_FIELDS,
         hostname: 'other',
         lastUpdated: 'old',
         days: {
@@ -348,6 +357,7 @@ describe('recomputeCostsCommand', () => {
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
     mocks.readFileSync.mockReturnValue(
       JSON.stringify({
+        ...SCHEMA_FIELDS,
         hostname: 'other',
         lastUpdated: 'old',
         days: {
@@ -389,6 +399,7 @@ describe('recomputeCostsCommand', () => {
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
     mocks.readFileSync.mockReturnValue(
       JSON.stringify({
+        ...SCHEMA_FIELDS,
         hostname: 'other',
         lastUpdated: 'old',
         days: {
@@ -413,6 +424,7 @@ describe('recomputeCostsCommand', () => {
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
     mocks.readFileSync.mockReturnValue(
       JSON.stringify({
+        ...SCHEMA_FIELDS,
         hostname: 'other',
         lastUpdated: 'old',
         days: {
