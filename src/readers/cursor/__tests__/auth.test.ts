@@ -125,9 +125,10 @@ describe('cursor auth', () => {
     });
 
     process.env.CURSOR_WEB_BASE_URL = 'https://cursor.test';
-    const response = await fetchCursorUsageCsv('good-token');
+    const { response, shape } = await fetchCursorUsageCsv('good-token');
     expect(response.ok).toBe(true);
     expect(await response.text()).toBe('csv');
+    expect(shape).toBe('bearer');
     expect(calls[0]).toBe('Bearer good-token');
   });
 

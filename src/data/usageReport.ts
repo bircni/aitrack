@@ -17,6 +17,8 @@ export interface UsageReportOptions {
   from?: string;
   to?: string;
   n?: number;
+  /** Re-fetch live-provider (Cursor) data instead of serving a cached export. */
+  refreshLive?: boolean;
 }
 
 export interface UsageReportRow {
@@ -215,7 +217,10 @@ function compareUsageReports(current: UsageReport, previous: UsageReport): Usage
  * both render from a single source of truth.
  */
 export async function buildUsageReport(options: UsageReportOptions): Promise<UsageReport | null> {
-  const loaded = await loadMergedProviderData({ providers: options.providers });
+  const loaded = await loadMergedProviderData({
+    providers: options.providers,
+    refreshLive: options.refreshLive,
+  });
   if (!loaded) return null;
 
   const window = computeUsageWindow(options);
@@ -227,7 +232,10 @@ export async function buildUsageComparison(
 ): Promise<UsageComparisonReport | null> {
   const currentWindow = computeUsageWindow(options);
   const previousWindow = computePreviousUsageWindow(options, currentWindow);
-  const loaded = await loadMergedProviderData({ providers: options.providers });
+  const loaded = await loadMergedProviderData({
+    providers: options.providers,
+    refreshLive: options.refreshLive,
+  });
   if (!loaded) return null;
 
   const current = buildUsageReportFromData(loaded.providerData, currentWindow);

@@ -92,12 +92,10 @@ export async function readLocalProviderMaps(
   fallbacks?: FallbackCollector,
 ): Promise<Record<string, DayMap>> {
   const entries = await Promise.all(
-    syncedProviders().map(async (provider) => {
-      if (!provider.reader) {
-        throw new Error(`provider ${provider.descriptor.key} is synced but has no reader`);
-      }
-      return [provider.descriptor.key, await provider.reader.readData(fallbacks)] as const;
-    }),
+    syncedProviders().map(
+      async (provider) =>
+        [provider.descriptor.key, await provider.reader.readData(fallbacks)] as const,
+    ),
   );
   return Object.fromEntries(entries);
 }

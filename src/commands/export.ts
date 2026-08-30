@@ -15,6 +15,8 @@ export interface ExportOptions {
   providers?: string[];
   /** Emit CSV instead of the PDF receipt. */
   csv?: boolean;
+  /** Re-fetch live provider data (Cursor) instead of serving the local cache. */
+  refresh?: boolean;
 }
 
 /** Default `-o` ends in `.pdf`; swap it for `.csv` when the user didn't say otherwise. */
@@ -23,7 +25,10 @@ function csvOutputPath(output: string): string {
 }
 
 export async function exportCommand(options: ExportOptions): Promise<void> {
-  const report = await buildUsageReport(parseUsageReportOptions(options));
+  const report = await buildUsageReport({
+    ...parseUsageReportOptions(options),
+    ...(options.refresh !== undefined && { refreshLive: options.refresh }),
+  });
 
   if (!report || report.rowCount === 0) {
     const message = emptyReportMessage(report);

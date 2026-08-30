@@ -2,9 +2,9 @@ import type { CheckResult } from '../display/checkResult.js';
 import { CODEX_PRICING_BY_ID, estimateCodexCostUSD } from '../pricing/codex.js';
 import { getCodexPaths, readCodexData } from '../readers/codex.js';
 import { sourceCheck } from '../readers/paths.js';
-import type { Provider } from './types.js';
+import type { SyncedProvider } from './types.js';
 
-export const codexProvider: Provider = {
+export const codexProvider: SyncedProvider = {
   descriptor: {
     key: 'codex',
     label: 'Codex',

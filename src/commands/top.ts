@@ -33,6 +33,8 @@ export interface TopOptions {
   limit: number;
   sort: TopSort;
   providers?: string[];
+  /** Re-fetch live provider data (Cursor) instead of serving the local cache. */
+  refresh?: boolean;
   year?: number;
   /** Inclusive lower bound, YYYY-MM-DD. */
   since?: string;
@@ -146,6 +148,7 @@ export async function topCommand(options: TopOptions): Promise<void> {
 
   const loaded = await loadMergedProviderData({
     providers: options.providers,
+    ...(options.refresh !== undefined && { refreshLive: options.refresh }),
     // Skip the load-time year prune when an explicit range is set: the range,
     // not the calendar year, is what bounds the result.
     year: options.since === undefined && options.until === undefined ? options.year : undefined,
