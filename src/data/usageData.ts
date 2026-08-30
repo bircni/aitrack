@@ -1,11 +1,10 @@
 import { basename } from 'node:path';
 
 import { resolveMachineId, tryLoadConfig } from '../config.js';
-import { isSyncedProvider } from '../display/providers.js';
 import { isCloned, listDataFiles, readDataFile, writePendingMachineFile } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
 import { resolveModelCost } from '../pricing/resolve.js';
-import { liveProviders } from '../providers/index.js';
+import { isSyncedProvider, liveProviders } from '../providers/index.js';
 import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
 import { buildLocalMachineFile, machineHasData, mergePersistedDays } from './localData.js';
 import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';

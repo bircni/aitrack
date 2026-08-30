@@ -4,7 +4,14 @@ import { findDuplicateMachineDays } from '../duplicateMachines.js';
 import type { MachineFile } from '../types.js';
 
 function machine(hostname: string, days: MachineFile['days']): MachineFile {
-  return { hostname, lastUpdated: '2026-01-16T00:00:00.000Z', days };
+  return {
+    schemaVersion: 2,
+    hostname,
+    timezone: 'UTC',
+    dayBucket: 'utc',
+    lastUpdated: '2026-01-16T00:00:00.000Z',
+    days,
+  };
 }
 
 const day = {

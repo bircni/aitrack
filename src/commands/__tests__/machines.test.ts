@@ -26,7 +26,10 @@ function makeMachine(
   >,
 ): MachineFile {
   const out: MachineFile = {
+    schemaVersion: 2,
     hostname,
+    timezone: 'UTC',
+    dayBucket: 'utc',
     lastUpdated: '2026-04-01T12:00:00.000Z',
     days: {},
   };

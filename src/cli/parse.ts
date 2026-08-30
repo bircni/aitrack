@@ -10,7 +10,8 @@ import {
   type UsagePeriod,
 } from '../data/usagePeriods.js';
 import type { UsageReportOptions } from '../data/usageReport.js';
-import { normalizeProviderKey, PROVIDER_ORDER } from '../display/providers.js';
+import { normalizeProviderKey } from '../display/providers.js';
+import { providerKeys } from '../providers/index.js';
 
 export function isValidDateString(date: string): boolean {
   return isDayKey(date);
@@ -113,14 +114,14 @@ export function parseProviders(value: string): string[] {
     const key = normalizeProviderKey(name);
     if (key === null) {
       throw new InvalidArgumentError(
-        `Invalid provider: "${name}". Expected one of: ${PROVIDER_ORDER.join(', ')}.`,
+        `Invalid provider: "${name}". Expected one of: ${providerKeys().join(', ')}.`,
       );
     }
     seen.add(key);
   }
   if (seen.size === 0) {
     throw new InvalidArgumentError(
-      `No valid providers given. Expected one of: ${PROVIDER_ORDER.join(', ')}.`,
+      `No valid providers given. Expected one of: ${providerKeys().join(', ')}.`,
     );
   }
   return [...seen];

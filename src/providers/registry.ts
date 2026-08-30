@@ -37,6 +37,15 @@ export function syncedProviders(): SyncedProvider[] {
   return PROVIDERS.filter((provider): provider is SyncedProvider => provider.reader !== undefined);
 }
 
+/** Keys of the providers written to git during sync, in display order. */
+export function syncedProviderKeys(): string[] {
+  return syncedProviders().map((provider) => provider.descriptor.key);
+}
+
+export function isSyncedProvider(key: string): boolean {
+  return PROVIDER_BY_KEY[key]?.reader !== undefined;
+}
+
 /** Providers fetched live and never persisted (Cursor), in display order. */
 export function liveProviders(): LiveProvider[] {
   return PROVIDERS.filter((provider): provider is LiveProvider => provider.live !== undefined);

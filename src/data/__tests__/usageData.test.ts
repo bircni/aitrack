@@ -34,8 +34,10 @@ function emptyDay(): DayEntry {
   return { inputTokens: 0, outputTokens: 0, byModel: {} };
 }
 
+const SCHEMA_FIELDS = { schemaVersion: 2, timezone: 'UTC', dayBucket: 'utc' } as const;
+
 function emptyLocalMachine(host = 'host'): MachineFile {
-  return { hostname: host, lastUpdated: 'now', days: {} };
+  return { ...SCHEMA_FIELDS, hostname: host, lastUpdated: 'now', days: {} };
 }
 
 describe('mergeProviderDay', () => {
@@ -175,6 +177,7 @@ describe('loadMergedProviderData', () => {
   it('uses a supplied local machine file instead of reading the logs again', async () => {
     mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
     const localMachine = {
+      ...SCHEMA_FIELDS,
       hostname: 'host',
       lastUpdated: 'from-sync',
       days: {

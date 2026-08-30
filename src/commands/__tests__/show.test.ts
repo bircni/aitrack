@@ -42,12 +42,15 @@ import type { MachineFile, ProviderData } from '../../data/types.js';
 import type { RenderOptions } from '../../display/renderOptions.js';
 import { showCommand } from '../show.js';
 
+const SCHEMA_FIELDS = { schemaVersion: 2, timezone: 'UTC', dayBucket: 'utc' } as const;
+
 function emptyLocalMachine(host = 'host'): MachineFile {
-  return { hostname: host, lastUpdated: 'now', days: {} };
+  return { ...SCHEMA_FIELDS, hostname: host, lastUpdated: 'now', days: {} };
 }
 
 function localMachineWithData(host = 'host'): MachineFile {
   return {
+    ...SCHEMA_FIELDS,
     hostname: host,
     lastUpdated: 'now',
     days: {

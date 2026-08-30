@@ -1,8 +1,10 @@
 import { isDayKey } from '../constants.js';
 import { errorMessage } from '../errors.js';
+import { applyMigrations, UNKNOWN_TIMEZONE } from '../store/migrations/index.js';
 import { reportMachineFileDiagnostics } from './diagnostics.js';
 import { isFiniteNumber, isRecord } from './guards.js';
-import type { MachineFile, ProviderDay, TokenCounts } from './types.js';
+import { CURRENT_SCHEMA_VERSION } from './schema.js';
+import type { DayBucket, MachineFile, ProviderDay, TokenCounts } from './types.js';
 
 export interface MachineFileValidationOptions {
   /** Let recompute-costs load a file whose aggregate cost is the value being repaired. */
@@ -134,18 +136,46 @@ export function checkMachineFile(
   });
 
   if (!isRecord(data)) return skip('root must be an object');
-  if (typeof data.hostname !== 'string' || data.hostname.length === 0) {
+
+  // Bring an older file up to the current schema before validating it. A file
+  // already current comes back by reference, so its round-trip stays
+  // byte-identical; a newer-than-us file throws and is skipped with a clear
+  // reason so the other machines' files still load.
+  //
+  // Silently: the header is metadata no report reads, so an older file is not a
+  // problem the user has to act on. Warning per file per run, and forcing a
+  // rewrite of every machine's file to clear the warning, would be noise for a
+  // change nothing depends on — and would fight any machine still on 1.x, which
+  // drops fields it does not recognise on its own next write.
+  const diagnostics: MachineFileDiagnostic[] = [];
+  let file: Record<string, unknown>;
+  try {
+    file = applyMigrations(data).file;
+  } catch (error) {
+    return skip(errorMessage(error));
+  }
+
+  if (typeof file.hostname !== 'string' || file.hostname.length === 0) {
     return skip('hostname must be a non-empty string');
   }
-  if (typeof data.lastUpdated !== 'string' || data.lastUpdated.length === 0) {
+  if (typeof file.lastUpdated !== 'string' || file.lastUpdated.length === 0) {
     return skip('lastUpdated must be a non-empty string');
   }
-  if (!isRecord(data.days)) return skip('days must be an object');
+  // The header fields are tolerated, not required: absent or malformed, they
+  // fall back to what the migration would have written. Failing the file here
+  // would take that machine's entire history out of every report over metadata
+  // nothing reads, and there is no repair path for another machine's file.
+  const timezone =
+    typeof file.timezone === 'string' && file.timezone.length > 0
+      ? file.timezone
+      : UNKNOWN_TIMEZONE;
+  const dayBucket: DayBucket =
+    file.dayBucket === 'utc' || file.dayBucket === 'local' ? file.dayBucket : 'local';
+  if (!isRecord(file.days)) return skip('days must be an object');
 
-  const diagnostics: MachineFileDiagnostic[] = [];
   const days: MachineFile['days'] = {};
 
-  for (const [date, providers] of Object.entries(data.days)) {
+  for (const [date, providers] of Object.entries(file.days)) {
     // A day key that is not a date can only come from a reader that wrote one
     // (an unparseable timestamp used to yield "NaN-NaN-NaN"). Such a day is
     // skipped by every year and window filter yet still counted in all-time
@@ -169,7 +199,14 @@ export function checkMachineFile(
   }
 
   return {
-    machine: { hostname: data.hostname, lastUpdated: data.lastUpdated, days },
+    machine: {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      hostname: file.hostname,
+      timezone,
+      dayBucket,
+      lastUpdated: file.lastUpdated,
+      days,
+    },
     diagnostics,
   };
 }

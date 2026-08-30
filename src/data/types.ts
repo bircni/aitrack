@@ -29,8 +29,21 @@ export interface ProviderDay {
   totals: TokenCounts;
 }
 
+/** How the day keys in a machine file were bucketed. */
+export type DayBucket = 'utc' | 'local';
+
 export interface MachineFile {
+  /** On-disk schema version. See src/data/schema.ts. */
+  schemaVersion: number;
   hostname: string;
+  /** IANA zone of the producing machine (Intl…resolvedOptions().timeZone). */
+  timezone: string;
+  /**
+   * How the day keys were bucketed. Currently always 'local' (each machine's
+   * own calendar day); the `timezone` field records which zone. 'utc' is
+   * reserved for a future normalization.
+   */
+  dayBucket: DayBucket;
   lastUpdated: string;
   days: Record<string, Record<string, ProviderDay>>;
 }

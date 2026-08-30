@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
 import { loadConfig, resolveMachineId } from '../config.js';
+import { reportMachineFileDiagnostics } from '../data/diagnostics.js';
 import {
   buildMachineData,
   machineHasData,
@@ -10,8 +11,7 @@ import {
 } from '../data/localData.js';
 import { REPO_NOT_CLONED_MESSAGE } from '../data/messages.js';
 import type { MachineFile, ProviderDay } from '../data/types.js';
-import { approximatelyEqual, parseMachineFile } from '../data/validate.js';
-import { SYNCED_PROVIDERS } from '../display/providers.js';
+import { approximatelyEqual, checkRawMachineFile } from '../data/validate.js';
 import { commitDataChanges, isCloned, listDataFiles } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
 import { log } from '../output.js';
@@ -21,7 +21,7 @@ import {
   reportFallbackPricing,
 } from '../pricing/fallback.js';
 import { resolveModelCost } from '../pricing/resolve.js';
-import { getProvider } from '../providers/index.js';
+import { getProvider, syncedProviderKeys } from '../providers/index.js';
 
 /**
  * Days serialized without their costs, for change detection.
@@ -104,7 +104,7 @@ function repriceMachineDays(
   let legacySkipped = 0;
 
   for (const [date, providers] of Object.entries(days)) {
-    for (const providerKey of SYNCED_PROVIDERS) {
+    for (const providerKey of syncedProviderKeys()) {
       const providerDay = providers[providerKey];
       if (!providerDay) continue;
       const result = repriceProviderDay(providerKey, date, providerDay, fallbacks);
@@ -127,10 +127,12 @@ function loadMachineForRecompute(
   localFresh: MachineFile,
 ): { machine: MachineFile; isTouched: boolean } | null {
   const raw = readFileSync(filePath, 'utf8');
-  const machine = parseMachineFile(raw, filePath, { allowInconsistentCostTotals: true });
+  const checked = checkRawMachineFile(raw, filePath, { allowInconsistentCostTotals: true });
+  reportMachineFileDiagnostics(checked.diagnostics);
+  const machine = checked.machine;
 
   if (!machine) {
-    // parseMachineFile already warned why. Only the current machine can be
+    // The diagnostics above already said why. Only the current machine can be
     // repaired — the local logs are its source of truth — and this is the one
     // command that can do it: sync refuses to overwrite a file it cannot read.
     if (!isCurrentMachine || !machineHasData(localFresh)) return null;

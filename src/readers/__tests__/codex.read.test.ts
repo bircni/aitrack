@@ -67,12 +67,12 @@ describe('readCodexData', () => {
     writeJsonl(join(sessionDir, 'a.jsonl'), [
       {
         type: 'turn_context',
-        timestamp: new Date(2024, 0, 15, 10).toISOString(),
+        timestamp: localTimestamp('2024-01-15', 10),
         payload: { model: 'gpt-5.1-codex' },
       },
       {
         type: 'event_msg',
-        timestamp: new Date(2024, 0, 15, 10, 1).toISOString(),
+        timestamp: localTimestamp('2024-01-15', 10),
         payload: {
           type: 'token_count',
           info: { total_token_usage: { input_tokens: 100, output_tokens: 10 } },
@@ -80,12 +80,12 @@ describe('readCodexData', () => {
       },
       {
         type: 'turn_context',
-        timestamp: new Date(2024, 0, 16, 10).toISOString(),
+        timestamp: localTimestamp('2024-01-16', 10),
         payload: { model: 'gpt-5.4' },
       },
       {
         type: 'event_msg',
-        timestamp: new Date(2024, 0, 16, 10, 1).toISOString(),
+        timestamp: localTimestamp('2024-01-16', 10),
         payload: {
           type: 'token_count',
           info: { total_token_usage: { input_tokens: 250, output_tokens: 25 } },

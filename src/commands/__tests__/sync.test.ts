@@ -44,7 +44,14 @@ vi.mock('../../data/localData.js', async () => {
           };
         }
       }
-      return { hostname: host, lastUpdated: 'now', days };
+      return {
+        schemaVersion: 2,
+        hostname: host,
+        timezone: 'UTC',
+        dayBucket: 'local',
+        lastUpdated: 'now',
+        days,
+      };
     },
     readLocalProviderMaps: async (
       fallbacks?: FallbackCollector,
@@ -68,6 +75,9 @@ import { loggedOutput } from '../../__tests__/helpers/fixtures.js';
 import type { DayMap } from '../../data/types.js';
 import type { FallbackCollector } from '../../pricing/fallback.js';
 import { syncCommand, syncData } from '../sync.js';
+
+/** Header fields a file already on the current schema carries. */
+const SCHEMA_FIELDS = { schemaVersion: 2, timezone: 'UTC', dayBucket: 'local' } as const;
 
 function dayMap(inputTokens: number, outputTokens: number, model = 'model'): DayMap {
   return new Map([
@@ -253,6 +263,7 @@ describe('syncCommand', () => {
 
   it('does not commit unrelated data changes when the matching current target is clean', async () => {
     const existing = {
+      ...SCHEMA_FIELDS,
       hostname: 'host',
       lastUpdated: 'old',
       days: {
@@ -279,6 +290,7 @@ describe('syncCommand', () => {
     // Previous run committed but could not push (offline). The data is
     // unchanged since, so nothing in the working tree signals the gap.
     const existing = {
+      ...SCHEMA_FIELDS,
       hostname: 'host',
       lastUpdated: 'old',
       days: {
@@ -304,6 +316,7 @@ describe('syncCommand', () => {
 
   it('pushes a pending machine rename even when usage data already matches', async () => {
     const existing = {
+      ...SCHEMA_FIELDS,
       hostname: 'new-host',
       lastUpdated: 'old',
       days: {
