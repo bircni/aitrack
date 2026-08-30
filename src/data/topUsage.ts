@@ -1,5 +1,5 @@
 import { providerLabel } from '../display/providers.js';
-import { aggregateModelsByDayMap } from './aggregate.js';
+import { type AggregateModelsFilter, aggregateModelsByDayMap, dateInFilter } from './aggregate.js';
 import { compareByCostThenTokens } from './sort.js';
 import type { DayMap, ProviderData } from './types.js';
 
@@ -48,12 +48,12 @@ export function topDays(
   providerData: ProviderData,
   limit: number,
   sort: TopSort,
-  year?: number,
+  filter?: AggregateModelsFilter,
 ): DayEntryAccumulator[] {
   const byDate = new Map<string, DayEntryAccumulator>();
   for (const [providerKey, dayMap] of Object.entries(providerData)) {
     for (const [date, day] of dayMap) {
-      if (year !== undefined && !date.startsWith(`${String(year)}-`)) continue;
+      if (!dateInFilter(date, filter)) continue;
       let accumulator = byDate.get(date);
       if (!accumulator) {
         accumulator = { date, tokens: 0, cost: null, byProvider: {} };
@@ -72,8 +72,12 @@ export function topDays(
   return all.slice(0, limit);
 }
 
-function aggregateModels(dayMap: DayMap, providerKey: string, year?: number): ModelAccumulator[] {
-  const byModel = aggregateModelsByDayMap(dayMap, { year });
+function aggregateModels(
+  dayMap: DayMap,
+  providerKey: string,
+  filter?: AggregateModelsFilter,
+): ModelAccumulator[] {
+  const byModel = aggregateModelsByDayMap(dayMap, filter);
   return [...byModel]
     .filter(([, agg]) => agg.inputTokens + agg.outputTokens > 0 || agg.hasCost)
     .map(([model, agg]) => ({
@@ -90,11 +94,11 @@ export function topModels(
   providerData: ProviderData,
   limit: number,
   sort: TopSort,
-  year?: number,
+  filter?: AggregateModelsFilter,
 ): ModelAccumulator[] {
   const all: ModelAccumulator[] = [];
   for (const [providerKey, dayMap] of Object.entries(providerData)) {
-    all.push(...aggregateModels(dayMap, providerKey, year));
+    all.push(...aggregateModels(dayMap, providerKey, filter));
   }
   all.sort((a, b) => compareTopEntries(a, b, sort));
   return all.slice(0, limit);

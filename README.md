@@ -135,7 +135,7 @@ cost, and per-model movement with the equivalent previous period. Calendar-to-da
 the same elapsed days—for example, `aitrack usage thisweek --compare` compares this week so far with
 the same weekdays last week. Comparison data is also included with `--json`.
 
-**`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), and `--year <year>`.
+**`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), `--year <year>`, and `--since <YYYY-MM-DD>` / `--until <YYYY-MM-DD>` for an explicit inclusive date range.
 
 **`doctor` flags:** `--pricing-check` runs the pricing drift script when you are in a source checkout.
 

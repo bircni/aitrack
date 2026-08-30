@@ -20,6 +20,14 @@ export function invalidDateMessage(date: string): string {
   return `Invalid date: "${date}". Expected YYYY-MM-DD.`;
 }
 
+/** Commander option parser: a bare YYYY-MM-DD date, or a friendly rejection. */
+export function parseDateOption(value: string): string {
+  if (!isValidDateString(value)) {
+    throw new InvalidArgumentError(invalidDateMessage(value));
+  }
+  return value;
+}
+
 export function parseIntArgument(value: string): number {
   if (!/^-?\d+$/u.test(value)) {
     throw new InvalidArgumentError(`Expected an integer, got: ${value}`);

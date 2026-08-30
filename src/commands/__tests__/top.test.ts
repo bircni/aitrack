@@ -112,6 +112,64 @@ describe('topCommand', () => {
     expect(out).not.toContain('2025-01-01');
   });
 
+  it('respects an explicit --since/--until date range', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([
+          ['2026-03-10', makeDay(100, 0, 1, 'm1')],
+          ['2026-06-20', makeDay(9999, 0, 99, 'm1')],
+          ['2026-09-01', makeDay(5000, 0, 50, 'm1')],
+        ]),
+      },
+      machineData: [],
+    });
+
+    await topCommand({
+      kind: 'days',
+      limit: 10,
+      sort: 'tokens',
+      since: '2026-04-01',
+      until: '2026-08-01',
+    });
+
+    const out = loggedOutput();
+    expect(out).toContain('2026-06-20');
+    expect(out).toContain('(2026-04-01 → 2026-08-01)');
+    expect(out).not.toContain('2026-03-10');
+    expect(out).not.toContain('2026-09-01');
+  });
+
+  it('rejects a --since that falls after --until', async () => {
+    await expect(
+      topCommand({
+        kind: 'days',
+        limit: 10,
+        sort: 'tokens',
+        since: '2026-08-01',
+        until: '2026-01-01',
+      }),
+    ).rejects.toThrow('must not be after');
+  });
+
+  it('echoes the date range into --json output', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: { claude_code: new Map([['2026-06-20', makeDay(100, 0, 1, 'm1')]]) },
+      machineData: [],
+    });
+
+    await topCommand({
+      kind: 'models',
+      limit: 5,
+      sort: 'cost',
+      json: true,
+      since: '2026-01-01',
+      until: '2026-12-31',
+    });
+
+    const parsed = JSON.parse(loggedOutput()) as { since: string; until: string; year: null };
+    expect(parsed).toMatchObject({ since: '2026-01-01', until: '2026-12-31', year: null });
+  });
+
   it('days: ranks by tokens and prints JSON without a top provider when empty', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {
