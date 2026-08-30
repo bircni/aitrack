@@ -80,6 +80,49 @@ describe('exportCommand', () => {
     expect(loggedOutput()).toContain('r.pdf');
   });
 
+  it('writes CSV instead of a PDF with --csv, swapping the default extension', async () => {
+    mocks.buildUsageReport.mockResolvedValue({
+      windowLabel: 'this month',
+      providers: [
+        {
+          key: 'claude_code',
+          label: 'Claude Code',
+          rows: [
+            {
+              model: 'claude-opus-4-8',
+              inputTokens: 1000,
+              outputTokens: 200,
+              tokens: 1200,
+              costUSD: 3.5,
+              hasCost: true,
+            },
+          ],
+          subtotalTokens: 1200,
+          subtotalCostUSD: 3.5,
+          subtotalHasCost: true,
+        },
+      ],
+      totals: { inputTokens: 1000, outputTokens: 200, tokens: 1200, costUSD: 3.5, hasCost: true },
+      rowCount: 1,
+    } satisfies UsageReport);
+
+    await exportCommand({ output: 'aitrack-receipt.pdf', csv: true });
+
+    expect(mocks.renderReceiptPdf).not.toHaveBeenCalled();
+    const [path, body] = mocks.writeFileSync.mock.calls[0] as [string, string];
+    expect(path).toBe('aitrack-receipt.csv');
+    expect(body).toContain('provider,model,input_tokens,output_tokens,total_tokens,cost_usd');
+    expect(body).toContain('Claude Code,claude-opus-4-8,1000,200,1200,3.5000');
+    expect(body).toContain('TOTAL,,1000,200,1200,3.5000');
+    expect(loggedOutput()).toContain('Wrote CSV for this month → aitrack-receipt.csv');
+  });
+
+  it('honours an explicit --csv output path as given', async () => {
+    mocks.buildUsageReport.mockResolvedValue(report(3));
+    await exportCommand({ output: 'out.csv', csv: true });
+    expect((mocks.writeFileSync.mock.calls[0] as [string, string])[0]).toBe('out.csv');
+  });
+
   it('exports date, range, and last windows', async () => {
     mocks.buildUsageReport.mockResolvedValue(report(3));
     await exportCommand({ period: 'date', args: ['2026-06-01'], output: 'date.pdf' });

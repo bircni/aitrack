@@ -114,7 +114,7 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 | `aitrack sync`                  | Read local data, write it to the cloned repo, and push (`--dry-run` previews) |
 | `aitrack show`                  | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table) |
 | `aitrack usage <window>`        | Usage by provider and model for a rolling, calendar, or custom window         |
-| `aitrack export [window] [...]` | Export the same windows as an itemized PDF (defaults to `month`)              |
+| `aitrack export [window] [...]` | Export the same windows as an itemized PDF, or `--csv` (defaults to `month`)  |
 | `aitrack daemon`                | Serve a local, periodically refreshed HTML dashboard                          |
 | `aitrack top [days\|models]`    | Rank busiest days or most-used models by cost (or `--sort tokens`)            |
 | `aitrack machines`              | Per-machine totals + last sync time (helpful for spotting stale machines)     |
@@ -129,6 +129,8 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 **`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), and `--year <year>` (filter to one calendar year).
 
 **JSON output:** add `--json` to `usage`, `top`, `machines`, or `doctor` for scripting.
+
+**`export` flags:** `-o <path>` (output path) and `--csv` (write a spreadsheet-friendly CSV — raw token counts, one row per provider+model plus a `TOTAL` row — instead of the PDF receipt; the default `-o` extension switches to `.csv`).
 
 **Period comparison:** add `--compare` to any finite `usage` window to compare tokens, estimated
 cost, and per-model movement with the equivalent previous period. Calendar-to-date windows compare

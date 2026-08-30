@@ -126,8 +126,9 @@ export function buildProgram(): Command {
 
   program
     .command('export [period] [args...]')
-    .description('Export an itemized PDF usage receipt for a period (default: month)')
-    .option('-o, --output <path>', 'output PDF path', 'aitrack-receipt.pdf')
+    .description('Export an itemized usage receipt for a period (default: month) as PDF or CSV')
+    .option('-o, --output <path>', 'output path (.pdf, or .csv with --csv)', 'aitrack-receipt.pdf')
+    .option('--csv', 'write a spreadsheet-friendly CSV instead of the PDF receipt')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .action((period: string | undefined, args: string[], options: ExportOptions) => {
       runAsync(async () => {
