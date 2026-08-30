@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { decodeJwtPayload } from '../jwt.js';
 
 function token(payload: unknown, { urlSafe = false } = {}): string {
-  let encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64').replace(/=+$/, '');
+  let encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64').replace(/=+$/u, '');
   if (urlSafe) encoded = encoded.replaceAll('+', '-').replaceAll('/', '_');
   return `header.${encoded}.signature`;
 }

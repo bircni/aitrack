@@ -58,7 +58,10 @@ export async function jsonlSourceSummary(
 ): Promise<{ existing: string[]; fileCount: number }> {
   const existing = roots.filter((root) => existsSync(root));
   const counts = await Promise.all(
-    existing.map(async (root) => (await listJsonlFiles(root)).length),
+    existing.map(async (root) => {
+      const files = await listJsonlFiles(root);
+      return files.length;
+    }),
   );
   return { existing, fileCount: counts.reduce((sum, count) => sum + count, 0) };
 }

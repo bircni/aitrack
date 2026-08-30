@@ -25,9 +25,9 @@
     "unicorn/no-array-sort": "off",
     "unicorn/prefer-single-call": "off",
     "unicorn/no-immediate-mutation": "off",
-    "unicorn/consistent-function-scoping": "off",
+    "unicorn/consistent-function-scoping": "error",
     "unicorn/prefer-top-level-await": "off",
-    "unicorn/no-await-expression-member": "off",
+    "unicorn/no-await-expression-member": "error",
     "unicorn/prefer-number-coercion": "off",
     "unicorn/max-nested-calls": "off",
     "vitest/require-mock-type-parameters": "off",
@@ -37,7 +37,7 @@
     "max-lines-per-function": "off",
     "max-lines": "off",
     "no-inline-comments": "off",
-    "require-unicode-regexp": "off"
+    "require-unicode-regexp": "error"
   },
   "overrides": [
     {
@@ -120,20 +120,6 @@
         "no-var": "error",
         "object-shorthand": "error",
         "prefer-const": "error"
-      }
-    },
-    {
-      "files": ["**/*.cjs", "**/*.mjs", "**/*.js"],
-      "rules": {
-        "typescript/await-thenable": "off",
-        "typescript/no-unsafe-argument": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-unsafe-return": "off",
-        "typescript/prefer-nullish-coalescing": "off",
-        "typescript/strict-void-return": "off",
-        "typescript/switch-exhaustiveness-check": "off"
       }
     },
     {

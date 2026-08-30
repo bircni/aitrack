@@ -9,7 +9,7 @@ const IS_WIN = platform() === 'win32';
 
 /** Quote args for cmd.exe when shell mode joins them into one command string. */
 function quoteShellArgument(argument: string): string {
-  if (!/[\s()&|<>^"'%!]/.test(argument)) return argument;
+  if (!/[\s()&|<>^"'%!]/u.test(argument)) return argument;
   return `"${argument.replaceAll('"', String.raw`\"`)}"`;
 }
 

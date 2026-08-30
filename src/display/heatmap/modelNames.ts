@@ -10,25 +10,25 @@ function titleCase(word: string): string {
 // "Sonnet 4"; "claude-3-7-sonnet-20250219" -> "Sonnet 3.7";
 // "gpt-5.1-codex" -> "GPT-5.1 Codex"
 export function displayModelName(model: string): string {
-  const cleaned = stripModelVersionSuffixes(model).replace(/^claude-/, '');
+  const cleaned = stripModelVersionSuffixes(model).replace(/^claude-/u, '');
 
   for (const family of CLAUDE_FAMILIES) {
     // Both orderings ship in real ids — family-first ("sonnet-4-5") and the
     // older version-first ("3-7-sonnet") — and the minor component is optional,
     // as in "sonnet-4".
     const match =
-      new RegExp(String.raw`^${family}-(\d+)(?:-(\d+))?$`).exec(cleaned) ??
-      new RegExp(String.raw`^(\d+)(?:-(\d+))?-${family}$`).exec(cleaned);
+      new RegExp(String.raw`^${family}-(\d+)(?:-(\d+))?$`, 'u').exec(cleaned) ??
+      new RegExp(String.raw`^(\d+)(?:-(\d+))?-${family}$`, 'u').exec(cleaned);
     if (match?.[1] !== undefined) {
       const version = match[2] === undefined ? match[1] : `${match[1]}.${match[2]}`;
       return `${titleCase(family)} ${version}`;
     }
   }
 
-  const gpt = /^gpt-([\d.]+)(?:-(.+))?$/.exec(cleaned);
+  const gpt = /^gpt-([\d.]+)(?:-(.+))?$/u.exec(cleaned);
   if (gpt) {
     const suffix = gpt[2]
-      ? ' ' + gpt[2].replaceAll('-', ' ').replaceAll(/\b\w/g, (c) => c.toUpperCase())
+      ? ' ' + gpt[2].replaceAll('-', ' ').replaceAll(/\b\w/gu, (c) => c.toUpperCase())
       : '';
     return `GPT-${gpt[1]}${suffix}`;
   }

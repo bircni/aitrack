@@ -11,6 +11,13 @@ import {
   peakMonth,
 } from '../stats.js';
 
+function dayKey(offsetDays: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - offsetDays);
+  return toLocalDateString(d);
+}
+
 describe('computeModelStats', () => {
   it('returns top model + peak day in one pass', () => {
     const dayMap = new Map<string, DayEntry>([
@@ -62,13 +69,6 @@ describe('longestStreak', () => {
 });
 
 describe('currentStreak', () => {
-  const dayKey = (offsetDays: number): string => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - offsetDays);
-    return toLocalDateString(d);
-  };
-
   it('counts a run that ends yesterday, before today has any usage', () => {
     // Today is still in progress: counting from it reported 0 all morning and
     // then jumped to the full streak after the first request.

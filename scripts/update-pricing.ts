@@ -37,7 +37,7 @@ function pricesAt(html: string, hits: number[], windowSize: number): number[] {
   const found: number[] = [];
   for (const index of hits) {
     const window = html.slice(index, index + windowSize);
-    const re = /\$([\d.]+)/g;
+    const re = /\$([\d.]+)/gu;
     let m: RegExpExecArray | null;
     while ((m = re.exec(window)) !== null) {
       const amount = m[1];
@@ -61,7 +61,7 @@ async function fetchHtml(url: string): Promise<string> {
 
 // `claude-opus-4-7` -> `Claude Opus 4.7`
 export function claudeHeading(modelId: string): string {
-  const m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?$/.exec(modelId);
+  const m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?$/u.exec(modelId);
   if (!m) return modelId;
   const familyId = m[1];
   const majorVersion = m[2];
@@ -80,12 +80,12 @@ function claudeModelId(family: string, version: string): string {
 
 // Scan the docs page for priced Claude models we don't track yet.
 export function discoverClaudeModelsOnPage(html: string): string[] {
-  const re = /Claude (Opus|Sonnet|Haiku|Fable|Mythos) (\d+(?:\.\d+)?)/g;
+  const re = /Claude (Opus|Sonnet|Haiku|Fable|Mythos) (\d+(?:\.\d+)?)/gu;
   const found = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const after = html[m.index + m[0].length];
-    if (after && /[\d.]/.test(after)) continue;
+    if (after && /[\d.]/u.test(after)) continue;
     const prices = pricesAt(html, [m.index], 800);
     if (prices.length === 0) continue;
     const family = m[1];
@@ -223,7 +223,7 @@ function checkClaude(): Promise<CheckResult> {
     sourceFile: 'src/pricing/claude.ts',
     lookup: (html) => (modelId) => {
       const heading = claudeHeading(modelId);
-      const hits = findHits(html, heading, (c) => !/[\d.]/.test(c));
+      const hits = findHits(html, heading, (c) => !/[\d.]/u.test(c));
       return { prices: pricesAt(html, hits, 800), where: heading };
     },
     discover: discoverClaudeModelsOnPage,
@@ -238,21 +238,21 @@ interface CodexPricingRow {
 }
 
 function codexPricingRows(html: string): CodexPricingRow[] {
-  const rowPattern = /\[1,\[\[0,&quot;([^[]*?)&quot;\]/g;
+  const rowPattern = /\[1,\[\[0,&quot;([^[]*?)&quot;\]/gu;
   const matches = [...html.matchAll(rowPattern)];
   const rows: CodexPricingRow[] = [];
 
   for (const [index, match] of matches.entries()) {
     const label = match[1];
     if (!label) continue;
-    const modelMatch = /^(gpt-\d+(?:\.\d+)?(?:-[a-z0-9]+)*)(?:\s|$)/i.exec(label);
+    const modelMatch = /^(gpt-\d+(?:\.\d+)?(?:-[a-z0-9]+)*)(?:\s|$)/iu.exec(label);
     const modelId = modelMatch?.[1]?.toLowerCase();
     if (!modelId) continue;
 
     const rowStart = match.index + match[0].length;
     const rowEnd = matches[index + 1]?.index ?? html.length;
     const rowHtml = html.slice(rowStart, rowEnd);
-    const prices = [...rowHtml.matchAll(/\[0,(-?\d+(?:\.\d+)?)\]/g)].flatMap((priceMatch) => {
+    const prices = [...rowHtml.matchAll(/\[0,(-?\d+(?:\.\d+)?)\]/gu)].flatMap((priceMatch) => {
       const raw = priceMatch[1];
       if (!raw) return [];
       const price = Number(raw);
@@ -272,19 +272,20 @@ function standardPricingPane(html: string): string {
   return html.slice(start, next === -1 ? html.length : next);
 }
 
+function isCurrentGptVersion(modelId: string, minimumGpt5Minor: number): boolean {
+  const match = /^gpt-(\d+)(?:\.(\d+))?/u.exec(modelId);
+  if (!match?.[1]) return false;
+  const major = Number(match[1]);
+  if (major > 5) return true;
+  return major === 5 && match[2] !== undefined && Number(match[2]) >= minimumGpt5Minor;
+}
+
 export function discoverCodexModelsOnPage(html: string): string[] {
-  const isCurrentVersion = (modelId: string, minimumGpt5Minor: number): boolean => {
-    const match = /^gpt-(\d+)(?:\.(\d+))?/.exec(modelId);
-    if (!match?.[1]) return false;
-    const major = Number(match[1]);
-    if (major > 5) return true;
-    return major === 5 && match[2] !== undefined && Number(match[2]) >= minimumGpt5Minor;
-  };
   const currentStandardRows = codexPricingRows(standardPricingPane(html)).filter((row) =>
-    isCurrentVersion(row.modelId, 4),
+    isCurrentGptVersion(row.modelId, 4),
   );
   const codexSpecificRows = codexPricingRows(html).filter(
-    (row) => /-codex(?:-|$)/.test(row.modelId) && isCurrentVersion(row.modelId, 3),
+    (row) => /-codex(?:-|$)/u.test(row.modelId) && isCurrentGptVersion(row.modelId, 3),
   );
   return [
     ...new Set(

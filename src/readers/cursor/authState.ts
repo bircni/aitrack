@@ -37,7 +37,7 @@ function readCursorAuthStateFromDatabase(databasePath: string): CursorAuthState 
 }
 
 function isSqliteLockedError(error: unknown): boolean {
-  return error instanceof Error && /database is locked/i.test(error.message);
+  return error instanceof Error && /database is locked/iu.test(error.message);
 }
 
 async function withCursorStateSnapshot<T>(

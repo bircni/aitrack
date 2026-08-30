@@ -16,7 +16,7 @@ describe('parseCursorDateString', () => {
 
   it('parses a locale-style date string', () => {
     const result = parseCursorDateString('March 15, 2024');
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   });
 
   it('returns null for empty string', () => {

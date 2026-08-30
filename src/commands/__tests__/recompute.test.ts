@@ -23,15 +23,17 @@ vi.mock('../../git.js', () => ({
   listDataFiles: mocks.listDataFiles,
   commitDataChanges: vi.fn(() => true),
 }));
-vi.mock('../../data/localData.js', async () => ({
-  readLocalProviderMaps: mocks.readLocalProviderMaps,
-  buildMachineData: mocks.buildMachineData,
-  machineHasData: mocks.machineHasData,
-  // The real merge helper — this is what keeps pruned-away history in the file.
-  mergePersistedDays: (
-    await vi.importActual<typeof import('../../data/localData.js')>('../../data/localData.js')
-  ).mergePersistedDays,
-}));
+vi.mock('../../data/localData.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../data/localData.js')>('../../data/localData.js');
+  return {
+    readLocalProviderMaps: mocks.readLocalProviderMaps,
+    buildMachineData: mocks.buildMachineData,
+    machineHasData: mocks.machineHasData,
+    // The real merge helper — this is what keeps pruned-away history in the file.
+    mergePersistedDays: actual.mergePersistedDays,
+  };
+});
 vi.mock('fs', () => ({
   readFileSync: mocks.readFileSync,
   writeFileSync: mocks.writeFileSync,

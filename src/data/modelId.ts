@@ -12,10 +12,10 @@
 
 /** Strip the `-latest` alias suffix. Applied by readers before storing a model. */
 export function stripModelAliasSuffix(model: string): string {
-  return model.replace(/-latest$/, '');
+  return model.replace(/-latest$/u, '');
 }
 
 /** Strip both the `-latest` alias and a `-YYYYMMDD` release suffix. */
 export function stripModelVersionSuffixes(model: string): string {
-  return model.replace(/-(?:latest|\d{8})$/, '');
+  return model.replace(/-(?:latest|\d{8})$/u, '');
 }

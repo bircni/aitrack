@@ -21,7 +21,7 @@ export function invalidDateMessage(date: string): string {
 }
 
 export function parseIntArgument(value: string): number {
-  if (!/^-?\d+$/.test(value)) {
+  if (!/^-?\d+$/u.test(value)) {
     throw new InvalidArgumentError(`Expected an integer, got: ${value}`);
   }
   const n = Number(value);
@@ -60,7 +60,7 @@ export function parsePortArgument(value: string): number {
 }
 
 export function parsePositiveInt(value: string): number | undefined {
-  if (!/^\d+$/.test(value)) return undefined;
+  if (!/^\d+$/u.test(value)) return undefined;
   const n = Number(value);
   if (!Number.isSafeInteger(n) || n < 1) return undefined;
   return n;
