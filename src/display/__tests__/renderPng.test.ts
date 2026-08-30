@@ -4,9 +4,13 @@ import { makeDay } from '../../__tests__/helpers/fixtures.js';
 import type { DayEntry } from '../../data/types.js';
 import { renderToPng } from '../renderPng.js';
 
-// PNG width lives in bytes 16-19 of the IHDR chunk.
+// PNG width/height live in bytes 16-19 / 20-23 of the IHDR chunk.
 function pngWidth(buffer: Buffer): number {
   return buffer.readUInt32BE(16);
+}
+
+function pngSize(buffer: Buffer): { width: number; height: number } {
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
 }
 
 describe('renderToPng', () => {
@@ -18,6 +22,27 @@ describe('renderToPng', () => {
     expect(buffer[1]).toBe(0x50);
     expect(buffer[2]).toBe(0x4e);
     expect(buffer[3]).toBe(0x47);
+  });
+
+  it('keeps the canvas at its established size for a fixed year (layout regression guard)', () => {
+    const oneProvider = new Map([['2025-06-01', makeDay(1000, 500)]]);
+    const twoProviders = new Map([['2025-06-02', makeDay(200, 100)]]);
+
+    const single = pngSize(renderToPng({ claude_code: oneProvider }, { year: 2025 }));
+    const paired = pngSize(
+      renderToPng({ claude_code: oneProvider, codex: twoProviders }, { year: 2025 }),
+    );
+    const merged = pngSize(
+      renderToPng({ claude_code: oneProvider, codex: twoProviders }, { year: 2025, all: true }),
+    );
+
+    // Golden dimensions: a change here means the heatmap layout shifted.
+    expect(single).toEqual({ width: 927, height: 404 });
+    // Each extra provider adds exactly one section band...
+    expect(paired).toEqual({ width: 927, height: 760 });
+    expect(paired.height - single.height).toBe(356);
+    // ...and `all` collapses back to a single band.
+    expect(merged).toEqual(single);
   });
 
   it('widens the canvas for a 54-week year instead of clipping it', () => {
