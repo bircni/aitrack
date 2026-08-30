@@ -41,7 +41,7 @@ export function findDuplicateMachineDays(machines: MachineFile[]): DuplicateMach
   }
 
   return {
-    days: [...collidingDays].sort((a, b) => a.localeCompare(b)),
-    machines: [...collidingMachines].sort((a, b) => a.localeCompare(b)),
+    days: [...collidingDays].toSorted((a, b) => a.localeCompare(b)),
+    machines: [...collidingMachines].toSorted((a, b) => a.localeCompare(b)),
   };
 }

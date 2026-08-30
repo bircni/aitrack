@@ -87,7 +87,7 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
 
   const summaries = loaded.machineData
     .map(summarizeMachine)
-    .sort((a, b) => b.totalTokens - a.totalTokens);
+    .toSorted((a, b) => b.totalTokens - a.totalTokens);
 
   if (options.json) {
     printJsonCommand('machines', { machines: summaries });

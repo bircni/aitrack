@@ -63,7 +63,7 @@ export function orderedProviderKeys(providerData: ProviderData): string[] {
 }
 
 export function sortProviderKeys(keys: string[]): string[] {
-  return [...keys].sort((a, b) => {
+  return keys.toSorted((a, b) => {
     const ai = PROVIDER_ORDER.indexOf(a);
     const bi = PROVIDER_ORDER.indexOf(b);
     if (ai === -1 && bi === -1) return a.localeCompare(b);

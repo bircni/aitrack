@@ -93,7 +93,7 @@ export function discoverClaudeModelsOnPage(html: string): string[] {
     if (family === undefined || version === undefined) continue;
     found.add(claudeModelId(family, version));
   }
-  return [...found].sort((a, b) => a.localeCompare(b));
+  return [...found].toSorted((a, b) => a.localeCompare(b));
 }
 
 export interface ProviderCheck<P extends { inputPerMillion: number; outputPerMillion: number }> {
@@ -293,7 +293,7 @@ export function discoverCodexModelsOnPage(html: string): string[] {
         .filter((row) => row.prices.length >= 2)
         .map((row) => row.modelId),
     ),
-  ].sort((a, b) => a.localeCompare(b));
+  ].toSorted((a, b) => a.localeCompare(b));
 }
 
 function checkCodex(): Promise<CheckResult> {

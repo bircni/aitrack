@@ -40,7 +40,7 @@ function compareTopEntries(a: TopSortable, b: TopSortable, sort: TopSort): numbe
 }
 
 export function topProviderKey(byProvider: Record<string, number>): string | null {
-  const top = Object.entries(byProvider).sort((a, b) => b[1] - a[1])[0];
+  const top = Object.entries(byProvider).toSorted((a, b) => b[1] - a[1])[0];
   return top ? top[0] : null;
 }
 

@@ -69,7 +69,7 @@ export function mergePersistedDays(
 ): MachineFile['days'] {
   const dates = new Set([...Object.keys(persisted ?? {}), ...Object.keys(fresh)]);
   const days: MachineFile['days'] = {};
-  for (const date of [...dates].sort()) {
+  for (const date of [...dates].toSorted()) {
     const providers: Record<string, ProviderDay> = { ...persisted?.[date] };
     for (const [providerKey, freshDay] of Object.entries(fresh[date] ?? {})) {
       const persistedDay = providers[providerKey];
@@ -78,7 +78,7 @@ export function mergePersistedDays(
       }
     }
     days[date] = Object.fromEntries(
-      Object.entries(providers).sort(([a], [b]) => a.localeCompare(b)),
+      Object.entries(providers).toSorted(([a], [b]) => a.localeCompare(b)),
     );
   }
   return days;

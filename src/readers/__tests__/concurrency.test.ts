@@ -60,7 +60,7 @@ describe('mapWithConcurrency', () => {
       4,
     );
 
-    expect([...seen].sort((a, b) => a - b)).toEqual(Array.from({ length: 50 }, (_, i) => i));
+    expect([...seen].toSorted((a, b) => a - b)).toEqual(Array.from({ length: 50 }, (_, i) => i));
     expect(results).toEqual(Array.from({ length: 50 }, (_, i) => i * 2));
   });
 
