@@ -42,7 +42,7 @@ function pricesAt(html: string, hits: number[], windowSize: number): number[] {
     while ((m = re.exec(window)) !== null) {
       const amount = m[1];
       if (amount === undefined) continue;
-      const v = parseFloat(amount);
+      const v = Number.parseFloat(amount);
       if (!Number.isNaN(v)) found.push(v);
     }
   }
@@ -176,20 +176,24 @@ export function tallyFindings(findings: PricingFinding[]): CheckResult {
 function reportFinding(finding: PricingFinding, sourceFile: string): void {
   const id = finding.modelId.padEnd(22);
   switch (finding.kind) {
-    case 'ok':
+    case 'ok': {
       console.log(`\u2713 ${id} ${finding.summary}`);
       break;
-    case 'drift':
+    }
+    case 'drift': {
       console.log(
         `\u2717 ${id} ${finding.summary}  — input=${finding.isInOk ? 'ok' : 'MISS'} output=${finding.isOutOk ? 'ok' : 'MISS'}  (saw: ${finding.saw.join(', ')})`,
       );
       break;
-    case 'unverified':
+    }
+    case 'unverified': {
       console.log(`? ${id} ${finding.summary}  — "${finding.where}" not on page`);
       break;
-    case 'missing':
+    }
+    case 'missing': {
       console.log(`+ ${id} — on docs page but missing from ${sourceFile}`);
       break;
+    }
   }
 }
 
