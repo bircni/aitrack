@@ -30,6 +30,7 @@ import {
   adoptPendingDataFiles,
   cloneRepo,
   commitAndPush,
+  commitDataChanges,
   hasMachineDataChanges,
   hasUnpushedCommits,
   isCloned,
@@ -129,6 +130,16 @@ describe('git helpers', () => {
 
   it('reports nothing unpushed when the branch has no upstream', () => {
     mocks.spawnSync.mockReturnValueOnce({ status: 1, stdout: '' });
+
+    expect(hasUnpushedCommits()).toBe(false);
+  });
+
+  it('treats a failing rev-list as nothing to retry rather than throwing', () => {
+    mocks.spawnSync
+      // hasUpstream succeeds...
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      // ...but rev-list blows up (e.g. a fresh repo with no commits yet)
+      .mockReturnValueOnce({ status: 128, stdout: '', stderr: 'fatal: bad revision' });
 
     expect(hasUnpushedCommits()).toBe(false);
   });
@@ -254,6 +265,33 @@ describe('git helpers', () => {
       '--',
       'data/',
     ]);
+  });
+
+  it('stages the whole data dir and reports when nothing was committed', () => {
+    mocks.spawnSync
+      // add data/
+      .mockReturnValueOnce({ status: 0 })
+      // diff --cached: nothing staged
+      .mockReturnValueOnce({ status: 0, stdout: '' });
+
+    expect(commitDataChanges('recompute costs')).toBe(false);
+    expect(mocks.spawnSync.mock.calls[0]?.[1]).toEqual(['add', 'data/']);
+  });
+
+  it('commits every staged data file when recomputing costs across machines', () => {
+    mocks.spawnSync
+      // add data/
+      .mockReturnValueOnce({ status: 0 })
+      // diff --cached: two machines changed
+      .mockReturnValueOnce({ status: 0, stdout: 'data/host.json\ndata/laptop.json\n' })
+      // commit
+      .mockReturnValueOnce({ status: 0, stdout: '' })
+      // pushWithRetry: hasUpstream, then push
+      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      .mockReturnValueOnce({ status: 0, stdout: '' });
+
+    expect(commitDataChanges('recompute costs')).toBe(true);
+    expect(mocks.spawnSync.mock.calls[2]?.[1]).toEqual(['commit', '-m', 'recompute costs']);
   });
 
   it('commits a staged deletion instead of failing to read the file back', () => {
@@ -514,6 +552,35 @@ describe('git helpers', () => {
       'not safe in a filename',
     );
     expect(mocks.copyFileSync).not.toHaveBeenCalled();
+  });
+
+  it('refuses to adopt a pending file whose name only differs after normalization', () => {
+    // ` host.json` validates but trims to `host`, so adopting it would silently
+    // rename the machine's data. Bail instead.
+    mocks.existsSync.mockImplementation((path: string) => path.includes(join('pending', 'data')));
+    mocks.readdirSync.mockReturnValue([' host.json']);
+
+    expect(() => adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toThrow(
+      'invalid name',
+    );
+    expect(mocks.copyFileSync).not.toHaveBeenCalled();
+  });
+
+  it('rolls back the copied file when deleting the staged source fails', () => {
+    mocks.existsSync.mockImplementation((path: string) => path.includes(join('pending', 'data')));
+    mocks.readdirSync.mockReturnValue(['host.json']);
+    // The copy lands, then removing the staged source throws — the half-done
+    // adoption has to undo its own copy before propagating the error.
+    mocks.rmSync.mockImplementationOnce(() => {
+      throw new Error('EBUSY: staged file is locked');
+    });
+
+    expect(() => adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toThrow('EBUSY');
+    expect(mocks.copyFileSync).toHaveBeenCalledTimes(1);
+    expect(mocks.rmSync).toHaveBeenCalledWith(
+      expect.stringContaining(join('repo', 'data', 'host.json')),
+      expect.objectContaining({ force: true }),
+    );
   });
 
   it('removes a pending file for a machine id', () => {

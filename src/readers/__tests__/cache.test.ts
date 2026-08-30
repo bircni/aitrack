@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -122,6 +122,34 @@ describe('openParseCache', () => {
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });
 
+  it('ignores an entry whose dedup keys are not all strings', async () => {
+    await seedCache();
+    writeFileSync(CACHE_FILE, readFileSync(CACHE_FILE, 'utf8').replace('"k1"', '42'), 'utf8');
+
+    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
+  });
+
+  it('records nothing for a file that vanishes before it can be stat-ed', async () => {
+    const gone = join(TEST_HOME, 'never-existed.jsonl');
+    const cache = openParseCache('claude');
+
+    await expect(cache.record(gone, { days: days(5), keys: ['k1'] })).resolves.toBeUndefined();
+    cache.save();
+
+    await expect(openParseCache('claude').lookup(gone)).resolves.toBeNull();
+  });
+
+  it('does not throw when the cache file cannot be replaced', () => {
+    // A directory sitting where the cache file goes makes the rename fail; the
+    // command it was speeding up must not care.
+    mkdirSync(CACHE_FILE, { recursive: true });
+
+    expect(() => {
+      openParseCache('claude').save();
+    }).not.toThrow();
+    expect(existsSync(`${CACHE_FILE}.${String(process.pid)}.tmp`)).toBe(false);
+  });
+
   it('forgets files that were not looked up, so deleted logs age out', async () => {
     await seedCache();
 
@@ -148,6 +176,7 @@ describe('openParseCache', () => {
     process.env.AITRACK_NO_CACHE = '1';
 
     const cache = openParseCache('claude');
+    await expect(cache.lookup(SOURCE)).resolves.toBeNull();
     await cache.record(SOURCE, { days: days(10), keys: ['k1'] });
     cache.save();
 
