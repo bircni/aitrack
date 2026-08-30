@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.5.0] - 2026-08-30
+
+
+### Bug Fixes
+
+- **doctor:** Align the status column when color is enabled
+
+### Build
+
+- Make the quality gates able to fail
+
+### CI
+
+- Read the Node version from .node-version
+- Add Dependabot config
+
+### Features
+
+- **top:** Add --since and --until for an explicit date range
+- **export:** Add --csv for a spreadsheet-friendly receipt
+- **usage:** Warn about the monthly budget on the thismonth window
+- **cursor:** Estimate cost for rows that map to a tracked list price
+
+### Performance
+
+- **cli:** Load the show and export commands on demand
+
+### Refactoring
+
+- **core:** Centralize paths, errors, output and shared messages
+- **pricing:** Replace the global fallback sets with a per-run collector
+- **data:** Make machine-file validation pure and return diagnostics
+- **data:** Give each usage period one definition and fix type placement
+- **git:** Split the data-repo module by concern
+- **providers:** Describe each provider once
+- **commands:** Move aggregation out of the command layer
+- **errors:** Finish consolidating the error-message helper
+- **cursor:** Split the auth module and cover what it does
+- **cli:** Stop re-declaring each command's options
+- **pricing-check:** Separate drift comparison from fetching and output
+- **scripts:** Migrate remaining .mjs config and scripts to TypeScript
+- **usage-periods:** Split calendar math into its own module
+
+### Tests
+
+- Cover the untested heatmap modules and share the jsonl writer
+- Cover the rollback and recovery paths
+- Cover calendar arithmetic and the codex bad-timestamp fallback
+- Cover the error and edge branches in the git store and parse cache
+- **display:** Assert golden heatmap PNG dimensions
+
 ## [v1.4.1] - 2026-08-25
 
 
