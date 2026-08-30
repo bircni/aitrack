@@ -37,7 +37,9 @@ jobs:
         run: pnpm run build
 
       - name: Publish
-        run: pnpm publish --no-git-checks
+        # `id-token: write` above + provenance here attaches a signed build
+        # attestation linking the tarball to this workflow run.
+        run: pnpm publish --no-git-checks --provenance
 
   github-release:
     name: Create GitHub release
