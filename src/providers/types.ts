@@ -75,13 +75,28 @@ export interface LiveProviderReader {
   liveFetch: (options?: { maxAgeSeconds?: number }) => Promise<DayMap>;
 }
 
-export interface Provider {
+interface ProviderBase {
   descriptor: ProviderDescriptor;
   heatmap: ProviderHeatmap;
   pricing: ProviderPricing;
-  /** Present iff `descriptor.synced`. */
-  reader?: SyncedProviderReader;
-  /** Present iff `!descriptor.synced`. */
-  live?: LiveProviderReader;
   doctorCheck: () => CheckResult | Promise<CheckResult>;
 }
+
+/** A provider read from local logs and written to git during sync. */
+export interface SyncedProvider extends ProviderBase {
+  reader: SyncedProviderReader;
+  live?: undefined;
+}
+
+/** A provider fetched live on every command and never persisted (Cursor). */
+export interface LiveProvider extends ProviderBase {
+  live: LiveProviderReader;
+  reader?: undefined;
+}
+
+/**
+ * A union rather than one shape with two optional readers, so "synced ⇒ has a
+ * reader" is a compile error instead of a runtime throw from inside the sync,
+ * recompute and report paths.
+ */
+export type Provider = SyncedProvider | LiveProvider;

@@ -30,6 +30,7 @@ export interface ShowOptions {
   open?: boolean;
   year?: number;
   tui?: boolean;
+  refresh?: boolean;
 }
 
 export async function showCommand(options: ShowOptions = {}): Promise<void> {
@@ -37,6 +38,7 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
     providers: options.providers,
     year: options.year,
     stagePending: true,
+    refreshLive: options.refresh,
   });
 
   if (!loaded) {

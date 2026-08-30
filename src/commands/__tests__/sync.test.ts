@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   hostname: vi.fn(),
 }));
 
-vi.mock('os', () => ({ hostname: mocks.hostname }));
+vi.mock('os', () => ({ hostname: mocks.hostname, homedir: () => '/home/test' }));
 vi.mock('fs', () => ({
   mkdirSync: mocks.mkdirSync,
   writeFileSync: mocks.writeFileSync,

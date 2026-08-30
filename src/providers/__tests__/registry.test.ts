@@ -28,17 +28,26 @@ describe('provider registry', () => {
     expect(getProvider('gemini')).toBeUndefined();
   });
 
-  it('splits synced from live by the descriptor flag', () => {
+  it('splits synced from live by which reader the provider carries', () => {
     expect(syncedProviders().map((p) => p.descriptor.key)).toEqual(['claude_code', 'codex']);
     expect(liveProviders().map((p) => p.descriptor.key)).toEqual(['cursor']);
   });
 
   it('gives every synced provider a readData and every live provider a liveFetch', () => {
     for (const provider of syncedProviders()) {
-      expect(provider.reader?.readData).toBeTypeOf('function');
+      expect(provider.reader.readData).toBeTypeOf('function');
     }
     for (const provider of liveProviders()) {
-      expect(provider.live?.liveFetch).toBeTypeOf('function');
+      expect(provider.live.liveFetch).toBeTypeOf('function');
+    }
+  });
+
+  it('keeps descriptor.synced in step with which reader a provider carries', () => {
+    // descriptor.synced is the display-facing flag; the reader/live split is
+    // what the type system enforces. They must agree.
+    for (const provider of PROVIDERS) {
+      expect(provider.reader !== undefined).toBe(provider.descriptor.synced);
+      expect(provider.live !== undefined).toBe(!provider.descriptor.synced);
     }
   });
 

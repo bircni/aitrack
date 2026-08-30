@@ -8,10 +8,13 @@ interface UsageCommonOptions {
   providers?: string[];
   json?: boolean;
   compare?: boolean;
+  refresh?: boolean;
 }
 
 const PROVIDERS_FLAG = '--providers <list>';
 const PROVIDERS_DESC = 'comma-separated providers to show (claude, codex, cursor); default: all';
+const REFRESH_FLAG = '--refresh';
+const REFRESH_DESC = 're-fetch live provider data (Cursor), ignoring the local cache';
 
 /**
  * Parsing happens inside the async body so a bad period travels through
@@ -28,6 +31,7 @@ function runUsageFromPeriod(
       ...parseUsageReportOptions({ period, args, providers: options.providers }),
       json: options.json,
       ...(options.compare !== undefined && { compare: options.compare }),
+      ...(options.refresh !== undefined && { refreshLive: options.refresh }),
     };
     return usageCommand(parsed);
   });
@@ -42,6 +46,7 @@ export function registerUsageCommands(
       .command(def.name)
       .description(def.description)
       .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
+      .option(REFRESH_FLAG, REFRESH_DESC)
       .option('--compare', 'compare with the equivalent previous period')
       .option('--json', 'print machine-readable JSON');
 
@@ -74,4 +79,4 @@ export function registerUsageCommands(
   }
 }
 
-export { PROVIDERS_DESC, PROVIDERS_FLAG };
+export { PROVIDERS_DESC, PROVIDERS_FLAG, REFRESH_DESC, REFRESH_FLAG };

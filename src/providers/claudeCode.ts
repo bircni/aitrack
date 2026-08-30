@@ -6,9 +6,9 @@ import {
 } from '../pricing/claude.js';
 import { getClaudePaths, readClaudeData } from '../readers/claude.js';
 import { sourceCheck } from '../readers/paths.js';
-import type { Provider } from './types.js';
+import type { SyncedProvider } from './types.js';
 
-export const claudeCodeProvider: Provider = {
+export const claudeCodeProvider: SyncedProvider = {
   descriptor: {
     key: 'claude_code',
     label: 'Claude Code',

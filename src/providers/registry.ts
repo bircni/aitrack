@@ -10,7 +10,7 @@
 import { claudeCodeProvider } from './claudeCode.js';
 import { codexProvider } from './codex.js';
 import { cursorProvider } from './cursor.js';
-import type { Provider } from './types.js';
+import type { LiveProvider, Provider, SyncedProvider } from './types.js';
 
 /** In display order. */
 export const PROVIDERS: readonly Provider[] = [claudeCodeProvider, codexProvider, cursorProvider];
@@ -33,11 +33,11 @@ export function providerKeys(): string[] {
 }
 
 /** Providers written to git during sync, in display order. */
-export function syncedProviders(): Provider[] {
-  return PROVIDERS.filter((provider) => provider.descriptor.synced);
+export function syncedProviders(): SyncedProvider[] {
+  return PROVIDERS.filter((provider): provider is SyncedProvider => provider.reader !== undefined);
 }
 
 /** Providers fetched live and never persisted (Cursor), in display order. */
-export function liveProviders(): Provider[] {
-  return PROVIDERS.filter((provider) => !provider.descriptor.synced);
+export function liveProviders(): LiveProvider[] {
+  return PROVIDERS.filter((provider): provider is LiveProvider => provider.live !== undefined);
 }

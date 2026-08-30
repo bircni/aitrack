@@ -52,11 +52,15 @@ describe('parseCursorDateString', () => {
     mkdirSync(tmpDir, { recursive: true });
     fetchCalls = [];
     resetCursorEnvironment();
+    // These tests exercise the live fetch/degrade paths; the CSV cache has its
+    // own suite. Disabling it keeps each case independent of the last.
+    process.env.AITRACK_NO_CACHE = '1';
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     resetCursorEnvironment();
+    delete process.env.AITRACK_NO_CACHE;
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
     rmSync(tmpDir, { recursive: true, force: true });
@@ -174,11 +178,15 @@ describe('readCursorData', () => {
     mkdirSync(tmpDir, { recursive: true });
     fetchCalls = [];
     resetCursorEnvironment();
+    // These tests exercise the live fetch/degrade paths; the CSV cache has its
+    // own suite. Disabling it keeps each case independent of the last.
+    process.env.AITRACK_NO_CACHE = '1';
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     resetCursorEnvironment();
+    delete process.env.AITRACK_NO_CACHE;
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
     rmSync(tmpDir, { recursive: true, force: true });

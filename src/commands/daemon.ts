@@ -111,6 +111,12 @@ export async function daemonCommand(options: DaemonOptions = {}): Promise<void> 
       const loaded = await loadMergedProviderData({
         providers: renderOptions.providers,
         year: renderOptions.year,
+        // The daemon's own tick is the refresh clock; don't let a live
+        // provider's longer default TTL keep the dashboard stale for hours.
+        // Strictly below the interval: `fetchedAt` is stamped when the previous
+        // fetch *finished* but the timer fires from when the tick *started*, so
+        // an age equal to the interval would hit the cache on every other tick.
+        liveMaxAgeSeconds: Math.max(settings.interval - 5, 0),
         ...(localMachine !== undefined && { localMachine }),
       });
 

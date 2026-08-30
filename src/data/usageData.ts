@@ -99,6 +99,17 @@ export interface LoadUsageOptions {
    * then discards was the bulk of that command's runtime.
    */
   skipLocalLogs?: boolean;
+  /**
+   * Ignore any cached live-provider (Cursor) data and re-fetch. Without this a
+   * cached CSV export younger than the TTL is served without a network call.
+   */
+  refreshLive?: boolean;
+  /**
+   * Explicit max age, in seconds, for a served live-provider cache entry.
+   * Overrides `refreshLive`. The daemon sets this to its refresh interval so a
+   * live provider's own longer default TTL can't keep the dashboard stale.
+   */
+  liveMaxAgeSeconds?: number;
 }
 
 export interface LoadedUsageData {
@@ -138,13 +149,16 @@ export async function loadMergedProviderData(
   // The catch matters because the promise is started before the awaits below:
   // if one of those threw first, an unguarded rejection here would surface as
   // an unhandled rejection rather than the original error.
+  // `0` forces a refresh; `undefined` lets each live provider apply its own
+  // cache TTL.
+  const liveMaxAgeSeconds = options.liveMaxAgeSeconds ?? (options.refreshLive ? 0 : undefined);
   const livePending = liveProviders()
     .filter((provider) => !providerFilter || providerFilter.has(provider.descriptor.key))
     .map((provider) => ({
       key: provider.descriptor.key,
-      pending: (provider.live?.liveFetch() ?? Promise.resolve<DayMap>(new Map())).catch(
-        (): DayMap => new Map(),
-      ),
+      pending: provider.live
+        .liveFetch({ maxAgeSeconds: liveMaxAgeSeconds })
+        .catch((): DayMap => new Map()),
     }));
 
   const localMachine = options.skipLocalLogs

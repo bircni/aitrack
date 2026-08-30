@@ -24,7 +24,13 @@ import {
   parseTopLimit,
   parseTopSort,
 } from './parse.js';
-import { PROVIDERS_DESC, PROVIDERS_FLAG, registerUsageCommands } from './usageCommands.js';
+import {
+  PROVIDERS_DESC,
+  PROVIDERS_FLAG,
+  REFRESH_DESC,
+  REFRESH_FLAG,
+  registerUsageCommands,
+} from './usageCommands.js';
 
 /**
  * Run an async command handler, printing a friendly error and exiting with a
@@ -53,6 +59,7 @@ interface TopCliOptions {
   year?: number;
   since?: string;
   until?: string;
+  refresh?: boolean;
   json?: boolean;
 }
 
@@ -70,6 +77,7 @@ function runTop(kind: string | undefined, options: TopCliOptions): void {
       year: options.year,
       since: options.since,
       until: options.until,
+      refresh: options.refresh,
       json: options.json,
     }),
   );
@@ -109,6 +117,7 @@ export function buildProgram(): Command {
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
     .option('--no-open', 'do not auto-open the generated PNG (useful for scripts / CI)')
     .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
+    .option(REFRESH_FLAG, REFRESH_DESC)
     .option('--tui', 'render a stats table in the terminal instead of a PNG')
     .action((options: ShowOptions) => {
       runAsync(async () => {
@@ -130,6 +139,7 @@ export function buildProgram(): Command {
     .option('-o, --output <path>', 'output path (.pdf, or .csv with --csv)', 'aitrack-receipt.pdf')
     .option('--csv', 'write a spreadsheet-friendly CSV instead of the PDF receipt')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
+    .option(REFRESH_FLAG, REFRESH_DESC)
     .action((period: string | undefined, args: string[], options: ExportOptions) => {
       runAsync(async () => {
         // Loaded on demand so `pdfkit` stays off the startup path of every
@@ -174,6 +184,7 @@ export function buildProgram(): Command {
       'only include days on or before this date (YYYY-MM-DD)',
       parseDateOption,
     )
+    .option(REFRESH_FLAG, REFRESH_DESC)
     .option('--json', 'print machine-readable JSON')
     .action((kind: string | undefined, options: TopCliOptions) => {
       runTop(kind, options);

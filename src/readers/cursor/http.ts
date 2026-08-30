@@ -36,7 +36,7 @@ interface FetchAttempt {
   headers: Record<string, string>;
 }
 
-function getCursorFetchAttempts(accessToken: string): FetchAttempt[] {
+function getCursorFetchAttempts(accessToken: string, preferShape?: string): FetchAttempt[] {
   const attempts: FetchAttempt[] = [];
   const seen = new Set<string>();
   const subject = decodeJwtPayload(accessToken)?.sub?.trim();
@@ -68,24 +68,40 @@ function getCursorFetchAttempts(accessToken: string): FetchAttempt[] {
       Cookie: buildCookieHeaderValue(encodeURIComponent(cookieValue)),
     });
   }
+
+  // The shape that worked last time (remembered in the CSV cache) is very
+  // likely to work again, so try it first. The full list still follows.
+  if (preferShape !== undefined) {
+    const index = attempts.findIndex((attempt) => attempt.label === preferShape);
+    if (index > 0) attempts.unshift(...attempts.splice(index, 1));
+  }
   return attempts;
 }
 
-export async function fetchCursorUsageCsv(accessToken: string): Promise<Response> {
+/** A successful export response, plus which credential shape produced it. */
+export interface CursorCsvResponse {
+  response: Response;
+  shape: string;
+}
+
+export async function fetchCursorUsageCsv(
+  accessToken: string,
+  preferShape?: string,
+): Promise<CursorCsvResponse> {
   const url = new URL(
     '/api/dashboard/export-usage-events-csv?strategy=tokens',
     getCursorWebBaseUrl(),
   );
   const failures: Array<{ label: string; status: number; statusText: string; body: string }> = [];
 
-  for (const attempt of getCursorFetchAttempts(accessToken)) {
+  for (const attempt of getCursorFetchAttempts(accessToken, preferShape)) {
     const response = await fetch(url, {
       headers: {
         Accept: 'text/csv,text/plain;q=0.9,*/*;q=0.8',
         ...attempt.headers,
       },
     });
-    if (response.ok) return response;
+    if (response.ok) return { response, shape: attempt.label };
     const responseBody = await response.text();
     failures.push({
       label: attempt.label,

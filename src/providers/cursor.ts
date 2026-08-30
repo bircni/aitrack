@@ -1,8 +1,9 @@
 import type { CheckResult } from '../display/checkResult.js';
 import { errorMessage } from '../errors.js';
 import { getCursorStateDatabasePath, readCursorAuthState } from '../readers/cursor/auth.js';
+import { cursorCacheTtlSeconds } from '../readers/cursor/cache.js';
 import { readCursorData } from '../readers/cursor/index.js';
-import type { Provider } from './types.js';
+import type { LiveProvider } from './types.js';
 
 async function cursorCheck(): Promise<CheckResult> {
   const stateDb = getCursorStateDatabasePath();
@@ -28,7 +29,7 @@ async function cursorCheck(): Promise<CheckResult> {
   }
 }
 
-export const cursorProvider: Provider = {
+export const cursorProvider: LiveProvider = {
   descriptor: {
     key: 'cursor',
     label: 'Cursor',
@@ -47,9 +48,10 @@ export const cursorProvider: Provider = {
     priceModelCost: () => undefined,
   },
   live: {
-    // maxAgeSeconds is honoured once PR2 lands the CSV cache; today every call
-    // is a live fetch, exactly as before.
-    liveFetch: () => readCursorData(),
+    // A caller that passes no age gets Cursor's own TTL; `0` still forces a
+    // refresh (`0 ?? x` is `0`).
+    liveFetch: (options) =>
+      readCursorData({ maxAgeSeconds: options?.maxAgeSeconds ?? cursorCacheTtlSeconds() }),
   },
   doctorCheck: cursorCheck,
 };
