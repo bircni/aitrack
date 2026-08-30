@@ -10,28 +10,15 @@ import { findDuplicateMachineDays } from '../data/duplicateMachines.js';
 import { isRecord } from '../data/guards.js';
 import { INIT_HINT } from '../data/messages.js';
 import type { MachineFile } from '../data/types.js';
+import { type CheckResult, type CheckStatus } from '../display/checkResult.js';
 import { pad } from '../display/format.js';
-import { errorMessage } from '../errors.js';
 import { isCloned, listDataFiles, LOCAL_REPO, readDataFile } from '../git.js';
 import { log } from '../output.js';
-import { CLAUDE_PRICING_BY_ID } from '../pricing/claude.js';
-import { CODEX_PRICING_BY_ID } from '../pricing/codex.js';
-import { getClaudePaths } from '../readers/claude.js';
-import { getCodexPaths } from '../readers/codex.js';
-import { getCursorStateDatabasePath, readCursorAuthState } from '../readers/cursor/auth.js';
-import { jsonlSourceSummary } from '../readers/paths.js';
+import { getProvider, PROVIDERS } from '../providers/index.js';
 
 interface DoctorOptions {
   pricingCheck?: boolean;
   json?: boolean;
-}
-
-type CheckStatus = 'ok' | 'warn' | 'fail';
-
-interface CheckResult {
-  status: CheckStatus;
-  label: string;
-  detail: string;
 }
 
 /**
@@ -106,29 +93,6 @@ function commandCheck(
   };
 }
 
-async function sourceCheck(label: string, roots: string[]): Promise<CheckResult> {
-  const { existing, fileCount } = await jsonlSourceSummary(roots);
-  if (fileCount > 0) {
-    return {
-      status: 'ok',
-      label,
-      detail: `${String(fileCount)} JSONL file(s) across ${String(existing.length)} existing path(s)`,
-    };
-  }
-  if (existing.length > 0) {
-    return {
-      status: 'warn',
-      label,
-      detail: `paths exist but no JSONL files were found: ${existing.join(', ')}`,
-    };
-  }
-  return {
-    status: 'warn',
-    label,
-    detail: `no source paths found; checked ${roots.join(', ')}`,
-  };
-}
-
 /** Whether `directory` is the aitrack repo, which is what carries the script. */
 function isAitrackCheckout(directory: string): boolean {
   try {
@@ -144,11 +108,13 @@ function isAitrackCheckout(directory: string): boolean {
 
 function pricingCheck(options: DoctorOptions): CheckResult {
   if (!options.pricingCheck) {
+    const claudeCount = getProvider('claude_code')?.pricing.modelCount ?? 0;
+    const codexCount = getProvider('codex')?.pricing.modelCount ?? 0;
     return {
       status: 'ok',
       label: 'Pricing tables',
-      detail: `${String(Object.keys(CLAUDE_PRICING_BY_ID).length)} Claude and ${String(
-        Object.keys(CODEX_PRICING_BY_ID).length,
+      detail: `${String(claudeCount)} Claude and ${String(
+        codexCount,
       )} Codex model entries bundled; run doctor --pricing-check for drift check`,
     };
   }
@@ -176,31 +142,6 @@ function pricingCheck(options: DoctorOptions): CheckResult {
           ? `pnpm run pricing:check failed: ${run.output}`
           : 'pnpm run pricing:check did not pass; run from the aitrack repo root and inspect its output',
       };
-}
-
-async function cursorCheck(): Promise<CheckResult> {
-  const stateDb = getCursorStateDatabasePath();
-  if (!stateDb) {
-    return {
-      status: 'warn',
-      label: 'Cursor source',
-      detail: 'state.vscdb not found; Cursor usage will be skipped unless configured',
-    };
-  }
-
-  try {
-    const auth = await readCursorAuthState(stateDb);
-    return auth.accessToken
-      ? { status: 'ok', label: 'Cursor source', detail: `auth token found in ${stateDb}` }
-      : {
-          status: 'warn',
-          label: 'Cursor source',
-          detail: `state DB found but no access token was present: ${stateDb}`,
-        };
-  } catch (error) {
-    const message = errorMessage(error);
-    return { status: 'warn', label: 'Cursor source', detail: message };
-  }
 }
 
 // One physical machine synced under two identities (e.g. after a hostname or
@@ -304,13 +245,9 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
     );
   }
 
-  // Three independent probes that each hit the filesystem or Cursor's database.
+  // One probe per provider — each hits the filesystem or Cursor's database.
   checks.push(
-    ...(await Promise.all([
-      sourceCheck('Claude Code source', getClaudePaths()),
-      sourceCheck('Codex source', getCodexPaths()),
-      cursorCheck(),
-    ])),
+    ...(await Promise.all(PROVIDERS.map((provider) => Promise.resolve(provider.doctorCheck())))),
   );
   checks.push(pricingCheck(options));
 

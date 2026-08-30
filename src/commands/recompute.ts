@@ -21,6 +21,7 @@ import {
   reportFallbackPricing,
 } from '../pricing/fallback.js';
 import { resolveModelCost } from '../pricing/resolve.js';
+import { getProvider } from '../providers/index.js';
 
 /**
  * Days serialized without their costs, for change detection.
@@ -69,7 +70,7 @@ function repriceProviderDay(
         isCostComplete = false;
       } else {
         dayTotal += counts.costUSD;
-        if (providerKey === 'claude_code') legacySkipped++;
+        if (getProvider(providerKey)?.pricing.repriceRequiresBreakdown) legacySkipped++;
       }
       continue;
     }

@@ -1,16 +1,14 @@
-import { createReadStream } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from '../config.js';
 import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
-import { isRecord } from '../data/guards.js';
 import type { DayMap } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedParse } from './cache.js';
+import { streamJsonlObjects } from './jsonl.js';
 import { resolveSourceRoots } from './paths.js';
 import { parseProviderSources } from './pipeline.js';
 
@@ -88,29 +86,12 @@ function addSessionUsage(
 }
 
 export async function parseSessionFile(filePath: string): Promise<SessionResult[]> {
-  const rl = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
-  });
-
   let currentDate: string | null = null;
   let model = 'unknown';
   let previousTotal = { input_tokens: 0, output_tokens: 0, cached_input_tokens: 0 };
   const results = new Map<string, SessionResult>();
 
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      // A truncated or half-written line — the transcript is appended to while
-      // it is being read. Skip it rather than failing the whole file.
-      continue;
-    }
-    // A JSONL line is only interesting when it is an object; a bare number or
-    // string parses fine and would otherwise be cast to a shape it never had.
-    if (!isRecord(parsed)) continue;
+  for await (const parsed of streamJsonlObjects(filePath)) {
     const entry = parsed as unknown as CodexEntry;
 
     if (entry.timestamp) {
@@ -195,7 +176,7 @@ function addSessionResult(
  * One session file's contribution, computed from its own bytes alone so it can
  * be cached. Codex has no cross-file de-duplication, so there are no keys.
  */
-async function parseCodexFile(
+export async function parseCodexFile(
   filePath: string,
   fallbacks?: FallbackCollector,
 ): Promise<CachedParse> {

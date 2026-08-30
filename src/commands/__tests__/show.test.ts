@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('fs', () => ({ writeFileSync: mocks.writeFileSync }));
 vi.mock('child_process', () => ({ spawn: mocks.spawn }));
-vi.mock('os', () => ({ hostname: mocks.hostname }));
+vi.mock('os', () => ({ hostname: mocks.hostname, homedir: () => '/home/test' }));
 vi.mock('../../config.js', () => ({
   tryLoadConfig: mocks.tryLoadConfig,
   resolveMachineId: mocks.resolveMachineId,

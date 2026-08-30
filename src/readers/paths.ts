@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
+import type { CheckResult } from '../display/checkResult.js';
 import { mapWithConcurrency } from './concurrency.js';
 
 export function splitConfiguredPaths(value: string | undefined): string[] {
@@ -64,6 +65,34 @@ export async function jsonlSourceSummary(
     }),
   );
   return { existing, fileCount: counts.reduce((sum, count) => sum + count, 0) };
+}
+
+/**
+ * A `doctor` check that a synced provider's transcript directories exist and
+ * hold JSONL files. Lived in `src/commands/doctor.ts` as a private helper; a
+ * provider module now calls it from its own `doctorCheck`.
+ */
+export async function sourceCheck(label: string, roots: string[]): Promise<CheckResult> {
+  const { existing, fileCount } = await jsonlSourceSummary(roots);
+  if (fileCount > 0) {
+    return {
+      status: 'ok',
+      label,
+      detail: `${String(fileCount)} JSONL file(s) across ${String(existing.length)} existing path(s)`,
+    };
+  }
+  if (existing.length > 0) {
+    return {
+      status: 'warn',
+      label,
+      detail: `paths exist but no JSONL files were found: ${existing.join(', ')}`,
+    };
+  }
+  return {
+    status: 'warn',
+    label,
+    detail: `no source paths found; checked ${roots.join(', ')}`,
+  };
 }
 
 export function resolveSourceRoots(options: {

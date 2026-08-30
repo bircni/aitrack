@@ -53,8 +53,8 @@ describe('localData', () => {
 
     const maps = await readLocalProviderMaps();
 
-    expect(maps.claude_code.get('2024-01-01')?.inputTokens).toBe(1);
-    expect(maps.codex.get('2024-01-01')?.inputTokens).toBe(2);
+    expect(maps.claude_code?.get('2024-01-01')?.inputTokens).toBe(1);
+    expect(maps.codex?.get('2024-01-01')?.inputTokens).toBe(2);
   });
 
   describe('mergePersistedDays', () => {
