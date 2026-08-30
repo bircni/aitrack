@@ -57,7 +57,7 @@ describe('renderTui', () => {
     });
 
     const totalLine = output.split('\n').find((line) => line.includes('TOTAL')) ?? '';
-    expect(totalLine).toMatch(/TOTAL\s*│\s*1\s*│/);
+    expect(totalLine).toMatch(/TOTAL\s*│\s*1\s*│/u);
   });
 
   it('reports the same day count as the merged all-providers view', () => {
@@ -82,7 +82,7 @@ describe('renderTui', () => {
         .find((line) => line.includes('All providers')) ?? '';
 
     // Three distinct dates across both providers, either way you slice it.
-    expect(totalLine).toMatch(/TOTAL\s*│\s*3\s*│/);
-    expect(mergedLine).toMatch(/All providers\s*│\s*3\s*│/);
+    expect(totalLine).toMatch(/TOTAL\s*│\s*3\s*│/u);
+    expect(mergedLine).toMatch(/All providers\s*│\s*3\s*│/u);
   });
 });

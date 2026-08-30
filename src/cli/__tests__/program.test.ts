@@ -58,7 +58,7 @@ describe('buildProgram', () => {
   });
 
   it('reports the package version', () => {
-    expect(buildProgram().version()).toMatch(/^\d+\.\d+\.\d+/);
+    expect(buildProgram().version()).toMatch(/^\d+\.\d+\.\d+/u);
   });
 
   it('wires simple commands', async () => {

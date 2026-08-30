@@ -64,12 +64,12 @@ export const CODEX_PRICING_OVERRIDES: Record<
 
 // Fallback by family slug — keeps cost reasonable for unknown future model ids.
 const FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> = [
-  { match: /-nano$/, pricing: { inputPerMillion: 0.2, outputPerMillion: 1.25 } },
-  { match: /-mini$/, pricing: { inputPerMillion: 0.25, outputPerMillion: 2 } },
-  { match: /-codex(-max)?$/, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
+  { match: /-nano$/u, pricing: { inputPerMillion: 0.2, outputPerMillion: 1.25 } },
+  { match: /-mini$/u, pricing: { inputPerMillion: 0.25, outputPerMillion: 2 } },
+  { match: /-codex(-max)?$/u, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
   // Last resort for an unrecognized gpt-5 variant. Ordered after the suffix
   // rules above so those still win.
-  { match: /^gpt-5/, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
+  { match: /^gpt-5/u, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
 ];
 
 export function findCodexPricing(

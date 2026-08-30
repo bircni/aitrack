@@ -67,7 +67,7 @@ describe('renderReceiptPdf', () => {
     }));
     const buffer = await renderReceiptPdf(report);
     // PDFKit emits one "/Type /Page" object per page; sizing to content keeps it to one.
-    const pageCount = buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g)?.length ?? 0;
+    const pageCount = buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/gu)?.length ?? 0;
     expect(pageCount).toBe(1);
   });
 });

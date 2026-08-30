@@ -50,7 +50,7 @@ function configValue(config: Config | null, key: ConfigKey): string | number | b
 }
 
 function parseDaemonInteger(key: 'daemon.port' | 'daemon.interval', value: string): number {
-  if (!/^\d+$/.test(value)) {
+  if (!/^\d+$/u.test(value)) {
     throw new Error(`${key} must be a positive integer.`);
   }
   const parsed = Number(value);

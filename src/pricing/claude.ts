@@ -90,7 +90,7 @@ function canonicalClaudeModelId(model: string): string {
   if (cached !== undefined) return cached;
 
   const id = stripModelVersionSuffixes(model.toLowerCase());
-  const legacy = /^claude-(\d+)(?:-(\d+))?-(opus|sonnet|haiku)$/.exec(id);
+  const legacy = /^claude-(\d+)(?:-(\d+))?-(opus|sonnet|haiku)$/u.exec(id);
   const [, major, minor, family] = legacy ?? [];
   const canonical =
     legacy && major && family ? `claude-${family}-${major}${minor ? `-${minor}` : ''}` : id;

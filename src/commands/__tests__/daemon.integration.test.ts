@@ -68,7 +68,7 @@ describe('daemon HTTP integration', () => {
     });
 
     const listenLine = logs.find((line) => line.includes('listening on http://127.0.0.1:'));
-    const port = listenLine?.match(/http:\/\/127\.0\.0\.1:(\d+)/)?.[1];
+    const port = listenLine?.match(/http:\/\/127\.0\.0\.1:(\d+)/u)?.[1];
     expect(port).toBeDefined();
     if (port === undefined) throw new Error('expected daemon to log listen URL');
 

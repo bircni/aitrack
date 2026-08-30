@@ -6,7 +6,7 @@ import { loggedOutput } from '../../__tests__/helpers/fixtures.js';
 /** Strip SGR color codes so a rendered line can be measured as the user sees it. */
 function stripAnsi(value: string): string {
   // eslint-disable-next-line no-control-regex
-  return value.replaceAll(/\u001B\[\d+m/g, '');
+  return value.replaceAll(/\u001B\[\d+m/gu, '');
 }
 
 const mocks = vi.hoisted(() => ({
@@ -49,6 +49,14 @@ vi.mock('../../readers/cursor/auth.js', () => ({
 }));
 
 import { doctorCommand, duplicateMachineCheck } from '../doctor.js';
+
+const machine = (hostname: string, days: Record<string, unknown>) => ({ hostname, days });
+const day = (cost: number) => ({
+  claude_code: {
+    byModel: { 'claude-opus-4-8': { inputTokens: 10, outputTokens: 2, costUSD: cost } },
+    totals: { inputTokens: 10, outputTokens: 2, costUSD: cost },
+  },
+});
 
 function dirent(
   name: string,
@@ -148,13 +156,13 @@ describe('doctorCommand', () => {
       const rows = loggedOutput()
         .split('\n')
         .map((line) => stripAnsi(line))
-        .filter((line) => /^(OK|WARN|FAIL) /.test(line));
+        .filter((line) => /^(OK|WARN|FAIL) /u.test(line));
 
       expect(rows.some((line) => line.startsWith('OK'))).toBe(true);
       expect(rows.some((line) => line.startsWith('WARN'))).toBe(true);
 
       // Every row's label starts in the same column, whatever its status.
-      const labelStarts = new Set(rows.map((line) => line.search(/(?<=^(OK|WARN|FAIL) +)\S/)));
+      const labelStarts = new Set(rows.map((line) => line.search(/(?<=^(OK|WARN|FAIL) +)\S/u)));
       expect(labelStarts.size).toBe(1);
     } finally {
       chalk.level = previousLevel;
@@ -218,14 +226,6 @@ describe('doctorCommand', () => {
   });
 
   describe('duplicateMachineCheck', () => {
-    const machine = (hostname: string, days: Record<string, unknown>) => ({ hostname, days });
-    const day = (cost: number) => ({
-      claude_code: {
-        byModel: { 'claude-opus-4-8': { inputTokens: 10, outputTokens: 2, costUSD: cost } },
-        totals: { inputTokens: 10, outputTokens: 2, costUSD: cost },
-      },
-    });
-
     it('warns when one machine is synced under several ids', () => {
       const shared = day(5);
       mocks.listDataFiles.mockReturnValue(['/repo/data/a.json', '/repo/data/b.json']);

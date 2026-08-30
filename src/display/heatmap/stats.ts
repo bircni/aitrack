@@ -102,6 +102,20 @@ function recentWindowStart(): string {
   return toLocalDateString(d);
 }
 
+function bumpModelTotal(
+  table: Map<string, number>,
+  model: string,
+  delta: number,
+  track: ModelTop | null,
+): ModelTop {
+  const next = (table.get(model) ?? 0) + delta;
+  table.set(model, next);
+  if (!track || next > track.tokens || (next === track.tokens && model < track.model)) {
+    return { model, tokens: next };
+  }
+  return track;
+}
+
 export function computeModelStats(dayMap: DayMap): ModelStats {
   const since = recentWindowStart();
   const allTime = new Map<string, number>();
@@ -109,20 +123,6 @@ export function computeModelStats(dayMap: DayMap): ModelStats {
   let topAll: ModelTop | null = null;
   let topRec: ModelTop | null = null;
   let peak: PeakDay | null = null;
-
-  const bump = (
-    table: Map<string, number>,
-    model: string,
-    delta: number,
-    track: ModelTop | null,
-  ): ModelTop => {
-    const next = (table.get(model) ?? 0) + delta;
-    table.set(model, next);
-    if (!track || next > track.tokens || (next === track.tokens && model < track.model)) {
-      return { model, tokens: next };
-    }
-    return track;
-  };
 
   for (const [date, data] of dayMap) {
     const dayTotal = data.inputTokens + data.outputTokens;
@@ -133,8 +133,8 @@ export function computeModelStats(dayMap: DayMap): ModelStats {
     for (const [model, counts] of Object.entries(data.byModel)) {
       const tokens = counts.inputTokens + counts.outputTokens;
       if (tokens === 0) continue;
-      topAll = bump(allTime, model, tokens, topAll);
-      if (isRecent) topRec = bump(recent, model, tokens, topRec);
+      topAll = bumpModelTotal(allTime, model, tokens, topAll);
+      if (isRecent) topRec = bumpModelTotal(recent, model, tokens, topRec);
     }
   }
 

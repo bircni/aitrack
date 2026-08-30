@@ -19,7 +19,7 @@ function runRelease(arguments_: string[]) {
 }
 
 function expectedPatchVersion(version: string): string {
-  const match = /^(\d+)\.(\d+)\.(\d+)(-.+)?$/.exec(version);
+  const match = /^(\d+)\.(\d+)\.(\d+)(-.+)?$/u.exec(version);
   if (!match) throw new Error(`Unexpected package version: ${version}`);
   const [, major, minor, patch, prerelease] = match;
   if (major === undefined || minor === undefined || patch === undefined) {
@@ -61,7 +61,7 @@ describe('release tooling', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain(`git-cliff --config .cliff.toml --tag ${expectedTag}`);
     expect(result.stdout).toMatch(
-      new RegExp(`git push \\S+ refs/tags/${expectedTag.replaceAll('.', '\\.')}`),
+      new RegExp(`git push \\S+ refs/tags/${expectedTag.replaceAll('.', '\\.')}`, 'u'),
     );
     expect(result.stdout).toContain(`Dry run complete: would release ${expectedTag}.`);
     expect(result.stdout).not.toContain('git push --tags');

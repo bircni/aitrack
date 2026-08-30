@@ -108,7 +108,7 @@ function processCursorCsvLines(lines: Iterable<string>, onRow: (row: CursorCsvRo
 export function aggregateCursorCsvToDayMap(content: string): DayMap {
   const result: DayMap = new Map();
 
-  processCursorCsvLines(content.split(/\r?\n/), (row) => {
+  processCursorCsvLines(content.split(/\r?\n/u), (row) => {
     const dateString = parseCursorDateString(row.Date);
     const rawModel = row.Model?.trim();
     const tokenTotals = createCursorTokenTotals(row);

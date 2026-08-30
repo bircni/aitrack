@@ -4,7 +4,7 @@ import { mapWithConcurrency } from '../concurrency.js';
 
 /** Resolves only once `release()` is called, so a test controls completion order. */
 function deferred(): { promise: Promise<void>; release: () => void } {
-  let release = (): void => undefined;
+  let release!: () => void;
   const promise = new Promise<void>((resolve) => {
     release = resolve;
   });

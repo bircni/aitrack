@@ -66,7 +66,7 @@ export function hasUpstream(): boolean {
 function isNonFastForward(error: unknown): error is GitCommandError {
   return (
     error instanceof GitCommandError &&
-    /(?:non-fast-forward|fetch first|\[rejected\].*(?:rejected|stale info))/i.test(error.output)
+    /(?:non-fast-forward|fetch first|\[rejected\].*(?:rejected|stale info))/iu.test(error.output)
   );
 }
 

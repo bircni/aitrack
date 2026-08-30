@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../readers/claude.js', () => ({ readClaudeData: mocks.readClaudeData }));
 vi.mock('../../readers/codex.js', () => ({ readCodexData: mocks.readCodexData }));
 
+const providerDay = (inputTokens: number) => ({
+  byModel: { m: { inputTokens, outputTokens: 0 } },
+  totals: { inputTokens, outputTokens: 0 },
+});
+
 import { buildLocalMachineFile, readLocalProviderMaps } from '../localData.js';
 
 function dayMap(inputTokens: number, outputTokens: number): DayMap {
@@ -53,11 +58,6 @@ describe('localData', () => {
   });
 
   describe('mergePersistedDays', () => {
-    const providerDay = (inputTokens: number) => ({
-      byModel: { m: { inputTokens, outputTokens: 0 } },
-      totals: { inputTokens, outputTokens: 0 },
-    });
-
     it('keeps persisted days that the pruned local logs no longer cover', () => {
       const persisted = {
         '2024-01-01': { claude_code: providerDay(100) },

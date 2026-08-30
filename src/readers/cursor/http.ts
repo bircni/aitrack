@@ -86,11 +86,12 @@ export async function fetchCursorUsageCsv(accessToken: string): Promise<Response
       },
     });
     if (response.ok) return response;
+    const responseBody = await response.text();
     failures.push({
       label: attempt.label,
       status: response.status,
       statusText: response.statusText,
-      body: (await response.text()).trim().slice(0, 200),
+      body: responseBody.trim().slice(0, 200),
     });
   }
 

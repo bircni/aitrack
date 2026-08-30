@@ -27,31 +27,33 @@ vi.mock('../../config.js', () => ({
 }));
 vi.mock('../../readers/claude.js', () => ({ readClaudeData: mocks.readClaudeData }));
 vi.mock('../../readers/codex.js', () => ({ readCodexData: mocks.readCodexData }));
-vi.mock('../../data/localData.js', async () => ({
-  // The real merge helper — this is what keeps pruned-away history in the file.
-  mergePersistedDays: (
-    await vi.importActual<typeof import('../../data/localData.js')>('../../data/localData.js')
-  ).mergePersistedDays,
-  buildMachineData: (host: string, providers: Record<string, DayMap>) => {
-    const days: Record<string, Record<string, unknown>> = {};
-    for (const [providerKey, dayMap] of Object.entries(providers)) {
-      for (const [date, day] of dayMap) {
-        days[date] ??= {};
-        days[date][providerKey] = {
-          byModel: day.byModel,
-          totals: { inputTokens: day.inputTokens, outputTokens: day.outputTokens },
-        };
+vi.mock('../../data/localData.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../data/localData.js')>('../../data/localData.js');
+  return {
+    // The real merge helper — this is what keeps pruned-away history in the file.
+    mergePersistedDays: actual.mergePersistedDays,
+    buildMachineData: (host: string, providers: Record<string, DayMap>) => {
+      const days: Record<string, Record<string, unknown>> = {};
+      for (const [providerKey, dayMap] of Object.entries(providers)) {
+        for (const [date, day] of dayMap) {
+          days[date] ??= {};
+          days[date][providerKey] = {
+            byModel: day.byModel,
+            totals: { inputTokens: day.inputTokens, outputTokens: day.outputTokens },
+          };
+        }
       }
-    }
-    return { hostname: host, lastUpdated: 'now', days };
-  },
-  readLocalProviderMaps: async (
-    fallbacks?: FallbackCollector,
-  ): Promise<{ claude_code: DayMap; codex: DayMap }> => ({
-    claude_code: (await mocks.readClaudeData(fallbacks)) as DayMap,
-    codex: (await mocks.readCodexData(fallbacks)) as DayMap,
-  }),
-}));
+      return { hostname: host, lastUpdated: 'now', days };
+    },
+    readLocalProviderMaps: async (
+      fallbacks?: FallbackCollector,
+    ): Promise<{ claude_code: DayMap; codex: DayMap }> => ({
+      claude_code: (await mocks.readClaudeData(fallbacks)) as DayMap,
+      codex: (await mocks.readCodexData(fallbacks)) as DayMap,
+    }),
+  };
+});
 vi.mock('../../git.js', () => ({
   LOCAL_REPO: '/repo',
   isCloned: mocks.isCloned,
