@@ -1,5 +1,5 @@
-#!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
+#!/usr/bin/env tsx
+import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,18 +8,31 @@ import { pathToFileURL } from 'node:url';
 const IS_WIN = platform() === 'win32';
 
 /** Quote args for cmd.exe when shell mode joins them into one command string. */
-function quoteShellArgument(argument) {
+function quoteShellArgument(argument: string): string {
   if (!/[\s()&|<>^"'%!]/.test(argument)) return argument;
   return `"${argument.replaceAll('"', String.raw`\"`)}"`;
 }
 
-function spawnCommand(command, arguments_, options = {}) {
-  return IS_WIN
-    ? spawnSync([command, ...arguments_.map(quoteShellArgument)].join(' '), {
-        ...options,
-        shell: true,
-      })
-    : spawnSync(command, arguments_, options);
+/**
+ * Every caller that reads `stdout`/`stderr` passes `encoding: 'utf8'`, so the
+ * result is narrowed to the string variant; `run()` only inspects `status`.
+ */
+function spawnCommand(
+  command: string,
+  arguments_: string[],
+  options: SpawnSyncOptions = {},
+): SpawnSyncReturns<string> {
+  return (
+    IS_WIN
+      ? spawnSync(
+          [command, ...arguments_.map((argument) => quoteShellArgument(argument))].join(' '),
+          {
+            ...options,
+            shell: true,
+          },
+        )
+      : spawnSync(command, arguments_, options)
+  ) as SpawnSyncReturns<string>;
 }
 
 const ALLOWED_BUMPS = new Set([
@@ -33,7 +46,15 @@ const ALLOWED_BUMPS = new Set([
   'prerelease',
 ]);
 
-function run(command, arguments_, { dryRun = false, ...spawnOptions } = {}) {
+interface RunOptions extends SpawnSyncOptions {
+  dryRun?: boolean;
+}
+
+function run(
+  command: string,
+  arguments_: string[],
+  { dryRun = false, ...spawnOptions }: RunOptions = {},
+): void {
   const pretty = [command, ...arguments_].join(' ');
   if (dryRun) {
     console.log(`[dry-run] ${pretty}`);
@@ -47,7 +68,7 @@ function run(command, arguments_, { dryRun = false, ...spawnOptions } = {}) {
   }
 }
 
-function output(command, arguments_) {
+function output(command: string, arguments_: string[]): string {
   const result = spawnCommand(command, arguments_, { encoding: 'utf8' });
   if (result.status !== 0) {
     throw new Error(`Command failed: ${[command, ...arguments_].join(' ')}`);
@@ -55,18 +76,20 @@ function output(command, arguments_) {
   return result.stdout.trim();
 }
 
-function optionalOutput(command, arguments_) {
+function optionalOutput(command: string, arguments_: string[]): string | undefined {
   const result = spawnCommand(command, arguments_, { encoding: 'utf8' });
   return result.status === 0 ? result.stdout.trim() || undefined : undefined;
 }
 
-function getPackageVersion() {
-  const package_ = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+function getPackageVersion(): string {
+  const package_ = JSON.parse(
+    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+  ) as { version: string };
   return package_.version;
 }
 
 /** Ask pnpm to calculate a bump in an isolated directory without touching the checkout. */
-export function previewVersionBump(currentVersion, bump) {
+export function previewVersionBump(currentVersion: string, bump: string): string {
   if (bump === 'none') return currentVersion;
 
   const previewDirectory = mkdtempSync(join(tmpdir(), 'aitrack-release-preview-'));
@@ -86,7 +109,7 @@ export function previewVersionBump(currentVersion, bump) {
       throw new Error(`Could not preview ${bump} version bump${detail ? `: ${detail}` : ''}`);
     }
 
-    const package_ = JSON.parse(readFileSync(previewPackagePath, 'utf8'));
+    const package_ = JSON.parse(readFileSync(previewPackagePath, 'utf8')) as { version?: unknown };
     if (typeof package_.version !== 'string') {
       throw new TypeError('pnpm version preview did not produce a package version');
     }
@@ -96,26 +119,32 @@ export function previewVersionBump(currentVersion, bump) {
   }
 }
 
-function getPushRemote({ allowPlaceholder = false } = {}) {
+function getPushRemote({ allowPlaceholder = false }: { allowPlaceholder?: boolean } = {}): string {
   const branch = output('git', ['branch', '--show-current']);
   const configured = [
     optionalOutput('git', ['config', '--get', `branch.${branch}.pushRemote`]),
     optionalOutput('git', ['config', '--get', 'remote.pushDefault']),
     optionalOutput('git', ['config', '--get', `branch.${branch}.remote`]),
   ].find(Boolean);
-  if (configured) return configured;
+  if (configured !== undefined) return configured;
 
   const remotes = output('git', ['remote'])
     .split('\n')
     .filter((remote) => remote.length > 0);
   if (remotes.includes('origin')) return 'origin';
-  if (remotes.length === 1) return remotes[0];
+  const [onlyRemote] = remotes;
+  if (remotes.length === 1 && onlyRemote !== undefined) return onlyRemote;
   if (allowPlaceholder) return '<remote>';
   throw new Error('Could not determine push remote. Configure an upstream or remote.pushDefault.');
 }
 
-function parseArguments(argv) {
-  const bumpArgument = argv.find((argument) => !argument.startsWith('--')) || 'patch';
+interface ParsedArguments {
+  bump: string;
+  dryRun: boolean;
+}
+
+function parseArguments(argv: string[]): ParsedArguments {
+  const bumpArgument = argv.find((argument) => !argument.startsWith('--')) ?? 'patch';
   if (!ALLOWED_BUMPS.has(bumpArgument)) {
     throw new Error(
       `Invalid bump type: ${bumpArgument}. Use one of: ${[...ALLOWED_BUMPS].join(', ')}`,
@@ -128,7 +157,7 @@ function parseArguments(argv) {
   };
 }
 
-function ensureCleanGitTree(dryRun) {
+function ensureCleanGitTree(dryRun: boolean): void {
   const dirty = output('git', ['status', '--porcelain']);
   if (dirty !== '') {
     if (dryRun) {
@@ -139,7 +168,7 @@ function ensureCleanGitTree(dryRun) {
   }
 }
 
-function main() {
+function main(): void {
   const { bump, dryRun } = parseArguments(process.argv.slice(2));
   const options = { dryRun };
 

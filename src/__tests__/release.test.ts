@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const REPO_ROOT = new URL('../..', import.meta.url);
-const RELEASE_SCRIPT = new URL('../../scripts/release.mjs', import.meta.url);
+const RELEASE_SCRIPT = new URL('../../scripts/release.ts', import.meta.url);
 const REPO_ROOT_PATH = fileURLToPath(REPO_ROOT);
 const RELEASE_SCRIPT_PATH = fileURLToPath(RELEASE_SCRIPT);
 
