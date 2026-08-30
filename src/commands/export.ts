@@ -4,6 +4,7 @@ import chalk from 'chalk';
 
 import { parseUsageReportOptions } from '../cli/parse.js';
 import { buildUsageReport, emptyReportMessage } from '../data/usageReport.js';
+import { renderUsageReportCsv } from '../display/csv/report.js';
 import { renderReceiptPdf } from '../display/pdf/receipt.js';
 import { log } from '../output.js';
 
@@ -12,6 +13,13 @@ export interface ExportOptions {
   args?: string[];
   output: string;
   providers?: string[];
+  /** Emit CSV instead of the PDF receipt. */
+  csv?: boolean;
+}
+
+/** Default `-o` ends in `.pdf`; swap it for `.csv` when the user didn't say otherwise. */
+function csvOutputPath(output: string): string {
+  return output.endsWith('.pdf') ? `${output.slice(0, -'.pdf'.length)}.csv` : output;
 }
 
 export async function exportCommand(options: ExportOptions): Promise<void> {
@@ -20,6 +28,13 @@ export async function exportCommand(options: ExportOptions): Promise<void> {
   if (!report || report.rowCount === 0) {
     const message = emptyReportMessage(report);
     if (message !== null) log.info(message);
+    return;
+  }
+
+  if (options.csv) {
+    const output = csvOutputPath(options.output);
+    writeFileSync(output, renderUsageReportCsv(report));
+    log.info(chalk.bold(`Wrote CSV for ${report.windowLabel} → ${output}`));
     return;
   }
 
