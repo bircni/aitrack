@@ -14,6 +14,11 @@ interface DaemonConfig {
   interval?: number;
 }
 
+interface BudgetConfig {
+  /** Estimated-cost ceiling for the calendar month, in USD. `usage thismonth` flags progress against it. */
+  monthlyUSD?: number;
+}
+
 export interface Config {
   repoUrl: string;
   /** Stable machine identifier for data/{machineId}.json; defaults to os.hostname(). */
@@ -23,4 +28,5 @@ export interface Config {
   /** Comma-separated Codex session roots; defaults to the standard Codex locations. */
   codexSessionsDir?: string;
   daemon?: DaemonConfig;
+  budget?: BudgetConfig;
 }

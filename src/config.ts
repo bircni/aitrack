@@ -54,6 +54,23 @@ function validateDaemon(value: unknown): Config['daemon'] | undefined {
   return daemon;
 }
 
+function validateBudget(value: unknown): Config['budget'] | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return undefined;
+  const budget: NonNullable<Config['budget']> = {};
+  if (value.monthlyUSD !== undefined) {
+    if (
+      typeof value.monthlyUSD !== 'number' ||
+      !Number.isFinite(value.monthlyUSD) ||
+      value.monthlyUSD <= 0
+    ) {
+      return undefined;
+    }
+    budget.monthlyUSD = value.monthlyUSD;
+  }
+  return budget;
+}
+
 function validateConfig(parsed: unknown): Config | null {
   if (!isRecord(parsed)) return null;
   if (typeof parsed.repoUrl !== 'string') return null;
@@ -78,12 +95,16 @@ function validateConfig(parsed: unknown): Config | null {
   const daemon = validateDaemon(parsed.daemon);
   if (parsed.daemon !== undefined && daemon === undefined) return null;
 
+  const budget = validateBudget(parsed.budget);
+  if (parsed.budget !== undefined && budget === undefined) return null;
+
   return {
     repoUrl: parsed.repoUrl,
     ...(machineId !== undefined && { machineId }),
     ...(claudeProjectsDir !== undefined && { claudeProjectsDir }),
     ...(codexSessionsDir !== undefined && { codexSessionsDir }),
     ...(daemon !== undefined && { daemon }),
+    ...(budget !== undefined && { budget }),
   };
 }
 

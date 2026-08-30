@@ -45,6 +45,7 @@ describe('configCommand', () => {
       expect(out).toContain('daemon.port =');
       expect(out).toContain('daemon.interval =');
       expect(out).toContain('daemon.sync =');
+      expect(out).toContain('budget.monthly =');
       expect(out).toContain('resolved-host');
     });
 
@@ -75,6 +76,12 @@ describe('configCommand', () => {
       });
       await configCommand({ action: 'get', key: 'daemon.port' });
       expect(loggedOutput()).toBe('9090');
+    });
+
+    it('prints the configured monthly budget', async () => {
+      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x', budget: { monthlyUSD: 200 } });
+      await configCommand({ action: 'get', key: 'budget.monthly' });
+      expect(loggedOutput()).toBe('200');
     });
 
     it('rejects an unknown key', async () => {
@@ -151,6 +158,27 @@ describe('configCommand', () => {
       await expect(configCommand({ action: 'set', key, value })).rejects.toThrow('daemon.');
       expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
+
+    it('sets budget.monthly as a positive dollar amount under budget.monthlyUSD', async () => {
+      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/d.git' });
+
+      await configCommand({ action: 'set', key: 'budget.monthly', value: '149.99' });
+
+      expect(mocks.saveConfig).toHaveBeenCalledWith({
+        repoUrl: 'git@example.com:me/d.git',
+        budget: { monthlyUSD: 149.99 },
+      });
+    });
+
+    it.each(['0', '-5', 'lots'])(
+      'rejects a non-positive budget.monthly value %j',
+      async (value) => {
+        await expect(
+          configCommand({ action: 'set', key: 'budget.monthly', value }),
+        ).rejects.toThrow('budget.monthly');
+        expect(mocks.saveConfig).not.toHaveBeenCalled();
+      },
+    );
 
     it.each(['../escape', '..\\escape', 'nested/machine'])(
       'rejects unsafe machineId %j before migration or save',
