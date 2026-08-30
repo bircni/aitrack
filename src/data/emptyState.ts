@@ -10,12 +10,15 @@ export function isUsageNotConfigured(): boolean {
 
 export function formatUsageEmptyMessage(reason: UsageEmptyReason, detail?: string): string {
   switch (reason) {
-    case 'not-configured':
+    case 'not-configured': {
       return `No local usage data found (Claude Code or Codex). Run: ${INIT_HINT} to sync across machines.`;
-    case 'no-data':
+    }
+    case 'no-data': {
       return 'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.';
-    case 'empty-window':
+    }
+    case 'empty-window': {
       return detail ? `No usage recorded for ${detail}.` : 'No usage recorded.';
+    }
   }
 }
 

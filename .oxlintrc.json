@@ -16,11 +16,10 @@
   "rules": {
     "unicorn/filename-case": "off",
     "unicorn/no-null": "off",
-    "unicorn/no-array-callback-reference": "off",
-    "unicorn/prefer-number-properties": "off",
+    "unicorn/prefer-number-properties": "error",
     "unicorn/no-process-exit": "off",
     "unicorn/no-array-reduce": "off",
-    "unicorn/switch-case-braces": "off",
+    "unicorn/switch-case-braces": "error",
     "unicorn/no-useless-undefined": "off",
     "unicorn/import-style": "off",
     "unicorn/no-array-sort": "off",
@@ -37,7 +36,6 @@
     "typescript/strict-boolean-expressions": "off",
     "max-lines-per-function": "off",
     "max-lines": "off",
-    "max-depth": "off",
     "no-inline-comments": "off",
     "require-unicode-regexp": "off"
   },

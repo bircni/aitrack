@@ -17,7 +17,7 @@ function renderMonthLabels(weeks: Array<Array<string | null>>): string {
   for (const [w, week] of weeks.entries()) {
     const first = week.find((d) => d !== null);
     if (!first) continue;
-    const month = parseInt(first.slice(5, 7), 10) - 1;
+    const month = Number.parseInt(first.slice(5, 7), 10) - 1;
     if (month !== lastMonth) {
       labels.push(
         `<span class="month-label" style="grid-column:${String(w + 1)}">${escapeHtml(MONTHS[month] ?? '')}</span>`,

@@ -46,26 +46,30 @@ export function registerUsageCommands(
       .option('--json', 'print machine-readable JSON');
 
     switch (def.argShape) {
-      case 'date':
+      case 'date': {
         command.action((date: string, options: UsageCommonOptions) => {
           runUsageFromPeriod(def.period, [date], options, runAsync);
         });
         break;
-      case 'range':
+      }
+      case 'range': {
         command.action((from: string, to: string, options: UsageCommonOptions) => {
           runUsageFromPeriod(def.period, [from, to], options, runAsync);
         });
         break;
-      case 'last':
+      }
+      case 'last': {
         command.action((n: string, options: UsageCommonOptions) => {
           runUsageFromPeriod(def.period, [n], options, runAsync);
         });
         break;
-      case 'none':
+      }
+      case 'none': {
         command.action((options: UsageCommonOptions) => {
           runUsageFromPeriod(def.period, [], options, runAsync);
         });
         break;
+      }
     }
   }
 }

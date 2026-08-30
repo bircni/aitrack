@@ -97,7 +97,7 @@ function drawSection(
   for (const [w, week] of weeks.entries()) {
     const first = week.find((d) => d !== null);
     if (!first) continue;
-    const month = parseInt(first.slice(5, 7), 10) - 1;
+    const month = Number.parseInt(first.slice(5, 7), 10) - 1;
     if (month !== lastMonth) {
       context.fillText(MONTHS[month] ?? '', LEFT + w * STEP, y + 14);
       lastMonth = month;
