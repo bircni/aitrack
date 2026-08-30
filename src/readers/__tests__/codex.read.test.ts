@@ -154,6 +154,41 @@ describe('readCodexData', () => {
     expect(result.get('2024-01-15')?.inputTokens).toBe(30);
   });
 
+  it('keeps the last good date when a later entry carries an unparseable timestamp', async () => {
+    const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
+    mkdirSync(sessionDir, { recursive: true });
+    writeJsonl(join(sessionDir, 'bad-ts.jsonl'), [
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-5' },
+      },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: { total_token_usage: { input_tokens: 10, output_tokens: 4 } },
+        },
+      },
+      { type: 'turn_context', timestamp: 'not-a-real-date', payload: {} },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: { total_token_usage: { input_tokens: 25, output_tokens: 10 } },
+        },
+      },
+    ]);
+
+    const result = await readCodexData();
+
+    // The garbage timestamp neither opened a new day nor dropped the usage that
+    // followed it: both increments land on the last date we could parse.
+    expect([...result.keys()]).toEqual(['2024-01-15']);
+    expect(result.get('2024-01-15')?.inputTokens).toBe(25);
+    expect(result.get('2024-01-15')?.outputTokens).toBe(10);
+  });
+
   it('returns the same totals from a warm cache as from a cold one', async () => {
     const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
     mkdirSync(sessionDir, { recursive: true });
