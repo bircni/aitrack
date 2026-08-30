@@ -17,6 +17,7 @@ export const CONFIG_KEYS = [
   'daemon.port',
   'daemon.interval',
   'daemon.sync',
+  'budget.monthly',
 ] as const;
 type ConfigKey = (typeof CONFIG_KEYS)[number];
 
@@ -46,6 +47,9 @@ function configValue(config: Config | null, key: ConfigKey): string | number | b
     case 'daemon.sync': {
       return config.daemon?.sync;
     }
+    case 'budget.monthly': {
+      return config.budget?.monthlyUSD;
+    }
   }
 }
 
@@ -67,6 +71,14 @@ function parseDaemonBoolean(value: string): boolean {
   if (value === 'true') return true;
   if (value === 'false') return false;
   throw new Error('daemon.sync must be either true or false.');
+}
+
+function parseMonthlyBudget(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error('budget.monthly must be a positive dollar amount, e.g. 200 or 149.99.');
+  }
+  return parsed;
 }
 
 export interface ConfigCommandOptions {
@@ -137,7 +149,9 @@ function setConfig(key: string | undefined, value: string | undefined): void {
         ? parseDaemonInteger(key, value)
         : key === 'daemon.sync'
           ? parseDaemonBoolean(value)
-          : value;
+          : key === 'budget.monthly'
+            ? parseMonthlyBudget(value)
+            : value;
   if (key === 'machineId') {
     const previousMachineId = resolveMachineId(existing ?? { repoUrl: '' });
     migrateMachineDataFiles(previousMachineId, normalizeMachineId(value));
@@ -151,7 +165,9 @@ function setConfig(key: string | undefined, value: string | undefined): void {
           [key.slice('daemon.'.length)]: normalizedValue,
         },
       }
-    : { ...base, [key]: normalizedValue };
+    : key === 'budget.monthly'
+      ? { ...base, budget: { ...base.budget, monthlyUSD: normalizedValue as number } }
+      : { ...base, [key]: normalizedValue };
   saveConfig(next);
   log.info(`Set ${key} = ${String(normalizedValue)}`);
   if (next.repoUrl.length === 0) {

@@ -516,6 +516,65 @@ describe('usageCommand', () => {
     });
   });
 
+  describe('monthly budget', () => {
+    function withJuneUsage() {
+      mocks.loadMergedProviderData.mockResolvedValue({
+        providerData: {
+          claude_code: new Map([
+            ['2026-06-03', makeDay(1_000_000, 20_000, 90, 'claude-opus-4-8')],
+            ['2026-06-14', makeDay(900_000, 18_000, 82.5, 'claude-opus-4-8')],
+          ]),
+        },
+        machineData: [],
+      });
+    }
+
+    it('flags month-to-date spend against budget.monthly for the thismonth window', async () => {
+      withJuneUsage();
+      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x', budget: { monthlyUSD: 200 } });
+
+      await usageCommand({ period: 'thismonth' });
+
+      // 90 + 82.5 = 172.50 of 200 → 86% → warn.
+      expect(loggedOutput()).toContain('Budget: $172.50 of $200.00 this month (86%)');
+      expect(loggedOutput()).toContain('approaching your limit');
+    });
+
+    it('reports the overage once spend passes the budget', async () => {
+      withJuneUsage();
+      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x', budget: { monthlyUSD: 150 } });
+
+      await usageCommand({ period: 'thismonth' });
+
+      expect(loggedOutput()).toContain('Budget: $172.50 of $150.00 this month (115%)');
+      expect(loggedOutput()).toContain('over by $22.50');
+    });
+
+    it('stays silent without a configured budget or for the rolling month window', async () => {
+      withJuneUsage();
+      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x' });
+      await usageCommand({ period: 'thismonth' });
+      expect(loggedOutput()).not.toContain('Budget:');
+
+      vi.mocked(console.log).mockClear();
+      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x', budget: { monthlyUSD: 200 } });
+      await usageCommand({ period: 'month' });
+      expect(loggedOutput()).not.toContain('Budget:');
+    });
+
+    it('includes the budget status in --json output', async () => {
+      withJuneUsage();
+      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x', budget: { monthlyUSD: 200 } });
+
+      await usageCommand({ period: 'thismonth', json: true });
+
+      const parsed = JSON.parse(loggedOutput()) as {
+        budget?: { level: string; budgetUSD: number; spentUSD: number };
+      };
+      expect(parsed.budget).toMatchObject({ level: 'warn', budgetUSD: 200, spentUSD: 172.5 });
+    });
+  });
+
   it('renders multiple providers with em-dash for missing costs', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {

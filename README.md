@@ -192,6 +192,9 @@ Stored at `~/.config/aitrack/config.json`:
     "port": 9089,
     "interval": 120,
     "sync": false
+  },
+  "budget": {
+    "monthlyUSD": 200
   }
 }
 ```
@@ -200,7 +203,9 @@ Stored at `~/.config/aitrack/config.json`:
 
 `claudeProjectsDir` and `codexSessionsDir` are optional comma-separated **additional** source roots. They do not replace the standard locations; aitrack recursively scans the configured, environment, and default roots and deduplicates identical paths. You can also add roots with `AITRACK_CLAUDE_PROJECTS_DIRS` or `AITRACK_CODEX_SESSION_DIRS`.
 
-`daemon.port`, `daemon.interval` (seconds), and `daemon.sync` provide defaults for `aitrack daemon`; command-line options take precedence, including `--sync` and `--no-sync`. `aitrack config list`, `get`, and `set` cover every key shown above, using dotted names for daemon settings—for example, `aitrack config set daemon.interval 60`.
+`daemon.port`, `daemon.interval` (seconds), and `daemon.sync` provide defaults for `aitrack daemon`; command-line options take precedence, including `--sync` and `--no-sync`. `aitrack config list`, `get`, and `set` cover every key shown above, using dotted names for nested settings—for example, `aitrack config set daemon.interval 60`.
+
+`budget.monthly` (set with `aitrack config set budget.monthly 200`) is an estimated-cost ceiling in USD for the calendar month. When it is set, `aitrack usage thismonth` prints a line showing month-to-date estimated spend against it, warning at 80% and flagging the overage once it is exceeded. It is advisory only—nothing is blocked—and it is ignored by the rolling `usage month` window.
 
 ---
 

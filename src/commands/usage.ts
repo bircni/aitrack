@@ -1,6 +1,8 @@
 import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
+import { tryLoadConfig } from '../config.js';
+import { type BudgetStatus, budgetStatus } from '../data/budget.js';
 import {
   buildUsageComparison,
   buildUsageReport,
@@ -139,11 +141,37 @@ function renderComparison(report: UsageComparisonReport): void {
   );
 }
 
+/**
+ * Month-to-date spend vs the configured `budget.monthly`, but only for the
+ * `thismonth` window — the rolling `month` (last 30 days) is not a calendar
+ * month, so comparing it to a monthly ceiling would mislead.
+ */
+function resolveBudgetStatus(options: UsageOptions, report: UsageReport): BudgetStatus | null {
+  if (options.period !== 'thismonth' || !report.totals.hasCost) return null;
+  const monthlyUSD = tryLoadConfig()?.budget?.monthlyUSD;
+  if (monthlyUSD === undefined) return null;
+  return budgetStatus(report.totals.costUSD, monthlyUSD);
+}
+
+function renderBudgetLine(status: BudgetStatus): void {
+  const percent = `${String(Math.round(status.ratio * 100))}%`;
+  const head = `Budget: ${fmtUSDCost(status.spentUSD)} of ${fmtUSDCost(status.budgetUSD)} this month (${percent})`;
+  if (status.level === 'over') {
+    log.info(chalk.red(`⚠ ${head} — over by ${fmtUSDCost(status.overUSD)}`));
+  } else if (status.level === 'warn') {
+    log.info(chalk.yellow(`⚠ ${head} — approaching your limit`));
+  } else {
+    log.info(chalk.dim(head));
+  }
+}
+
 export async function usageCommand(options: UsageOptions): Promise<void> {
   const comparisonReport = options.compare ? await buildUsageComparison(options) : null;
   const report = options.compare
     ? (comparisonReport?.current ?? null)
     : await buildUsageReport(options);
+
+  const budget = report ? resolveBudgetStatus(options, report) : null;
 
   if (options.json) {
     const message = emptyReportMessage(report);
@@ -160,6 +188,7 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
       totals: report?.totals ?? emptyTotals,
       rowCount: report?.rowCount ?? 0,
       ...(comparisonReport !== null && { comparison: comparisonReport.comparison }),
+      ...(budget !== null && { budget }),
       ...(message !== null && { message }),
     });
     return;
@@ -172,6 +201,8 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   }
 
   renderUsageReport(report);
+
+  if (budget) renderBudgetLine(budget);
 
   if (comparisonReport) renderComparison(comparisonReport);
 }
