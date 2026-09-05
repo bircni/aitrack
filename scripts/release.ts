@@ -81,11 +81,15 @@ function optionalOutput(command: string, arguments_: string[]): string | undefin
   return result.status === 0 ? result.stdout.trim() || undefined : undefined;
 }
 
+function readRepoPackage(): { version: string; packageManager?: string } {
+  return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+    version: string;
+    packageManager?: string;
+  };
+}
+
 function getPackageVersion(): string {
-  const package_ = JSON.parse(
-    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-  ) as { version: string };
-  return package_.version;
+  return readRepoPackage().version;
 }
 
 /** Ask pnpm to calculate a bump in an isolated directory without touching the checkout. */
@@ -95,9 +99,19 @@ export function previewVersionBump(currentVersion: string, bump: string): string
   const previewDirectory = mkdtempSync(join(tmpdir(), 'aitrack-release-preview-'));
   const previewPackagePath = join(previewDirectory, 'package.json');
   try {
+    // pnpm resolves `packageManager` by walking up from cwd, so without our own
+    // field it adopts whatever package.json sits above the temp dir — on Windows
+    // that search reaches the user's home directory and can select a different
+    // package manager entirely.
+    const { packageManager } = readRepoPackage();
     writeFileSync(
       previewPackagePath,
-      `${JSON.stringify({ name: 'aitrack-release-preview', version: currentVersion, private: true })}\n`,
+      `${JSON.stringify({
+        name: 'aitrack-release-preview',
+        version: currentVersion,
+        private: true,
+        ...(packageManager === undefined ? {} : { packageManager }),
+      })}\n`,
       'utf8',
     );
     const result = spawnCommand('pnpm', ['version', bump, '--no-git-tag-version'], {
