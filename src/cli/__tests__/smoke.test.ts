@@ -22,9 +22,11 @@ function resolveCliEntry(): { command: string; prefixArgs: string[] } {
     if (!existsSync(entry)) {
       throw new Error(`SMOKE_CLI not found: ${entry}`);
     }
-    return { command: 'node', prefixArgs: [entry] };
+    return { command: process.execPath, prefixArgs: [entry] };
   }
-  return { command: 'pnpm', prefixArgs: ['exec', 'tsx', 'src/cli.ts'] };
+  // Spawn node itself rather than the `pnpm` shim: on Windows that shim is
+  // `pnpm.cmd`, which spawnSync refuses to run without a shell (ENOENT).
+  return { command: process.execPath, prefixArgs: ['--import', 'tsx', 'src/cli.ts'] };
 }
 
 function runCli(arguments_: string[]): CliRun {
@@ -34,6 +36,9 @@ function runCli(arguments_: string[]): CliRun {
     encoding: 'utf8',
     env: { ...process.env, FORCE_COLOR: '0' },
   });
+  // Without this a failed spawn surfaces as `status: null`, which every
+  // assertion below reports as "expected null to be 0".
+  if (result.error) throw result.error;
   return {
     status: result.status,
     stdout: result.stdout,

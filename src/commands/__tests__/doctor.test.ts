@@ -83,9 +83,12 @@ describe('doctorCommand', () => {
       JSON.stringify({ name: 'aitrack', scripts: { 'pricing:check': 'tsx scripts/x.ts' } }),
     );
     mocks.readdir.mockImplementation((path: string) => {
-      if (path === '/claude') return Promise.resolve([dirent('project', 'dir')]);
-      if (path === '/claude/project') return Promise.resolve([dirent('history.jsonl', 'file')]);
-      if (path === '/codex') return Promise.resolve([dirent('session.jsonl', 'file')]);
+      // The walker builds child paths with path.join, so they arrive
+      // backslash-separated on Windows while these keys stay POSIX.
+      const key = path.replaceAll('\\', '/');
+      if (key === '/claude') return Promise.resolve([dirent('project', 'dir')]);
+      if (key === '/claude/project') return Promise.resolve([dirent('history.jsonl', 'file')]);
+      if (key === '/codex') return Promise.resolve([dirent('session.jsonl', 'file')]);
       return Promise.resolve([]);
     });
     mocks.readConfig.mockReturnValue({

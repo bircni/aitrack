@@ -1,6 +1,6 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -36,7 +36,7 @@ afterAll(() => {
 describe('listJsonlFiles', () => {
   it('finds every .jsonl file recursively and ignores other extensions', async () => {
     const files = await listJsonlFiles(root);
-    expect(files.map((f) => f.replace(`${root}/`, '')).toSorted()).toEqual([
+    expect(files.map((f) => relative(root, f).replaceAll(sep, '/')).toSorted()).toEqual([
       'a.jsonl',
       'nested/b.jsonl',
       'nested/deep/c.jsonl',
