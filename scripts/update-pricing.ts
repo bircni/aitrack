@@ -7,9 +7,16 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { errorMessage } from '../src/errors.js';
-import { CLAUDE_PRICING_BY_ID } from '../src/pricing/claude.js';
-import { CODEX_PRICING_BY_ID, CODEX_PRICING_CURRENT } from '../src/pricing/codex.js';
+// Imported from the library's source rather than through the `aitrack-lib`
+// package, which resolves to `dist/`: this script is a tsx-only repo tool, and
+// making it depend on a build would mean building the library to check whether
+// a vendor changed a price.
+import { errorMessage } from '../packages/aitrack-lib/src/errors.js';
+import { CLAUDE_PRICING_BY_ID } from '../packages/aitrack-lib/src/pricing/claude.js';
+import {
+  CODEX_PRICING_BY_ID,
+  CODEX_PRICING_CURRENT,
+} from '../packages/aitrack-lib/src/pricing/codex.js';
 
 const CLAUDE_PRICING_URL = 'https://platform.claude.com/docs/en/about-claude/pricing';
 const CODEX_PRICING_URL = 'https://developers.openai.com/api/docs/pricing';

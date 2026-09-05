@@ -1,0 +1,56 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "repo-tools",
+  "projectType": "application",
+  "sourceRoot": "scripts",
+  "targets": {
+    "typecheck": {
+      "inputs": ["repoTools", "^production"]
+    },
+    "test": {
+      "inputs": ["repoTools", "^production"]
+    },
+    "lint": {
+      "inputs": ["repoTools", "^production", "lintConfig"],
+      "options": {
+        "additionalArguments": "--type-aware commitlint.config.ts"
+      }
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "inputs": ["repoTools", "formatConfig"],
+      "options": {
+        "command": "oxfmt --check .github scripts commitlint.config.ts knip.json nx.json package.json pnpm-workspace.yaml tsconfig.base.json tsconfig.json"
+      }
+    },
+    "check:unused": {
+      "executor": "nx:run-commands",
+      "inputs": ["repoTools", "^production", "{workspaceRoot}/knip.json"],
+      "cache": true,
+      "options": {
+        "command": "knip --workspace ."
+      }
+    },
+    "pricing:check": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "tsx scripts/update-pricing.ts"
+      }
+    },
+    "changelog": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "git-cliff --config .cliff.toml -o CHANGELOG.md"
+      }
+    },
+    "release": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "tsx scripts/release.ts"
+      }
+    }
+  }
+}

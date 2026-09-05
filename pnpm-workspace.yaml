@@ -1,3 +1,22 @@
+packages:
+  - packages/*
+
+overrides:
+  '@nx/devkit@22.3.3>minimatch': 9.0.7
+
+# Versions every package shares. `catalog:` in a package.json resolves to the
+# entry here, so the toolchain is bumped in one place instead of three — and
+# two packages can no longer end up compiling against different TypeScripts.
+catalog:
+  '@types/node': '^26.4.1'
+  '@typescript/native': 'npm:typescript@^7.0.2'
+  '@vitest/coverage-v8': '^5.0.0'
+  chalk: '^6.0.0'
+  tsx: '^4.23.13'
+  typescript: 'npm:@typescript/typescript6@^6.0.2'
+  vitest: '^5.0.0'
+
 allowBuilds:
   esbuild: true
   simple-git-hooks: true
+  nx: true

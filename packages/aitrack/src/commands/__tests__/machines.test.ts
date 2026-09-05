@@ -1,0 +1,126 @@
+import { loggedOutput, makeProviderDay } from '@aitrack/test-fixtures';
+import type { MachineFile } from 'aitrack-lib/data/types';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  loadMergedProviderData: vi.fn(),
+  tryLoadConfig: vi.fn(),
+  isCloned: vi.fn(),
+}));
+
+vi.mock('aitrack-lib/data/usageData', () => ({
+  loadMergedProviderData: mocks.loadMergedProviderData,
+  usageEmptyMessage: () => 'No data.',
+}));
+vi.mock('aitrack-lib/config', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
+vi.mock('aitrack-lib/git', () => ({ isCloned: mocks.isCloned }));
+
+import { machinesCommand } from '../machines.js';
+
+function makeMachine(
+  hostname: string,
+  days: Record<
+    string,
+    Array<{ providerKey: string; input: number; output: number; cost?: number }>
+  >,
+): MachineFile {
+  const out: MachineFile = {
+    schemaVersion: 2,
+    hostname,
+    timezone: 'UTC',
+    dayBucket: 'utc',
+    lastUpdated: '2026-04-01T12:00:00.000Z',
+    days: {},
+  };
+  for (const [date, items] of Object.entries(days)) {
+    out.days[date] = Object.fromEntries(
+      items.map((item) => [
+        item.providerKey,
+        makeProviderDay(item.input, item.output, item.cost, 'm'),
+      ]),
+    );
+  }
+  return out;
+}
+
+describe('machinesCommand', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
+    mocks.isCloned.mockReturnValue(true);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+
+  it('prints a table of machines sorted by tokens desc', async () => {
+    const a = makeMachine('big', {
+      '2026-01-01': [{ providerKey: 'claude_code', input: 1000, output: 100, cost: 5 }],
+    });
+    const b = makeMachine('small', {
+      '2026-01-01': [{ providerKey: 'codex', input: 50, output: 5 }],
+    });
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {},
+      machineData: [b, a],
+    });
+
+    await machinesCommand();
+
+    const out = loggedOutput();
+    expect(out).toContain('aitrack machines (2)');
+    const bigIndex = out.indexOf('big');
+    const smallIndex = out.indexOf('small');
+    expect(bigIndex).toBeGreaterThan(-1);
+    expect(smallIndex).toBeGreaterThan(bigIndex);
+    expect(out).toContain('Claude Code');
+    expect(out).toContain('Codex');
+  });
+
+  it('prints JSON when requested', async () => {
+    const machine = makeMachine('box', {
+      '2026-01-01': [{ providerKey: 'claude_code', input: 1000, output: 100, cost: 5 }],
+    });
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {},
+      machineData: [machine],
+    });
+
+    await machinesCommand({ json: true });
+
+    const parsed = JSON.parse(loggedOutput()) as {
+      command: string;
+      machines: Array<{ hostname: string; totalTokens: number; costUSD: number }>;
+    };
+    expect(parsed.command).toBe('machines');
+    expect(parsed.machines[0]).toMatchObject({
+      hostname: 'box',
+      totalTokens: 1100,
+      costUSD: 5,
+    });
+  });
+
+  it('shows empty message when no machine data', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {},
+      machineData: [],
+    });
+
+    await machinesCommand();
+
+    expect(loggedOutput()).toContain('No data.');
+  });
+
+  it('prints valid JSON when no machine data exists', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {},
+      machineData: [],
+    });
+
+    await machinesCommand({ json: true });
+
+    expect(JSON.parse(loggedOutput())).toMatchObject({
+      command: 'machines',
+      machines: [],
+      message: 'No data.',
+    });
+  });
+});
