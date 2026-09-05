@@ -1,7 +1,7 @@
 // Per-model Claude pricing from https://platform.claude.com/docs/en/about-claude/pricing
-// Cache read = 0.10x input; cache create (5min) = 1.25x input.
+// Cache read = 0.10x input (0.025x on Fable 5.1 / Mythos 5.1); cache create (5min) = 1.25x input.
 // Keep entries keyed by normalized family-first id (with date/latest suffixes stripped).
-// Last updated: 2026-08-03. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
+// Last updated: 2026-09-05. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
 
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
 import { stripModelVersionSuffixes } from '../data/modelId.js';
@@ -14,17 +14,28 @@ export interface ClaudePricing {
   cacheCreatePerMillion: number;
 }
 
-function priceFromBase(input: number, output: number): ClaudePricing {
+// Fable 5.1 and Mythos 5.1 bill a cache hit at 2.5% of base input instead of
+// the 10% every other model charges. Claude Code usage is mostly cache reads,
+// so applying the usual rate here would overstate their cost roughly 4x.
+const REDUCED_CACHE_READ_RATE_MULTIPLIER = 0.025;
+
+function priceFromBase(
+  input: number,
+  output: number,
+  cacheReadRateMultiplier = CACHE_READ_RATE_MULTIPLIER,
+): ClaudePricing {
   return {
     inputPerMillion: input,
     outputPerMillion: output,
-    cacheReadPerMillion: input * CACHE_READ_RATE_MULTIPLIER,
+    cacheReadPerMillion: input * cacheReadRateMultiplier,
     cacheCreatePerMillion: input * 1.25,
   };
 }
 
 export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
   // Latest generation (Fable/Mythos tier: $10/$50)
+  'claude-fable-5-1': priceFromBase(10, 50, REDUCED_CACHE_READ_RATE_MULTIPLIER),
+  'claude-mythos-5-1': priceFromBase(10, 50, REDUCED_CACHE_READ_RATE_MULTIPLIER),
   'claude-fable-5': priceFromBase(10, 50),
   'claude-mythos-5': priceFromBase(10, 50),
   // Current generation (Opus 4.5+ and Sonnet/Haiku 4.5+ tier)

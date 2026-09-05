@@ -5,6 +5,7 @@ import { createFallbackCollector } from '../fallback.js';
 
 describe('codex pricing', () => {
   it('costs 1M+1M tokens correctly for known models', () => {
+    expect(estimateCodexCostUSD('gpt-6-astra', 1_000_000, 1_000_000)).toBe(60);
     expect(estimateCodexCostUSD('gpt-5.6-sol', 1_000_000, 1_000_000)).toBe(24);
     expect(estimateCodexCostUSD('gpt-5.6-terra', 1_000_000, 1_000_000)).toBe(14);
     expect(estimateCodexCostUSD('gpt-5.6-luna', 1_000_000, 1_000_000)).toBe(1.4);

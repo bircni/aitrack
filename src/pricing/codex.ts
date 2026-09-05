@@ -8,7 +8,7 @@ import type { FallbackCollector } from './fallback.js';
 //   https://openrouter.ai/openai/gpt-5.1-codex
 // Codex sessions report aggregate input/output tokens plus a cached-input subset,
 // which is billed at 10% of the base input rate.
-// Last updated: 2026-08-25.
+// Last updated: 2026-09-05.
 
 export interface CodexPricing {
   inputPerMillion: number;
@@ -18,6 +18,7 @@ export interface CodexPricing {
 // Models currently listed on developers.openai.com/api/docs/pricing.
 // Verified by `pnpm run pricing:check`.
 export const CODEX_PRICING_CURRENT: Record<string, CodexPricing> = {
+  'gpt-6-astra': { inputPerMillion: 10, outputPerMillion: 50 },
   'gpt-5.6-sol': { inputPerMillion: 4, outputPerMillion: 20 },
   'gpt-5.6-terra': { inputPerMillion: 2, outputPerMillion: 12 },
   'gpt-5.6-luna': { inputPerMillion: 0.2, outputPerMillion: 1.2 },

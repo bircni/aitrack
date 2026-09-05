@@ -16,5 +16,9 @@ export function isDayKey(value: string): boolean {
 /** Highest bindable TCP port. */
 export const MAX_PORT = 65_535;
 
-/** Cache reads bill at a tenth of the base input rate for every provider. */
+/**
+ * Cache reads bill at a tenth of the base input rate. Holds for every Codex
+ * model and every Claude model but Fable 5.1 / Mythos 5.1, which price their
+ * own cache reads in `pricing/claude.ts`.
+ */
 export const CACHE_READ_RATE_MULTIPLIER = 0.1;
