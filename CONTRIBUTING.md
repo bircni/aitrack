@@ -26,9 +26,8 @@ packages/
       git.ts          Clone, pull, push data repo
       index.ts        The public barrel (`import … from 'aitrack-lib'`)
       data/           Types, validation, aggregation, usage loading
-      display/        TUI, PNG heatmap, HTML dashboard, PDF/CSV receipts
+      display/        TUI, PNG heatmap, PDF/CSV receipts
         heatmap/      Shared heatmap stats, themes, view models
-        html/         HTML render pipeline
       readers/        Provider-specific ingestion (Claude, Codex, Cursor)
       pricing/        Model pricing tables and cost resolution
       providers/      Provider registry and descriptors

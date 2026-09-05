@@ -1,6 +1,5 @@
 import { resolveMachineId, saveConfig, tryLoadConfig } from 'aitrack-lib/config';
 import type { Config } from 'aitrack-lib/configTypes';
-import { MAX_PORT } from 'aitrack-lib/constants';
 import { NO_CONFIG_MESSAGE, REPO_URL_UNSET_MESSAGE } from 'aitrack-lib/data/messages';
 import { migrateMachineDataFiles } from 'aitrack-lib/git';
 import { normalizeMachineId } from 'aitrack-lib/machineId';
@@ -13,9 +12,6 @@ export const CONFIG_KEYS = [
   'machineId',
   'claudeProjectsDir',
   'codexSessionsDir',
-  'daemon.port',
-  'daemon.interval',
-  'daemon.sync',
   'budget.monthly',
 ] as const;
 type ConfigKey = (typeof CONFIG_KEYS)[number];
@@ -37,39 +33,10 @@ function configValue(config: Config | null, key: ConfigKey): string | number | b
     case 'codexSessionsDir': {
       return config[key];
     }
-    case 'daemon.port': {
-      return config.daemon?.port;
-    }
-    case 'daemon.interval': {
-      return config.daemon?.interval;
-    }
-    case 'daemon.sync': {
-      return config.daemon?.sync;
-    }
     case 'budget.monthly': {
       return config.budget?.monthlyUSD;
     }
   }
-}
-
-function parseDaemonInteger(key: 'daemon.port' | 'daemon.interval', value: string): number {
-  if (!/^\d+$/u.test(value)) {
-    throw new Error(`${key} must be a positive integer.`);
-  }
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 1) {
-    throw new Error(`${key} must be a positive integer.`);
-  }
-  if (key === 'daemon.port' && parsed > MAX_PORT) {
-    throw new Error(`daemon.port must be between 1 and ${String(MAX_PORT)}.`);
-  }
-  return parsed;
-}
-
-function parseDaemonBoolean(value: string): boolean {
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  throw new Error('daemon.sync must be either true or false.');
 }
 
 function parseMonthlyBudget(value: string): number {
@@ -144,27 +111,16 @@ function setConfig(key: string | undefined, value: string | undefined): void {
   const normalizedValue =
     key === 'machineId'
       ? normalizeMachineId(value)
-      : key === 'daemon.port' || key === 'daemon.interval'
-        ? parseDaemonInteger(key, value)
-        : key === 'daemon.sync'
-          ? parseDaemonBoolean(value)
-          : key === 'budget.monthly'
-            ? parseMonthlyBudget(value)
-            : value;
+      : key === 'budget.monthly'
+        ? parseMonthlyBudget(value)
+        : value;
   if (key === 'machineId') {
     const previousMachineId = resolveMachineId(existing ?? { repoUrl: '' });
     migrateMachineDataFiles(previousMachineId, normalizeMachineId(value));
   }
   const base: Config = existing ?? { repoUrl: '' };
-  const next: Config = key.startsWith('daemon.')
-    ? {
-        ...base,
-        daemon: {
-          ...base.daemon,
-          [key.slice('daemon.'.length)]: normalizedValue,
-        },
-      }
-    : key === 'budget.monthly'
+  const next: Config =
+    key === 'budget.monthly'
       ? { ...base, budget: { ...base.budget, monthlyUSD: normalizedValue as number } }
       : { ...base, [key]: normalizedValue };
   saveConfig(next);

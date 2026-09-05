@@ -69,6 +69,5 @@ export * from './display/renderOptions.js';
 export * from './display/terminalTable.js';
 export * from './display/tui.js';
 export { renderUsageReportCsv } from './display/csv/report.js';
-export { type HtmlRenderOptions, renderToHtml } from './display/html/render.js';
 export { renderReceiptPdf } from './display/pdf/receipt.js';
 export { renderToPng } from './display/renderPng.js';

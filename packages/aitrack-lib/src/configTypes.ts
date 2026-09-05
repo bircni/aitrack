@@ -5,15 +5,6 @@
  * layer neither produces nor validates them — `config.ts` does. Keeping them
  * here stops the domain types from depending on a CLI concern.
  */
-interface DaemonConfig {
-  /** When true, run sync (pull + push) on each daemon refresh tick. */
-  sync?: boolean;
-  /** HTTP listen port for the daemon dashboard. */
-  port?: number;
-  /** Seconds between data refresh ticks. */
-  interval?: number;
-}
-
 interface BudgetConfig {
   /** Estimated-cost ceiling for the calendar month, in USD. `usage thismonth` flags progress against it. */
   monthlyUSD?: number;
@@ -27,6 +18,5 @@ export interface Config {
   claudeProjectsDir?: string;
   /** Comma-separated Codex session roots; defaults to the standard Codex locations. */
   codexSessionsDir?: string;
-  daemon?: DaemonConfig;
   budget?: BudgetConfig;
 }

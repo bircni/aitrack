@@ -174,28 +174,6 @@ describe('loadMergedProviderData', () => {
     expect(loaded?.warnedNotConfigured).toBe(true);
   });
 
-  it('uses a supplied local machine file instead of reading the logs again', async () => {
-    mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
-    const localMachine = {
-      ...SCHEMA_FIELDS,
-      hostname: 'host',
-      lastUpdated: 'from-sync',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 42, outputTokens: 7 } },
-            totals: { inputTokens: 42, outputTokens: 7 },
-          },
-        },
-      },
-    };
-
-    const loaded = await loadMergedProviderData({ providers: ['claude_code'], localMachine });
-
-    expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
-    expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(42);
-  });
-
   it('skipLocalLogs reports the synced files without reading the local logs', async () => {
     mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
     mocks.isCloned.mockReturnValue(true);

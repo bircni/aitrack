@@ -9,7 +9,7 @@ import { log } from '../output.js';
  *
  * This used to be two module-level `Set`s inside the pricing tables, drained by
  * a `consume*FallbackHits()` pair. That made pricing lookups impure and
- * order-dependent, and it leaked across the daemon's refresh ticks — the
+ * order-dependent, and it leaked from one long-lived run into the next — the
  * "consume" step existed only to paper over the shared state. Passing a
  * collector explicitly makes each run's hits its own.
  */

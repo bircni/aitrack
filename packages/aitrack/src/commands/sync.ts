@@ -21,7 +21,7 @@ import {
   removePendingMachineFile,
 } from 'aitrack-lib/git';
 import { machineDataFilename } from 'aitrack-lib/machineId';
-import { createLogger } from 'aitrack-lib/output';
+import { log } from 'aitrack-lib/output';
 import {
   createFallbackCollector,
   type FallbackCollector,
@@ -30,7 +30,6 @@ import {
 import { syncedProviders } from 'aitrack-lib/providers/index';
 
 export interface SyncDataOptions {
-  quiet?: boolean;
   dryRun?: boolean;
 }
 
@@ -55,11 +54,11 @@ function pushMachineData(host: string): boolean {
 
 /**
  * Push this machine's usage data. Returns the machine file built from the local
- * logs so a caller that also needs it (the daemon renders right after syncing)
- * can reuse it instead of parsing the whole JSONL corpus a second time.
+ * logs, so a caller that needs it as well does not have to parse the whole
+ * JSONL corpus a second time.
  */
 export async function syncData(options: SyncDataOptions = {}): Promise<MachineFile> {
-  // One collector per run, so a long-lived daemon never carries one tick's
+  // One collector per run, so a long-lived process never carries one run's
   // models into the next.
   const fallbacks = createFallbackCollector();
   try {
@@ -78,15 +77,13 @@ async function pushLocalUsage(
 ): Promise<MachineFile> {
   const config = loadConfig();
   const isDryRun = Boolean(options.dryRun);
-  // Silenced by `quiet` — the daemon syncs on every refresh tick.
-  const progress = createLogger({ quiet: Boolean(options.quiet) });
 
   if (!isCloned()) {
     throw new Error(REPO_NOT_CLONED_MESSAGE);
   }
 
   if (!isDryRun) {
-    progress.info('Pulling latest from remote...');
+    log.info('Pulling latest from remote...');
     pull();
   }
 
@@ -95,7 +92,7 @@ async function pushLocalUsage(
   const dataFilePath = join(dataDir, machineDataFilename(host));
 
   // Cursor usage is loaded locally by report/display commands; it is never written to git.
-  progress.info('Reading local data...');
+  log.info('Reading local data...');
   const maps = await readLocalProviderMaps(fallbacks);
 
   const freshData = buildMachineData(host, maps);
@@ -103,7 +100,7 @@ async function pushLocalUsage(
 
   if (totalDays === 0) {
     const isPushed = !isDryRun && pushMachineData(host);
-    progress.info(
+    log.info(
       isPushed
         ? `Done! Pushed machine data migration for ${host}.`
         : `No local data found (${syncedProviders()
@@ -120,7 +117,7 @@ async function pushLocalUsage(
     }))
     .filter((source) => source.size > 0)
     .map((source) => `${source.label} (${String(source.size)} days)`);
-  progress.info(`Found: ${sources.join(', ')}`);
+  log.info(`Found: ${sources.join(', ')}`);
 
   // Only write if the usage data changed — avoids a spurious commit on every run
   // (lastUpdated would otherwise always make the file dirty).
@@ -166,13 +163,13 @@ async function pushLocalUsage(
       removePendingMachineFile(host);
       isPushed = pushMachineData(host);
     }
-    progress.info(isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
+    log.info(isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
     return freshData;
   }
 
   if (isDryRun) {
     const action = existingDays === null ? 'create' : 'update';
-    progress.info(
+    log.info(
       `Dry run: would ${action} data/${host}.json (${String(syncedDays)} days). No changes written.`,
     );
     return freshData;
@@ -182,7 +179,7 @@ async function pushLocalUsage(
   writeFileSync(dataFilePath, JSON.stringify(outgoingData, null, 2), 'utf8');
   removePendingMachineFile(host);
 
-  progress.info(commitAndPush(host) ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
+  log.info(commitAndPush(host) ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
   return freshData;
 }
 

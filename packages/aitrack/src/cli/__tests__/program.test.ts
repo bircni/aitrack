@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   showCommand: vi.fn(),
   usageCommand: vi.fn(),
   exportCommand: vi.fn(),
-  daemonCommand: vi.fn(),
   doctorCommand: vi.fn(),
   topCommand: vi.fn(),
   machinesCommand: vi.fn(),
@@ -19,7 +18,6 @@ vi.mock('../../commands/sync.js', () => ({ syncCommand: mocks.syncCommand }));
 vi.mock('../../commands/show.js', () => ({ showCommand: mocks.showCommand }));
 vi.mock('../../commands/usage.js', () => ({ usageCommand: mocks.usageCommand }));
 vi.mock('../../commands/export.js', () => ({ exportCommand: mocks.exportCommand }));
-vi.mock('../../commands/daemon.js', () => ({ daemonCommand: mocks.daemonCommand }));
 vi.mock('../../commands/doctor.js', () => ({ doctorCommand: mocks.doctorCommand }));
 vi.mock('../../commands/top.js', () => ({ topCommand: mocks.topCommand }));
 vi.mock('../../commands/machines.js', () => ({ machinesCommand: mocks.machinesCommand }));
@@ -27,15 +25,7 @@ vi.mock('../../commands/recompute.js', () => ({
   recomputeCostsCommand: mocks.recomputeCostsCommand,
 }));
 vi.mock('../../commands/config.js', () => ({
-  CONFIG_KEYS: [
-    'repoUrl',
-    'machineId',
-    'claudeProjectsDir',
-    'codexSessionsDir',
-    'daemon.port',
-    'daemon.interval',
-    'daemon.sync',
-  ],
+  CONFIG_KEYS: ['repoUrl', 'machineId', 'claudeProjectsDir', 'codexSessionsDir'],
   configCommand: mocks.configCommand,
 }));
 
@@ -153,19 +143,6 @@ describe('buildProgram', () => {
     expect(mocks.topCommand).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });
 
-  it('maps daemon options including an explicit sync override', async () => {
-    await run('daemon');
-    // Commander omits an unset flag rather than passing it as undefined; the
-    // daemon reads `options.sync ?? config`, so both mean "not overridden".
-    const daemonArgs = mocks.daemonCommand.mock.lastCall?.[0] as { sync?: boolean } | undefined;
-    expect(daemonArgs?.sync).toBeUndefined();
-
-    await run('daemon', '--port', '9089', '--interval', '30', '--no-sync');
-    expect(mocks.daemonCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ port: 9089, interval: 30, sync: false }),
-    );
-  });
-
   it('wires the config subcommands', async () => {
     await run('config', 'list');
     expect(mocks.configCommand).toHaveBeenCalledWith({ action: 'list' });
@@ -224,12 +201,8 @@ describe('buildProgram', () => {
 
     it('rejects malformed and non-positive numeric options', async () => {
       await expect(run('show', '--year', '2026junk')).rejects.toThrow('exit');
-      await expect(run('daemon', '--port', '0')).rejects.toThrow('exit');
-      await expect(run('daemon', '--port', '65536')).rejects.toThrow('exit');
-      await expect(run('daemon', '--interval', '-1')).rejects.toThrow('exit');
       await expect(run('top', '--year', '0')).rejects.toThrow('exit');
       expect(mocks.showCommand).not.toHaveBeenCalled();
-      expect(mocks.daemonCommand).not.toHaveBeenCalled();
       expect(mocks.topCommand).not.toHaveBeenCalled();
     });
   });

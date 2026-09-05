@@ -115,7 +115,6 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 | `aitrack show`                  | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table) |
 | `aitrack usage <window>`        | Usage by provider and model for a rolling, calendar, or custom window         |
 | `aitrack export [window] [...]` | Export the same windows as an itemized PDF, or `--csv` (defaults to `month`)  |
-| `aitrack daemon`                | Serve a local, periodically refreshed HTML dashboard                          |
 | `aitrack top [days\|models]`    | Rank busiest days or most-used models by cost (or `--sort tokens`)            |
 | `aitrack machines`              | Per-machine totals + last sync time (helpful for spotting stale machines)     |
 | `aitrack recompute-costs`       | Refresh costs: re-read local JSONL; reprice other machines from stored cache  |
@@ -124,9 +123,9 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 **Usage and export windows:** `today`, `yesterday`, `date <YYYY-MM-DD>`, `range <from> <to>`, `thisweek`, `lastweek`, `week` (rolling 7 days), `thismonth`, `lastmonth`, `month` (rolling 30 days), `last <n>`, `year`, and `all`.
 
-**Provider selection:** `--providers <list>` accepts comma-separated `claude`, `codex`, and `cursor` values and works with `show`, every `usage` window, `export`, `top`, and `daemon`. All three are selected by default. Excluding `cursor` prevents the Cursor credential read and HTTPS export request.
+**Provider selection:** `--providers <list>` accepts comma-separated `claude`, `codex`, and `cursor` values and works with `show`, every `usage` window, `export`, and `top`. All three are selected by default. Excluding `cursor` prevents the Cursor credential read and HTTPS export request.
 
-**Live data refresh:** Cursor's CSV export is cached at `~/.config/aitrack/cache/cursor.json` (default 6 h, `AITRACK_CURSOR_CACHE_TTL` seconds to change, `AITRACK_NO_CACHE=1` to disable), so `show` / `usage` / `top` / the daemon no longer hit the network on every run. Pass `--refresh` to `show` or any `usage` window to force a fresh fetch; the daemon refreshes Cursor at most once per its own interval.
+**Live data refresh:** Cursor's CSV export is cached at `~/.config/aitrack/cache/cursor.json` (default 6 h, `AITRACK_CURSOR_CACHE_TTL` seconds to change, `AITRACK_NO_CACHE=1` to disable), so `show` / `usage` / `top` no longer hit the network on every run. Pass `--refresh` to `show` or any `usage` window to force a fresh fetch.
 
 **`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year), and `--refresh` (re-fetch Cursor, ignoring the cache).
 
@@ -143,18 +142,13 @@ the same weekdays last week. Comparison data is also included with `--json`.
 
 **`doctor` flags:** `--pricing-check` runs the pricing drift script when you are in a source checkout.
 
-**Daemon reliability:** refresh and sync ticks are single-flight, so a slow refresh cannot overlap the
-next one. The dashboard shows the last successful refresh and sync plus the latest error. For local
-monitoring, `GET /healthz` reports process liveness, `GET /readyz` reports whether a refresh has
-succeeded, and `GET /status.json` returns the full runtime status as JSON.
-
 ---
 
 ## How it works
 
 ```text
 ~/.config/aitrack/
-├── config.json          # remote, machine, source-root, and daemon settings
+├── config.json          # remote, machine, and source-root settings
 ├── cache/               # parsed-transcript cache, rebuildable at any time
 │   ├── claude.json
 │   └── codex.json
@@ -191,11 +185,6 @@ Stored at `~/.config/aitrack/config.json`:
   "machineId": "work-laptop",
   "claudeProjectsDir": "/custom/claude/projects",
   "codexSessionsDir": "/custom/codex/sessions-a,/custom/codex/sessions-b",
-  "daemon": {
-    "port": 9089,
-    "interval": 120,
-    "sync": false
-  },
   "budget": {
     "monthlyUSD": 200
   }
@@ -206,7 +195,7 @@ Stored at `~/.config/aitrack/config.json`:
 
 `claudeProjectsDir` and `codexSessionsDir` are optional comma-separated **additional** source roots. They do not replace the standard locations; aitrack recursively scans the configured, environment, and default roots and deduplicates identical paths. You can also add roots with `AITRACK_CLAUDE_PROJECTS_DIRS` or `AITRACK_CODEX_SESSION_DIRS`.
 
-`daemon.port`, `daemon.interval` (seconds), and `daemon.sync` provide defaults for `aitrack daemon`; command-line options take precedence, including `--sync` and `--no-sync`. `aitrack config list`, `get`, and `set` cover every key shown above, using dotted names for nested settings—for example, `aitrack config set daemon.interval 60`.
+`aitrack config list`, `get`, and `set` cover every key shown above, using dotted names for nested settings—for example, `aitrack config set budget.monthly 200`.
 
 `budget.monthly` (set with `aitrack config set budget.monthly 200`) is an estimated-cost ceiling in USD for the calendar month. When it is set, `aitrack usage thismonth` prints a line showing month-to-date estimated spend against it, warning at 80% and flagging the overage once it is exceeded. It is advisory only—nothing is blocked—and it is ignored by the rolling `usage month` window.
 

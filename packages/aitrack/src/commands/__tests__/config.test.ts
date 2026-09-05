@@ -41,9 +41,6 @@ describe('configCommand', () => {
       expect(out).toContain('machineId =');
       expect(out).toContain('claudeProjectsDir =');
       expect(out).toContain('codexSessionsDir =');
-      expect(out).toContain('daemon.port =');
-      expect(out).toContain('daemon.interval =');
-      expect(out).toContain('daemon.sync =');
       expect(out).toContain('budget.monthly =');
       expect(out).toContain('resolved-host');
     });
@@ -66,15 +63,6 @@ describe('configCommand', () => {
       mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x' });
       await configCommand({ action: 'get', key: 'machineId' });
       expect(loggedOutput()).toBe('');
-    });
-
-    it('prints nested daemon values', async () => {
-      mocks.tryLoadConfig.mockReturnValue({
-        repoUrl: 'x',
-        daemon: { port: 9090, interval: 45, sync: false },
-      });
-      await configCommand({ action: 'get', key: 'daemon.port' });
-      expect(loggedOutput()).toBe('9090');
     });
 
     it('prints the configured monthly budget', async () => {
@@ -128,34 +116,6 @@ describe('configCommand', () => {
         repoUrl: 'git@example.com:me/d.git',
         machineId: 'Work Laptop_01.2',
       });
-    });
-
-    it.each([
-      ['daemon.port', '9090', { port: 9090 }],
-      ['daemon.interval', '45', { interval: 45 }],
-      ['daemon.sync', 'false', { sync: false }],
-    ])('sets typed nested %s configuration', async (key, value, daemon) => {
-      mocks.tryLoadConfig.mockReturnValue({
-        repoUrl: 'git@example.com:me/d.git',
-        daemon: { sync: true },
-      });
-
-      await configCommand({ action: 'set', key, value });
-
-      expect(mocks.saveConfig).toHaveBeenCalledWith({
-        repoUrl: 'git@example.com:me/d.git',
-        daemon: { sync: true, ...daemon },
-      });
-    });
-
-    it.each([
-      ['daemon.port', '0'],
-      ['daemon.port', '65536'],
-      ['daemon.interval', '1.5'],
-      ['daemon.sync', 'yes'],
-    ])('rejects invalid nested %s value %s', async (key, value) => {
-      await expect(configCommand({ action: 'set', key, value })).rejects.toThrow('daemon.');
-      expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
     it('sets budget.monthly as a positive dollar amount under budget.monthlyUSD', async () => {

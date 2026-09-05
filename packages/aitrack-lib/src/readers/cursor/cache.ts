@@ -8,7 +8,7 @@ import { packageVersion } from '../../version.js';
 
 /**
  * Cursor usage is fetched live on every command that shows it. Caching the raw
- * CSV export lets `show` / `usage` / `top` / the daemon reuse a recent pull
+ * CSV export lets `show` / `usage` / `top` reuse a recent pull
  * instead of making a network round-trip (and trying the whole credential-shape
  * sequence) every single run.
  *
