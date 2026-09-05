@@ -2,7 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.6.0] - 2026-09-05
+
+
+
+### Bug Fixes
+
+- **store:** Validate a pending filename before joining it
+- **release:** Pin the package manager used to preview a version bump
+
+### Build
+
+- **deps:** Update dependencies to latest
+
+### Documentation
+
+- Document Cursor CSV caching, --refresh, and schema v2 migration
+
+### Features
+
+- **cursor:** Cache the CSV export and memoise the working auth shape
+- **data:** Record a machine-file schema version and timezone
+- **pricing:** Add Fable 5.1, Mythos 5.1 and gpt-6-astra
+
+### Refactoring
+
+- **providers:** Make each provider a self-contained module
+
+### Tests
+
+- Make the suite pass on Windows
+
 ## [v1.5.0] - 2026-08-30
+
 
 
 ### Bug Fixes
@@ -56,11 +88,13 @@ All notable changes to this project will be documented in this file.
 ## [v1.4.1] - 2026-08-25
 
 
+
 ### Bug Fixes
 
 - **pricing:** Apply the 2026-08-21 gpt-5.6 Sol price cut (#68)
 
 ## [v1.4.0] - 2026-08-15
+
 
 
 ### Bug Fixes
@@ -102,11 +136,13 @@ All notable changes to this project will be documented in this file.
 ## [v1.3.1] - 2026-08-03
 
 
+
 ### Bug Fixes
 
 - **pricing:** Apply the 2026-07-30 gpt-5.6 price cut by usage date (#60)
 
 ## [v1.3.0] - 2026-08-02
+
 
 
 ### Bug Fixes
@@ -151,6 +187,7 @@ All notable changes to this project will be documented in this file.
 ## [v1.2.0] - 2026-07-24
 
 
+
 ### Bug Fixes
 
 - **pricing:** Add Claude Opus 5 rates
@@ -173,12 +210,14 @@ All notable changes to this project will be documented in this file.
 ## [v1.1.1] - 2026-07-22
 
 
+
 ### Bug Fixes
 
 - **pricing:** Keep unknown Fable/Mythos models on the top tier
 - **data:** Derive machine identity from the short hostname
 
 ## [v1.1.0] - 2026-07-12
+
 
 
 ### Bug Fixes
@@ -212,6 +251,7 @@ All notable changes to this project will be documented in this file.
 ## [v1.0.0] - 2026-07-07
 
 
+
 ### Bug Fixes
 
 - Harden release readiness checks
@@ -242,11 +282,14 @@ All notable changes to this project will be documented in this file.
 ## [v0.6.0] - 2026-07-05
 
 
-### Features
+### ⚠ Breaking Changes
 
-- Replace --no-cursor with --providers allowlist (#32)
+- The `--no-cursor` flag is removed. Use
+`--providers claude,codex` to exclude Cursor.
+
 
 ## [v0.5.1] - 2026-07-03
+
 
 
 ### Features
@@ -256,11 +299,13 @@ All notable changes to this project will be documented in this file.
 ## [v0.5.0] - 2026-06-28
 
 
+
 ### Features
 
 - **heatmap:** Split stat token amounts onto a lighter second line
 
 ## [v0.4.1] - 2026-06-22
+
 
 
 ### CI
@@ -276,6 +321,7 @@ All notable changes to this project will be documented in this file.
 - **deps:** Replace better-sqlite3 with node:sqlite
 
 ## [v0.4.0] - 2026-06-15
+
 
 
 ### Bug Fixes
@@ -296,11 +342,13 @@ All notable changes to this project will be documented in this file.
 ## [v0.3.3] - 2026-06-11
 
 
+
 ### Bug Fixes
 
 - Add new claude model pricings
 
 ## [v0.3.2] - 2026-06-10
+
 
 
 ### Documentation
@@ -326,11 +374,13 @@ All notable changes to this project will be documented in this file.
 ## [v0.3.0] - 2026-06-04
 
 
+
 ### Features
 
 - **usage:** Add flexible time filters to the usage command
 
 ## [v0.2.0] - 2026-06-01
+
 
 
 ### Refactoring
@@ -344,6 +394,7 @@ All notable changes to this project will be documented in this file.
 ## [v0.1.3] - 2026-05-31
 
 
+
 ### Documentation
 
 - Update project description and enhance usage details
@@ -355,6 +406,7 @@ All notable changes to this project will be documented in this file.
 ## [v0.1.2] - 2026-05-28
 
 
+
 ### Bug Fixes
 
 - **pricing:** Add Claude Opus 4.8 at $5/$25
@@ -364,6 +416,7 @@ All notable changes to this project will be documented in this file.
 - Fix drift check to detect new models on pricing page
 
 ## [v0.1.1] - 2026-05-27
+
 
 
 ### Bug Fixes
@@ -389,6 +442,7 @@ All notable changes to this project will be documented in this file.
 - **validate:** Cover cache breakdown fields and fix lint for recompute
 
 ## [v0.1.0] - 2026-05-27
+
 
 
 ### CI
