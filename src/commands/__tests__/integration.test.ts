@@ -74,7 +74,10 @@ function readMachineFile(filePath: string): MachineFile {
 
 // ── tests ────────────────────────────────────────────────────────────────────
 
-describe('integration', () => {
+// Every case here drives real `git init`/`clone`/`push` through execSync, which
+// costs seconds per test on Windows and more when workers run in parallel — the
+// 15s default expires under load even though the slowest case takes ~4s alone.
+describe('integration', { timeout: 60_000 }, () => {
   beforeEach(() => {
     mkdirSync(TEST_HOME, { recursive: true });
     process.env.XDG_CONFIG_HOME = TEST_HOME; // points claude reader at TEST_HOME/claude/projects
