@@ -1,16 +1,18 @@
 {
-  "compilerOptions": {
-    "target": "ES2023",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "types": ["node"],
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true,
-    "skipLibCheck": true,
-    "noEmit": true
-  },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "*.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/test-fixtures"
+    },
+    {
+      "path": "./packages/aitrack-lib"
+    },
+    {
+      "path": "./packages/aitrack"
+    },
+    {
+      "path": "./scripts"
+    }
+  ]
 }

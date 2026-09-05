@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "rootDir": "..",
+    "outDir": ".typecheck"
+  },
+  "include": ["**/*.ts", "../commitlint.config.ts"],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    {
+      "path": "../packages/aitrack-lib"
+    }
+  ]
+}

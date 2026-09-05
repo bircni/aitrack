@@ -1,7 +1,7 @@
 name: Pricing drift check
 
 # Vendors occasionally add models or adjust prices. Run weekly to catch drift
-# between src/pricing/*.ts and their published pricing tables.
+# between packages/aitrack-lib/src/pricing/*.ts and their published pricing tables.
 
 on:
   schedule:
@@ -43,7 +43,7 @@ jobs:
           TITLE="Pricing drift detected by scheduled check"
           BODY=$(cat <<EOF
           The scheduled \`pricing:check\` run flagged drift between the bundled
-          pricing tables in \`src/pricing/*.ts\` and vendor pricing docs.
+          pricing tables in \`packages/aitrack-lib/src/pricing/*.ts\` and vendor pricing docs.
 
           Update the affected table(s) and re-run \`pnpm run pricing:check\` locally
           to confirm.

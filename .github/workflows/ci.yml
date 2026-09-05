@@ -33,6 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # `nx affected` diffs against the merge base, which a shallow clone
+          # does not have.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
@@ -45,40 +49,43 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # nx caches per project and per target, so a change confined to one
+      # package does not re-run the others' checks.
+      - name: Restore nx cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            nx-${{ runner.os }}-
+
+      - uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
+
+      - name: Check formatting
+        run: pnpm nx affected -t format:check
+
       - name: Lint
-        run: pnpm run lint
+        run: pnpm nx affected -t lint
 
-      - name: Format check
-        run: pnpm run format:check
+      - name: Typecheck
+        run: pnpm nx affected -t typecheck
 
-      - name: Check unused dependencies
-        run: pnpm run check:unused
+      - name: Check unused files and dependencies
+        run: pnpm nx affected -t check:unused
 
-      - name: Type check
-        run: pnpm run typecheck
-
-      # `coverage` is `vitest run --coverage`, so it runs the suite and checks
-      # the thresholds in one pass — a separate `test` step would run it twice.
-      - name: Test and coverage
-        run: pnpm run coverage
-
-      # Usage is keyed by the local calendar day, so a fixture pinned to a UTC
-      # instant silently lands on the wrong day far from UTC. Runners are UTC,
-      # which hid that until someone ran the suite in NZ. These two are the
-      # extremes of the offset range (+14 and -11).
-      - name: Test at the edges of the timezone range
-        run: |
-          TZ=Pacific/Kiritimati pnpm run test
-          TZ=Pacific/Midway pnpm run test
+      - name: Test
+        run: pnpm nx affected -t test --configuration ci
 
       - name: Build
-        run: pnpm run build
+        run: pnpm nx affected -t build
 
       - name: CLI smoke tests
-        run: SMOKE_CLI=dist/cli.js pnpm run test:smoke
+        run: pnpm nx affected -t test:smoke
+        env:
+          SMOKE_CLI: dist/cli.js
 
-      - name: Verify publish tarball
-        run: npm pack --dry-run
+      - name: Verify publish tarballs
+        run: pnpm nx affected -t package:check
 
   cross-platform:
     name: Smoke (${{ matrix.os }}, Node ${{ matrix.node }})
@@ -90,6 +97,8 @@ jobs:
         node: [24, 26]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
@@ -102,13 +111,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm run build
+      - uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
 
       - name: CLI smoke tests
-        run: pnpm run test:smoke
+        run: pnpm nx affected -t test:smoke
         env:
           SMOKE_CLI: dist/cli.js
 
-      - name: Verify publish tarball
-        run: npm pack --dry-run
+      - name: Verify publish tarballs
+        run: pnpm nx affected -t package:check

@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "outDir": ".typecheck",
+    "paths": {
+      "aitrack-lib": ["../aitrack-lib/src/index.ts"],
+      "aitrack-lib/*": ["../aitrack-lib/src/*.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "*.config.ts"],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    {
+      "path": "../aitrack-lib"
+    },
+    {
+      "path": "../test-fixtures"
+    }
+  ]
+}

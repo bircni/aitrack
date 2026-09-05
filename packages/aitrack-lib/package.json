@@ -1,0 +1,66 @@
+{
+  "name": "aitrack-lib",
+  "version": "1.6.0",
+  "description": "Core library behind aitrack: reading Claude Code, Codex & Cursor usage, pricing it, storing it in a git repo and rendering it.",
+  "keywords": [
+    "ai",
+    "ai-usage",
+    "claude",
+    "claude-code",
+    "codex",
+    "cost-tracking",
+    "cursor",
+    "heatmap",
+    "openai",
+    "token-usage",
+    "usage"
+  ],
+  "homepage": "https://github.com/bircni/aitrack#readme",
+  "bugs": {
+    "url": "https://github.com/bircni/aitrack/issues"
+  },
+  "license": "MIT",
+  "author": "Nicolas <bircni@icloud.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bircni/aitrack.git",
+    "directory": "packages/aitrack-lib"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "!dist/**/*.test.js"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.8",
+    "chalk": "catalog:",
+    "pdfkit": "^0.20.2"
+  },
+  "devDependencies": {
+    "@aitrack/test-fixtures": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/pdfkit": "^0.17.6",
+    "@vitest/coverage-v8": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

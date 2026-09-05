@@ -1,11 +1,30 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["scripts/*.ts"],
-  "project": ["src/**/*.ts", "scripts/**/*.ts"],
   "ignoreExportsUsedInFile": true,
-  "vitest": {
-    "config": "vitest.config.ts",
-    "entry": ["src/**/__tests__/**/*.test.ts", "scripts/__tests__/**/*.test.ts"]
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.ts", "scripts/__tests__/**/*.test.ts"],
+      "project": ["scripts/**/*.ts", "*.config.ts"],
+      "ignoreDependencies": [
+        "@typescript/native",
+        "git-cliff",
+        "nx-oxlint",
+        "oxlint",
+        "oxlint-tsgolint",
+        "tsx"
+      ]
+    },
+    "packages/aitrack-lib": {
+      "entry": ["src/**/*.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/aitrack": {
+      "entry": ["src/**/__tests__/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/test-fixtures": {
+      "project": ["src/**/*.ts"]
+    }
   },
   "rules": {
     "exports": "error",

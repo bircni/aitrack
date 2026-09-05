@@ -1,0 +1,40 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "aitrack",
+  "projectType": "application",
+  "sourceRoot": "packages/aitrack/src",
+  "targets": {
+    "lint": {},
+    "format:check": {},
+    "check:unused": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "knip --workspace aitrack"
+      }
+    },
+    "test:smoke": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "vitest run src/cli/__tests__/smoke.test.ts"
+      }
+    },
+    "package:check": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "cache": true,
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "npm pack --dry-run"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "tsx src/cli.ts"
+      }
+    }
+  }
+}

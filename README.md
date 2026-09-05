@@ -269,6 +269,39 @@ Each machine's file in the repo:
 
 ---
 
+## Using the library
+
+The CLI is a thin shell over [`aitrack-lib`](packages/aitrack-lib), which is published
+separately. Read a provider's local usage, price it, and render it yourself:
+
+```sh
+npm install aitrack-lib
+```
+
+```ts
+import { buildUsageReport, loadConfig, readClaudeData } from 'aitrack-lib';
+
+// Or reach for one module on its own, without pulling the renderers in:
+import { readClaudeData } from 'aitrack-lib/readers/claude';
+```
+
+Every module is reachable both from the package root and at its own subpath.
+
+---
+
+## Repository layout
+
+This repo is an [nx](https://nx.dev/) monorepo:
+
+| Package                                        | Published as  | What it is                                           |
+| ---------------------------------------------- | ------------- | ---------------------------------------------------- |
+| [`packages/aitrack`](packages/aitrack)         | `aitrack`     | The `aitrack` command line                           |
+| [`packages/aitrack-lib`](packages/aitrack-lib) | `aitrack-lib` | Readers, pricing, the data model, storage, renderers |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full layout and the development workflow.
+
+---
+
 ## Requirements
 
 - **Node.js 24+**

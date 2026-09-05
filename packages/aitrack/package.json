@@ -1,0 +1,64 @@
+{
+  "name": "aitrack",
+  "version": "1.6.0",
+  "description": "Track and visualize your Claude Code, Codex & Cursor usage and cost — heatmaps, stats, and multi-machine sync over a git repo you own.",
+  "keywords": [
+    "ai",
+    "ai-usage",
+    "claude",
+    "claude-code",
+    "cli",
+    "codex",
+    "cost-tracking",
+    "cursor",
+    "developer-tools",
+    "git-sync",
+    "heatmap",
+    "openai",
+    "token-usage",
+    "tui",
+    "usage"
+  ],
+  "homepage": "https://github.com/bircni/aitrack#readme",
+  "bugs": {
+    "url": "https://github.com/bircni/aitrack/issues"
+  },
+  "license": "MIT",
+  "author": "Nicolas <bircni@icloud.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bircni/aitrack.git",
+    "directory": "packages/aitrack"
+  },
+  "bin": {
+    "aitrack": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "!dist/**/*.test.js"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "aitrack-lib": "workspace:*",
+    "chalk": "catalog:",
+    "commander": "^15.0.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@aitrack/test-fixtures": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/prompts": "^2.4.9",
+    "@vitest/coverage-v8": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

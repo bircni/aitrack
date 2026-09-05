@@ -39,7 +39,10 @@ jobs:
       - name: Publish
         # `id-token: write` above + provenance here attaches a signed build
         # attestation linking the tarball to this workflow run.
-        run: pnpm publish --no-git-checks --provenance
+        # `-r` publishes every non-private workspace package in dependency
+        # order (aitrack-lib before aitrack) and rewrites the `workspace:*`
+        # range to the version it just published.
+        run: pnpm publish -r --no-git-checks --provenance
 
   github-release:
     name: Create GitHub release

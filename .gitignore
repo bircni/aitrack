@@ -4,3 +4,7 @@ aitrack*.png
 aitrack*.pdf
 coverage/
 .DS_Store
+.nx/
+.vite/
+.typecheck/
+*.tsbuildinfo

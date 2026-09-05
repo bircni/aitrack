@@ -3,7 +3,7 @@ import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from 'node:ch
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const IS_WIN = platform() === 'win32';
 
@@ -81,15 +81,45 @@ function optionalOutput(command: string, arguments_: string[]): string | undefin
   return result.status === 0 ? result.stdout.trim() || undefined : undefined;
 }
 
+const REPO_ROOT = new URL('../', import.meta.url);
+
 function readRepoPackage(): { version: string; packageManager?: string } {
-  return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+  return JSON.parse(readFileSync(new URL('package.json', REPO_ROOT), 'utf8')) as {
     version: string;
     packageManager?: string;
   };
 }
 
+/**
+ * Every package.json the release moves, the workspace root included.
+ *
+ * `aitrack` and `aitrack-lib` are released in lockstep — the CLI depends on the
+ * library by `workspace:*`, which pnpm rewrites to the exact version at publish
+ * time, so a split version would ship a CLI pinned to a library that was never
+ * tagged.
+ */
+const VERSIONED_PACKAGES = [
+  'package.json',
+  'packages/aitrack-lib/package.json',
+  'packages/aitrack/package.json',
+];
+
+/** The CLI's version: it is what the `vX.Y.Z` tag names. */
 function getPackageVersion(): string {
-  return readRepoPackage().version;
+  const package_ = JSON.parse(
+    readFileSync(new URL('packages/aitrack/package.json', REPO_ROOT), 'utf8'),
+  ) as { version: string };
+  return package_.version;
+}
+
+/** Write one exact version into every package, rather than bumping each. */
+function setPackageVersions(version: string, options: RunOptions): void {
+  for (const packageFile of VERSIONED_PACKAGES) {
+    run('pnpm', ['version', version, '--no-git-tag-version'], {
+      ...options,
+      cwd: fileURLToPath(new URL(packageFile.replace(/package\.json$/u, ''), REPO_ROOT)),
+    });
+  }
 }
 
 /** Ask pnpm to calculate a bump in an isolated directory without touching the checkout. */
@@ -193,15 +223,15 @@ function main(): void {
   run('pnpm', ['run', 'build'], options);
 
   const currentVersion = getPackageVersion();
+  const version = previewVersionBump(currentVersion, bump);
   if (bump !== 'none') {
-    run('pnpm', ['version', bump, '--no-git-tag-version'], options);
+    setPackageVersions(version, options);
   }
-  const version = dryRun ? previewVersionBump(currentVersion, bump) : getPackageVersion();
   const tag = `v${version}`;
 
   run('git-cliff', ['--config', '.cliff.toml', '--tag', tag, '-o', 'CHANGELOG.md'], options);
 
-  run('git', ['add', 'package.json', 'pnpm-lock.yaml', 'CHANGELOG.md'], options);
+  run('git', ['add', ...VERSIONED_PACKAGES, 'pnpm-lock.yaml', 'CHANGELOG.md'], options);
   run('git', ['commit', '-m', `chore(release): ${tag}`], options);
   run('git', ['tag', tag], options);
 

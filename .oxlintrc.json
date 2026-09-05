@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc", "vitest"],
+  "plugins": ["typescript", "unicorn", "oxc", "vitest", "react"],
   "categories": {
     "correctness": "error",
     "pedantic": "error"
@@ -41,10 +41,15 @@
   },
   "overrides": [
     {
-      "files": ["**/*.ts"],
+      "files": ["**/*.ts", "**/*.tsx"],
       "rules": {
         "typescript/adjacent-overload-signatures": "error",
-        "typescript/array-type": ["error", { "default": "array-simple" }],
+        "typescript/array-type": [
+          "error",
+          {
+            "default": "array-simple"
+          }
+        ],
         "typescript/ban-tslint-comment": "error",
         "typescript/class-literal-property-style": "error",
         "typescript/consistent-generic-constructors": "error",
@@ -88,14 +93,27 @@
         "typescript/no-unnecessary-type-conversion": "error",
         "typescript/no-unnecessary-type-parameters": "error",
         "typescript/no-unsafe-enum-comparison": "error",
-        "typescript/no-floating-promises": ["error", { "ignoreVoid": true, "ignoreIIFE": false }],
+        "typescript/no-floating-promises": [
+          "error",
+          {
+            "ignoreVoid": true,
+            "ignoreIIFE": false
+          }
+        ],
         "typescript/no-misused-promises": [
           "error",
-          { "checksVoidReturn": { "attributes": false } }
+          {
+            "checksVoidReturn": {
+              "attributes": false
+            }
+          }
         ],
         "typescript/restrict-template-expressions": [
           "error",
-          { "allowBoolean": true, "allowNumber": false }
+          {
+            "allowBoolean": true,
+            "allowNumber": false
+          }
         ],
         "typescript/await-thenable": "error",
         "typescript/no-unsafe-argument": "error",
@@ -123,7 +141,7 @@
       }
     },
     {
-      "files": ["**/*.test.ts"],
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
       "rules": {
         "vitest/no-focused-tests": "error",
         "vitest/no-disabled-tests": "warn",

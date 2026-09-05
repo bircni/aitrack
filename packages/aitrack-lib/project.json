@@ -1,0 +1,25 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "aitrack-lib",
+  "projectType": "library",
+  "sourceRoot": "packages/aitrack-lib/src",
+  "targets": {
+    "lint": {},
+    "format:check": {},
+    "check:unused": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "knip --workspace aitrack-lib"
+      }
+    },
+    "package:check": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "cache": true,
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "npm pack --dry-run"
+      }
+    }
+  }
+}
