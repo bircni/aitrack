@@ -50,7 +50,14 @@ export function listPendingDataFiles(): string[] {
   if (!existsSync(PENDING_DATA_DIR)) return [];
   return readdirSync(PENDING_DATA_DIR)
     .filter((f: string) => f.endsWith('.json'))
-    .map((f: string) => join(PENDING_DATA_DIR, f));
+    .map((f: string) => {
+      // Check the entry name as read, before join() can rewrite it. A `..\`
+      // prefix is an ordinary character run on POSIX but a real traversal on
+      // Windows, where join() resolves it to a path outside this directory and
+      // leaves basename() a clean name that passes every later check.
+      normalizeMachineId(f.slice(0, -'.json'.length));
+      return join(PENDING_DATA_DIR, f);
+    });
 }
 
 export function adoptPendingDataFiles(targetDataDir: string): number {
