@@ -13,6 +13,16 @@ describe('claude pricing', () => {
       cacheCreatePerMillion: 6.25,
     });
 
+    // Fable 5.1 and Mythos 5.1 bill cache hits at 0.025x input, not 0.1x.
+    expect(findClaudePricing('claude-fable-5-1')).toEqual({
+      inputPerMillion: 10,
+      outputPerMillion: 50,
+      cacheReadPerMillion: 0.25,
+      cacheCreatePerMillion: 12.5,
+    });
+    expect(findClaudePricing('claude-mythos-5-1').cacheReadPerMillion).toBe(0.25);
+    expect(findClaudePricing('claude-fable-5').cacheReadPerMillion).toBe(1);
+
     const sonnet = findClaudePricing('claude-sonnet-4-6');
     expect(sonnet.inputPerMillion).toBe(3);
     expect(sonnet.outputPerMillion).toBe(15);
@@ -76,12 +86,12 @@ describe('claude pricing', () => {
 
   it('keeps unknown fable and mythos models on the top tier, not sonnet', () => {
     const fallbacks = createFallbackCollector();
-    for (const model of ['claude-fable-5-1', 'claude-fable-6', 'claude-mythos-5-1']) {
+    for (const model of ['claude-fable-6', 'claude-mythos-6']) {
       const pricing = findClaudePricing(model, undefined, fallbacks);
       expect(pricing.inputPerMillion).toBe(10);
       expect(pricing.outputPerMillion).toBe(50);
     }
-    expect(fallbacks.drain()).toEqual(['claude-fable-5-1', 'claude-fable-6', 'claude-mythos-5-1']);
+    expect(fallbacks.drain()).toEqual(['claude-fable-6', 'claude-mythos-6']);
   });
 
   it('honors date-versioned pricing overrides', () => {
