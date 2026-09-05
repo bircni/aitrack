@@ -1,5 +1,4 @@
-import { MAX_INTERVAL_SECONDS } from 'aitrack-lib/config';
-import { isDayKey, MAX_PORT } from 'aitrack-lib/constants';
+import { isDayKey } from 'aitrack-lib/constants';
 import {
   isNoArgPeriod,
   isUsagePeriod,
@@ -46,26 +45,6 @@ export function parsePositiveIntArgument(value: string): number {
     throw new InvalidArgumentError(`Expected a positive integer, got: ${value}`);
   }
   return n;
-}
-
-export function parseIntervalArgument(value: string): number {
-  const seconds = parsePositiveIntArgument(value);
-  if (seconds > MAX_INTERVAL_SECONDS) {
-    throw new InvalidArgumentError(
-      `Expected an interval between 1 and ${String(MAX_INTERVAL_SECONDS)} seconds, got: ${value}`,
-    );
-  }
-  return seconds;
-}
-
-export function parsePortArgument(value: string): number {
-  const port = parsePositiveIntArgument(value);
-  if (port > MAX_PORT) {
-    throw new InvalidArgumentError(
-      `Expected a port between 1 and ${String(MAX_PORT)}, got: ${value}`,
-    );
-  }
-  return port;
 }
 
 export function parsePositiveInt(value: string): number | undefined {

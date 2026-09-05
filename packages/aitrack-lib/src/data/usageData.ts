@@ -86,12 +86,6 @@ export interface LoadUsageOptions {
   /** Stage local machine JSON under ~/.config/aitrack/pending/ for later init adoption. */
   stagePending?: boolean;
   /**
-   * Reuse an already-built local machine file instead of re-reading the logs.
-   * The daemon syncs and renders back to back, and parsing a large JSONL corpus
-   * twice per tick is the bulk of a refresh.
-   */
-  localMachine?: MachineFile;
-  /**
    * Report only what is already synced to the repo, without reading this
    * machine's JSONL logs at all. `machines` summarizes the persisted files and
    * never looks at the merged day maps, and parsing a large corpus for data it
@@ -103,12 +97,6 @@ export interface LoadUsageOptions {
    * cached CSV export younger than the TTL is served without a network call.
    */
   refreshLive?: boolean;
-  /**
-   * Explicit max age, in seconds, for a served live-provider cache entry.
-   * Overrides `refreshLive`. The daemon sets this to its refresh interval so a
-   * live provider's own longer default TTL can't keep the dashboard stale.
-   */
-  liveMaxAgeSeconds?: number;
 }
 
 export interface LoadedUsageData {
@@ -150,7 +138,7 @@ export async function loadMergedProviderData(
   // an unhandled rejection rather than the original error.
   // `0` forces a refresh; `undefined` lets each live provider apply its own
   // cache TTL.
-  const liveMaxAgeSeconds = options.liveMaxAgeSeconds ?? (options.refreshLive ? 0 : undefined);
+  const liveMaxAgeSeconds = options.refreshLive ? 0 : undefined;
   const livePending = liveProviders()
     .filter((provider) => !providerFilter || providerFilter.has(provider.descriptor.key))
     .map((provider) => ({
@@ -160,9 +148,7 @@ export async function loadMergedProviderData(
         .catch((): DayMap => new Map()),
     }));
 
-  const localMachine = options.skipLocalLogs
-    ? null
-    : (options.localMachine ?? (await buildLocalMachineFile(machineId)));
+  const localMachine = options.skipLocalLogs ? null : await buildLocalMachineFile(machineId);
 
   const isWarnedNotConfigured = !config || !isCloned();
 

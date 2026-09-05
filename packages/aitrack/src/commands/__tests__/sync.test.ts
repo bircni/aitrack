@@ -239,16 +239,6 @@ describe('syncCommand', () => {
     expect(mocks.commitAndPush).not.toHaveBeenCalled();
   });
 
-  it('syncData with quiet suppresses progress logs', async () => {
-    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
-
-    await syncData({ quiet: true });
-
-    expect(console.log).not.toHaveBeenCalled();
-    expect(mocks.writeFileSync).toHaveBeenCalled();
-    expect(mocks.commitAndPush).toHaveBeenCalledWith('host');
-  });
-
   it('dry-runs without pulling, writing, committing, or cleaning pending data', async () => {
     mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
 

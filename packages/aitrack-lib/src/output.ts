@@ -2,8 +2,9 @@
  * The single place aitrack writes human-readable output.
  *
  * Commands used to call `console.*` directly from ~20 modules, including the
- * domain layer, so there was no way to silence progress chatter. The daemon
- * re-runs sync and recompute on every refresh tick and needs exactly that.
+ * domain layer, so there was no way to silence progress chatter. `log` is what
+ * the CLI prints through; `createLogger({ quiet: true })` is for an embedder
+ * that wants the work without the running commentary.
  *
  * These wrap `console.*` rather than `process.stdout` on purpose: it keeps the
  * stdout/stderr split that `console.log` and `console.warn` already imply, and

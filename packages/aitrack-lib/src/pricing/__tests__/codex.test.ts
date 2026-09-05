@@ -88,7 +88,7 @@ describe('codex pricing', () => {
   });
 
   it("keeps each run's fallback hits to itself", () => {
-    // The old module-level Set leaked hits between runs, so a long-lived daemon
+    // The old module-level Set leaked hits between runs, so a long-lived process
     // reported one tick's unknown models on the next tick.
     const first = createFallbackCollector();
     findCodexPricing('gpt-5.9', undefined, first);

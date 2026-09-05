@@ -53,7 +53,7 @@ describe('validateMachineFile', () => {
 
   it('warns about bad day keys once per file', () => {
     // Only the current machine self-heals, so another machine's file would
-    // otherwise print this on every command and every daemon refresh tick.
+    // otherwise print this on every single command.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const withGarbageDay = {
       ...validMachine,

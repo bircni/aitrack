@@ -6,7 +6,7 @@ import type { MachineFileDiagnostic } from './validate.js';
  *
  * Only the current machine self-heals — sync rewrites its own file — so for
  * another machine's file this would otherwise print on every command and every
- * daemon tick with nothing the local user could do about it.
+ * run with nothing the local user could do about it.
  *
  * This lived inside the validator, which made a pure check impure. It belongs
  * with the reporting, since it is a presentation decision.

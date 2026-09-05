@@ -3,7 +3,6 @@ import { log } from 'aitrack-lib/output';
 import { Command } from 'commander';
 
 import { CONFIG_KEYS, configCommand } from '../commands/config.js';
-import { daemonCommand, type DaemonOptions } from '../commands/daemon.js';
 import { doctorCommand } from '../commands/doctor.js';
 import type { ExportOptions } from '../commands/export.js';
 import { initCommand } from '../commands/init.js';
@@ -16,8 +15,6 @@ import { cliVersion } from '../version.js';
 import {
   parseDateOption,
   parseIntArgument,
-  parsePortArgument,
-  parseIntervalArgument,
   parsePositiveIntArgument,
   parseProviders,
   parseTopKind,
@@ -147,22 +144,6 @@ export function buildProgram(): Command {
         const { exportCommand } = await import('../commands/export.js');
         await exportCommand({ ...options, period, args });
       });
-    });
-
-  program
-    .command('daemon')
-    .description('Run a local HTTP dashboard that refreshes usage data on an interval')
-    .option('--port <port>', 'HTTP listen port', parsePortArgument)
-    .option('--interval <seconds>', 'seconds between data refresh ticks', parseIntervalArgument)
-    .option('--host <host>', 'bind address', '127.0.0.1')
-    .option('--sync', 'pull and push local data on each refresh tick')
-    .option('--no-sync', 'disable configured sync-on-refresh')
-    .option('--dark', 'dark mode dashboard')
-    .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
-    .option('--all', 'single merged heatmap across all providers instead of one row per provider')
-    .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
-    .action((options: DaemonOptions) => {
-      runAsync(() => daemonCommand(options));
     });
 
   program

@@ -2,56 +2,15 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 
 import type { Config } from './configTypes.js';
-import { MAX_PORT } from './constants.js';
 import { isRecord } from './data/guards.js';
 import { INIT_HINT, NO_CONFIG_MESSAGE } from './data/messages.js';
 import { errorMessage } from './errors.js';
 import { normalizeMachineId } from './machineId.js';
 import { APP_DIR, CONFIG_PATH } from './paths.js';
 
-/**
- * Refresh interval ceiling in seconds. setInterval takes 32-bit milliseconds,
- * so a larger value overflows and Node silently clamps the timer to 1ms,
- * turning the daemon into a continuous refresh loop.
- */
-export const MAX_INTERVAL_SECONDS = 2_147_483;
-
 function optionalString(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   return typeof value === 'string' ? value : undefined;
-}
-
-function validateDaemon(value: unknown): Config['daemon'] | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) return undefined;
-  const daemon: NonNullable<Config['daemon']> = {};
-  if (value.sync !== undefined) {
-    if (typeof value.sync !== 'boolean') return undefined;
-    daemon.sync = value.sync;
-  }
-  if (value.port !== undefined) {
-    if (
-      typeof value.port !== 'number' ||
-      !Number.isSafeInteger(value.port) ||
-      value.port < 1 ||
-      value.port > MAX_PORT
-    ) {
-      return undefined;
-    }
-    daemon.port = value.port;
-  }
-  if (value.interval !== undefined) {
-    if (
-      typeof value.interval !== 'number' ||
-      !Number.isSafeInteger(value.interval) ||
-      value.interval < 1 ||
-      value.interval > MAX_INTERVAL_SECONDS
-    ) {
-      return undefined;
-    }
-    daemon.interval = value.interval;
-  }
-  return daemon;
 }
 
 function validateBudget(value: unknown): Config['budget'] | undefined {
@@ -92,9 +51,6 @@ function validateConfig(parsed: unknown): Config | null {
   const codexSessionsDir = optionalString(parsed.codexSessionsDir);
   if (parsed.codexSessionsDir !== undefined && codexSessionsDir === undefined) return null;
 
-  const daemon = validateDaemon(parsed.daemon);
-  if (parsed.daemon !== undefined && daemon === undefined) return null;
-
   const budget = validateBudget(parsed.budget);
   if (parsed.budget !== undefined && budget === undefined) return null;
 
@@ -103,7 +59,6 @@ function validateConfig(parsed: unknown): Config | null {
     ...(machineId !== undefined && { machineId }),
     ...(claudeProjectsDir !== undefined && { claudeProjectsDir }),
     ...(codexSessionsDir !== undefined && { codexSessionsDir }),
-    ...(daemon !== undefined && { daemon }),
     ...(budget !== undefined && { budget }),
   };
 }
