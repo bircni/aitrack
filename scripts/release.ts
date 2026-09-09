@@ -115,7 +115,7 @@ function getPackageVersion(): string {
 /** Write one exact version into every package, rather than bumping each. */
 function setPackageVersions(version: string, options: RunOptions): void {
   for (const packageFile of VERSIONED_PACKAGES) {
-    run('pnpm', ['version', version, '--no-git-tag-version'], {
+    run('pnpm', ['version', version, '--no-git-tag-version', '--no-git-checks'], {
       ...options,
       cwd: fileURLToPath(new URL(packageFile.replace(/package\.json$/u, ''), REPO_ROOT)),
     });
