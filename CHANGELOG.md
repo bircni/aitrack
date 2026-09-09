@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.0.0] - 2026-09-09
+
+
+### ⚠ Breaking Changes
+
+- The `aitrack daemon` command is gone, and `daemon.port`,
+`daemon.interval` and `daemon.sync` are no longer supported config keys, so
+`aitrack config get`/`set` reject them.
+
+
+### Build
+
+- **release:** Let the version loop run on its own dirty tree
+- **deps:** Force a patched smol-toml under nx
+
+### Refactoring
+
+- **repo:** Split into aitrack and aitrack-lib under nx
+
 ## [v1.6.0] - 2026-09-05
 
 
