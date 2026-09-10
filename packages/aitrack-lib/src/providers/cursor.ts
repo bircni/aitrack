@@ -1,8 +1,8 @@
-import type { CheckResult } from './checkResult.js';
 import { errorMessage } from '../errors.js';
 import { getCursorStateDatabasePath, readCursorAuthState } from '../readers/cursor/auth.js';
 import { cursorCacheTtlSeconds } from '../readers/cursor/cache.js';
 import { readCursorData } from '../readers/cursor/index.js';
+import type { CheckResult } from './checkResult.js';
 import type { LiveProvider } from './types.js';
 
 async function cursorCheck(): Promise<CheckResult> {

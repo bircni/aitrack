@@ -14,13 +14,13 @@ import {
   usageEmptyWindowMessage,
 } from 'aitrack-lib/data/usageData';
 import { fmt, fmtUSD } from 'aitrack-lib/display/format';
-import { providerLabel } from 'aitrack-lib/providers/index';
 import {
   defaultTableStyle,
   renderTerminalTable,
   type TerminalTableColumn,
 } from 'aitrack-lib/display/terminalTable';
 import { log } from 'aitrack-lib/output';
+import { providerLabel } from 'aitrack-lib/providers/index';
 import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
@@ -149,9 +149,6 @@ export async function topCommand(options: TopOptions): Promise<void> {
   const loaded = await loadMergedProviderData({
     providers: options.providers,
     ...(options.refresh !== undefined && { refreshLive: options.refresh }),
-    // Skip the load-time year prune when an explicit range is set: the range,
-    // not the calendar year, is what bounds the result.
-    year: options.since === undefined && options.until === undefined ? options.year : undefined,
   });
 
   if (!loaded) {

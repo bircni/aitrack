@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   isCloned: vi.fn(),
   listDataFiles: vi.fn(),
   readDataFile: vi.fn(),
-  writePendingMachineFile: vi.fn(),
   buildLocalMachineFile: vi.fn(),
 }));
 
@@ -18,7 +17,6 @@ vi.mock('../../git.js', () => ({
   isCloned: mocks.isCloned,
   listDataFiles: mocks.listDataFiles,
   readDataFile: mocks.readDataFile,
-  writePendingMachineFile: mocks.writePendingMachineFile,
 }));
 // mergePersistedDays stays real: it is the rule sync persists with, and these
 // tests assert display agrees with it.
@@ -28,7 +26,7 @@ vi.mock(import('../localData.js'), async (importOriginal) => ({
 }));
 
 import type { DayEntry, MachineFile, ProviderDay } from '../types.js';
-import { loadMergedProviderData, mergeProviderDay } from '../usageData.js';
+import { loadMergedProviderData, loadPersistedMachines, mergeProviderDay } from '../usageData.js';
 
 function emptyDay(): DayEntry {
   return { inputTokens: 0, outputTokens: 0, byModel: {} };
@@ -164,17 +162,34 @@ describe('loadMergedProviderData', () => {
 
     const loaded = await loadMergedProviderData({
       providers: ['claude_code', 'codex'],
-      stagePending: true,
     });
 
     expect(console.warn).not.toHaveBeenCalled();
-    expect(mocks.writePendingMachineFile).toHaveBeenCalled();
     expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(10);
     expect(loaded?.machineData).toEqual([]);
     expect(loaded?.warnedNotConfigured).toBe(true);
   });
 
-  it('skipLocalLogs reports the synced files without reading the local logs', async () => {
+  it('loadPersistedMachines lists synced files without reading the local logs', () => {
+    mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
+    mocks.readDataFile.mockReturnValue({
+      hostname: 'other',
+      lastUpdated: 'now',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { claude: { inputTokens: 10, outputTokens: 5 } },
+            totals: { inputTokens: 10, outputTokens: 5 },
+          },
+        },
+      },
+    });
+
+    expect(loadPersistedMachines().map((entry) => entry.machine.hostname)).toEqual(['other']);
+    expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
+  });
+
+  it('skips the local log read when localMachine is passed in', async () => {
     mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
     mocks.isCloned.mockReturnValue(true);
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
@@ -193,47 +208,11 @@ describe('loadMergedProviderData', () => {
 
     const loaded = await loadMergedProviderData({
       providers: ['claude_code'],
-      skipLocalLogs: true,
+      localMachine: null,
     });
 
     expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
     expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['other']);
-  });
-
-  it('does not stage pending data by default', async () => {
-    mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
-
-    await loadMergedProviderData({ providers: ['claude_code'] });
-
-    expect(mocks.writePendingMachineFile).not.toHaveBeenCalled();
-  });
-
-  it('does not stage pending data once the repo is configured and cloned', async () => {
-    // A staged copy here has nothing to be adopted into later, and would
-    // collide with the synced file the next time init runs.
-    mocks.tryLoadConfig.mockReturnValue({
-      repoUrl: 'git@example.com:me/data.git',
-      machineId: 'host',
-    });
-    mocks.resolveMachineId.mockReturnValue('host');
-    mocks.isCloned.mockReturnValue(true);
-    mocks.listDataFiles.mockReturnValue([]);
-    mocks.buildLocalMachineFile.mockResolvedValue({
-      hostname: 'host',
-      lastUpdated: 'fresh',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 10, outputTokens: 5 } },
-            totals: { inputTokens: 10, outputTokens: 5 },
-          },
-        },
-      },
-    });
-
-    await loadMergedProviderData({ providers: ['claude_code'], stagePending: true });
-
-    expect(mocks.writePendingMachineFile).not.toHaveBeenCalled();
   });
 
   it('merges git data from other machines and overlays fresh local read', async () => {

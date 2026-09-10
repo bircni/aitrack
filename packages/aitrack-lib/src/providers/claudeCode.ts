@@ -1,4 +1,3 @@
-import type { CheckResult } from './checkResult.js';
 import {
   CLAUDE_PRICING_BY_ID,
   estimateClaudeCostFromAggregateTokens,
@@ -6,6 +5,7 @@ import {
 } from '../pricing/claude.js';
 import { getClaudePaths, readClaudeData } from '../readers/claude.js';
 import { sourceCheck } from '../readers/paths.js';
+import type { CheckResult } from './checkResult.js';
 import type { SyncedProvider } from './types.js';
 
 export const claudeCodeProvider: SyncedProvider = {
