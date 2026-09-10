@@ -1,5 +1,5 @@
 import { isDayKey } from '../../constants.js';
-import { getOrCreateDay } from '../../data/dayMap.js';
+import { addModelUsage, getOrCreateDay } from '../../data/dayMap.js';
 import { stripModelAliasSuffix } from '../../data/modelId.js';
 import type { DayMap } from '../../data/types.js';
 import { type CursorCostTokens, estimateCursorCostUSD } from '../../pricing/cursor.js';
@@ -132,15 +132,11 @@ export function aggregateCursorCsvToDayMap(content: string): DayMap {
     const costUSD = estimateCursorCostUSD(model, tokenTotals, dateString);
 
     const day = getOrCreateDay(result, dateString);
-    const rec = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-    rec.inputTokens += inputTokens;
-    rec.outputTokens += outputTokens;
-    day.inputTokens += inputTokens;
-    day.outputTokens += outputTokens;
-    if (costUSD !== undefined) {
-      rec.costUSD = (rec.costUSD ?? 0) + costUSD;
-      day.costUSD = (day.costUSD ?? 0) + costUSD;
-    }
+    addModelUsage(day, model, {
+      inputTokens,
+      outputTokens,
+      ...(costUSD !== undefined && { costUSD }),
+    });
   });
 
   return result;

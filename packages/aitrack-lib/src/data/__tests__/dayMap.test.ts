@@ -2,6 +2,7 @@ import { EXTREME_TIME_ZONES, useTimeZone } from '@aitrack/test-fixtures';
 import { describe, expect, it } from 'vitest';
 
 import {
+  addModelUsage,
   filterDayMapByYear,
   filterProviderDataByYear,
   getOrCreateDay,
@@ -16,6 +17,28 @@ function emptyDay(): DayEntry {
 }
 
 describe('dayMap helpers', () => {
+  it('addModelUsage updates the model row and the day totals together', () => {
+    const day = emptyDay();
+    addModelUsage(day, 'm', {
+      inputTokens: 10,
+      outputTokens: 4,
+      cachedInputTokens: 3,
+      costUSD: 0.5,
+    });
+    addModelUsage(day, 'm', { inputTokens: 5, outputTokens: 1, costUSD: 0.25 });
+
+    expect(day.inputTokens).toBe(15);
+    expect(day.outputTokens).toBe(5);
+    expect(day.cachedInputTokens).toBe(3);
+    expect(day.costUSD).toBe(0.75);
+    expect(day.byModel.m).toEqual({
+      inputTokens: 15,
+      outputTokens: 5,
+      cachedInputTokens: 3,
+      costUSD: 0.75,
+    });
+  });
+
   it('getOrCreateDay returns the same entry for repeated dates', () => {
     const dayMap: DayMap = new Map();
     const first = getOrCreateDay(dayMap, '2024-01-01');
