@@ -22,6 +22,9 @@ vi.mock('aitrack-lib/git', () => ({
   isCloned: mocks.isCloned,
   listDataFiles: mocks.listDataFiles,
   commitDataChanges: vi.fn(() => true),
+  writeMachineFile: (filePath: string, machine: MachineFile) => {
+    mocks.writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
+  },
 }));
 vi.mock('aitrack-lib/data/localData', async () => {
   const actual = await vi.importActual<typeof import('aitrack-lib/data/localData')>(

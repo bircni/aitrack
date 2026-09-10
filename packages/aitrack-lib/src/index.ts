@@ -59,6 +59,7 @@ export {
   readDataFile,
   removeLocalClone,
   removePendingMachineFile,
+  writeMachineFile,
   writePendingMachineFile,
 } from './git.js';
 

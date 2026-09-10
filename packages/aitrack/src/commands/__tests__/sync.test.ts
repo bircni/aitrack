@@ -70,6 +70,10 @@ vi.mock('aitrack-lib/git', () => ({
   hasMachineDataChanges: mocks.hasMachineDataChanges,
   pushPendingCommits: mocks.pushPendingCommits,
   removePendingMachineFile: vi.fn(),
+  writeMachineFile: (filePath: string, machine: object) => {
+    mocks.mkdirSync(filePath, { recursive: true });
+    mocks.writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
+  },
 }));
 
 import { loggedOutput } from '@aitrack/test-fixtures';

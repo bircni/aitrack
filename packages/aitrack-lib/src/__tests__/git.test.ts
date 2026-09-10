@@ -42,6 +42,7 @@ import {
   readDataFile,
   removeLocalClone,
   removePendingMachineFile,
+  writeMachineFile,
   writePendingMachineFile,
 } from '../git.js';
 
@@ -430,6 +431,24 @@ describe('git helpers', () => {
       lastUpdated: 'now',
       days: {},
     });
+  });
+
+  it('writes a machine file through the store, creating the parent directory', () => {
+    writeMachineFile('/repo/data/host.json', {
+      schemaVersion: 2,
+      hostname: 'host',
+      timezone: 'UTC',
+      dayBucket: 'utc',
+      lastUpdated: 'now',
+      days: {},
+    });
+
+    expect(mocks.mkdirSync).toHaveBeenCalledWith('/repo/data', { recursive: true });
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      '/repo/data/host.json',
+      expect.stringContaining('"hostname": "host"'),
+      'utf8',
+    );
   });
 
   it('writes and lists pending machine files for a legitimate custom id', () => {

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
 import { loadConfig, resolveMachineId } from 'aitrack-lib/config';
@@ -12,7 +12,7 @@ import {
 import { REPO_NOT_CLONED_MESSAGE } from 'aitrack-lib/data/messages';
 import type { MachineFile, ProviderDay } from 'aitrack-lib/data/types';
 import { approximatelyEqual, checkRawMachineFile } from 'aitrack-lib/data/validate';
-import { commitDataChanges, isCloned, listDataFiles } from 'aitrack-lib/git';
+import { commitDataChanges, isCloned, listDataFiles, writeMachineFile } from 'aitrack-lib/git';
 import { machineDataFilename } from 'aitrack-lib/machineId';
 import { log } from 'aitrack-lib/output';
 import {
@@ -194,7 +194,7 @@ export async function recomputeCostsCommand(): Promise<void> {
     if (!loaded.isTouched && !repriced.isTouched) continue;
 
     loaded.machine.lastUpdated = new Date().toISOString();
-    writeFileSync(filePath, JSON.stringify(loaded.machine, null, 2), 'utf8');
+    writeMachineFile(filePath, loaded.machine);
     changed++;
   }
 
