@@ -1,9 +1,8 @@
 import { isDayKey } from 'aitrack-lib/constants';
 import {
-  isNoArgPeriod,
   isUsagePeriod,
   USAGE_PERIOD_DEFINITIONS,
-  type UsagePeriod,
+  usagePeriodDefinition,
 } from 'aitrack-lib/data/usagePeriods';
 import type { UsageReportOptions } from 'aitrack-lib/data/usageReport';
 import { normalizeProviderKey } from 'aitrack-lib/display/providers';
@@ -122,50 +121,5 @@ export function parseUsageReportOptions(input: ParseUsageReportOptionsInput): Us
     throw new Error(invalidUsagePeriodMessage(period));
   }
 
-  return parseUsageReportOptionsForPeriod(period, args, providers);
-}
-
-function parseUsageReportOptionsForPeriod(
-  period: UsagePeriod,
-  args: string[],
-  providers?: string[],
-): UsageReportOptions {
-  if (isNoArgPeriod(period)) {
-    if (args.length > 0) {
-      throw new Error(`Period "${period}" does not accept extra arguments.`);
-    }
-    return { period, providers };
-  }
-
-  if (period === 'date') {
-    const [from, ...rest] = args;
-    if (from === undefined || rest.length > 0) {
-      throw new Error('Usage: aitrack export date <date>');
-    }
-    if (!isValidDateString(from)) throw new Error(invalidDateMessage(from));
-    return { period: 'date', from, providers };
-  }
-
-  if (period === 'range') {
-    const [from, to, ...rest] = args;
-    if (from === undefined || to === undefined || rest.length > 0) {
-      throw new Error('Usage: aitrack export range <from> <to>');
-    }
-    if (!isValidDateString(from)) throw new Error(invalidDateMessage(from));
-    if (!isValidDateString(to)) throw new Error(invalidDateMessage(to));
-    if (from > to) {
-      throw new Error(`Start date "${from}" must not be after end date "${to}".`);
-    }
-    return { period: 'range', from, to, providers };
-  }
-
-  const [n, ...rest] = args;
-  if (n === undefined || rest.length > 0) {
-    throw new Error('Usage: aitrack export last <n>');
-  }
-  const parsed = parsePositiveInt(n);
-  if (parsed === undefined) {
-    throw new Error(`Invalid number of days: "${n}". Expected a positive integer.`);
-  }
-  return { period: 'last', n: parsed, providers };
+  return { period, providers, ...usagePeriodDefinition(period).parseArgs(args) };
 }

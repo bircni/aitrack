@@ -1,3 +1,4 @@
+import { isDayKey } from '../constants.js';
 import {
   inclusiveDayCount,
   mondayOfWeek,
@@ -55,6 +56,12 @@ export interface UsageWindowInput {
   n?: number;
 }
 
+export interface UsagePeriodArgs {
+  from?: string;
+  to?: string;
+  n?: number;
+}
+
 export interface UsagePeriodDefinition {
   name: string;
   period: UsagePeriod;
@@ -62,6 +69,72 @@ export interface UsagePeriodDefinition {
   argShape: UsagePeriodArgShape;
   /** How this period turns today's date into a window. */
   window: (input: UsageWindowInput) => UsageWindow;
+  /** Comparable window immediately before `current`. */
+  previous: (input: UsageWindowInput, current: UsageWindow) => UsageWindow;
+  /** Extra CLI args for this period (`date`, `range`, `last`), or none. */
+  parseArgs: (args: string[]) => UsagePeriodArgs;
+}
+
+function parseNoArgs(period: UsagePeriod): (args: string[]) => UsagePeriodArgs {
+  return (args) => {
+    if (args.length > 0) {
+      throw new Error(`Period "${period}" does not accept extra arguments.`);
+    }
+    return {};
+  };
+}
+
+function parseDateArgs(args: string[]): UsagePeriodArgs {
+  const [from, ...rest] = args;
+  if (from === undefined || rest.length > 0) {
+    throw new Error('Period "date" expects a single date (YYYY-MM-DD).');
+  }
+  if (!isDayKey(from)) throw new Error(`Invalid date: "${from}". Expected YYYY-MM-DD.`);
+  return { from };
+}
+
+function parseRangeArgs(args: string[]): UsagePeriodArgs {
+  const [from, to, ...rest] = args;
+  if (from === undefined || to === undefined || rest.length > 0) {
+    throw new Error('Period "range" expects two dates (YYYY-MM-DD YYYY-MM-DD).');
+  }
+  if (!isDayKey(from)) throw new Error(`Invalid date: "${from}". Expected YYYY-MM-DD.`);
+  if (!isDayKey(to)) throw new Error(`Invalid date: "${to}". Expected YYYY-MM-DD.`);
+  if (from > to) {
+    throw new Error(`Start date "${from}" must not be after end date "${to}".`);
+  }
+  return { from, to };
+}
+
+function parseLastArgs(args: string[]): UsagePeriodArgs {
+  const [n, ...rest] = args;
+  if (n === undefined || rest.length > 0) {
+    throw new Error('Period "last" expects a positive integer day count.');
+  }
+  if (!/^\d+$/u.test(n)) {
+    throw new Error(`Invalid number of days: "${n}". Expected a positive integer.`);
+  }
+  const parsed = Number(n);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error(`Invalid number of days: "${n}". Expected a positive integer.`);
+  }
+  return { n: parsed };
+}
+
+/** A window of the same length ending the day before `current` starts. */
+function previousEqualSpan(_input: UsageWindowInput, current: UsageWindow): UsageWindow {
+  const days = inclusiveDayCount(current.start, current.end);
+  const end = shiftDate(current.start, -1);
+  const start = shiftDate(end, -(days - 1));
+  return { start, end, label: `previous period (${start} → ${end})` };
+}
+
+function previousShiftedWeek(labelPrefix: string) {
+  return (_input: UsageWindowInput, current: UsageWindow): UsageWindow => {
+    const start = shiftDate(current.start, -7);
+    const end = shiftDate(current.end, -7);
+    return { start, end, label: `${labelPrefix} (${start} → ${end})` };
+  };
 }
 
 /** Single registry for CLI registration, parsing, and validation. */
@@ -71,6 +144,8 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'today',
     description: "Today's usage: provider / tokens / model / price",
     argShape: 'none',
+    parseArgs: parseNoArgs('today'),
+    previous: previousEqualSpan,
     window: ({ today }) => {
       // The only place a wall-clock time is shown rather than a calendar date.
       const now = new Date();
@@ -86,6 +161,8 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'yesterday',
     description: "Yesterday's usage",
     argShape: 'none',
+    parseArgs: parseNoArgs('yesterday'),
+    previous: previousEqualSpan,
     window: ({ today }) => {
       const date = shiftDate(today, -1);
       return { start: date, end: date, label: `yesterday (${date})` };
@@ -96,6 +173,8 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'date',
     description: 'Usage for a specific date (YYYY-MM-DD)',
     argShape: 'date',
+    parseArgs: parseDateArgs,
+    previous: previousEqualSpan,
     window: ({ from }) => {
       if (!from) throw new Error('from is required for date period');
       return { start: from, end: from, label: from };
@@ -106,6 +185,8 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'range',
     description: 'Usage for a custom date range (YYYY-MM-DD YYYY-MM-DD)',
     argShape: 'range',
+    parseArgs: parseRangeArgs,
+    previous: previousEqualSpan,
     window: ({ from, to }) => {
       if (!from || !to) throw new Error('from and to are required for range period');
       return { start: from, end: to, label: `${from} → ${to}` };
@@ -116,6 +197,8 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'thisweek',
     description: 'Usage for the current calendar week (Mon–Sun)',
     argShape: 'none',
+    parseArgs: parseNoArgs('thisweek'),
+    previous: previousShiftedWeek('previous week to date'),
     window: ({ today }) => {
       const start = mondayOfWeek(today);
       return { start, end: today, label: `this week (${start} → ${today})` };
@@ -126,6 +209,8 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'lastweek',
     description: 'Usage for the previous calendar week (Mon–Sun)',
     argShape: 'none',
+    parseArgs: parseNoArgs('lastweek'),
+    previous: previousShiftedWeek('week before'),
     window: ({ today }) => {
       const monday = mondayOfWeek(today);
       const start = shiftDate(monday, -7);
@@ -138,6 +223,8 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'week',
     description: 'Rolling 7-day usage ending today',
     argShape: 'none',
+    parseArgs: parseNoArgs('week'),
+    previous: previousEqualSpan,
     window: ({ today }) => rollingWindow(today, 7),
   },
   {
@@ -145,6 +232,12 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'thismonth',
     description: 'Usage for the current calendar month',
     argShape: 'none',
+    parseArgs: parseNoArgs('thismonth'),
+    previous: (_input, current) => {
+      const start = shiftMonthStart(current.end, -1);
+      const end = shiftMonthSameDay(current.end, -1);
+      return { start, end, label: `previous month to date (${start} → ${end})` };
+    },
     window: ({ today }) => {
       const start = shiftMonthStart(today, 0);
       return { start, end: today, label: `this month (${start} → ${today})` };
@@ -155,6 +248,12 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'lastmonth',
     description: 'Usage for the previous calendar month',
     argShape: 'none',
+    parseArgs: parseNoArgs('lastmonth'),
+    previous: (_input, current) => {
+      const start = shiftMonthStart(current.start, -1);
+      const end = shiftMonthEnd(current.start, -1);
+      return { start, end, label: `month before (${start} → ${end})` };
+    },
     window: ({ today }) => {
       const start = shiftMonthStart(today, -1);
       const end = shiftMonthEnd(today, -1);
@@ -166,6 +265,8 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'month',
     description: 'Rolling 30-day usage ending today',
     argShape: 'none',
+    parseArgs: parseNoArgs('month'),
+    previous: previousEqualSpan,
     window: ({ today }) => rollingWindow(today, 30),
   },
   {
@@ -173,6 +274,8 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'last',
     description: 'Rolling N-day usage ending today, e.g. last 14',
     argShape: 'last',
+    parseArgs: parseLastArgs,
+    previous: previousEqualSpan,
     window: ({ today, n }) => {
       if (!n) throw new Error('n is required for last period');
       return rollingWindow(today, n);
@@ -183,6 +286,15 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'year',
     description: 'Usage for the current calendar year',
     argShape: 'none',
+    parseArgs: parseNoArgs('year'),
+    previous: ({ today }) => {
+      // The current window is the whole calendar year, so the comparable slice
+      // of the previous one has to come from today rather than from `current.end`.
+      const previousYear = yearOf(today) - 1;
+      const start = `${String(previousYear)}-01-01`;
+      const end = sameDayInYear(today, previousYear);
+      return { start, end, label: `previous year to date (${start} → ${end})` };
+    },
     window: ({ today }) => {
       const year = String(yearOf(today));
       return { start: `${year}-01-01`, end: `${year}-12-31`, label: year };
@@ -193,23 +305,24 @@ export const USAGE_PERIOD_DEFINITIONS = [
     period: 'all',
     description: 'All-time usage across every recorded day',
     argShape: 'none',
+    parseArgs: parseNoArgs('all'),
+    previous: () => {
+      throw new Error('All-time usage does not have a comparable previous period.');
+    },
     window: () => ({ start: '0000-01-01', end: '9999-12-31', label: 'all time' }),
   },
 ] as const satisfies readonly UsagePeriodDefinition[];
 
-/** Periods that need no extra arguments (unlike `date`, `range`, or `last`). */
-export const NO_ARG_PERIODS = USAGE_PERIOD_DEFINITIONS.filter((def) => def.argShape === 'none').map(
-  (def) => def.period,
-) as ReadonlyArray<Exclude<UsagePeriod, 'date' | 'range' | 'last'>>;
-
-export type NoArgPeriod = (typeof NO_ARG_PERIODS)[number];
-
-export function isNoArgPeriod(value: string): value is NoArgPeriod {
-  return (NO_ARG_PERIODS as readonly string[]).includes(value);
-}
-
 export function isUsagePeriod(value: string): value is UsagePeriod {
   return USAGE_PERIOD_DEFINITIONS.some((def) => def.period === value);
+}
+
+export function usagePeriodDefinition(period: UsagePeriod): UsagePeriodDefinition {
+  const definition = USAGE_PERIOD_DEFINITIONS.find((def) => def.period === period);
+  if (!definition) {
+    throw new Error(`Unknown usage period: ${period}`);
+  }
+  return definition;
 }
 
 /**
@@ -233,58 +346,25 @@ export function computePreviousUsageWindow(
   options: UsageWindowOptions,
   current: UsageWindow = computeUsageWindow(options),
 ): UsageWindow {
-  if (options.period === 'all') {
-    throw new Error('All-time usage does not have a comparable previous period.');
-  }
-
-  if (options.period === 'thisweek' || options.period === 'lastweek') {
-    const start = shiftDate(current.start, -7);
-    const end = shiftDate(current.end, -7);
-    const prefix = options.period === 'thisweek' ? 'previous week to date' : 'week before';
-    return { start, end, label: `${prefix} (${start} → ${end})` };
-  }
-
-  if (options.period === 'thismonth') {
-    const start = shiftMonthStart(current.end, -1);
-    const end = shiftMonthSameDay(current.end, -1);
-    return { start, end, label: `previous month to date (${start} → ${end})` };
-  }
-
-  if (options.period === 'lastmonth') {
-    const start = shiftMonthStart(current.start, -1);
-    const end = shiftMonthEnd(current.start, -1);
-    return { start, end, label: `month before (${start} → ${end})` };
-  }
-
-  if (options.period === 'year') {
-    // The current window is the whole calendar year, so the comparable slice of
-    // the previous one has to come from today rather than from `current.end`.
-    const previousYear = yearOf(todayString()) - 1;
-    const start = `${String(previousYear)}-01-01`;
-    const end = sameDayInYear(todayString(), previousYear);
-    return { start, end, label: `previous year to date (${start} → ${end})` };
-  }
-
-  const days = inclusiveDayCount(current.start, current.end);
-  const end = shiftDate(current.start, -1);
-  const start = shiftDate(end, -(days - 1));
-  return { start, end, label: `previous period (${start} → ${end})` };
+  return usagePeriodDefinition(options.period).previous(
+    {
+      today: todayString(),
+      from: options.from,
+      to: options.to,
+      n: options.n,
+    },
+    current,
+  );
 }
 
 /**
  * Resolve a period to its window.
  *
- * The period list used to be spelled out three times — once in the registry,
- * once as a 13-case switch here, and partly again in
- * `computePreviousUsageWindow`. Each period now carries its own window
- * function, so adding one is a single entry.
+ * Each period carries window, previous-window, and arg-parse functions, so
+ * adding one is a single registry entry.
  */
 export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
-  const definition = USAGE_PERIOD_DEFINITIONS.find((def) => def.period === options.period);
-  if (!definition) {
-    throw new Error(`Unknown usage period: ${options.period}`);
-  }
-  return definition.window({
+  return usagePeriodDefinition(options.period).window({
     today: todayString(),
     from: options.from,
     to: options.to,

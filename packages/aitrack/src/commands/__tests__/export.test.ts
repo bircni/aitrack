@@ -56,7 +56,7 @@ describe('exportCommand', () => {
 
   it('rejects missing or invalid extra period arguments', async () => {
     await expect(exportCommand({ period: 'range', output: 'r.pdf' })).rejects.toThrow(
-      'aitrack export range',
+      'Period "range" expects two dates',
     );
     await expect(exportCommand({ period: 'date', args: ['bad'], output: 'r.pdf' })).rejects.toThrow(
       'Invalid date',
