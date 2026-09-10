@@ -47,11 +47,24 @@
     }
   ],
   "namedInputs": {
-    "default": ["{projectRoot}/**/*", "sharedGlobals"],
-    "production": ["default", "!{projectRoot}/**/__tests__/**", "!{projectRoot}/vitest.config.ts"],
-    "sharedGlobals": ["{workspaceRoot}/tsconfig.base.json"],
-    "lintConfig": ["{workspaceRoot}/.oxlintrc.json"],
-    "formatConfig": ["{workspaceRoot}/.oxfmtrc.json"],
+    "default": [
+      "{projectRoot}/**/*",
+      "sharedGlobals"
+    ],
+    "production": [
+      "default",
+      "!{projectRoot}/**/__tests__/**",
+      "!{projectRoot}/vitest.config.ts"
+    ],
+    "sharedGlobals": [
+      "{workspaceRoot}/tsconfig.base.json"
+    ],
+    "lintConfig": [
+      "{workspaceRoot}/.oxlintrc.json"
+    ],
+    "formatConfig": [
+      "{workspaceRoot}/.oxfmtrc.json"
+    ],
     "repoTools": [
       "{workspaceRoot}/.github/**/*",
       "{workspaceRoot}/scripts/**/*",
@@ -66,13 +79,23 @@
   },
   "targetDefaults": {
     "build": {
-      "dependsOn": ["^build"],
-      "inputs": ["production", "^production"],
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "production",
+        "^production"
+      ],
       "cache": true,
-      "outputs": ["{projectRoot}/dist"]
+      "outputs": [
+        "{projectRoot}/dist"
+      ]
     },
     "typecheck": {
-      "inputs": ["default", "^production"],
+      "inputs": [
+        "default",
+        "^production"
+      ],
       "cache": true
     },
     "lint": {
@@ -82,7 +105,11 @@
         "maxWarnings": 0,
         "additionalArguments": "--type-aware"
       },
-      "inputs": ["default", "^production", "lintConfig"],
+      "inputs": [
+        "default",
+        "^production",
+        "lintConfig"
+      ],
       "cache": true
     },
     "format:check": {
@@ -90,17 +117,29 @@
       "options": {
         "command": "oxfmt --check {projectRoot}"
       },
-      "inputs": ["default", "formatConfig"],
+      "inputs": [
+        "default",
+        "formatConfig"
+      ],
       "cache": true
     },
     "check:unused": {
-      "inputs": ["default", "^production", "{workspaceRoot}/knip.json"],
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/knip.json"
+      ],
       "cache": true
     },
     "test": {
-      "inputs": ["default", "^production"],
+      "inputs": [
+        "default",
+        "^production"
+      ],
       "cache": true,
-      "outputs": ["{projectRoot}/coverage"],
+      "outputs": [
+        "{projectRoot}/coverage"
+      ],
       "configurations": {
         "ci": {
           "command": "vitest run --coverage"
@@ -108,7 +147,9 @@
       }
     },
     "test:smoke": {
-      "dependsOn": ["build"],
+      "dependsOn": [
+        "build"
+      ],
       "inputs": [
         "default",
         "^production",
@@ -119,5 +160,6 @@
       "cache": true
     }
   },
-  "analytics": false
+  "analytics": false,
+  "nxCloudId": "6aa326a3b1ff8cd53a6d2932"
 }
