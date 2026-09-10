@@ -54,7 +54,7 @@
     "formatConfig": ["{workspaceRoot}/.oxfmtrc.json"],
     "platform": [
       {
-        "runtime": "node -p \"process.platform+process.arch+process.versions.node.split('.')[0]\""
+        "runtime": "node -p process.platform+process.arch+process.versions.node"
       }
     ],
     "repoTools": [
