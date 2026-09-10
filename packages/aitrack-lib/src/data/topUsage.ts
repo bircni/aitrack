@@ -1,4 +1,4 @@
-import { providerLabel } from '../display/providers.js';
+import { providerLabel } from '../providers/index.js';
 import { type AggregateModelsFilter, aggregateModelsByDayMap, dateInFilter } from './aggregate.js';
 import { compareByCostThenTokens } from './sort.js';
 import type { DayMap, ProviderData } from './types.js';

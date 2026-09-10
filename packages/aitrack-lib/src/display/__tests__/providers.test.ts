@@ -2,19 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProviderData } from '../../data/types.js';
 import {
-  isSyncedProvider,
-  providerKeys,
-  PROVIDERS,
-  syncedProviderKeys,
-} from '../../providers/index.js';
-import {
   activeProviderKeys,
   costColumnLabel,
+  isSyncedProvider,
   normalizeProviderKey,
   orderedProviderKeys,
+  PROVIDERS,
+  providerKeys,
   providerLabel,
   sortProviderKeys,
-} from '../providers.js';
+  syncedProviderKeys,
+} from '../../providers/index.js';
 
 describe('provider helpers', () => {
   it('returns human-readable labels with fallback to the key', () => {

@@ -1,6 +1,6 @@
 import { filterProviderDataByYear } from '../../data/dayMap.js';
 import type { ProviderData } from '../../data/types.js';
-import { activeProviderKeys } from '../providers.js';
+import { activeProviderKeys } from '../../providers/index.js';
 import { mergeAllProviderDayMaps } from './merge.js';
 
 export interface ProviderLayoutOptions {

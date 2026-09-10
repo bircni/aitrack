@@ -64,9 +64,9 @@ export const PALETTE: Record<'light' | 'dark', Palette> = {
 };
 
 /**
- * Cell colours for a provider. The display name is not here — it lives in
- * PROVIDER_LABELS, and this used to carry a third copy of it whose "Unknown"
- * fallback was just providerLabel's raw-key fallback spelled differently.
+ * Cell colours for a provider. The display name is not here — it lives on
+ * the provider registry, and this used to carry a third copy of it whose
+ * "Unknown" fallback was just providerLabel's raw-key fallback spelled differently.
  */
 export function getProviderTheme(
   providerKey: string,

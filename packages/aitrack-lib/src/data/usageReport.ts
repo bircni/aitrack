@@ -1,4 +1,4 @@
-import { orderedProviderKeys, providerLabel } from '../display/providers.js';
+import { orderedProviderKeys, providerLabel } from '../providers/index.js';
 import { aggregateModelsByDayMap } from './aggregate.js';
 import { isUsageNotConfigured, usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
 import { compareByCostThenTokens } from './sort.js';

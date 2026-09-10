@@ -1,4 +1,4 @@
-import type { CheckResult } from '../display/checkResult.js';
+import type { CheckResult } from './checkResult.js';
 import { errorMessage } from '../errors.js';
 import { getCursorStateDatabasePath, readCursorAuthState } from '../readers/cursor/auth.js';
 import { cursorCacheTtlSeconds } from '../readers/cursor/cache.js';

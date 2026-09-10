@@ -2,14 +2,13 @@ import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
 import type { MachineFile } from 'aitrack-lib/data/types';
 import { loadMergedProviderData, usageEmptyMessage } from 'aitrack-lib/data/usageData';
 import { fmt, fmtUSD } from 'aitrack-lib/display/format';
-import { providerLabel, sortProviderKeys } from 'aitrack-lib/display/providers';
 import {
   defaultTableStyle,
   renderTerminalTable,
   type TerminalTableColumn,
 } from 'aitrack-lib/display/terminalTable';
 import { log } from 'aitrack-lib/output';
-import { syncedProviderKeys } from 'aitrack-lib/providers/index';
+import { providerLabel, sortProviderKeys, syncedProviderKeys } from 'aitrack-lib/providers/index';
 import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
