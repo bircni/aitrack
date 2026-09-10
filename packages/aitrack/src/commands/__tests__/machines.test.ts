@@ -3,13 +3,13 @@ import type { MachineFile } from 'aitrack-lib/data/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  loadMergedProviderData: vi.fn(),
+  loadPersistedMachines: vi.fn(),
   tryLoadConfig: vi.fn(),
   isCloned: vi.fn(),
 }));
 
 vi.mock('aitrack-lib/data/usageData', () => ({
-  loadMergedProviderData: mocks.loadMergedProviderData,
+  loadPersistedMachines: mocks.loadPersistedMachines,
   usageEmptyMessage: () => 'No data.',
 }));
 vi.mock('aitrack-lib/config', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
@@ -58,10 +58,10 @@ describe('machinesCommand', () => {
     const b = makeMachine('small', {
       '2026-01-01': [{ providerKey: 'codex', input: 50, output: 5 }],
     });
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {},
-      machineData: [b, a],
-    });
+    mocks.loadPersistedMachines.mockReturnValue([
+      { filePath: '/repo/data/small.json', machine: b },
+      { filePath: '/repo/data/big.json', machine: a },
+    ]);
 
     await machinesCommand();
 
@@ -79,10 +79,7 @@ describe('machinesCommand', () => {
     const machine = makeMachine('box', {
       '2026-01-01': [{ providerKey: 'claude_code', input: 1000, output: 100, cost: 5 }],
     });
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {},
-      machineData: [machine],
-    });
+    mocks.loadPersistedMachines.mockReturnValue([{ filePath: '/repo/data/box.json', machine }]);
 
     await machinesCommand({ json: true });
 
@@ -99,10 +96,7 @@ describe('machinesCommand', () => {
   });
 
   it('shows empty message when no machine data', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {},
-      machineData: [],
-    });
+    mocks.loadPersistedMachines.mockReturnValue([]);
 
     await machinesCommand();
 
@@ -110,10 +104,7 @@ describe('machinesCommand', () => {
   });
 
   it('prints valid JSON when no machine data exists', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {},
-      machineData: [],
-    });
+    mocks.loadPersistedMachines.mockReturnValue([]);
 
     await machinesCommand({ json: true });
 

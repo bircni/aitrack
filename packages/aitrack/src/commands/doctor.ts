@@ -7,10 +7,10 @@ import { findDuplicateMachineDays } from 'aitrack-lib/data/duplicateMachines';
 import { isRecord } from 'aitrack-lib/data/guards';
 import { INIT_HINT } from 'aitrack-lib/data/messages';
 import type { MachineFile } from 'aitrack-lib/data/types';
-import { type CheckResult, type CheckStatus } from 'aitrack-lib/providers/index';
 import { pad } from 'aitrack-lib/display/format';
 import { isCloned, listDataFiles, LOCAL_REPO, readDataFile } from 'aitrack-lib/git';
 import { log } from 'aitrack-lib/output';
+import { type CheckResult, type CheckStatus } from 'aitrack-lib/providers/index';
 import { getProvider, PROVIDERS } from 'aitrack-lib/providers/index';
 import chalk from 'chalk';
 

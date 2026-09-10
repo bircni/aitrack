@@ -1,6 +1,6 @@
 import type { DayMap, TokenCounts } from '../data/types.js';
-import type { CheckResult } from './checkResult.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
+import type { CheckResult } from './checkResult.js';
 
 /** Static facts about a provider — the old `ProviderDescriptor` table. */
 export interface ProviderDescriptor {

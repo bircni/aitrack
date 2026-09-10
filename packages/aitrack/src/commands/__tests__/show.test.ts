@@ -116,6 +116,7 @@ describe('showCommand', () => {
     await showCommand();
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.writePendingMachineFile).toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(
       'No local usage data found (Claude Code or Codex). Run: npx aitrack init to sync across machines.',
     );
@@ -124,6 +125,7 @@ describe('showCommand', () => {
   it('prints the sync hint when configured but no git or local data exists', async () => {
     await showCommand();
 
+    expect(mocks.writePendingMachineFile).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(
       'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
     );

@@ -1,11 +1,11 @@
 import { basename } from 'node:path';
 
 import { resolveMachineId, tryLoadConfig } from '../config.js';
-import { isCloned, listDataFiles, readDataFile, writePendingMachineFile } from '../git.js';
+import { isCloned, listDataFiles, readDataFile } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { isSyncedProvider, liveProviders } from '../providers/index.js';
-import { addTokenCounts, filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
+import { addTokenCounts, getOrCreateDay } from './dayMap.js';
 import { buildLocalMachineFile, machineHasData, mergePersistedDays } from './localData.js';
 import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';
 
@@ -62,21 +62,21 @@ export interface LoadUsageOptions {
    * when it is included (or when the filter is absent).
    */
   providers?: string[];
-  year?: number;
-  /** Stage local machine JSON under ~/.config/aitrack/pending/ for later init adoption. */
-  stagePending?: boolean;
-  /**
-   * Report only what is already synced to the repo, without reading this
-   * machine's JSONL logs at all. `machines` summarizes the persisted files and
-   * never looks at the merged day maps, and parsing a large corpus for data it
-   * then discards was the bulk of that command's runtime.
-   */
-  skipLocalLogs?: boolean;
   /**
    * Ignore any cached live-provider (Cursor) data and re-fetch. Without this a
    * cached CSV export younger than the TTL is served without a network call.
    */
   refreshLive?: boolean;
+  /**
+   * Already-read local machine file. When provided (including `null` to skip
+   * the logs), the loader does not parse the JSONL corpus again.
+   */
+  localMachine?: MachineFile | null;
+}
+
+export interface PersistedMachine {
+  filePath: string;
+  machine: MachineFile;
 }
 
 export interface LoadedUsageData {
@@ -103,23 +103,63 @@ function splitByProvider(machineFiles: MachineFile[]): ProviderData {
   return providers;
 }
 
-export async function loadMergedProviderData(
-  options: LoadUsageOptions = {},
-): Promise<LoadedUsageData | null> {
-  const config = tryLoadConfig();
-  const machineId = resolveMachineId(config ?? { repoUrl: '' });
+/** Synced machine files that parsed, with the path used to identify the current one. */
+export function loadPersistedMachines(): PersistedMachine[] {
+  return listDataFiles()
+    .map((filePath) => ({ filePath, machine: readDataFile(filePath) }))
+    .filter((entry): entry is PersistedMachine => entry.machine !== null);
+}
 
-  // A live provider (Cursor) is an HTTPS round-trip and the rest of this is disk
-  // and CPU work, so start it now and collect it at the end rather than paying
-  // for it in series.
-  const providerFilter = options.providers ? new Set(options.providers) : undefined;
-  // The catch matters because the promise is started before the awaits below:
-  // if one of those threw first, an unguarded rejection here would surface as
-  // an unhandled rejection rather than the original error.
-  // `0` forces a refresh; `undefined` lets each live provider apply its own
-  // cache TTL.
-  const liveMaxAgeSeconds = options.refreshLive ? 0 : undefined;
-  const livePending = liveProviders()
+/**
+ * Overlay this machine's local logs onto its persisted file through the same
+ * rule sync writes with, then split the result by provider.
+ */
+function mergePersistedWithLocal(
+  persisted: PersistedMachine[],
+  localMachine: MachineFile | null,
+  currentFile: string,
+): { machineData: MachineFile[]; providerData: ProviderData; isLocalMerged: boolean } {
+  const machineData = persisted.map((entry) => entry.machine);
+  const reportMachines: MachineFile[] = [];
+  let isLocalMerged = false;
+
+  for (const entry of persisted) {
+    if (
+      localMachine === null ||
+      basename(entry.filePath) !== currentFile ||
+      !machineHasData(localMachine)
+    ) {
+      reportMachines.push(entry.machine);
+      continue;
+    }
+    reportMachines.push({
+      ...entry.machine,
+      days: mergePersistedDays(entry.machine.days, localMachine.days),
+    });
+    isLocalMerged = true;
+  }
+
+  return {
+    machineData,
+    providerData: splitByProvider(reportMachines),
+    isLocalMerged,
+  };
+}
+
+/**
+ * Start live-provider fetches now so they overlap the JSONL read.
+ *
+ * The catch matters because the promise is started before later awaits: if one
+ * of those threw first, an unguarded rejection here would surface as an
+ * unhandled rejection rather than the original error.
+ */
+function startLiveFetches(
+  providerFilter: Set<string> | undefined,
+  refreshLive?: boolean,
+): Array<{ key: string; pending: Promise<DayMap> }> {
+  // `0` forces a refresh; `undefined` lets each live provider apply its own TTL.
+  const liveMaxAgeSeconds = refreshLive ? 0 : undefined;
+  return liveProviders()
     .filter((provider) => !providerFilter || providerFilter.has(provider.descriptor.key))
     .map((provider) => ({
       key: provider.descriptor.key,
@@ -127,54 +167,36 @@ export async function loadMergedProviderData(
         .liveFetch({ maxAgeSeconds: liveMaxAgeSeconds })
         .catch((): DayMap => new Map()),
     }));
+}
 
-  const localMachine = options.skipLocalLogs ? null : await buildLocalMachineFile(machineId);
+export async function loadMergedProviderData(
+  options: LoadUsageOptions = {},
+): Promise<LoadedUsageData | null> {
+  const config = tryLoadConfig();
+  const machineId = resolveMachineId(config ?? { repoUrl: '' });
+  const providerFilter = options.providers ? new Set(options.providers) : undefined;
+
+  const livePending = startLiveFetches(providerFilter, options.refreshLive);
+  const localMachine =
+    options.localMachine === undefined
+      ? await buildLocalMachineFile(machineId)
+      : options.localMachine;
 
   const isWarnedNotConfigured = !config || !isCloned();
-
-  // Staging exists so a later `init` can adopt usage recorded before the repo
-  // was set up. Once the machine is configured and cloned, sync writes into the
-  // repo directly and a staged copy would only collide with the synced file the
-  // next time init runs.
-  if (localMachine && options.stagePending && isWarnedNotConfigured) {
-    writePendingMachineFile(localMachine);
-  }
 
   let machineData: MachineFile[] = [];
   let providerData: ProviderData = {};
   let isLocalMerged = false;
 
   if (config && isCloned()) {
-    const files = listDataFiles();
-    const currentFile = machineDataFilename(machineId);
-    const persisted = files
-      .map((filePath) => ({ filePath, machine: readDataFile(filePath) }))
-      .filter(
-        (entry): entry is { filePath: string; machine: MachineFile } => entry.machine !== null,
-      );
-    machineData = persisted.map((entry) => entry.machine);
-
-    const reportMachines: MachineFile[] = [];
-    for (const entry of persisted) {
-      if (
-        localMachine === null ||
-        basename(entry.filePath) !== currentFile ||
-        !machineHasData(localMachine)
-      ) {
-        reportMachines.push(entry.machine);
-        continue;
-      }
-      // Merge the local logs into the current machine's persisted days through
-      // the same rule sync writes with, so what is displayed matches what the
-      // file holds — including a boundary day whose logs have been pruned down
-      // below what was synced from them earlier.
-      reportMachines.push({
-        ...entry.machine,
-        days: mergePersistedDays(entry.machine.days, localMachine.days),
-      });
-      isLocalMerged = true;
-    }
-    providerData = splitByProvider(reportMachines);
+    const merged = mergePersistedWithLocal(
+      loadPersistedMachines(),
+      localMachine,
+      machineDataFilename(machineId),
+    );
+    machineData = merged.machineData;
+    providerData = merged.providerData;
+    isLocalMerged = merged.isLocalMerged;
   }
 
   // Only when no persisted file absorbed it above; merging already covers it.
@@ -193,17 +215,12 @@ export async function loadMergedProviderData(
     );
   }
 
-  const filtered =
-    options.year === undefined
-      ? providerData
-      : filterProviderDataByYear(providerData, options.year);
-
-  if (Object.keys(filtered).length === 0) {
+  if (Object.keys(providerData).length === 0) {
     return null;
   }
 
   return {
-    providerData: filtered,
+    providerData,
     machineData,
     warnedNotConfigured: isWarnedNotConfigured,
   };

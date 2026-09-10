@@ -1,6 +1,6 @@
 import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
 import type { MachineFile } from 'aitrack-lib/data/types';
-import { loadMergedProviderData, usageEmptyMessage } from 'aitrack-lib/data/usageData';
+import { loadPersistedMachines, usageEmptyMessage } from 'aitrack-lib/data/usageData';
 import { fmt, fmtUSD } from 'aitrack-lib/display/format';
 import {
   defaultTableStyle,
@@ -8,7 +8,7 @@ import {
   type TerminalTableColumn,
 } from 'aitrack-lib/display/terminalTable';
 import { log } from 'aitrack-lib/output';
-import { providerLabel, sortProviderKeys, syncedProviderKeys } from 'aitrack-lib/providers/index';
+import { providerLabel, sortProviderKeys } from 'aitrack-lib/providers/index';
 import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
@@ -67,31 +67,29 @@ interface MachinesOptions {
   json?: boolean;
 }
 
-export async function machinesCommand(options: MachinesOptions = {}): Promise<void> {
-  // Every summary below is derived from the persisted machine files, so there is
-  // nothing here for the local JSONL corpus to contribute.
-  const loaded = await loadMergedProviderData({
-    providers: syncedProviderKeys(),
-    skipLocalLogs: true,
-  });
+export function machinesCommand(options: MachinesOptions = {}): Promise<void> {
+  const warnedNotConfigured = isUsageNotConfigured();
+  const machineData = warnedNotConfigured
+    ? []
+    : loadPersistedMachines().map((entry) => entry.machine);
 
-  if (!loaded || loaded.machineData.length === 0) {
-    const message = usageEmptyMessage(loaded?.warnedNotConfigured ?? isUsageNotConfigured());
+  if (machineData.length === 0) {
+    const message = usageEmptyMessage(warnedNotConfigured);
     if (options.json) {
       printJsonCommand('machines', { machines: [], message });
     } else {
       log.info(message);
     }
-    return;
+    return Promise.resolve();
   }
 
-  const summaries = loaded.machineData
-    .map(summarizeMachine)
+  const summaries = machineData
+    .map((machine) => summarizeMachine(machine))
     .toSorted((a, b) => b.totalTokens - a.totalTokens);
 
   if (options.json) {
     printJsonCommand('machines', { machines: summaries });
-    return;
+    return Promise.resolve();
   }
 
   const columns: Array<TerminalTableColumn<MachineSummary>> = [
@@ -109,4 +107,5 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
 
   log.info(chalk.bold(`aitrack machines (${String(summaries.length)})`));
   log.info(renderTerminalTable(summaries, columns, { style: defaultTableStyle() }));
+  return Promise.resolve();
 }
