@@ -5,7 +5,7 @@ import { isCloned, listDataFiles, readDataFile, writePendingMachineFile } from '
 import { machineDataFilename } from '../machineId.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { isSyncedProvider, liveProviders } from '../providers/index.js';
-import { filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
+import { addTokenCounts, filterProviderDataByYear, getOrCreateDay } from './dayMap.js';
 import { buildLocalMachineFile, machineHasData, mergePersistedDays } from './localData.js';
 import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';
 
@@ -21,36 +21,16 @@ export function mergeProviderDay(
   pData: ProviderDay,
   date?: string,
 ): void {
-  rec.inputTokens += pData.totals.inputTokens;
-  rec.outputTokens += pData.totals.outputTokens;
-  if (pData.totals.cachedInputTokens !== undefined) {
-    rec.cachedInputTokens = (rec.cachedInputTokens ?? 0) + pData.totals.cachedInputTokens;
-  }
-  if (pData.totals.rawInputTokens !== undefined) {
-    rec.rawInputTokens = (rec.rawInputTokens ?? 0) + pData.totals.rawInputTokens;
-  }
-  if (pData.totals.cacheCreationInputTokens !== undefined) {
-    rec.cacheCreationInputTokens =
-      (rec.cacheCreationInputTokens ?? 0) + pData.totals.cacheCreationInputTokens;
-  }
+  // Token fields only. Day cost is a stored-total-plus-backfill policy, not a
+  // straight sum of the incoming totals and model rows.
+  addTokenCounts(rec, { ...pData.totals, costUSD: undefined });
 
   let summedModelCost = 0;
   let backfilledModelCost = 0;
   let isAnyModelHadCost = false;
   for (const [model, counts] of Object.entries(pData.byModel)) {
     const m = (rec.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-    m.inputTokens += counts.inputTokens;
-    m.outputTokens += counts.outputTokens;
-    if (counts.cachedInputTokens !== undefined) {
-      m.cachedInputTokens = (m.cachedInputTokens ?? 0) + counts.cachedInputTokens;
-    }
-    if (counts.rawInputTokens !== undefined) {
-      m.rawInputTokens = (m.rawInputTokens ?? 0) + counts.rawInputTokens;
-    }
-    if (counts.cacheCreationInputTokens !== undefined) {
-      m.cacheCreationInputTokens =
-        (m.cacheCreationInputTokens ?? 0) + counts.cacheCreationInputTokens;
-    }
+    addTokenCounts(m, { ...counts, costUSD: undefined });
     const cost = resolveModelCost(providerKey, model, counts, date);
     if (cost !== undefined) {
       m.costUSD = (m.costUSD ?? 0) + cost;

@@ -31,7 +31,7 @@ export function tryLocalDateString(ts: string | Date): string | null {
 }
 
 /** Accumulate the optional cache/raw token breakdown fields. */
-export function mergeTokenBreakdown(dst: TokenCounts, source: TokenCounts): void {
+function mergeTokenBreakdown(dst: TokenCounts, source: TokenCounts): void {
   if (source.rawInputTokens !== undefined) {
     dst.rawInputTokens = (dst.rawInputTokens ?? 0) + source.rawInputTokens;
   }
@@ -44,22 +44,37 @@ export function mergeTokenBreakdown(dst: TokenCounts, source: TokenCounts): void
   }
 }
 
+/** Add source token fields onto dest (input, output, breakdown, cost). */
+export function addTokenCounts(dest: TokenCounts, source: TokenCounts): void {
+  dest.inputTokens += source.inputTokens;
+  dest.outputTokens += source.outputTokens;
+  mergeTokenBreakdown(dest, source);
+  if (source.costUSD !== undefined) {
+    dest.costUSD = (dest.costUSD ?? 0) + source.costUSD;
+  }
+}
+
+/**
+ * Add one model's usage onto a day — the model row and the day totals.
+ *
+ * Readers call this once per event. `mergeDayMaps` must not: the source day
+ * already holds both the totals and the per-model rows, so that would
+ * double-count.
+ */
+export function addModelUsage(day: DayEntry, model: string, counts: TokenCounts): void {
+  const rec = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
+  addTokenCounts(rec, counts);
+  addTokenCounts(day, counts);
+}
+
 /** Merge one DayMap into another, summing day totals, breakdowns and models. */
 export function mergeDayMaps(dst: DayMap, source: DayMap): void {
   for (const [date, sourceDay] of source) {
     const dstDay = getOrCreateDay(dst, date);
-    dstDay.inputTokens += sourceDay.inputTokens;
-    dstDay.outputTokens += sourceDay.outputTokens;
-    mergeTokenBreakdown(dstDay, sourceDay);
-    if (sourceDay.costUSD !== undefined) dstDay.costUSD = (dstDay.costUSD ?? 0) + sourceDay.costUSD;
+    addTokenCounts(dstDay, sourceDay);
     for (const [model, counts] of Object.entries(sourceDay.byModel)) {
       const modelTotals = (dstDay.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-      modelTotals.inputTokens += counts.inputTokens;
-      modelTotals.outputTokens += counts.outputTokens;
-      mergeTokenBreakdown(modelTotals, counts);
-      if (counts.costUSD !== undefined) {
-        modelTotals.costUSD = (modelTotals.costUSD ?? 0) + counts.costUSD;
-      }
+      addTokenCounts(modelTotals, counts);
     }
   }
 }

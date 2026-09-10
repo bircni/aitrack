@@ -2,9 +2,9 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { tryLoadConfig } from '../config.js';
-import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
+import { addModelUsage, getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
 import { stripModelAliasSuffix } from '../data/modelId.js';
-import type { DayMap, TokenCounts } from '../data/types.js';
+import type { DayMap } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { estimateClaudeCostUSD } from '../pricing/claude.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
@@ -42,18 +42,6 @@ interface ClaudeEntry {
   };
 }
 
-function addClaudeUsageBreakdown(
-  rec: TokenCounts,
-  usage: NonNullable<NonNullable<ClaudeEntry['message']>['usage']>,
-): void {
-  const raw = usage.input_tokens ?? 0;
-  const cacheRead = usage.cache_read_input_tokens ?? 0;
-  const cacheCreate = usage.cache_creation_input_tokens ?? 0;
-  rec.rawInputTokens = (rec.rawInputTokens ?? 0) + raw;
-  rec.cachedInputTokens = (rec.cachedInputTokens ?? 0) + cacheRead;
-  rec.cacheCreationInputTokens = (rec.cacheCreationInputTokens ?? 0) + cacheCreate;
-}
-
 export async function parseJsonlFile(
   filePath: string,
   seen: Set<string>,
@@ -87,15 +75,14 @@ export async function parseJsonlFile(
     const costUSD = estimateClaudeCostUSD(model, usage, dateString, fallbacks);
 
     const day = getOrCreateDay(result, dateString);
-    const rec = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-    rec.inputTokens += inputTokens;
-    rec.outputTokens += outputTokens;
-    addClaudeUsageBreakdown(rec, usage);
-    rec.costUSD = (rec.costUSD ?? 0) + costUSD;
-    day.inputTokens += inputTokens;
-    day.outputTokens += outputTokens;
-    addClaudeUsageBreakdown(day, usage);
-    day.costUSD = (day.costUSD ?? 0) + costUSD;
+    addModelUsage(day, model, {
+      inputTokens,
+      outputTokens,
+      rawInputTokens: usage.input_tokens ?? 0,
+      cachedInputTokens: usage.cache_read_input_tokens ?? 0,
+      cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
+      costUSD,
+    });
   }
 
   return result;

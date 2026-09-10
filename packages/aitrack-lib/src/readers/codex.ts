@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { tryLoadConfig } from '../config.js';
-import { getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
+import { addModelUsage, getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
 import type { DayMap } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
@@ -150,14 +150,6 @@ function addSessionResult(
 ): void {
   const { dateStr, model, inputTokens, outputTokens, cachedInputTokens } = result;
   const day = getOrCreateDay(allDays, dateStr);
-  const modelTotals = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-  modelTotals.inputTokens += inputTokens;
-  modelTotals.outputTokens += outputTokens;
-  modelTotals.cachedInputTokens = (modelTotals.cachedInputTokens ?? 0) + cachedInputTokens;
-  day.inputTokens += inputTokens;
-  day.outputTokens += outputTokens;
-  day.cachedInputTokens = (day.cachedInputTokens ?? 0) + cachedInputTokens;
-
   const cost = estimateCodexCostUSD(
     model,
     inputTokens,
@@ -166,10 +158,12 @@ function addSessionResult(
     dateStr,
     fallbacks,
   );
-  if (cost !== undefined) {
-    modelTotals.costUSD = (modelTotals.costUSD ?? 0) + cost;
-    day.costUSD = (day.costUSD ?? 0) + cost;
-  }
+  addModelUsage(day, model, {
+    inputTokens,
+    outputTokens,
+    cachedInputTokens,
+    ...(cost !== undefined && { costUSD: cost }),
+  });
 }
 
 /**
