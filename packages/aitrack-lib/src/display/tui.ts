@@ -7,7 +7,7 @@ import { fmt, fmtUSD } from './format.js';
 import { resolveProviderLayout } from './heatmap/layout.js';
 import { providerStats } from './heatmap/providerStats.js';
 import { formatMonthLabel } from './heatmap/stats.js';
-import { providerLabel } from './providers.js';
+import { providerLabel } from '../providers/index.js';
 import { defaultTableStyle, renderTerminalTable } from './terminalTable.js';
 
 export interface TuiOptions {

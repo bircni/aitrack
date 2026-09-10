@@ -1,4 +1,4 @@
-import type { CheckResult } from '../display/checkResult.js';
+import type { CheckResult } from './checkResult.js';
 import {
   CLAUDE_PRICING_BY_ID,
   estimateClaudeCostFromAggregateTokens,

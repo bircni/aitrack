@@ -14,7 +14,7 @@ import {
   usageEmptyWindowMessage,
 } from 'aitrack-lib/data/usageData';
 import { fmt, fmtUSD } from 'aitrack-lib/display/format';
-import { providerLabel } from 'aitrack-lib/display/providers';
+import { providerLabel } from 'aitrack-lib/providers/index';
 import {
   defaultTableStyle,
   renderTerminalTable,

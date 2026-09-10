@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import type { CheckResult } from '../display/checkResult.js';
+import type { CheckResult } from '../providers/checkResult.js';
 import { mapWithConcurrency } from './concurrency.js';
 
 export function splitConfiguredPaths(value: string | undefined): string[] {

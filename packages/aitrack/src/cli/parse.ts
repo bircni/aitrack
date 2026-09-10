@@ -5,8 +5,7 @@ import {
   usagePeriodDefinition,
 } from 'aitrack-lib/data/usagePeriods';
 import type { UsageReportOptions } from 'aitrack-lib/data/usageReport';
-import { normalizeProviderKey } from 'aitrack-lib/display/providers';
-import { providerKeys } from 'aitrack-lib/providers/index';
+import { normalizeProviderKey, providerKeys } from 'aitrack-lib/providers/index';
 import { InvalidArgumentError } from 'commander';
 
 import type { TopKind, TopSort } from '../commands/top.js';

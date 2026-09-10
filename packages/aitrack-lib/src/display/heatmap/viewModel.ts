@@ -1,6 +1,6 @@
 import type { DayMap } from '../../data/types.js';
 import { fmt, fmtUSDCost } from '../format.js';
-import { costColumnLabel, providerLabel } from '../providers.js';
+import { costColumnLabel, providerLabel } from '../../providers/index.js';
 import { INTENSITY_PERCENTILE } from './constants.js';
 import { percentile } from './intensity.js';
 import { displayModelName } from './modelNames.js';

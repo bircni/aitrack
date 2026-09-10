@@ -1,4 +1,4 @@
-import type { CheckResult } from '../display/checkResult.js';
+import type { CheckResult } from './checkResult.js';
 import { CODEX_PRICING_BY_ID, estimateCodexCostUSD } from '../pricing/codex.js';
 import { getCodexPaths, readCodexData } from '../readers/codex.js';
 import { sourceCheck } from '../readers/paths.js';
