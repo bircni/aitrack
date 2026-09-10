@@ -52,6 +52,11 @@
     "sharedGlobals": ["{workspaceRoot}/tsconfig.base.json"],
     "lintConfig": ["{workspaceRoot}/.oxlintrc.json"],
     "formatConfig": ["{workspaceRoot}/.oxfmtrc.json"],
+    "platform": [
+      {
+        "runtime": "node -p process.platform+process.arch+process.versions.node"
+      }
+    ],
     "repoTools": [
       "{workspaceRoot}/.github/**/*",
       "{workspaceRoot}/scripts/**/*",
@@ -112,6 +117,7 @@
       "inputs": [
         "default",
         "^production",
+        "platform",
         {
           "env": "SMOKE_CLI"
         }
@@ -119,5 +125,6 @@
       "cache": true
     }
   },
-  "analytics": false
+  "analytics": false,
+  "nxCloudId": "6aa326a3b1ff8cd53a6d2932"
 }
