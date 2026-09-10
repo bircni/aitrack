@@ -8,7 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import type { MachineFile } from '../data/types.js';
 import { parseMachineFile } from '../data/validate.js';
@@ -40,10 +40,19 @@ export function readDataFile(filePath: string): MachineFile | null {
   return parseMachineFile(raw, filePath);
 }
 
+/** Serialize a machine file the way every writer must, so round-trips stay stable. */
+function serializeMachineFile(machine: MachineFile): string {
+  return JSON.stringify(machine, null, 2);
+}
+
+/** Write a machine file, creating its parent directory if needed. */
+export function writeMachineFile(filePath: string, machine: MachineFile): void {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, serializeMachineFile(machine), 'utf8');
+}
+
 export function writePendingMachineFile(machine: MachineFile): void {
-  const filePath = machineFilePath(PENDING_DATA_DIR, machine.hostname);
-  mkdirSync(PENDING_DATA_DIR, { recursive: true });
-  writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
+  writeMachineFile(machineFilePath(PENDING_DATA_DIR, machine.hostname), machine);
 }
 
 export function listPendingDataFiles(): string[] {

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { loadConfig, resolveMachineId } from 'aitrack-lib/config';
@@ -19,6 +19,7 @@ import {
   pull,
   pushPendingCommits,
   removePendingMachineFile,
+  writeMachineFile,
 } from 'aitrack-lib/git';
 import { machineDataFilename } from 'aitrack-lib/machineId';
 import { log } from 'aitrack-lib/output';
@@ -88,8 +89,7 @@ async function pushLocalUsage(
   }
 
   const host = resolveMachineId(config);
-  const dataDir = join(LOCAL_REPO, 'data');
-  const dataFilePath = join(dataDir, machineDataFilename(host));
+  const dataFilePath = join(LOCAL_REPO, 'data', machineDataFilename(host));
 
   // Cursor usage is loaded locally by report/display commands; it is never written to git.
   log.info('Reading local data...');
@@ -175,8 +175,7 @@ async function pushLocalUsage(
     return freshData;
   }
 
-  mkdirSync(dataDir, { recursive: true });
-  writeFileSync(dataFilePath, JSON.stringify(outgoingData, null, 2), 'utf8');
+  writeMachineFile(dataFilePath, outgoingData);
   removePendingMachineFile(host);
 
   log.info(commitAndPush(host) ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);

@@ -23,6 +23,7 @@ export {
   listPendingDataFiles,
   readDataFile,
   removePendingMachineFile,
+  writeMachineFile,
   writePendingMachineFile,
 } from './store/machineFiles.js';
 export { migrateMachineDataFiles } from './store/migrate.js';
