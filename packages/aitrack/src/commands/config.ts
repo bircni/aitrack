@@ -36,6 +36,10 @@ function configValue(config: Config | null, key: ConfigKey): string | number | b
     case 'budget.monthly': {
       return config.budget?.monthlyUSD;
     }
+    default: {
+      const _exhaustive: never = key;
+      throw new Error(`Unhandled config key: ${String(_exhaustive)}`);
+    }
   }
 }
 
@@ -69,6 +73,10 @@ export async function configCommand(options: ConfigCommandOptions): Promise<void
     case 'set': {
       setConfig(options.key, options.value);
       break;
+    }
+    default: {
+      const _exhaustive: never = options.action;
+      throw new Error(`Unhandled config action: ${String(_exhaustive)}`);
     }
   }
 }

@@ -19,6 +19,10 @@ export function formatUsageEmptyMessage(reason: UsageEmptyReason, detail?: strin
     case 'empty-window': {
       return detail ? `No usage recorded for ${detail}.` : 'No usage recorded.';
     }
+    default: {
+      const _exhaustive: never = reason;
+      throw new Error(`Unhandled empty-state reason: ${String(_exhaustive)}`);
+    }
   }
 }
 
