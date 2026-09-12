@@ -12,7 +12,13 @@ import {
 import { REPO_NOT_CLONED_MESSAGE } from 'aitrack-lib/data/messages';
 import type { MachineFile, ProviderDay } from 'aitrack-lib/data/types';
 import { approximatelyEqual, checkRawMachineFile } from 'aitrack-lib/data/validate';
-import { commitDataChanges, isCloned, listDataFiles, writeMachineFile } from 'aitrack-lib/git';
+import {
+  commitDataChanges,
+  isCloned,
+  listDataFiles,
+  pull,
+  writeMachineFile,
+} from 'aitrack-lib/git';
 import { machineDataFilename } from 'aitrack-lib/machineId';
 import { log } from 'aitrack-lib/output';
 import {
@@ -169,6 +175,9 @@ export async function recomputeCostsCommand(): Promise<void> {
   if (!isCloned()) {
     throw new Error(REPO_NOT_CLONED_MESSAGE);
   }
+
+  log.info('Pulling latest from remote...');
+  pull();
 
   const files = listDataFiles();
   if (files.length === 0) {

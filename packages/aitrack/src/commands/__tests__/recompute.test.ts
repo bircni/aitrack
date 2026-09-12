@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   loadConfig: vi.fn(),
   resolveMachineId: vi.fn(),
   isCloned: vi.fn(),
+  pull: vi.fn(),
   listDataFiles: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('aitrack-lib/config', () => ({
 vi.mock('aitrack-lib/git', () => ({
   LOCAL_REPO: '/repo',
   isCloned: mocks.isCloned,
+  pull: mocks.pull,
   listDataFiles: mocks.listDataFiles,
   commitDataChanges: vi.fn(() => true),
   writeMachineFile: (filePath: string, machine: MachineFile) => {
@@ -84,6 +86,12 @@ describe('recomputeCostsCommand', () => {
   it('throws when the repo has not been cloned', async () => {
     mocks.isCloned.mockReturnValue(false);
     await expect(recomputeCostsCommand()).rejects.toThrow('Repo not cloned');
+    expect(mocks.pull).not.toHaveBeenCalled();
+  });
+
+  it('pulls the data repo before rewriting machine files', async () => {
+    await recomputeCostsCommand();
+    expect(mocks.pull).toHaveBeenCalled();
   });
 
   it('refreshes the current machine from local JSONL when available', async () => {
