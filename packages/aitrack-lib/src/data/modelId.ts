@@ -10,6 +10,10 @@
  * together.
  */
 
+/** Claude families, in fallback-pricing order. */
+export const CLAUDE_FAMILIES = ['fable', 'mythos', 'opus', 'haiku', 'sonnet'] as const;
+export type ClaudeFamily = (typeof CLAUDE_FAMILIES)[number];
+
 /** Strip the `-latest` alias suffix. Applied by readers before storing a model. */
 export function stripModelAliasSuffix(model: string): string {
   return model.replace(/-latest$/u, '');

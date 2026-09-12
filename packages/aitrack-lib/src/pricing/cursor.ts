@@ -1,9 +1,20 @@
+import { CLAUDE_FAMILIES } from '../data/modelId.js';
 import {
   CLAUDE_PRICING_BY_ID,
   estimateClaudeCostFromAggregateTokens,
   estimateClaudeCostFromStoredCounts,
 } from './claude.js';
 import { CODEX_PRICING_BY_ID, estimateCodexCostUSD } from './codex.js';
+
+const CLAUDE_FAMILY_ALTERNATION = CLAUDE_FAMILIES.join('|');
+const CURSOR_CLAUDE_VERSION_FIRST = new RegExp(
+  `^claude-(\\d+)(?:[.-](\\d+))?-(${CLAUDE_FAMILY_ALTERNATION})$`,
+  'u',
+);
+const CURSOR_CLAUDE_FAMILY_FIRST = new RegExp(
+  `^claude-(${CLAUDE_FAMILY_ALTERNATION})-(\\d+)(?:[.-](\\d+))?$`,
+  'u',
+);
 
 /**
  * One Cursor CSV row's token counts.
@@ -80,13 +91,13 @@ export function estimateCursorCostUSD(
 function normalizeCursorModelId(rawModel: string): string | undefined {
   const model = rawModel.trim().toLowerCase();
 
-  const versionFirst = /^claude-(\d+)(?:[.-](\d+))?-(sonnet|opus|haiku)$/u.exec(model);
+  const versionFirst = CURSOR_CLAUDE_VERSION_FIRST.exec(model);
   if (versionFirst) {
     const [, major, minor, family] = versionFirst;
     return minor ? `claude-${family}-${major}-${minor}` : `claude-${family}-${major}`;
   }
 
-  const familyFirst = /^claude-(sonnet|opus|haiku)-(\d+)(?:[.-](\d+))?$/u.exec(model);
+  const familyFirst = CURSOR_CLAUDE_FAMILY_FIRST.exec(model);
   if (familyFirst) {
     const [, family, major, minor] = familyFirst;
     return minor ? `claude-${family}-${major}-${minor}` : `claude-${family}-${major}`;

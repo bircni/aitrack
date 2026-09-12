@@ -38,6 +38,22 @@ describe('renderTui', () => {
     expect(output).not.toContain('TOTAL');
   });
 
+  it('uses the provider cost heading when only Cursor is shown', () => {
+    const output = renderTui({
+      cursor: new Map([['2024-06-01', makeDay(100, 50, 1.25)]]),
+    });
+    expect(output).toContain('Cost');
+    expect(output).not.toContain('Est. cost');
+  });
+
+  it('keeps Est. cost when more than one provider is shown', () => {
+    const output = renderTui({
+      claude_code: new Map([['2024-06-01', makeDay(100, 50, 1)]]),
+      cursor: new Map([['2024-06-01', makeDay(200, 100, 2)]]),
+    });
+    expect(output).toContain('Est. cost');
+  });
+
   it('adds a total row for multiple providers', () => {
     const output = renderTui({
       claude_code: new Map([['2024-06-01', makeDay(100, 50)]]),
