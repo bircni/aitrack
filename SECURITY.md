@@ -9,9 +9,9 @@
 
 ## What stays local
 
-- **Cursor usage** is never synced to git. It is available only from the current machine when Cursor is selected for `show`, `usage`, `export`, `top`, or `daemon`.
+- **Cursor usage** is never synced to git. It is available only from the current machine when Cursor is selected for `show`, `usage`, `export`, or `top`.
 - `aitrack doctor` reads the local Cursor auth state to report whether a token exists, but does not request the usage export.
-- Config (`~/.config/aitrack/config.json`) stays on disk locally. It can contain the git remote URL, machine ID, additional Claude/Codex source paths, and daemon defaults; none of the config file itself is copied into the data repo.
+- Config (`~/.config/aitrack/config.json`) stays on disk locally. It can contain the git remote URL, machine ID, additional Claude/Codex source paths, and a monthly budget; none of the config file itself is copied into the data repo.
 
 ## Recommendations
 

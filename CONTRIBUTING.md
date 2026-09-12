@@ -74,6 +74,9 @@ Tests run `vitest run`; the `ci` configuration adds coverage. Run
 The CLI and library depend on the shared test-fixtures package, so fixture changes
 invalidate their cached checks.
 
+If `nx` hangs without starting tasks (typically when Nx Cloud is unreachable),
+rerun with `NX_NO_CLOUD=true NX_DAEMON=false`.
+
 CI uses `nx affected` with `nrwl/nx-set-shas` supplying the comparison commits.
 Lint and formatter configuration are inputs to their respective targets. Shared tool
 versions live in the catalog in `pnpm-workspace.yaml`; published packages have catalog
