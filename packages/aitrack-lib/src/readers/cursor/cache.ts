@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { isFiniteNumber, isRecord } from '../../data/guards.js';
 import { environmentValue } from '../../env.js';
 import { CACHE_DIR } from '../../paths.js';
+import { machineTimezone } from '../../timezone.js';
 import { packageVersion } from '../../version.js';
 
 /**
@@ -61,6 +62,7 @@ export function readCursorCache(): CursorCacheEntry | null {
     // Costs are baked in when the CSV is aggregated, so a pricing/app change
     // must not serve stale dollars.
     parsed.appVersion !== packageVersion() ||
+    parsed.timezone !== machineTimezone() ||
     typeof parsed.csv !== 'string' ||
     typeof parsed.fetchedAt !== 'string'
   ) {
@@ -90,6 +92,7 @@ export function writeCursorCache(entry: CursorCacheEntry): void {
   const payload = JSON.stringify({
     format: CACHE_FORMAT,
     appVersion: packageVersion(),
+    timezone: machineTimezone(),
     fetchedAt: entry.fetchedAt,
     csv: entry.csv,
     ...(entry.workingAuthShape !== undefined && { workingAuthShape: entry.workingAuthShape }),

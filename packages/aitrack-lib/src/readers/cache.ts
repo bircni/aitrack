@@ -6,6 +6,7 @@ import { isFiniteNumber, isRecord } from '../data/guards.js';
 import type { DayEntry, DayMap, TokenCounts } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { CACHE_DIR } from '../paths.js';
+import { machineTimezone } from '../timezone.js';
 import { packageVersion } from '../version.js';
 
 /**
@@ -70,6 +71,7 @@ function readCacheFile(filePath: string): Record<string, CacheEntry> {
     // Costs are baked in at parse time, so a release that changes the pricing
     // tables must invalidate everything rather than serve stale dollars.
     parsed.appVersion !== packageVersion() ||
+    parsed.timezone !== machineTimezone() ||
     !isRecord(parsed.entries)
   ) {
     return {};
@@ -151,6 +153,7 @@ export function openParseCache(name: string): ParseCache {
       const payload = JSON.stringify({
         format: CACHE_FORMAT,
         appVersion: packageVersion(),
+        timezone: machineTimezone(),
         entries: next,
       });
       // Write-then-rename so a concurrent reader never sees a half-written

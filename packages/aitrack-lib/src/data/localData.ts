@@ -1,16 +1,10 @@
 import type { FallbackCollector } from '../pricing/fallback.js';
 import { syncedProviders } from '../providers/index.js';
+import { machineTimezone } from '../timezone.js';
 import { CURRENT_SCHEMA_VERSION } from './schema.js';
 import type { DayMap, MachineFile, ProviderDay, TokenCounts } from './types.js';
 
-/** IANA zone of this machine, for the machine file's `timezone` field. */
-export function machineTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  } catch {
-    return 'UTC';
-  }
-}
+export { machineTimezone };
 
 function tokenCountFields(counts: TokenCounts): TokenCounts {
   return {
