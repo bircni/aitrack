@@ -59,6 +59,18 @@ describe('cursor CSV cache', () => {
     });
   });
 
+  it('ignores an entry written in another timezone', () => {
+    writeCursorCache({ fetchedAt: '2026-01-01T00:00:00.000Z', csv: 'Date,Model\n' });
+    const stored: unknown = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
+    writeFileSync(
+      CACHE_FILE,
+      JSON.stringify({ ...(stored as object), timezone: 'Not/A-Zone' }),
+      'utf8',
+    );
+
+    expect(readCursorCache()).toBeNull();
+  });
+
   it('ignores an entry written by another app version', () => {
     mkdirSync(join(TEST_HOME, '.config', 'aitrack', 'cache'), { recursive: true });
     writeFileSync(

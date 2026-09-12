@@ -96,6 +96,18 @@ describe('openParseCache', () => {
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });
 
+  it('drops a cache written in a different timezone', async () => {
+    await seedCache();
+    const stored: unknown = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
+    writeFileSync(
+      CACHE_FILE,
+      JSON.stringify({ ...(stored as object), timezone: 'Not/A-Zone' }),
+      'utf8',
+    );
+
+    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
+  });
+
   it('drops a cache written in a different format', async () => {
     await seedCache();
     const stored: unknown = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
