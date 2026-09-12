@@ -62,7 +62,12 @@ describe('git helpers', () => {
 
     expect(mocks.spawnSync).toHaveBeenCalledWith(
       'git',
-      ['clone', 'git@example.com:me/data.git', expect.stringContaining(join('aitrack', 'repo'))],
+      [
+        'clone',
+        '--',
+        'git@example.com:me/data.git',
+        expect.stringContaining(join('aitrack', 'repo')),
+      ],
       { stdio: 'inherit' },
     );
     expect(mocks.rmSync).toHaveBeenCalledWith(expect.stringContaining(join('aitrack', 'repo')), {
@@ -591,26 +596,31 @@ describe('git helpers', () => {
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(join('pending', 'data')));
   });
 
-  it('rejects an unsafe pending filename before adopting it', () => {
-    mocks.existsSync.mockReturnValue(true);
-    mocks.readdirSync.mockReturnValue(['..\\escape.json']);
+  it('skips an unsafe pending filename instead of aborting adoption', () => {
+    mocks.existsSync.mockImplementation((path: string) => path.includes(join('pending', 'data')));
+    mocks.readdirSync.mockReturnValue(['..\\escape.json', 'host.json']);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    expect(() => adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toThrow(
-      'not safe in a filename',
+    expect(adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toBe(1);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('..\\escape.json'));
+    expect(mocks.copyFileSync).toHaveBeenCalledTimes(1);
+    expect(mocks.copyFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('host.json'),
+      expect.stringContaining(join('repo', 'data', 'host.json')),
+      1,
     );
-    expect(mocks.copyFileSync).not.toHaveBeenCalled();
   });
 
-  it('refuses to adopt a pending file whose name only differs after normalization', () => {
+  it('skips a pending file whose name only differs after normalization', () => {
     // ` host.json` validates but trims to `host`, so adopting it would silently
-    // rename the machine's data. Bail instead.
+    // rename the machine's data. Skip it so a stray file cannot brick init.
     mocks.existsSync.mockImplementation((path: string) => path.includes(join('pending', 'data')));
-    mocks.readdirSync.mockReturnValue([' host.json']);
+    mocks.readdirSync.mockReturnValue([' host.json', 'host.json']);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    expect(() => adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toThrow(
-      'invalid name',
-    );
-    expect(mocks.copyFileSync).not.toHaveBeenCalled();
+    expect(adoptPendingDataFiles('/home/test/.config/aitrack/repo/data')).toBe(1);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(' host.json'));
+    expect(mocks.copyFileSync).toHaveBeenCalledTimes(1);
   });
 
   it('rolls back the copied file when deleting the staged source fails', () => {
