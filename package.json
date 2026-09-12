@@ -1,6 +1,6 @@
 {
   "name": "aitrack-workspace",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "Monorepo for aitrack (the CLI) and aitrack-lib (the core library).",
   "homepage": "https://github.com/bircni/aitrack#readme",

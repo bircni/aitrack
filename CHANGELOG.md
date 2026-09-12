@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.0.1] - 2026-09-12
+
+
+
+### Build
+
+- **deps:** Update dependencies (#76)
+
+### CI
+
+- Set up nx-cloud workspace (#78)
+
+### Refactoring
+
+- **store:** Write machine files through one store helper
+- **usage:** Put previous windows and arg parsing on the period registry
+- **providers:** Own doctor results and labels on the registry
+- **data:** Add token counts through one helper
+- **data:** Split usage loading into composable sources
+
 ## [v2.0.0] - 2026-09-09
 
 
