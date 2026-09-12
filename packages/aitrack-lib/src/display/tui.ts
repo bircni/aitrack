@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import { sumDayMap } from '../data/aggregate.js';
 import { mergeDayMaps } from '../data/dayMap.js';
 import type { DayMap, ProviderData } from '../data/types.js';
-import { providerLabel } from '../providers/index.js';
+import { costColumnLabel, providerLabel } from '../providers/index.js';
 import { fmt, fmtUSD } from './format.js';
 import { resolveProviderLayout } from './heatmap/layout.js';
 import { providerStats } from './heatmap/providerStats.js';
@@ -67,6 +67,11 @@ function totalRow(dayMaps: DayMap[]): StatsRow {
   };
 }
 
+function costHeader(keys: string[]): string {
+  const only = keys.length === 1 ? keys[0] : undefined;
+  return only === undefined ? 'Est. cost' : costColumnLabel(only);
+}
+
 export function renderTui(providerData: ProviderData, options: TuiOptions = {}): string {
   const { layoutData, keys } = resolveProviderLayout(providerData, {
     all: options.all,
@@ -108,7 +113,7 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
       { header: 'Input', align: 'right', cell: (r) => r.input },
       { header: 'Output', align: 'right', cell: (r) => r.output },
       { header: 'Total', align: 'right', cell: (r) => r.total },
-      { header: 'Est. cost', align: 'right', cell: (r) => r.cost },
+      { header: costHeader(keys), align: 'right', cell: (r) => r.cost },
       { header: 'Streak', align: 'right', cell: (r) => r.streak },
       { header: 'Peak month', align: 'left', cell: (r) => r.peak },
     ],

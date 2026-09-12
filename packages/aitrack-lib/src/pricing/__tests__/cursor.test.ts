@@ -32,6 +32,8 @@ describe('estimateCursorCostUSD', () => {
     expect(estimateCursorCostUSD('claude-4.5-sonnet', aggregate(M, M))).toBeCloseTo(3 + 15);
     expect(estimateCursorCostUSD('claude-4-5-sonnet', aggregate(M, M))).toBeCloseTo(18);
     expect(estimateCursorCostUSD('claude-sonnet-4-5', aggregate(M, M))).toBeCloseTo(18);
+    expect(estimateCursorCostUSD('claude-5.1-fable', aggregate(M, M))).toBeCloseTo(10 + 50);
+    expect(estimateCursorCostUSD('claude-fable-5-1', aggregate(M, M))).toBeCloseTo(60);
   });
 
   it('prices a bare-major Claude id', () => {

@@ -1,6 +1,4 @@
-import { stripModelVersionSuffixes } from '../../data/modelId.js';
-
-const CLAUDE_FAMILIES = ['opus', 'sonnet', 'haiku'];
+import { CLAUDE_FAMILIES, stripModelVersionSuffixes } from '../../data/modelId.js';
 
 function titleCase(word: string): string {
   return `${(word.at(0) ?? '').toUpperCase()}${word.slice(1)}`;

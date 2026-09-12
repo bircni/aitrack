@@ -4,7 +4,7 @@
 // Last updated: 2026-09-05. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
 
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
-import { stripModelVersionSuffixes } from '../data/modelId.js';
+import { CLAUDE_FAMILIES, type ClaudeFamily, stripModelVersionSuffixes } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';
 
 export interface ClaudePricing {
@@ -83,7 +83,7 @@ export const CLAUDE_PRICING_OVERRIDES: Record<
 };
 
 // Family fallback for unknown future models.
-const FAMILY_FALLBACK: Record<'fable' | 'mythos' | 'opus' | 'sonnet' | 'haiku', ClaudePricing> = {
+const FAMILY_FALLBACK: Record<ClaudeFamily, ClaudePricing> = {
   fable: priceFromBase(10, 50),
   mythos: priceFromBase(10, 50),
   opus: priceFromBase(5, 25),
@@ -126,7 +126,7 @@ export function findClaudePricing(
   }
   const exact = CLAUDE_PRICING_BY_ID[id];
   if (exact) return exact;
-  for (const family of ['fable', 'mythos', 'opus', 'haiku', 'sonnet'] as const) {
+  for (const family of CLAUDE_FAMILIES) {
     if (!id.includes(family)) {
       continue;
     }
