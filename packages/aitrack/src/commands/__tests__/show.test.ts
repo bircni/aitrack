@@ -166,7 +166,7 @@ describe('showCommand', () => {
     expect(mocks.spawn).toHaveBeenLastCalledWith(
       'cmd',
       ['/c', 'start', '', expect.stringContaining('out.png')],
-      expect.objectContaining({ windowsVerbatimArguments: true }),
+      expect.objectContaining({ detached: true, stdio: 'ignore' }),
     );
 
     mocks.spawn.mockClear();
