@@ -13,10 +13,11 @@ import { log } from 'aitrack-lib/output';
 
 function openFile(filePath: string): void {
   if (process.platform === 'win32') {
+    // Let Node quote the path. `windowsVerbatimArguments` would pass spaces
+    // through unquoted, and `start` would treat the first token as the command.
     spawn('cmd', ['/c', 'start', '', filePath], {
       detached: true,
       stdio: 'ignore',
-      windowsVerbatimArguments: true,
     }).unref();
     return;
   }
