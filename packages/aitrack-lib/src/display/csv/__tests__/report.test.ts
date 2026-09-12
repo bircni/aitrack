@@ -65,6 +65,26 @@ describe('renderUsageReportCsv', () => {
     expect(csv.trimEnd().endsWith('TOTAL,,500,100,600,')).toBe(true);
   });
 
+  it('prefixes formula-like model names so spreadsheets treat them as text', () => {
+    const csv = renderUsageReportCsv(
+      report(
+        [
+          {
+            key: 'x',
+            label: 'Prov',
+            rows: [row('=HYPERLINK("http://x")', 1, 1, 1)],
+            subtotalTokens: 2,
+            subtotalCostUSD: 1,
+            subtotalHasCost: true,
+          },
+        ],
+        { inputTokens: 1, outputTokens: 1, tokens: 2, costUSD: 1, hasCost: true },
+      ),
+    );
+
+    expect(csv).toContain('Prov,"\'=HYPERLINK(""http://x"")",1,1,2,1.0000');
+  });
+
   it('quotes a field that contains a comma', () => {
     const csv = renderUsageReportCsv(
       report(

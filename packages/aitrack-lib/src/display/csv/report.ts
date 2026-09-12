@@ -9,7 +9,11 @@ import type { UsageReport } from '../../data/usageReport.js';
 const HEADER = ['provider', 'model', 'input_tokens', 'output_tokens', 'total_tokens', 'cost_usd'];
 
 function csvField(value: string | number): string {
-  const text = String(value);
+  let text = String(value);
+  // Neutralise spreadsheet formula injection from untrusted model names.
+  if (/^[=+\-@\t\r]/u.test(text)) {
+    text = `'${text}`;
+  }
   return /[",\r\n]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
