@@ -77,6 +77,31 @@ describe('initCommand', () => {
     expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
 
+  it('keeps existing source and budget settings when re-running init', async () => {
+    mocks.loadConfig.mockReturnValue({
+      repoUrl: 'same-url',
+      machineId: 'my-pc',
+      claudeProjectsDir: '/custom/claude',
+      codexSessionsDir: '/custom/codex',
+      budget: { monthlyUSD: 200 },
+    });
+    mocks.isCloned.mockReturnValue(true);
+    mocks.prompts
+      .mockResolvedValueOnce({ overwrite: true })
+      .mockResolvedValueOnce({ repoUrl: 'same-url' })
+      .mockResolvedValueOnce({ machineId: 'my-pc' });
+
+    await initCommand();
+
+    expect(mocks.saveConfig).toHaveBeenCalledWith({
+      repoUrl: 'same-url',
+      machineId: 'my-pc',
+      claudeProjectsDir: '/custom/claude',
+      codexSessionsDir: '/custom/codex',
+      budget: { monthlyUSD: 200 },
+    });
+  });
+
   it('overwrites an existing config and skips cloning when the URL is unchanged', async () => {
     mocks.loadConfig.mockReturnValue({ repoUrl: 'same-url', machineId: 'my-pc' });
     mocks.isCloned.mockReturnValue(true);
