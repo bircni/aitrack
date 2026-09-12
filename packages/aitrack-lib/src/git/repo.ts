@@ -18,7 +18,7 @@ export function isCloned(): boolean {
 }
 
 export function cloneRepo(url: string): void {
-  const result = spawnSync('git', ['clone', url, LOCAL_REPO], { stdio: 'inherit' });
+  const result = spawnSync('git', ['clone', '--', url, LOCAL_REPO], { stdio: 'inherit' });
   if (result.status !== 0) {
     throw new Error(`git clone failed with exit code ${String(result.status)}`);
   }

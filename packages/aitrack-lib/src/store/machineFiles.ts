@@ -12,7 +12,7 @@ import { basename, dirname, join } from 'node:path';
 
 import type { MachineFile } from '../data/types.js';
 import { parseMachineFile } from '../data/validate.js';
-import { machineDataFilename, normalizeMachineId } from '../machineId.js';
+import { machineDataFilename, machineIdValidationError, normalizeMachineId } from '../machineId.js';
 import { log } from '../output.js';
 import { DATA_DIR, PENDING_DATA_DIR } from '../paths.js';
 
@@ -57,16 +57,24 @@ export function writePendingMachineFile(machine: MachineFile): void {
 
 export function listPendingDataFiles(): string[] {
   if (!existsSync(PENDING_DATA_DIR)) return [];
-  return readdirSync(PENDING_DATA_DIR)
-    .filter((f: string) => f.endsWith('.json'))
-    .map((f: string) => {
-      // Check the entry name as read, before join() can rewrite it. A `..\`
-      // prefix is an ordinary character run on POSIX but a real traversal on
-      // Windows, where join() resolves it to a path outside this directory and
-      // leaves basename() a clean name that passes every later check.
-      normalizeMachineId(f.slice(0, -'.json'.length));
-      return join(PENDING_DATA_DIR, f);
-    });
+  const files: string[] = [];
+  for (const f of readdirSync(PENDING_DATA_DIR)) {
+    if (!f.endsWith('.json')) continue;
+    // Check the entry name as read, before join() can rewrite it. A `..\`
+    // prefix is an ordinary character run on POSIX but a real traversal on
+    // Windows, where join() resolves it to a path outside this directory and
+    // leaves basename() a clean name that passes every later check.
+    const machineId = f.slice(0, -'.json'.length);
+    const error = machineIdValidationError(machineId);
+    if (error !== null || machineId.trim() !== machineId) {
+      log.warn(
+        `Skipping staged data file with an invalid name: ${f}${error === null ? '' : ` (${error})`}`,
+      );
+      continue;
+    }
+    files.push(join(PENDING_DATA_DIR, f));
+  }
+  return files;
 }
 
 export function adoptPendingDataFiles(targetDataDir: string): number {
