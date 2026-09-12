@@ -12,7 +12,6 @@ import type { MachineFileDiagnostic } from './validate.js';
  * with the reporting, since it is a presentation decision.
  */
 const warnedDroppedDays = new Set<string>();
-/** Files whose migration has already been reported this run — one line each. */
 
 function formatMachineFileDiagnostic(diagnostic: MachineFileDiagnostic): string {
   switch (diagnostic.kind) {
@@ -21,6 +20,10 @@ function formatMachineFileDiagnostic(diagnostic: MachineFileDiagnostic): string 
     }
     case 'day-dropped': {
       return `Dropping day ${diagnostic.date} from machine file ${diagnostic.filePath}: ${diagnostic.reason}`;
+    }
+    default: {
+      const _exhaustive: never = diagnostic;
+      throw new Error(`Unhandled machine-file diagnostic: ${JSON.stringify(_exhaustive)}`);
     }
   }
 }

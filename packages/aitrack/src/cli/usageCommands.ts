@@ -50,7 +50,8 @@ export function registerUsageCommands(
       .option('--compare', 'compare with the equivalent previous period')
       .option('--json', 'print machine-readable JSON');
 
-    switch (def.argShape) {
+    const argShape = def.argShape;
+    switch (argShape) {
       case 'date': {
         command.action((date: string, options: UsageCommonOptions) => {
           runUsageFromPeriod(def.period, [date], options, runAsync);
@@ -74,6 +75,10 @@ export function registerUsageCommands(
           runUsageFromPeriod(def.period, [], options, runAsync);
         });
         break;
+      }
+      default: {
+        const _exhaustive: never = argShape;
+        throw new Error(`Unhandled usage period arg shape: ${String(_exhaustive)}`);
       }
     }
   }
