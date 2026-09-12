@@ -127,7 +127,7 @@ export async function initCommand(): Promise<void> {
   }
   migrateMachineDataFiles(previousMachineId, machineId);
 
-  saveConfig({ repoUrl, machineId });
+  saveConfig({ ...existing, repoUrl, machineId });
   if (adopted > 0) {
     log.info(`Adopted ${String(adopted)} pending data file(s) into the repo.`);
   }
