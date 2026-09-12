@@ -240,6 +240,7 @@ describe('readCursorData', () => {
       'https://cursor.test/api/dashboard/export-usage-events-csv?strategy=tokens',
     );
     expect(new Headers(authCall[1]?.headers).get('Authorization')).toBe('Bearer access-token');
+    expect(authCall[1]?.signal).toBeInstanceOf(AbortSignal);
     expect(map.get('2024-01-01')).toEqual({
       inputTokens: 35,
       outputTokens: 7,

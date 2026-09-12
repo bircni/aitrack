@@ -9,6 +9,8 @@ import { decodeJwtPayload } from './jwt.js';
  */
 const CURSOR_WEB_BASE_URL_ENV = 'CURSOR_WEB_BASE_URL';
 const CURSOR_SESSION_COOKIE_NAME = 'WorkosCursorSessionToken';
+/** Per-attempt limit so a stalled export cannot hang a report command. */
+const CURSOR_FETCH_TIMEOUT_MS = 20_000;
 
 function getCursorWebBaseUrl(): URL {
   const configured = environmentValue(CURSOR_WEB_BASE_URL_ENV) ?? 'https://cursor.com';
@@ -100,6 +102,7 @@ export async function fetchCursorUsageCsv(
         Accept: 'text/csv,text/plain;q=0.9,*/*;q=0.8',
         ...attempt.headers,
       },
+      signal: AbortSignal.timeout(CURSOR_FETCH_TIMEOUT_MS),
     });
     if (response.ok) return { response, shape: attempt.label };
     const responseBody = await response.text();
