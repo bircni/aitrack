@@ -75,34 +75,3 @@ export function getProviderTheme(
   const providerThemes = THEMES[dark ? 'dark' : 'light'];
   return providerThemes[providerKey] ?? providerThemes._default;
 }
-
-export function pagePalette(dark: boolean): {
-  bg: string;
-  text: string;
-  muted: string;
-  divider: string;
-  sectionBg: string;
-  tableHeaderBg: string;
-  tableRowAlt: string;
-} {
-  const p = PALETTE[dark ? 'dark' : 'light'];
-  return dark
-    ? {
-        bg: p.bg,
-        text: p.title,
-        muted: p.muted,
-        divider: p.divider,
-        sectionBg: '#161b22',
-        tableHeaderBg: '#1f2630',
-        tableRowAlt: '#1a2027',
-      }
-    : {
-        bg: p.bg,
-        text: p.title,
-        muted: p.label,
-        divider: p.divider,
-        sectionBg: '#fafafa',
-        tableHeaderBg: '#f0f0f0',
-        tableRowAlt: '#f6f6f6',
-      };
-}
