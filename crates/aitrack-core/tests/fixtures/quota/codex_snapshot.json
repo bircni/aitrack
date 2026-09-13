@@ -1,0 +1,19 @@
+{
+  "providerKey": "codex",
+  "providerLabel": "Codex",
+  "timestamp": "2026-09-13T09:00:00Z",
+  "windows": [
+    {
+      "periodStart": null,
+      "periodEnd": null,
+      "limit": 5000000.0,
+      "used": 2500000.0,
+      "remaining": 2500000.0,
+      "unit": "tokens"
+    }
+  ],
+  "metadata": {
+    "account_count": 1
+  },
+  "error": null
+}

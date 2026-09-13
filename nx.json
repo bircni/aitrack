@@ -44,12 +44,24 @@
         "testTargetName": "test",
         "testMode": "run"
       }
+    },
+    {
+      "plugin": "@monodon/rust"
     }
   ],
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "production": ["default", "!{projectRoot}/**/__tests__/**", "!{projectRoot}/vitest.config.ts"],
     "sharedGlobals": ["{workspaceRoot}/tsconfig.base.json"],
+    "rust": [
+      "{projectRoot}/**/*.{rs,toml}",
+      "{workspaceRoot}/Cargo.toml",
+      "{workspaceRoot}/Cargo.lock",
+      "{workspaceRoot}/rust-toolchain.toml",
+      {
+        "runtime": "rustc -vV"
+      }
+    ],
     "lintConfig": ["{workspaceRoot}/.oxlintrc.json"],
     "formatConfig": ["{workspaceRoot}/.oxfmtrc.json"],
     "platform": [
@@ -88,6 +100,18 @@
         "additionalArguments": "--type-aware"
       },
       "inputs": ["default", "^production", "lintConfig"],
+      "cache": true
+    },
+    "@monodon/rust:build": {
+      "inputs": ["rust", "^rust"],
+      "cache": true
+    },
+    "@monodon/rust:test": {
+      "inputs": ["rust", "^rust"],
+      "cache": true
+    },
+    "@monodon/rust:lint": {
+      "inputs": ["rust", "^rust"],
       "cache": true
     },
     "format:check": {

@@ -283,10 +283,11 @@ Every module is reachable both from the package root and at its own subpath.
 
 This repo is an [nx](https://nx.dev/) monorepo:
 
-| Package                                        | Published as  | What it is                                           |
-| ---------------------------------------------- | ------------- | ---------------------------------------------------- |
-| [`packages/aitrack`](packages/aitrack)         | `aitrack`     | The `aitrack` command line                           |
-| [`packages/aitrack-lib`](packages/aitrack-lib) | `aitrack-lib` | Readers, pricing, the data model, storage, renderers |
+| Package                                        | Published as  | What it is                                                                |
+| ---------------------------------------------- | ------------- | ------------------------------------------------------------------------- |
+| [`packages/aitrack`](packages/aitrack)         | `aitrack`     | The `aitrack` command line                                                |
+| [`packages/aitrack-lib`](packages/aitrack-lib) | `aitrack-lib` | Readers, pricing, the data model, storage, renderers                      |
+| [`crates/aitrack-core`](crates/aitrack-core)   | _(internal)_  | Rust core (desktop foundation; shares on-disk formats with `aitrack-lib`) |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full layout and the development workflow.
 

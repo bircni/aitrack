@@ -1,0 +1,20 @@
+{
+  "providerKey": "claude",
+  "providerLabel": "Claude",
+  "timestamp": "2026-09-13T09:00:00Z",
+  "windows": [
+    {
+      "periodStart": null,
+      "periodEnd": null,
+      "limit": null,
+      "used": 1500000.0,
+      "remaining": null,
+      "unit": "tokens"
+    }
+  ],
+  "metadata": {
+    "input_tokens": 1000000,
+    "output_tokens": 500000
+  },
+  "error": null
+}
