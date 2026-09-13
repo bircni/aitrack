@@ -26,6 +26,9 @@ export interface UsageReportRow {
   inputTokens: number;
   outputTokens: number;
   tokens: number;
+  /** Subset of inputTokens that hit a prompt cache. */
+  cachedInputTokens: number;
+  hasCached: boolean;
   costUSD: number;
   hasCost: boolean;
 }
@@ -43,6 +46,8 @@ export interface UsageReportTotals {
   inputTokens: number;
   outputTokens: number;
   tokens: number;
+  cachedInputTokens: number;
+  hasCached: boolean;
   costUSD: number;
   hasCost: boolean;
 }
@@ -93,6 +98,8 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
     inputTokens: 0,
     outputTokens: 0,
     tokens: 0,
+    cachedInputTokens: 0,
+    hasCached: false,
     costUSD: 0,
     hasCost: false,
   };
@@ -116,12 +123,18 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
         inputTokens: agg.inputTokens,
         outputTokens: agg.outputTokens,
         tokens,
+        cachedInputTokens: agg.cachedInputTokens,
+        hasCached: agg.hasCached,
         costUSD: agg.hasCost ? agg.costUSD : 0,
         hasCost: agg.hasCost,
       });
       subtotalTokens += tokens;
       totals.inputTokens += agg.inputTokens;
       totals.outputTokens += agg.outputTokens;
+      if (agg.hasCached) {
+        totals.cachedInputTokens += agg.cachedInputTokens;
+        totals.hasCached = true;
+      }
       if (agg.hasCost) {
         subtotalCostUSD += agg.costUSD;
         isSubtotalHasCost = true;

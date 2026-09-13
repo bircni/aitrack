@@ -93,7 +93,7 @@ describe('cursor CSV cache', () => {
     expect(readCursorCache()?.csv).toBe('a');
   });
 
-  it('embeds the current app version so a pricing bump invalidates it', () => {
+  it('embeds the current app version so a parser bump invalidates it', () => {
     writeCursorCache({ fetchedAt: new Date().toISOString(), csv: 'a' });
     const raw: unknown = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
     expect((raw as { appVersion: string }).appVersion).toBe(packageVersion());

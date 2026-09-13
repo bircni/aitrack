@@ -14,8 +14,7 @@ import { packageVersion } from '../../version.js';
  * sequence) every single run.
  *
  * The raw CSV is stored rather than the aggregated DayMap so `csv.ts` stays the
- * one parser and a pricing-table change re-aggregates from cache without the
- * network.
+ * one parser and a parser change re-aggregates from cache without the network.
  */
 const CACHE_FORMAT = 1;
 const CACHE_FILE = 'cursor.json';
@@ -59,8 +58,7 @@ export function readCursorCache(): CursorCacheEntry | null {
   if (
     !isRecord(parsed) ||
     parsed.format !== CACHE_FORMAT ||
-    // Costs are baked in when the CSV is aggregated, so a pricing/app change
-    // must not serve stale dollars.
+    // A parser/app change must not keep serving a CSV read under old rules.
     parsed.appVersion !== packageVersion() ||
     parsed.timezone !== machineTimezone() ||
     typeof parsed.csv !== 'string' ||

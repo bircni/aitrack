@@ -21,6 +21,7 @@ export type UsageOptions = UsageReportOptions & { json?: boolean; compare?: bool
 interface Row {
   provider: string;
   tokens: string;
+  cached: string;
   model: string;
   price: string;
   isTotal?: boolean;
@@ -46,6 +47,7 @@ function renderUsageReport(report: UsageReport): void {
       rows.push({
         provider: provider.label,
         tokens: fmt(row.tokens),
+        cached: row.hasCached ? fmt(row.cachedInputTokens) : '—',
         model: row.model,
         price: row.hasCost ? fmtUSD(row.costUSD) : '—',
       });
@@ -55,29 +57,34 @@ function renderUsageReport(report: UsageReport): void {
   const totalRow: Row = {
     provider: 'TOTAL',
     tokens: fmt(report.totals.tokens),
+    cached: report.totals.hasCached ? fmt(report.totals.cachedInputTokens) : '—',
     model: '',
     price: report.totals.hasCost ? fmtUSD(report.totals.costUSD) : '—',
     isTotal: true,
   };
 
+  const columns = [
+    { header: 'Provider', align: 'left' as const, cell: (r: Row) => r.provider },
+    { header: 'Tokens', align: 'right' as const, cell: (r: Row) => r.tokens },
+    ...(report.totals.hasCached
+      ? [{ header: 'Cached', align: 'right' as const, cell: (r: Row) => r.cached }]
+      : []),
+    { header: 'Model', align: 'left' as const, cell: (r: Row) => r.model },
+    { header: 'Price', align: 'right' as const, cell: (r: Row) => r.price },
+  ];
+
   log.info(chalk.bold(`aitrack usage ${report.windowLabel}`));
   log.info(
-    renderTerminalTable(
-      [...rows, totalRow],
-      [
-        { header: 'Provider', align: 'left', cell: (r) => r.provider },
-        { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
-        { header: 'Model', align: 'left', cell: (r) => r.model },
-        { header: 'Price', align: 'right', cell: (r) => r.price },
-      ],
-      {
-        style: defaultTableStyle(),
-        bodyRows: rows,
-        footerRow: totalRow,
-        footerStyle: chalk.bold.cyan,
-      },
-    ),
+    renderTerminalTable([...rows, totalRow], columns, {
+      style: defaultTableStyle(),
+      bodyRows: rows,
+      footerRow: totalRow,
+      footerStyle: chalk.bold.cyan,
+    }),
   );
+  if (report.totals.hasCached) {
+    log.info(chalk.dim('Cached is included in Tokens (prompt-cache hits, billed cheaper).'));
+  }
 }
 
 function renderComparison(report: UsageComparisonReport): void {
@@ -179,6 +186,8 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
       inputTokens: 0,
       outputTokens: 0,
       tokens: 0,
+      cachedInputTokens: 0,
+      hasCached: false,
       costUSD: 0,
       hasCost: false,
     };

@@ -9,6 +9,8 @@ function row(model: string, input: number, output: number, cost: number | null) 
     inputTokens: input,
     outputTokens: output,
     tokens: input + output,
+    cachedInputTokens: 0,
+    hasCached: false,
     costUSD: cost ?? 0,
     hasCost: cost !== null,
   };
@@ -32,14 +34,22 @@ describe('renderUsageReportCsv', () => {
             subtotalHasCost: true,
           },
         ],
-        { inputTokens: 1000, outputTokens: 200, tokens: 1200, costUSD: 3.5, hasCost: true },
+        {
+          inputTokens: 1000,
+          outputTokens: 200,
+          tokens: 1200,
+          cachedInputTokens: 0,
+          hasCached: false,
+          costUSD: 3.5,
+          hasCost: true,
+        },
       ),
     );
 
     expect(csv.split('\n')).toEqual([
-      'provider,model,input_tokens,output_tokens,total_tokens,cost_usd',
-      'Claude Code,claude-opus-4-8,1000,200,1200,3.5000',
-      'TOTAL,,1000,200,1200,3.5000',
+      'provider,model,input_tokens,cached_input_tokens,output_tokens,total_tokens,cost_usd',
+      'Claude Code,claude-opus-4-8,1000,,200,1200,3.5000',
+      'TOTAL,,1000,,200,1200,3.5000',
       '',
     ]);
   });
@@ -57,12 +67,20 @@ describe('renderUsageReportCsv', () => {
             subtotalHasCost: false,
           },
         ],
-        { inputTokens: 500, outputTokens: 100, tokens: 600, costUSD: 0, hasCost: false },
+        {
+          inputTokens: 500,
+          outputTokens: 100,
+          tokens: 600,
+          cachedInputTokens: 0,
+          hasCached: false,
+          costUSD: 0,
+          hasCost: false,
+        },
       ),
     );
 
-    expect(csv).toContain('Cursor,auto,500,100,600,\n');
-    expect(csv.trimEnd().endsWith('TOTAL,,500,100,600,')).toBe(true);
+    expect(csv).toContain('Cursor,auto,500,,100,600,\n');
+    expect(csv.trimEnd().endsWith('TOTAL,,500,,100,600,')).toBe(true);
   });
 
   it('prefixes formula-like model names so spreadsheets treat them as text', () => {
@@ -78,11 +96,19 @@ describe('renderUsageReportCsv', () => {
             subtotalHasCost: true,
           },
         ],
-        { inputTokens: 1, outputTokens: 1, tokens: 2, costUSD: 1, hasCost: true },
+        {
+          inputTokens: 1,
+          outputTokens: 1,
+          tokens: 2,
+          cachedInputTokens: 0,
+          hasCached: false,
+          costUSD: 1,
+          hasCost: true,
+        },
       ),
     );
 
-    expect(csv).toContain('Prov,"\'=HYPERLINK(""http://x"")",1,1,2,1.0000');
+    expect(csv).toContain('Prov,"\'=HYPERLINK(""http://x"")",1,,1,2,1.0000');
   });
 
   it('quotes a field that contains a comma', () => {
@@ -98,10 +124,18 @@ describe('renderUsageReportCsv', () => {
             subtotalHasCost: true,
           },
         ],
-        { inputTokens: 1, outputTokens: 1, tokens: 2, costUSD: 1, hasCost: true },
+        {
+          inputTokens: 1,
+          outputTokens: 1,
+          tokens: 2,
+          cachedInputTokens: 0,
+          hasCached: false,
+          costUSD: 1,
+          hasCost: true,
+        },
       ),
     );
 
-    expect(csv).toContain('"Prov, Inc",m,1,1,2,1.0000');
+    expect(csv).toContain('"Prov, Inc",m,1,,1,2,1.0000');
   });
 });

@@ -1,10 +1,10 @@
 // Per-model Claude pricing from https://platform.claude.com/docs/en/about-claude/pricing
 // Cache read = 0.10x input (0.025x on Fable 5.1 / Mythos 5.1); cache create (5min) = 1.25x input.
 // Keep entries keyed by normalized family-first id (with date/latest suffixes stripped).
-// Last updated: 2026-09-05. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
+// Last updated: 2026-09-13. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
 
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
-import { CLAUDE_FAMILIES, type ClaudeFamily, stripModelVersionSuffixes } from '../data/modelId.js';
+import { CLAUDE_FAMILIES, type ClaudeFamily, canonicalizeClaudeModelId } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';
 
 export interface ClaudePricing {
@@ -46,7 +46,9 @@ export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
   'claude-opus-4-5': priceFromBase(5, 25),
   'claude-sonnet-4-6': priceFromBase(3, 15),
   'claude-sonnet-4-5': priceFromBase(3, 15),
-  'claude-sonnet-5': priceFromBase(3, 15),
+  // Anthropic kept the launch $2/$10 rate as the standard price; the planned
+  // Sept 2026 step-up to $3/$15 did not happen.
+  'claude-sonnet-5': priceFromBase(2, 10),
   'claude-haiku-4-5': priceFromBase(1, 5),
   // Older / deprecated
   'claude-opus-4-1': priceFromBase(15, 75),
@@ -70,17 +72,11 @@ export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
 // in CLAUDE_PRICING_BY_ID". Sort each list ascending by `before`.
 //
 // Anthropic normally ships a new model id at a new tier rather than re-pricing
-// an existing one, so this table stays small. It exists for the exception:
-// claude-sonnet-5 launched at introductory rates and moved to the standard
-// tier later, and without the entry every day of sonnet-5 usage recorded
-// before that date would be silently re-costed at the higher rate.
+// an existing one, so this table stays small.
 export const CLAUDE_PRICING_OVERRIDES: Record<
   string,
   Array<{ before: string; pricing: ClaudePricing }>
-> = {
-  // Introductory pricing through 2026-08-31; standard tier from 2026-09-01.
-  'claude-sonnet-5': [{ before: '2026-09-01', pricing: priceFromBase(2, 10) }],
-};
+> = {};
 
 // Family fallback for unknown future models.
 const FAMILY_FALLBACK: Record<ClaudeFamily, ClaudePricing> = {
@@ -100,12 +96,7 @@ function canonicalClaudeModelId(model: string): string {
   const cached = canonicalIdCache.get(model);
   if (cached !== undefined) return cached;
 
-  const id = stripModelVersionSuffixes(model.toLowerCase());
-  const legacy = /^claude-(\d+)(?:-(\d+))?-(opus|sonnet|haiku)$/u.exec(id);
-  const [, major, minor, family] = legacy ?? [];
-  const canonical =
-    legacy && major && family ? `claude-${family}-${major}${minor ? `-${minor}` : ''}` : id;
-
+  const canonical = canonicalizeClaudeModelId(model);
   canonicalIdCache.set(model, canonical);
   return canonical;
 }

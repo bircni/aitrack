@@ -31,6 +31,8 @@ export function sumDayMap(dayMap: DayMap): TokenTotals {
 export interface ModelAgg {
   inputTokens: number;
   outputTokens: number;
+  cachedInputTokens: number;
+  hasCached: boolean;
   costUSD: number;
   hasCost: boolean;
   days: number;
@@ -61,11 +63,23 @@ export function aggregateModelsByDayMap(
       if (tokens === 0 && counts.costUSD === undefined) continue;
       let agg = byModel.get(model);
       if (!agg) {
-        agg = { inputTokens: 0, outputTokens: 0, costUSD: 0, hasCost: false, days: 0 };
+        agg = {
+          inputTokens: 0,
+          outputTokens: 0,
+          cachedInputTokens: 0,
+          hasCached: false,
+          costUSD: 0,
+          hasCost: false,
+          days: 0,
+        };
         byModel.set(model, agg);
       }
       agg.inputTokens += counts.inputTokens;
       agg.outputTokens += counts.outputTokens;
+      if (counts.cachedInputTokens !== undefined) {
+        agg.cachedInputTokens += counts.cachedInputTokens;
+        agg.hasCached = true;
+      }
       agg.days++;
       if (counts.costUSD !== undefined) {
         agg.costUSD += counts.costUSD;

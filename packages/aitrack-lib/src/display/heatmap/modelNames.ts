@@ -1,14 +1,28 @@
-import { CLAUDE_FAMILIES, stripModelVersionSuffixes } from '../../data/modelId.js';
+import {
+  CLAUDE_FAMILIES,
+  canonicalizeClaudeModelId,
+  stripModelEffortSuffix,
+  stripModelVersionSuffixes,
+} from '../../data/modelId.js';
 
 function titleCase(word: string): string {
   return `${(word.at(0) ?? '').toUpperCase()}${word.slice(1)}`;
 }
 
+function displayStem(model: string): string {
+  const lowered = model.toLowerCase();
+  const canonical = lowered.startsWith('claude-')
+    ? canonicalizeClaudeModelId(model)
+    : stripModelEffortSuffix(stripModelVersionSuffixes(lowered));
+  return canonical.replace(/^claude-/u, '');
+}
+
 // "claude-haiku-4-5-20251001" -> "Haiku 4.5"; "claude-sonnet-4-20250514" ->
 // "Sonnet 4"; "claude-3-7-sonnet-20250219" -> "Sonnet 3.7";
+// "claude-fable-5-1-thinking-high" -> "Fable 5.1";
 // "gpt-5.1-codex" -> "GPT-5.1 Codex"
 export function displayModelName(model: string): string {
-  const cleaned = stripModelVersionSuffixes(model).replace(/^claude-/u, '');
+  const cleaned = displayStem(model);
 
   for (const family of CLAUDE_FAMILIES) {
     // Both orderings ship in real ids — family-first ("sonnet-4-5") and the

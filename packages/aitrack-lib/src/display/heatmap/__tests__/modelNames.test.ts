@@ -10,6 +10,8 @@ describe('displayModelName', () => {
     expect(displayModelName('claude-fable-5-1')).toBe('Fable 5.1');
     expect(displayModelName('claude-mythos-5-1')).toBe('Mythos 5.1');
     expect(displayModelName('gpt-5.1-codex')).toBe('GPT-5.1 Codex');
+    expect(displayModelName('claude-fable-5-1-thinking-high')).toBe('Fable 5.1');
+    expect(displayModelName('gpt-6-astra-high')).toBe('GPT-6 Astra');
     expect(displayModelName('unknown-thing')).toBe('unknown-thing');
   });
 

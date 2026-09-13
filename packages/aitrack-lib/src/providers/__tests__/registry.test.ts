@@ -74,7 +74,7 @@ describe('provider registry', () => {
         'recompute',
       ),
     ).toBeGreaterThan(0);
-    // Cursor rows are priced at aggregation time, never through here.
+    // Cursor is never priced — billed rates are unpublished.
     expect(
       getProvider('cursor')?.pricing.priceModelCost(
         'claude-sonnet-4-5',

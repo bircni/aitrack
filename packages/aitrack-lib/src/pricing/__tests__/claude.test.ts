@@ -22,18 +22,19 @@ describe('claude pricing', () => {
     });
     expect(findClaudePricing('claude-mythos-5-1').cacheReadPerMillion).toBe(0.25);
     expect(findClaudePricing('claude-fable-5').cacheReadPerMillion).toBe(1);
+    expect(findClaudePricing('claude-fable-5-1-thinking-high')).toEqual(
+      findClaudePricing('claude-fable-5-1'),
+    );
+    expect(findClaudePricing('claude-5.1-fable').inputPerMillion).toBe(10);
 
     const sonnet = findClaudePricing('claude-sonnet-4-6');
     expect(sonnet.inputPerMillion).toBe(3);
     expect(sonnet.outputPerMillion).toBe(15);
 
-    const sonnet5Intro = findClaudePricing('claude-sonnet-5', '2026-07-01');
-    expect(sonnet5Intro.inputPerMillion).toBe(2);
-    expect(sonnet5Intro.outputPerMillion).toBe(10);
-
-    const sonnet5Standard = findClaudePricing('claude-sonnet-5', '2026-09-01');
-    expect(sonnet5Standard.inputPerMillion).toBe(3);
-    expect(sonnet5Standard.outputPerMillion).toBe(15);
+    const sonnet5 = findClaudePricing('claude-sonnet-5', '2026-07-01');
+    expect(sonnet5.inputPerMillion).toBe(2);
+    expect(sonnet5.outputPerMillion).toBe(10);
+    expect(findClaudePricing('claude-sonnet-5', '2026-09-01').inputPerMillion).toBe(2);
 
     const dated = findClaudePricing('claude-haiku-4-5-20251001');
     expect(dated.inputPerMillion).toBe(1);
