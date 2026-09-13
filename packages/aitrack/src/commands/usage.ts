@@ -10,6 +10,7 @@ import {
   type UsageReportOptions,
 } from 'aitrack-lib/data/usageReport';
 import { fmt, fmtUSD, fmtUSDCost } from 'aitrack-lib/display/format';
+import { displayModelName } from 'aitrack-lib/display/modelNames';
 import { defaultTableStyle, renderTerminalTable } from 'aitrack-lib/display/terminalTable';
 import { log } from 'aitrack-lib/output';
 import chalk from 'chalk';
@@ -48,7 +49,7 @@ function renderUsageReport(report: UsageReport): void {
         provider: provider.label,
         tokens: fmt(row.tokens),
         cached: row.hasCached ? fmt(row.cachedInputTokens) : '—',
-        model: row.model,
+        model: displayModelName(row.model, { effort: true }),
         price: row.hasCost ? fmtUSD(row.costUSD) : '—',
       });
     }
@@ -123,7 +124,7 @@ function renderComparison(report: UsageComparisonReport): void {
     .filter((model) => model.tokens.delta !== 0 || model.costUSD.delta !== 0)
     .map((model) => ({
       provider: model.providerLabel,
-      model: model.model,
+      model: displayModelName(model.model, { effort: true }),
       tokens: formatDelta(model.tokens, fmt),
       cost: model.hasCost ? formatDelta(model.costUSD, fmtUSDCost) : '—',
     }));

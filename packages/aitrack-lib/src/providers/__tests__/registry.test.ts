@@ -74,10 +74,17 @@ describe('provider registry', () => {
         'recompute',
       ),
     ).toBeGreaterThan(0);
-    // Cursor is never priced — billed rates are unpublished.
     expect(
       getProvider('cursor')?.pricing.priceModelCost(
         'claude-sonnet-4-5',
+        counts,
+        undefined,
+        'merge',
+      ),
+    ).toBeGreaterThan(0);
+    expect(
+      getProvider('cursor')?.pricing.priceModelCost(
+        'unknown-cursor-model',
         counts,
         undefined,
         'merge',

@@ -26,7 +26,11 @@ const CLAUDE_VERSION_FIRST = new RegExp(
 );
 
 /** Cursor/Claude Code effort labels that are not part of the priced model id. */
-const MODEL_EFFORT_SUFFIX = /(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))+(?:-thinking)?$/u;
+const MODEL_EFFORT_TOKEN = 'low|medium|extra-high|xhigh|high|max|none|minimal|ultra';
+const MODEL_EFFORT_SUFFIX = new RegExp(
+  `(?:-thinking)?(?:-(?:${MODEL_EFFORT_TOKEN}))+(?:-thinking)?$`,
+  'u',
+);
 /** Strip the `-latest` alias suffix. Applied by readers before storing a model. */
 export function stripModelAliasSuffix(model: string): string {
   return model.replace(/-latest$/u, '');
@@ -48,6 +52,23 @@ export function stripModelEffortSuffix(model: string): string {
     if (next === current) return current;
     current = next;
   }
+}
+
+/**
+ * The thinking/effort/fast knobs on a raw id (`medium`, `xhigh fast`), or
+ * undefined when the slug is already the priced model.
+ */
+export function modelEffortLabel(model: string): string | undefined {
+  let rest = model.toLowerCase();
+  const fast = rest.endsWith('-fast');
+  if (fast) rest = rest.slice(0, -'-fast'.length);
+  rest = stripModelVersionSuffixes(rest);
+  const match = MODEL_EFFORT_SUFFIX.exec(rest);
+  const effort = match
+    ? match[0].replaceAll('-thinking', '').replace(/^-/u, '').replaceAll('-', ' ')
+    : '';
+  const parts = [effort, fast ? 'fast' : ''].filter((part) => part !== '');
+  return parts.length > 0 ? parts.join(' ') : undefined;
 }
 
 /**

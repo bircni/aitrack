@@ -29,7 +29,7 @@ packages/
       display/        TUI, PNG heatmap, PDF/CSV receipts
         heatmap/      Shared heatmap stats, themes, view models
       readers/        Provider-specific ingestion (Claude, Codex, Cursor)
-      pricing/        Model pricing tables and cost resolution
+      pricing/        Cost resolution; rates and aliases in pricing/tables/*.json
       providers/      Provider registry and descriptors
       store/          Machine files on disk and their schema migrations
   aitrack/            The CLI: `aitrack` on the command line

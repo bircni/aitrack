@@ -26,15 +26,13 @@ describe('buildProviderSectionViewModel', () => {
     expect(vm.headerStats.some((cell) => cell.label === 'EST. COST')).toBe(true);
   });
 
-  it('labels the Cursor column as Cost, not an estimate', () => {
-    // Cursor usage is unpriced. The header still says Cost (and renders a dash
-    // when nothing is stored), not Est. cost.
+  it('labels the Cursor column as Est. cost', () => {
     const dayMap: DayMap = new Map([['2026-01-15', makeDay(10, 5)]]);
     const vm = buildProviderSectionViewModel('cursor', dayMap);
 
     expect(vm.name).toBe('Cursor');
-    expect(vm.headerStats.some((cell) => cell.label === 'COST')).toBe(true);
-    expect(statValue(vm.headerStats, 'COST')).toBe('—');
+    expect(vm.headerStats.some((cell) => cell.label === 'EST. COST')).toBe(true);
+    expect(statValue(vm.headerStats, 'EST. COST')).toBe('—');
   });
 
   it('shows a dash where there is no cost or no model history', () => {

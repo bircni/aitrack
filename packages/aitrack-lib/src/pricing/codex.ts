@@ -1,86 +1,23 @@
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
 import { stripModelEffortSuffix, stripModelVersionSuffixes } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';
+import { CODEX_FAMILY_FALLBACK, CODEX_PRICING_BY_ID, CODEX_PRICING_OVERRIDES } from './tables.js';
+import type { CodexPricing } from './types.js';
 
-// Per-model OpenAI (Codex) pricing.
-// Sources:
-//   https://developers.openai.com/api/docs/pricing
-//   https://developers.openai.com/codex/pricing
-//   https://openrouter.ai/openai/gpt-5.1-codex
-// Codex sessions report aggregate input/output tokens plus a cached-input subset,
-// which is billed at 10% of the base input rate.
-// Last updated: 2026-09-13.
+export type { CodexPricing };
+export {
+  CODEX_PRICING_BY_ID,
+  CODEX_PRICING_CURRENT,
+  CODEX_PRICING_HISTORICAL,
+  CODEX_PRICING_OVERRIDES,
+} from './tables.js';
 
-export interface CodexPricing {
-  inputPerMillion: number;
-  outputPerMillion: number;
+function canonicalCodexModelId(model: string): string {
+  return stripModelEffortSuffix(stripModelVersionSuffixes(model.toLowerCase()));
 }
 
-// Models currently listed on developers.openai.com/api/docs/pricing.
-// Verified by `pnpm run pricing:check`.
-export const CODEX_PRICING_CURRENT: Record<string, CodexPricing> = {
-  'gpt-6-astra': { inputPerMillion: 10, outputPerMillion: 50 },
-  'gpt-5.6-sol': { inputPerMillion: 4, outputPerMillion: 20 },
-  'gpt-5.6-terra': { inputPerMillion: 2, outputPerMillion: 12 },
-  'gpt-5.6-luna': { inputPerMillion: 0.2, outputPerMillion: 1.2 },
-  'gpt-5.5': { inputPerMillion: 5, outputPerMillion: 30 },
-  'gpt-5.5-pro': { inputPerMillion: 30, outputPerMillion: 180 },
-  'gpt-5.4': { inputPerMillion: 2.5, outputPerMillion: 15 },
-  'gpt-5.4-mini': { inputPerMillion: 0.75, outputPerMillion: 4.5 },
-  'gpt-5.4-nano': { inputPerMillion: 0.2, outputPerMillion: 1.25 },
-  'gpt-5.4-pro': { inputPerMillion: 30, outputPerMillion: 180 },
-  'gpt-5.3-codex': { inputPerMillion: 1.75, outputPerMillion: 14 },
-  'gpt-5-codex': { inputPerMillion: 1.25, outputPerMillion: 10 },
-};
-
-// Models we've seen in synced session data but that OpenAI no longer lists
-// publicly. Kept here so historical sessions still cost-resolve. Not checked
-// by the drift script.
-export const CODEX_PRICING_HISTORICAL: Record<string, CodexPricing> = {
-  'gpt-5.2-codex': { inputPerMillion: 1.75, outputPerMillion: 14 },
-  'gpt-5.1-codex': { inputPerMillion: 1.25, outputPerMillion: 10 },
-  'gpt-5.1-codex-max': { inputPerMillion: 1.25, outputPerMillion: 10 },
-  'gpt-5.1-codex-mini': { inputPerMillion: 0.25, outputPerMillion: 2 },
-  'gpt-5': { inputPerMillion: 1.25, outputPerMillion: 10 },
-  'gpt-5.1': { inputPerMillion: 1.25, outputPerMillion: 10 },
-};
-
-export const CODEX_PRICING_BY_ID: Record<string, CodexPricing> = {
-  ...CODEX_PRICING_CURRENT,
-  ...CODEX_PRICING_HISTORICAL,
-};
-
-// Historical pricing overrides. Same shape + semantics as Claude's overrides.
-export const CODEX_PRICING_OVERRIDES: Record<
-  string,
-  Array<{ before: string; pricing: CodexPricing }>
-> = {
-  // Sol kept its launch rates until 2026-08-20; promotional rates from 2026-08-21.
-  'gpt-5.6-sol': [{ before: '2026-08-21', pricing: { inputPerMillion: 5, outputPerMillion: 30 } }],
-  // Launch pricing through 2026-07-29; cut rates from 2026-07-30.
-  'gpt-5.6-terra': [
-    { before: '2026-07-30', pricing: { inputPerMillion: 2.5, outputPerMillion: 15 } },
-  ],
-  'gpt-5.6-luna': [{ before: '2026-07-30', pricing: { inputPerMillion: 1, outputPerMillion: 6 } }],
-};
-
-// Fallback by family slug — keeps cost reasonable for unknown future model ids.
-const FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> = [
-  { match: /-nano$/u, pricing: { inputPerMillion: 0.2, outputPerMillion: 1.25 } },
-  { match: /-mini$/u, pricing: { inputPerMillion: 0.25, outputPerMillion: 2 } },
-  { match: /-codex(-max)?$/u, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
-  // Last resort for an unrecognized gpt-6 / gpt-5 variant. Ordered after the
-  // suffix rules above so those still win.
-  { match: /^gpt-6/u, pricing: { inputPerMillion: 10, outputPerMillion: 50 } },
-  { match: /^gpt-5/u, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
-];
-
-export function findCodexPricing(
-  model: string,
-  usageDate?: string,
-  fallbacks?: FallbackCollector,
-): CodexPricing | undefined {
-  const id = stripModelEffortSuffix(stripModelVersionSuffixes(model.toLowerCase()));
+export function lookupCodexPricing(model: string, usageDate?: string): CodexPricing | undefined {
+  const id = canonicalCodexModelId(model);
   if (usageDate) {
     const overrides = CODEX_PRICING_OVERRIDES[id];
     if (overrides) {
@@ -89,9 +26,18 @@ export function findCodexPricing(
       }
     }
   }
-  const exact = CODEX_PRICING_BY_ID[id];
+  return CODEX_PRICING_BY_ID[id];
+}
+
+export function findCodexPricing(
+  model: string,
+  usageDate?: string,
+  fallbacks?: FallbackCollector,
+): CodexPricing | undefined {
+  const exact = lookupCodexPricing(model, usageDate);
   if (exact) return exact;
-  for (const { match, pricing } of FAMILY_FALLBACK) {
+  const id = canonicalCodexModelId(model);
+  for (const { match, pricing } of CODEX_FAMILY_FALLBACK) {
     if (!match.test(id)) {
       continue;
     }
@@ -102,9 +48,6 @@ export function findCodexPricing(
   return undefined;
 }
 
-// OpenAI's automatic prompt caching bills cache hits at 10% of base input.
-// `inputTokens` here is the FULL prompt count (includes cached); `cachedInputTokens`
-// is the subset that hit the cache (defaults to 0).
 export function estimateCodexCostUSD(
   model: string,
   inputTokens: number,

@@ -20,8 +20,8 @@ describe('provider helpers', () => {
     expect(providerLabel('custom_provider')).toBe('custom_provider');
   });
 
-  it('uses Cost for cursor and Est. cost for other providers', () => {
-    expect(costColumnLabel('cursor')).toBe('Cost');
+  it('uses Est. cost for every bundled provider', () => {
+    expect(costColumnLabel('cursor')).toBe('Est. cost');
     expect(costColumnLabel('claude_code', true)).toBe('EST. COST');
   });
 

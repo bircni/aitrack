@@ -1,0 +1,184 @@
+{
+  "updatedAt": "2026-09-13",
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "comment": "USD per million tokens. Cache read is 0.10x input except Fable/Mythos 5.1 (0.025x). Cache create is 1.25x input. Family fallback prices unknown future ids.",
+  "models": {
+    "claude-fable-5-1": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 50,
+      "cacheReadPerMillion": 0.25,
+      "cacheCreatePerMillion": 12.5
+    },
+    "claude-mythos-5-1": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 50,
+      "cacheReadPerMillion": 0.25,
+      "cacheCreatePerMillion": 12.5
+    },
+    "claude-fable-5": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 50,
+      "cacheReadPerMillion": 1,
+      "cacheCreatePerMillion": 12.5
+    },
+    "claude-mythos-5": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 50,
+      "cacheReadPerMillion": 1,
+      "cacheCreatePerMillion": 12.5
+    },
+    "claude-opus-5": {
+      "inputPerMillion": 5,
+      "outputPerMillion": 25,
+      "cacheReadPerMillion": 0.5,
+      "cacheCreatePerMillion": 6.25
+    },
+    "claude-opus-4-8": {
+      "inputPerMillion": 5,
+      "outputPerMillion": 25,
+      "cacheReadPerMillion": 0.5,
+      "cacheCreatePerMillion": 6.25
+    },
+    "claude-opus-4-7": {
+      "inputPerMillion": 5,
+      "outputPerMillion": 25,
+      "cacheReadPerMillion": 0.5,
+      "cacheCreatePerMillion": 6.25
+    },
+    "claude-opus-4-6": {
+      "inputPerMillion": 5,
+      "outputPerMillion": 25,
+      "cacheReadPerMillion": 0.5,
+      "cacheCreatePerMillion": 6.25
+    },
+    "claude-opus-4-5": {
+      "inputPerMillion": 5,
+      "outputPerMillion": 25,
+      "cacheReadPerMillion": 0.5,
+      "cacheCreatePerMillion": 6.25
+    },
+    "claude-sonnet-4-6": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3,
+      "cacheCreatePerMillion": 3.75
+    },
+    "claude-sonnet-4-5": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3,
+      "cacheCreatePerMillion": 3.75
+    },
+    "claude-sonnet-5": {
+      "inputPerMillion": 2,
+      "outputPerMillion": 10,
+      "cacheReadPerMillion": 0.2,
+      "cacheCreatePerMillion": 2.5
+    },
+    "claude-haiku-4-5": {
+      "inputPerMillion": 1,
+      "outputPerMillion": 5,
+      "cacheReadPerMillion": 0.1,
+      "cacheCreatePerMillion": 1.25
+    },
+    "claude-opus-4-1": {
+      "inputPerMillion": 15,
+      "outputPerMillion": 75,
+      "cacheReadPerMillion": 1.5,
+      "cacheCreatePerMillion": 18.75
+    },
+    "claude-opus-4-0": {
+      "inputPerMillion": 15,
+      "outputPerMillion": 75,
+      "cacheReadPerMillion": 1.5,
+      "cacheCreatePerMillion": 18.75
+    },
+    "claude-opus-4": {
+      "inputPerMillion": 15,
+      "outputPerMillion": 75,
+      "cacheReadPerMillion": 1.5,
+      "cacheCreatePerMillion": 18.75
+    },
+    "claude-sonnet-4-0": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3,
+      "cacheCreatePerMillion": 3.75
+    },
+    "claude-sonnet-4": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3,
+      "cacheCreatePerMillion": 3.75
+    },
+    "claude-haiku-3-5": {
+      "inputPerMillion": 0.8,
+      "outputPerMillion": 4,
+      "cacheReadPerMillion": 0.08,
+      "cacheCreatePerMillion": 1
+    },
+    "claude-opus-3": {
+      "inputPerMillion": 15,
+      "outputPerMillion": 75,
+      "cacheReadPerMillion": 1.5,
+      "cacheCreatePerMillion": 18.75
+    },
+    "claude-sonnet-3-7": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3,
+      "cacheCreatePerMillion": 3.75
+    },
+    "claude-sonnet-3-5": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3,
+      "cacheCreatePerMillion": 3.75
+    },
+    "claude-sonnet-3": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3,
+      "cacheCreatePerMillion": 3.75
+    },
+    "claude-haiku-3": {
+      "inputPerMillion": 0.25,
+      "outputPerMillion": 1.25,
+      "cacheReadPerMillion": 0.025,
+      "cacheCreatePerMillion": 0.3125
+    }
+  },
+  "overrides": {},
+  "familyFallback": {
+    "fable": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 50,
+      "cacheReadPerMillion": 1,
+      "cacheCreatePerMillion": 12.5
+    },
+    "mythos": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 50,
+      "cacheReadPerMillion": 1,
+      "cacheCreatePerMillion": 12.5
+    },
+    "opus": {
+      "inputPerMillion": 5,
+      "outputPerMillion": 25,
+      "cacheReadPerMillion": 0.5,
+      "cacheCreatePerMillion": 6.25
+    },
+    "sonnet": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3,
+      "cacheCreatePerMillion": 3.75
+    },
+    "haiku": {
+      "inputPerMillion": 1,
+      "outputPerMillion": 5,
+      "cacheReadPerMillion": 0.1,
+      "cacheCreatePerMillion": 1.25
+    }
+  }
+}

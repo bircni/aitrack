@@ -50,6 +50,10 @@ describe('aggregateCursorCsvToDayMap', () => {
     if (!day) return;
     expect(day.inputTokens).toBe(170); // 100+50+20
     expect(day.outputTokens).toBe(30);
+    expect(day.rawInputTokens).toBe(50);
+    expect(day.cachedInputTokens).toBe(20);
+    expect(day.cacheCreationInputTokens).toBe(100);
+    expect(day.costUSD).toBeCloseTo(0.000981);
   });
 
   it('preserves legacy rows that only expose aggregate Tokens', () => {
@@ -99,7 +103,18 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(map.get('2024-01-10')).toEqual({
       inputTokens: 350,
       outputTokens: 25,
-      byModel: { 'gpt-4o': { inputTokens: 350, outputTokens: 25 } },
+      rawInputTokens: 200,
+      cachedInputTokens: 50,
+      cacheCreationInputTokens: 100,
+      byModel: {
+        'gpt-4o': {
+          inputTokens: 350,
+          outputTokens: 25,
+          rawInputTokens: 200,
+          cachedInputTokens: 50,
+          cacheCreationInputTokens: 100,
+        },
+      },
     });
     expect(map.get('2024-01-11')?.inputTokens).toBe(100);
   });

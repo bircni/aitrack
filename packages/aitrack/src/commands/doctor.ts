@@ -112,12 +112,13 @@ function pricingCheck(options: DoctorOptions): CheckResult {
   if (!options.pricingCheck) {
     const claudeCount = getProvider('claude_code')?.pricing.modelCount ?? 0;
     const codexCount = getProvider('codex')?.pricing.modelCount ?? 0;
+    const cursorCount = getProvider('cursor')?.pricing.modelCount ?? 0;
     return {
       status: 'ok',
       label: 'Pricing tables',
-      detail: `${String(claudeCount)} Claude and ${String(
-        codexCount,
-      )} Codex model entries bundled; run doctor --pricing-check for drift check`,
+      detail: `${String(claudeCount)} Claude, ${String(codexCount)} Codex, and ${String(
+        cursorCount,
+      )} Cursor model entries bundled; run doctor --pricing-check for drift check`,
     };
   }
 
