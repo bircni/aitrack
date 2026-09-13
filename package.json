@@ -40,6 +40,7 @@
     "@commitlint/cli": "^21.2.2",
     "@commitlint/config-conventional": "^21.2.2",
     "@commitlint/types": "^21.2.0",
+    "@monodon/rust": "^3.0.0",
     "@nx/js": "23.2.0",
     "@nx/vitest": "23.2.0",
     "@types/node": "catalog:",

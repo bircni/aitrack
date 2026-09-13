@@ -1,0 +1,49 @@
+{
+  "name": "aitrack-core",
+  "projectType": "library",
+  "sourceRoot": "crates/aitrack-core/src",
+  "tags": ["lang:rust", "type:lib", "scope:core"],
+  "targets": {
+    "build": {
+      "executor": "@monodon/rust:build",
+      "outputs": ["{options.target-dir}"],
+      "options": {
+        "target-dir": "dist/target/aitrack-core/build"
+      },
+      "inputs": ["rust", "^rust"],
+      "cache": true
+    },
+    "test": {
+      "executor": "@monodon/rust:test",
+      "outputs": ["{options.target-dir}"],
+      "options": {
+        "target-dir": "dist/target/aitrack-core/test"
+      },
+      "inputs": ["rust", "^rust"],
+      "cache": true,
+      "configurations": {
+        "ci": {
+          "target-dir": "dist/target/aitrack-core/test"
+        }
+      }
+    },
+    "lint": {
+      "executor": "@monodon/rust:lint",
+      "outputs": ["{options.target-dir}"],
+      "options": {
+        "target-dir": "dist/target/aitrack-core/lint",
+        "args": ["-D", "warnings"]
+      },
+      "inputs": ["rust", "^rust"],
+      "cache": true
+    },
+    "format:check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p aitrack-core -- --check"
+      },
+      "inputs": ["rust"],
+      "cache": true
+    }
+  }
+}

@@ -9,3 +9,7 @@ coverage/
 .typecheck/
 *.tsbuildinfo
 .env
+.tmp
+/target/
+**/target/
+dist/target/

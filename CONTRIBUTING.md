@@ -16,11 +16,11 @@ Use `pnpm run dev -- init` (or `sync`, `show`) to run from TypeScript without bu
 
 ## Project layout
 
-This is an [nx](https://nx.dev/) monorepo of pnpm workspace packages.
+This is an [nx](https://nx.dev/) monorepo of pnpm workspace packages plus a Cargo workspace for Rust.
 
 ```
 packages/
-  aitrack-lib/        The library: everything that is not the command line
+  aitrack-lib/        The TypeScript library: everything that is not the command line
     src/
       config.ts       Local config (~/.config/aitrack)
       git.ts          Clone, pull, push data repo
@@ -38,8 +38,16 @@ packages/
       cli/            Pure CLI parsing/validation helpers
       commands/       Command handlers (show, sync, usage, …)
   test-fixtures/      Fixtures shared by both test suites. Never published.
+crates/
+  aitrack-core/       Rust port of aitrack-lib (desktop foundation; CLI stays TS for now)
 scripts/              Repo tooling: release, release notes, pricing drift
 ```
+
+Rust tasks are wired through nx via `@monodon/rust` (`aitrack-core:build|test|lint|format:check`).
+`pnpm validate` / `pnpm nx affected -t …` include them like the TypeScript packages.
+On-disk formats (`config.json`, machine files, parse caches) stay compatible with the TS library so both can run side by side.
+
+Lint policy for Rust lives in the root `Cargo.toml` under `[workspace.lints]`; crates opt in with `[lints] workspace = true`.
 
 Tests are colocated per module in one `__tests__` folder each.
 

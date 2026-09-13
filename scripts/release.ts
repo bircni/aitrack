@@ -104,6 +104,9 @@ const VERSIONED_PACKAGES = [
   'packages/aitrack/package.json',
 ];
 
+/** Cargo workspace version kept in lockstep with the npm packages. */
+const VERSIONED_CARGO_TOMLS = ['Cargo.toml'];
+
 /** The CLI's version: it is what the `vX.Y.Z` tag names. */
 function getPackageVersion(): string {
   const package_ = JSON.parse(
@@ -120,6 +123,32 @@ function setPackageVersions(version: string, options: RunOptions): void {
       cwd: fileURLToPath(new URL(packageFile.replace(/package\.json$/u, ''), REPO_ROOT)),
     });
   }
+  for (const cargoToml of VERSIONED_CARGO_TOMLS) {
+    setCargoWorkspaceVersion(cargoToml, version, options);
+  }
+}
+
+/** Bump `[workspace.package].version` in a Cargo.toml. */
+function setCargoWorkspaceVersion(
+  relativePath: string,
+  version: string,
+  options: RunOptions,
+): void {
+  const cargoPath = fileURLToPath(new URL(relativePath, REPO_ROOT));
+  if (options.dryRun) {
+    console.log(`[dry-run] set ${relativePath} workspace.package.version = ${version}`);
+    return;
+  }
+  const raw = readFileSync(cargoPath, 'utf8');
+  // Only rewrite the workspace.package version; crates keep version.workspace = true.
+  const updated = raw.replace(
+    /(\[workspace\.package\][\s\S]*?^version\s*=\s*")[^"]+(")/mu,
+    `$1${version}$2`,
+  );
+  if (updated === raw) {
+    throw new Error(`Could not find [workspace.package] version in ${relativePath}`);
+  }
+  writeFileSync(cargoPath, updated, 'utf8');
 }
 
 /** Ask pnpm to calculate a bump in an isolated directory without touching the checkout. */
@@ -231,7 +260,11 @@ function main(): void {
 
   run('git-cliff', ['--config', '.cliff.toml', '--tag', tag, '-o', 'CHANGELOG.md'], options);
 
-  run('git', ['add', ...VERSIONED_PACKAGES, 'pnpm-lock.yaml', 'CHANGELOG.md'], options);
+  run(
+    'git',
+    ['add', ...VERSIONED_PACKAGES, ...VERSIONED_CARGO_TOMLS, 'pnpm-lock.yaml', 'CHANGELOG.md'],
+    options,
+  );
   run('git', ['commit', '-m', `chore(release): ${tag}`], options);
   run('git', ['tag', tag], options);
 

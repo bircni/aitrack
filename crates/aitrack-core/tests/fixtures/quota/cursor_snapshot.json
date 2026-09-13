@@ -1,0 +1,29 @@
+{
+  "providerKey": "cursor",
+  "providerLabel": "Cursor",
+  "timestamp": "2026-09-13T09:00:00Z",
+  "windows": [
+    {
+      "periodStart": null,
+      "periodEnd": null,
+      "limit": 500.0,
+      "used": 250.0,
+      "remaining": 250.0,
+      "unit": "requests"
+    },
+    {
+      "periodStart": null,
+      "periodEnd": null,
+      "limit": null,
+      "used": null,
+      "remaining": 1000.0,
+      "unit": "credits"
+    }
+  ],
+  "metadata": {
+    "plan_name": "Pro",
+    "credits_limit": 2000.0,
+    "credits_balance": 1000.0
+  },
+  "error": null
+}

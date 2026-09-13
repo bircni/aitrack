@@ -1,0 +1,63 @@
+[workspace]
+resolver = "2"
+members = ["crates/aitrack-core"]
+
+[workspace.package]
+version = "2.0.1"
+edition = "2024"
+license = "MIT"
+authors = ["Nicolas <bircni@icloud.com>"]
+repository = "https://github.com/bircni/aitrack"
+rust-version = "1.85"
+
+[workspace.dependencies]
+aitrack-core = { path = "crates/aitrack-core" }
+ab_glyph = "0.2"
+anyhow = "1"
+base64 = "0.23"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+chrono-tz = "0.10"
+comfy-table = "8"
+fontdue = { version = "0.9", default-features = false, features = ["std"] }
+hostname = "0.4"
+iana-time-zone = "0.1"
+pollster = "1"
+printpdf = "0.11"
+rayon = "1"
+regex = "1"
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+tempfile = "3"
+thiserror = "2"
+tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd"] }
+urlencoding = "2"
+walkdir = "2"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+deprecated = "warn"
+elided_lifetimes_in_paths = "warn"
+rust_2021_prelude_collisions = "warn"
+semicolon_in_expressions_from_macros = "warn"
+trivial_numeric_casts = "warn"
+# `unsafe_op_in_unsafe_fn` may become the default in future Rust versions:
+# https://github.com/rust-lang/rust/issues/71668
+unsafe_op_in_unsafe_fn = "warn"
+unused_extern_crates = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+
+[workspace.lints.rustdoc]
+all = "warn"
+missing_crate_level_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+correctness = "warn"
+suspicious = "warn"
+style = "warn"
+complexity = "warn"
+perf = "warn"
