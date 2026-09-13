@@ -27,8 +27,8 @@ Each machine pushes Claude Code and Codex usage to a git repo _you_ control. Pul
 - 🔒 **You own the synced data** — it lives in a git repo you create. aitrack has no account or telemetry; Cursor requests go to `cursor.com` by default when that provider is selected.
 - 🔑 **No API tokens for sync** — uses your local `git`, so whatever auth already works in your terminal (SSH keys, credential manager) just works.
 - ⚡ **Zero-setup preview** — run `npx aitrack show --tui` and see your local usage _before_ configuring anything.
-- 💰 **API-equivalent cost estimates** — per-model list pricing applied to Claude Code and Codex token/cache usage. On a subscription this is the pay-as-you-go value of your usage, not what you're billed.
-- 🧮 **Total usage value, all in one place** — combined estimates across every synced machine, plus local Cursor token usage when selected.
+- 💰 **API-equivalent cost estimates** — per-model list pricing applied to Claude Code, Codex, and Cursor token/cache usage. On a subscription this is the pay-as-you-go value of your usage, not what you're billed.
+- 🧮 **Total usage value, all in one place** — combined estimates across every synced machine, plus local Cursor usage when selected.
 
 > **Synced via git:** Claude Code, Codex (OpenAI).
 > **Cursor** is selected by default, read through the current machine's Cursor session, and **never** written to your repo. Pass `--providers claude,codex` to provider-aware commands to exclude it (see [Where data comes from](#where-data-comes-from)).
@@ -172,7 +172,7 @@ the same weekdays last week. Comparison data is also included with `--json`.
 
 ### Cost handling
 
-Claude Code and Codex costs are API-equivalent estimates from per-model list pricing, not subscription charges. Claude estimates account for regular input, cache reads, cache creation, and output. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Unknown model IDs may use a family fallback and emit a warning, or remain unpriced when no safe match exists. Cursor usage is tokens only: aitrack does not apply Claude or OpenAI list prices to it, and it ignores any Cost column in the CSV export. If stored Claude or Codex estimates are missing or pricing changed, run `aitrack recompute-costs`.
+Claude Code, Codex, and Cursor costs are API-equivalent estimates from per-model list pricing, not subscription charges. Rates live in `packages/aitrack-lib/src/pricing/tables/*.json` so a price change is a JSON edit. Claude estimates account for regular input, cache reads, cache creation, and output. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Cursor estimates use the same CSV token buckets (uncached input, cache write, cache read, output) and ignore the export's Cost column, which is plan-included rather than a list price. Cursor CSV rows are aggregates, so long-context rate tiers are not applied. Unknown Claude or Codex model IDs may use a family fallback and emit a warning; unknown Cursor models stay unpriced. If stored Claude or Codex estimates are missing or pricing changed, run `aitrack recompute-costs`.
 
 ---
 

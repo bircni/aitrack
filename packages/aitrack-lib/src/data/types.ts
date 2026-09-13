@@ -3,13 +3,14 @@ export interface TokenCounts {
   outputTokens: number;
   /**
    * Subset of inputTokens that hit a cache (Codex prompt caching, Anthropic
-   * cache_read). Billed at 10% of base input. When undefined, callers treat
-   * the value as 0 — older synced data lacks this split.
+   * cache_read, Cursor "Cache Read"). Billed at the model's cache-read rate.
+   * When undefined, callers treat the value as 0 — older synced data lacks
+   * this split.
    */
   cachedInputTokens?: number;
-  /** Claude: non-cache input_tokens only. Omitted in legacy synced data. */
+  /** Uncached input (Claude input_tokens, Cursor "Input (w/o Cache Write)"). */
   rawInputTokens?: number;
-  /** Claude: cache_creation_input_tokens. Omitted in legacy synced data. */
+  /** Cache writes (Claude cache_creation, Cursor "Input (w/ Cache Write)"). */
   cacheCreationInputTokens?: number;
   costUSD?: number;
 }

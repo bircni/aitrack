@@ -62,12 +62,22 @@ describe('usageCommand', () => {
     const out = loggedOutput();
     expect(out).toContain(`today (${TODAY_LOCALE})`);
     expect(out).toContain('Claude Code');
-    expect(out).toContain('claude-opus-4-8');
-    expect(out).toContain('claude-sonnet-4-6');
+    expect(out).toContain('Opus 4.8');
+    expect(out).toContain('Sonnet 4.6');
     expect(out).toContain('TOTAL');
     expect(out).toContain('$1.20');
     expect(out).not.toContain('Cached');
     expect(out).not.toContain('prompt-cache hits');
+    expect(out.slice(out.indexOf('┌'))).toMatchInlineSnapshot(`
+      "┌─────────────┬────────┬────────────┬───────┐
+      │ Provider    │ Tokens │ Model      │ Price │
+      ├─────────────┼────────┼────────────┼───────┤
+      │ Claude Code │    900 │ Opus 4.8   │ $1.00 │
+      │ Claude Code │    300 │ Sonnet 4.6 │ $0.20 │
+      ├─────────────┼────────┼────────────┼───────┤
+      │ TOTAL       │   1.2K │            │ $1.20 │
+      └─────────────┴────────┴────────────┴───────┘"
+    `);
   });
 
   it('shows cached input and the cache-rate note for Codex rows', async () => {
@@ -99,11 +109,21 @@ describe('usageCommand', () => {
     await usageCommand({ period: 'today', providers: ['codex'] });
 
     const out = loggedOutput();
-    expect(out).toContain('gpt-6-astra');
+    expect(out).toContain('GPT-6 Astra');
     expect(out).toContain('5.0M');
     expect(out).toContain('4.8M');
     expect(out).toContain('$7.21');
     expect(out).toContain('Cached is included in Tokens');
+    expect(out.slice(out.indexOf('┌'))).toMatchInlineSnapshot(`
+      "┌──────────┬────────┬────────┬─────────────┬───────┐
+      │ Provider │ Tokens │ Cached │ Model       │ Price │
+      ├──────────┼────────┼────────┼─────────────┼───────┤
+      │ Codex    │   5.0M │   4.8M │ GPT-6 Astra │ $7.21 │
+      ├──────────┼────────┼────────┼─────────────┼───────┤
+      │ TOTAL    │   5.0M │   4.8M │             │ $7.21 │
+      └──────────┴────────┴────────┴─────────────┴───────┘
+      Cached is included in Tokens (prompt-cache hits, billed cheaper)."
+    `);
   });
 
   it('prints JSON when requested', async () => {
@@ -146,7 +166,7 @@ describe('usageCommand', () => {
     const out = loggedOutput();
     expect(out).toContain('Compared with previous week to date');
     expect(out).toContain('Per-model movement');
-    expect(out).toContain('claude-opus');
+    expect(out).toContain('Opus');
     expect(out).toContain('+100.0%');
     expect(out).toContain('+200.0%');
     expect(mocks.loadMergedProviderData).toHaveBeenCalledTimes(1);
@@ -615,8 +635,8 @@ describe('usageCommand', () => {
   it('renders multiple providers with em-dash for missing costs', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {
-        claude_code: new Map([[TODAY, makeDay(100, 50, 1.5, 'claude-x')]]),
-        codex: new Map([[TODAY, makeDay(200, 100, undefined, 'gpt-x')]]),
+        claude_code: new Map([[TODAY, makeDay(100, 50, 1.5, 'mystery-claude')]]),
+        codex: new Map([[TODAY, makeDay(200, 100, undefined, 'mystery-gpt')]]),
       },
       machineData: [],
     });
@@ -626,9 +646,52 @@ describe('usageCommand', () => {
     const out = loggedOutput();
     expect(out).toContain('Claude Code');
     expect(out).toContain('Codex');
-    expect(out).toContain('claude-x');
-    expect(out).toContain('gpt-x');
+    expect(out).toContain('mystery-claude');
+    expect(out).toContain('mystery-gpt');
     expect(out).toContain('—');
     expect(out).toContain('$1.50');
+    expect(out).toContain('┌');
+    expect(out).toContain('└');
+  });
+
+  it('pretty-prints Cursor model slugs in the usage table', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        cursor: new Map([
+          [
+            TODAY,
+            {
+              inputTokens: 39_100_000,
+              outputTokens: 1_000_000,
+              cachedInputTokens: 37_200_000,
+              costUSD: 53.12,
+              byModel: {
+                'cursor-grok-4.6-xhigh-fast': {
+                  inputTokens: 36_600_000,
+                  outputTokens: 800_000,
+                  cachedInputTokens: 34_900_000,
+                  costUSD: 43.87,
+                },
+                'claude-sonnet-4-5': {
+                  inputTokens: 2_500_000,
+                  outputTokens: 200_000,
+                  costUSD: 9.25,
+                },
+              },
+            },
+          ],
+        ]),
+      },
+      machineData: [],
+    });
+
+    await usageCommand({ period: 'today', providers: ['cursor'] });
+
+    const out = loggedOutput();
+    expect(out).toContain('Grok 4.6 xhigh fast');
+    expect(out).toContain('Sonnet 4.5');
+    expect(out).not.toContain('cursor-grok');
+    expect(out).toContain('┌');
+    expect(out).toContain('└');
   });
 });

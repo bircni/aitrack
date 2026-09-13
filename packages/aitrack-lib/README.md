@@ -21,8 +21,8 @@ import { resolveModelCost } from 'aitrack-lib/pricing/resolve';
 import type { DayEntry, MachineFile } from 'aitrack-lib/data/types';
 ```
 
-The main groups are `readers/` (provider ingestion), `pricing/` (model price tables and cost
-resolution), `data/` (the day/model data model, validation, aggregation and reports),
+The main groups are `readers/` (provider ingestion), `pricing/` (list-price estimates; rates
+in `pricing/tables/*.json`), `data/` (the day/model data model, validation, aggregation and reports),
 `store/` and `git.ts` (the synced machine files), `providers/` (the provider registry) and
 `display/` (terminal, PNG, PDF and CSV output).
 

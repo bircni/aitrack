@@ -1,9 +1,9 @@
 import type { DayMap } from '../../data/types.js';
 import { costColumnLabel, providerLabel } from '../../providers/index.js';
 import { fmt, fmtUSDCost } from '../format.js';
+import { displayModelName } from '../modelNames.js';
 import { INTENSITY_PERCENTILE } from './constants.js';
 import { percentile } from './intensity.js';
-import { displayModelName } from './modelNames.js';
 import { providerStats } from './providerStats.js';
 import { computeModelStats, formatMonthLabel, formatPeakDate } from './stats.js';
 

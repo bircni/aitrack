@@ -1,0 +1,390 @@
+{
+  "updatedAt": "2026-09-13",
+  "source": "https://cursor.com/docs/models-and-pricing.md",
+  "comment": "Cursor-native list prices and CSV slug aliases. Claude and Codex models resolve through those tables after aliasing. Unlisted models stay unpriced. Cache write/read are explicit; there is no long-context uplift because each CSV row is an aggregate.",
+  "models": {
+    "auto": {
+      "inputPerMillion": 1.25,
+      "outputPerMillion": 6,
+      "cacheReadPerMillion": 0.25,
+      "cacheWritePerMillion": 1.25
+    },
+    "composer-1": {
+      "inputPerMillion": 1.25,
+      "outputPerMillion": 10,
+      "cacheReadPerMillion": 0.125,
+      "cacheWritePerMillion": 1.25
+    },
+    "composer-1.5": {
+      "inputPerMillion": 3.5,
+      "outputPerMillion": 17.5,
+      "cacheReadPerMillion": 0.35,
+      "cacheWritePerMillion": 3.5
+    },
+    "composer-2": {
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 2.5,
+      "cacheReadPerMillion": 0.2,
+      "cacheWritePerMillion": 0.5
+    },
+    "composer-2-fast": {
+      "inputPerMillion": 1.5,
+      "outputPerMillion": 7.5,
+      "cacheReadPerMillion": 0.35,
+      "cacheWritePerMillion": 1.5
+    },
+    "composer-2.5": {
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 2.5,
+      "cacheReadPerMillion": 0.2,
+      "cacheWritePerMillion": 0.5
+    },
+    "composer-2.5-fast": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 3
+    },
+    "github_bugbot": {
+      "inputPerMillion": 5,
+      "outputPerMillion": 30,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 5
+    },
+    "grok-4.5": {
+      "inputPerMillion": 2,
+      "outputPerMillion": 6,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 2
+    },
+    "grok-4.5-fast": {
+      "inputPerMillion": 4,
+      "outputPerMillion": 12,
+      "cacheReadPerMillion": 1,
+      "cacheWritePerMillion": 4
+    },
+    "grok-4.6": {
+      "inputPerMillion": 2,
+      "outputPerMillion": 6,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 2
+    },
+    "grok-4.6-fast": {
+      "inputPerMillion": 4,
+      "outputPerMillion": 12,
+      "cacheReadPerMillion": 1,
+      "cacheWritePerMillion": 4
+    },
+    "kimi-k2.7-code": {
+      "inputPerMillion": 0.95,
+      "outputPerMillion": 4,
+      "cacheReadPerMillion": 0.19,
+      "cacheWritePerMillion": 0.95
+    },
+    "kimi-k3": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3,
+      "cacheWritePerMillion": 3
+    },
+    "muse-spark-1.3": {
+      "inputPerMillion": 1.25,
+      "outputPerMillion": 4.25,
+      "cacheReadPerMillion": 0.15,
+      "cacheWritePerMillion": 1.25
+    },
+    "claude-opus-4-7-fast": {
+      "inputPerMillion": 30,
+      "outputPerMillion": 150,
+      "cacheReadPerMillion": 3,
+      "cacheWritePerMillion": 37.5
+    },
+    "claude-opus-4-8-fast": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 50,
+      "cacheReadPerMillion": 1,
+      "cacheWritePerMillion": 12.5
+    },
+    "claude-opus-5-fast": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 50,
+      "cacheReadPerMillion": 1,
+      "cacheWritePerMillion": 12.5
+    },
+    "claude-4-sonnet-1m": {
+      "inputPerMillion": 6,
+      "outputPerMillion": 22.5,
+      "cacheReadPerMillion": 0.6,
+      "cacheWritePerMillion": 7.5
+    },
+    "glm-5.3": {
+      "inputPerMillion": 1.4,
+      "outputPerMillion": 4.4,
+      "cacheReadPerMillion": 0.26,
+      "cacheWritePerMillion": 1.4
+    },
+    "gemini-3.6-flash": {
+      "inputPerMillion": 1.5,
+      "outputPerMillion": 7.5,
+      "cacheReadPerMillion": 0.15,
+      "cacheWritePerMillion": 1.5
+    },
+    "gemini-3.7-flash": {
+      "inputPerMillion": 0.75,
+      "outputPerMillion": 3.75,
+      "cacheReadPerMillion": 0.075,
+      "cacheWritePerMillion": 0.75
+    },
+    "gemini-3.8-flash": {
+      "inputPerMillion": 0.75,
+      "outputPerMillion": 3.75,
+      "cacheReadPerMillion": 0.075,
+      "cacheWritePerMillion": 0.75
+    }
+  },
+  "fastMultipliers": {
+    "claude-opus-5": 2,
+    "gpt-5": 2,
+    "gpt-5.1-codex": 2,
+    "gpt-5.1-codex-max": 2,
+    "gpt-5.2": 2,
+    "gpt-5.2-codex": 2,
+    "gpt-5.3-codex": 2,
+    "gpt-5.4": 2,
+    "gpt-5.5": 2.5,
+    "gpt-5.6-sol": 2,
+    "gpt-6-astra": 2,
+    "gpt-5.6-terra": 2,
+    "gpt-5.6-luna": 2
+  },
+  "aliases": [
+    { "pattern": "^agent_review$", "canonical": "gpt-5.4" },
+    { "pattern": "^default$", "canonical": "auto" },
+    { "pattern": "^auto$", "canonical": "auto" },
+    { "pattern": "^composer$", "canonical": "composer-2.5" },
+    { "pattern": "^composer-1$", "canonical": "composer-1" },
+    { "pattern": "^composer-1\\.5$", "canonical": "composer-1.5" },
+    { "pattern": "^composer-2$", "canonical": "composer-2" },
+    { "pattern": "^composer-2-fast$", "canonical": "composer-2-fast" },
+    { "pattern": "^composer-2\\.5$", "canonical": "composer-2.5" },
+    { "pattern": "^composer-2\\.5-fast$", "canonical": "composer-2.5-fast" },
+    { "pattern": "^github_bugbot$", "canonical": "github_bugbot" },
+    {
+      "pattern": "^(?:cursor-)?grok-4[.-]6-fast(?:-(?:low|medium|high|xhigh))?$",
+      "canonical": "grok-4.6-fast"
+    },
+    {
+      "pattern": "^(?:cursor-)?grok-4[.-]6(?:-(?:low|medium|high|xhigh))?-fast$",
+      "canonical": "grok-4.6-fast"
+    },
+    {
+      "pattern": "^(?:cursor-)?grok-4[.-]6(?:-(?:build|low|medium|high|xhigh))?$",
+      "canonical": "grok-4.6"
+    },
+    { "pattern": "^grok-bot-default$", "canonical": "grok-4.6-fast" },
+    { "pattern": "^grok-bot-automation$", "canonical": "grok-4.6" },
+    {
+      "pattern": "^(?:cursor-)?grok-4[.-]5-fast(?:-(?:low|medium|high|xhigh))?$",
+      "canonical": "grok-4.5-fast"
+    },
+    {
+      "pattern": "^(?:cursor-)?grok-4[.-]5(?:-(?:low|medium|high|xhigh))?-fast$",
+      "canonical": "grok-4.5-fast"
+    },
+    {
+      "pattern": "^(?:cursor-)?grok-4[.-]5(?:-(?:build|low|medium|high|xhigh))?$",
+      "canonical": "grok-4.5"
+    },
+    { "pattern": "^kimi-k2\\.7(?:-code)?$", "canonical": "kimi-k2.7-code" },
+    { "pattern": "^kimi-k2p7(?:-code)?$", "canonical": "kimi-k2.7-code" },
+    { "pattern": "^kimi-k3(?:-code)?(?:-(?:low|medium|high|xhigh|max))?$", "canonical": "kimi-k3" },
+    {
+      "pattern": "^muse-spark-1\\.3(?:-(?:minimal|low|medium|high|xhigh|extra-high|max))?$",
+      "canonical": "muse-spark-1.3"
+    },
+    { "pattern": "^claude-4\\.5-haiku(?:-thinking)?$", "canonical": "claude-haiku-4-5" },
+    {
+      "pattern": "^claude-4\\.5-opus-(?:low|medium|high)(?:-thinking)?$",
+      "canonical": "claude-opus-4-5"
+    },
+    { "pattern": "^claude-4-sonnet-1m(?:-thinking)?$", "canonical": "claude-4-sonnet-1m" },
+    { "pattern": "^claude-4-sonnet(?:-thinking)?$", "canonical": "claude-sonnet-4" },
+    { "pattern": "^claude-4\\.5-sonnet(?:-thinking)?$", "canonical": "claude-sonnet-4-5" },
+    {
+      "pattern": "^claude-4\\.6-sonnet(?:-(?:low|medium|high|xhigh|max))?(?:-thinking)?$",
+      "canonical": "claude-sonnet-4-6"
+    },
+    {
+      "pattern": "^claude-4\\.6-opus-(?:low|medium|high|max)(?:-thinking)?-fast$",
+      "canonical": "claude-opus-4-6-fast"
+    },
+    {
+      "pattern": "^claude-4\\.6-opus-(?:low|medium|high|max)(?:-thinking)?$",
+      "canonical": "claude-opus-4-6"
+    },
+    {
+      "pattern": "^claude-4\\.7-opus-(?:low|medium|high|max)(?:-thinking)?-fast$",
+      "canonical": "claude-opus-4-7-fast"
+    },
+    {
+      "pattern": "^claude-4\\.7-opus-(?:low|medium|high|max)(?:-thinking)?$",
+      "canonical": "claude-opus-4-7"
+    },
+    {
+      "pattern": "^claude-opus-4-7(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?-fast$",
+      "canonical": "claude-opus-4-7-fast"
+    },
+    {
+      "pattern": "^claude-opus-4-7(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
+      "canonical": "claude-opus-4-7"
+    },
+    {
+      "pattern": "^claude-opus-4-8(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?-fast$",
+      "canonical": "claude-opus-4-8-fast"
+    },
+    {
+      "pattern": "^claude-opus-4-8(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
+      "canonical": "claude-opus-4-8"
+    },
+    {
+      "pattern": "^claude-opus-4-6(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
+      "canonical": "claude-opus-4-6"
+    },
+    {
+      "pattern": "^claude-sonnet-4-6(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
+      "canonical": "claude-sonnet-4-6"
+    },
+    {
+      "pattern": "^claude-opus-5(?:\\[1m\\])?(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?-fast$",
+      "canonical": "claude-opus-5-fast"
+    },
+    {
+      "pattern": "^claude-opus-5(?:\\[1m\\])?(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
+      "canonical": "claude-opus-5"
+    },
+    {
+      "pattern": "^claude-fable-5[.-]1(?:\\[1m\\])?(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
+      "canonical": "claude-fable-5-1"
+    },
+    {
+      "pattern": "^claude-fable-5(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
+      "canonical": "claude-fable-5"
+    },
+    {
+      "pattern": "^claude-sonnet-5(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
+      "canonical": "claude-sonnet-5"
+    },
+    {
+      "pattern": "^gemini-3\\.6-flash(?:-exp-[a-z])?(?:-preview)?(?:-(?:none|low|medium|high|xhigh))?(?:-preview)?$",
+      "canonical": "gemini-3.6-flash"
+    },
+    {
+      "pattern": "^gemini-3\\.7-flash(?:-exp-[a-z])?(?:-preview)?(?:-(?:none|low|medium|high|xhigh))?(?:-preview)?$",
+      "canonical": "gemini-3.7-flash"
+    },
+    {
+      "pattern": "^gemini-3\\.8-flash(?:-exp-[a-z])?(?:-preview)?(?:-(?:none|low|medium|high|xhigh))?(?:-preview)?$",
+      "canonical": "gemini-3.8-flash"
+    },
+    {
+      "pattern": "^gpt-5\\.1-codex-max(?:-(?:low|medium|high|xhigh))?-fast$",
+      "canonical": "gpt-5.1-codex-max-fast"
+    },
+    {
+      "pattern": "^gpt-5\\.1-codex-max(?:-(?:low|medium|high|xhigh))?$",
+      "canonical": "gpt-5.1-codex-max"
+    },
+    {
+      "pattern": "^gpt-5\\.1-codex-mini(?:-(?:low|medium|high|xhigh))?$",
+      "canonical": "gpt-5.1-codex-mini"
+    },
+    {
+      "pattern": "^gpt-5\\.1-codex(?:-(?:low|medium|high|xhigh))?-fast$",
+      "canonical": "gpt-5.1-codex-fast"
+    },
+    { "pattern": "^gpt-5\\.1-codex(?:-(?:low|medium|high|xhigh))?$", "canonical": "gpt-5.1-codex" },
+    {
+      "pattern": "^gpt-5\\.3-codex(?:-(?:low|high|xhigh))?-fast$",
+      "canonical": "gpt-5.3-codex-fast"
+    },
+    { "pattern": "^gpt-5\\.3-codex(?:-(?:low|high|xhigh))?$", "canonical": "gpt-5.3-codex" },
+    { "pattern": "^gpt-5\\.4-(?:low|medium|high|xhigh)-fast$", "canonical": "gpt-5.4-fast" },
+    { "pattern": "^gpt-5\\.4-(?:low|medium|high|xhigh)$", "canonical": "gpt-5.4" },
+    {
+      "pattern": "^gpt-5\\.5(?:-(?:low|medium|high|xhigh|extra-high))?-fast$",
+      "canonical": "gpt-5.5-fast"
+    },
+    { "pattern": "^gpt-5\\.5(?:-(?:low|medium|high|xhigh|extra-high))?$", "canonical": "gpt-5.5" },
+    {
+      "pattern": "^gpt-5\\.6-sol(?:-(?:none|low|medium|high|xhigh|max|ultra))?-fast$",
+      "canonical": "gpt-5.6-sol-fast"
+    },
+    {
+      "pattern": "^gpt-5\\.6-sol(?:-(?:none|low|medium|high|xhigh|max|ultra))?$",
+      "canonical": "gpt-5.6-sol"
+    },
+    {
+      "pattern": "^gpt-6-astra(?:-(?:none|low|medium|high|xhigh|max|ultra))?-fast$",
+      "canonical": "gpt-6-astra-fast"
+    },
+    {
+      "pattern": "^gpt-6-astra(?:-(?:none|low|medium|high|xhigh|max|ultra))?$",
+      "canonical": "gpt-6-astra"
+    },
+    {
+      "pattern": "^gpt-5\\.6-terra(?:-(?:none|low|medium|high|xhigh|max))?-fast$",
+      "canonical": "gpt-5.6-terra-fast"
+    },
+    {
+      "pattern": "^gpt-5\\.6-terra(?:-(?:none|low|medium|high|xhigh|max))?$",
+      "canonical": "gpt-5.6-terra"
+    },
+    {
+      "pattern": "^gpt-5\\.6-luna(?:-(?:none|low|medium|high|xhigh|max))?-fast$",
+      "canonical": "gpt-5.6-luna-fast"
+    },
+    {
+      "pattern": "^gpt-5\\.6-luna(?:-(?:none|low|medium|high|xhigh|max))?$",
+      "canonical": "gpt-5.6-luna"
+    },
+    {
+      "pattern": "(?i)^(?:z-ai|zai|zhipu)/?glm-5\\.3(?:-(?:low|high|max))?$",
+      "canonical": "glm-5.3"
+    },
+    { "pattern": "(?i)^Composer 2\\.5 Fast \\(Auto[^)]*\\)$", "canonical": "composer-2.5-fast" },
+    { "pattern": "(?i)^Composer 2\\.5 \\(Auto[^)]*\\)$", "canonical": "composer-2.5" },
+    { "pattern": "(?i)^Composer 2 Fast \\(Auto[^)]*\\)$", "canonical": "composer-2-fast" },
+    { "pattern": "(?i)^Composer 2 \\(Auto[^)]*\\)$", "canonical": "composer-2" },
+    {
+      "pattern": "(?i)^(?:Cursor )?Grok 4\\.6 Fast \\(Auto[^)]*\\)$",
+      "canonical": "grok-4.6-fast"
+    },
+    { "pattern": "(?i)^(?:Cursor )?Grok 4\\.6 \\(Auto[^)]*\\)$", "canonical": "grok-4.6" },
+    {
+      "pattern": "(?i)^(?:Cursor )?Grok 4\\.5 Fast \\(Auto[^)]*\\)$",
+      "canonical": "grok-4.5-fast"
+    },
+    { "pattern": "(?i)^(?:Cursor )?Grok 4\\.5 \\(Auto[^)]*\\)$", "canonical": "grok-4.5" },
+    { "pattern": "(?i)^(?:Claude )?Haiku 4\\.5 \\(Auto[^)]*\\)$", "canonical": "claude-haiku-4-5" },
+    { "pattern": "(?i)^(?:Claude )?Opus 4\\.6(?: \\([^)]*\\))?$", "canonical": "claude-opus-4-6" },
+    {
+      "pattern": "(?i)^(?:Claude )?Sonnet 4\\.6(?: \\([^)]*\\))?$",
+      "canonical": "claude-sonnet-4-6"
+    },
+    { "pattern": "(?i)^(?:Claude )?Opus 4\\.8 \\(Auto[^)]*\\)$", "canonical": "claude-opus-4-8" },
+    { "pattern": "(?i)^(?:Claude )?Opus 5 \\(Auto[^)]*\\)$", "canonical": "claude-opus-5" },
+    { "pattern": "(?i)^(?:Claude )?Sonnet 5 \\(Auto[^)]*\\)$", "canonical": "claude-sonnet-5" },
+    { "pattern": "(?i)^(?:Claude )?Fable 5\\.1 \\(Auto[^)]*\\)$", "canonical": "claude-fable-5-1" },
+    { "pattern": "(?i)^(?:Claude )?Fable 5 \\(Auto[^)]*\\)$", "canonical": "claude-fable-5" },
+    { "pattern": "(?i)^GPT-5\\.5 \\(Auto[^)]*\\)$", "canonical": "gpt-5.5" },
+    { "pattern": "(?i)^GPT-5\\.6 Sol \\(Auto[^)]*\\)$", "canonical": "gpt-5.6-sol" },
+    { "pattern": "(?i)^GPT-6 Astra \\(Auto[^)]*\\)$", "canonical": "gpt-6-astra" },
+    { "pattern": "(?i)^GPT-5\\.6 Terra \\(Auto[^)]*\\)$", "canonical": "gpt-5.6-terra" },
+    { "pattern": "(?i)^GPT-5\\.6 Luna \\(Auto[^)]*\\)$", "canonical": "gpt-5.6-luna" },
+    { "pattern": "(?i)^Gemini 3\\.6 Flash(?: \\([^)]*\\))?$", "canonical": "gemini-3.6-flash" },
+    { "pattern": "(?i)^Gemini 3\\.7 Flash(?: \\([^)]*\\))?$", "canonical": "gemini-3.7-flash" },
+    { "pattern": "(?i)^Gemini 3\\.8 Flash(?: \\([^)]*\\))?$", "canonical": "gemini-3.8-flash" },
+    { "pattern": "(?i)^GLM 5\\.3 \\(Auto[^)]*\\)$", "canonical": "glm-5.3" },
+    { "pattern": "(?i)^Kimi K3 \\(Auto[^)]*\\)$", "canonical": "kimi-k3" }
+  ]
+}

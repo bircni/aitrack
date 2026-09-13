@@ -17,6 +17,7 @@ export default defineConfig({
         'src/**/__tests__/**',
         'src/index.ts',
         'src/data/types.ts',
+        'src/pricing/types.ts',
         'src/configTypes.ts',
         'src/display/renderOptions.ts',
       ],

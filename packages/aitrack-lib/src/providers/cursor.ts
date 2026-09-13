@@ -1,4 +1,5 @@
 import { errorMessage } from '../errors.js';
+import { CURSOR_MODELS, estimateCursorCostUSD } from '../pricing/cursor.js';
 import { getCursorStateDatabasePath, readCursorAuthState } from '../readers/cursor/auth.js';
 import { cursorCacheTtlSeconds } from '../readers/cursor/cache.js';
 import { readCursorData } from '../readers/cursor/index.js';
@@ -35,18 +36,17 @@ export const cursorProvider: LiveProvider = {
     label: 'Cursor',
     aliases: ['cursor'],
     synced: false,
-    costLabel: 'Cost',
+    costLabel: 'Est. cost',
   },
   heatmap: {
     light: ['#ebedf0', '#fde8c8', '#f8a855', '#e56b10', '#8b2e00'],
     dark: ['#1e1e24', '#3a1800', '#7a3200', '#c45a00', '#f08820'],
   },
   pricing: {
-    // Cursor usage is tokens only. Their billed rates are not published in a
-    // form we can apply, so cost stays unset rather than guessing from Claude
-    // or OpenAI list prices.
-    modelCount: 0,
-    priceModelCost: () => undefined,
+    modelCount: Object.keys(CURSOR_MODELS).length,
+    priceModelCost(model, counts, usageDate) {
+      return estimateCursorCostUSD(model, counts, usageDate);
+    },
   },
   live: {
     // A caller that passes no age gets Cursor's own TTL; `0` still forces a

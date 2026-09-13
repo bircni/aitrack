@@ -62,8 +62,8 @@ describe('topCommand', () => {
 
     const out = loggedOutput();
     expect(out).toContain('Top 5 models by tokens');
-    const opusIndex = out.indexOf('opus');
-    const sonnetIndex = out.indexOf('sonnet');
+    const opusIndex = out.indexOf('Opus');
+    const sonnetIndex = out.indexOf('Sonnet');
     expect(opusIndex).toBeGreaterThan(-1);
     expect(sonnetIndex).toBeGreaterThan(opusIndex);
   });

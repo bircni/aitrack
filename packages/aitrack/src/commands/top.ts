@@ -14,6 +14,7 @@ import {
   usageEmptyWindowMessage,
 } from 'aitrack-lib/data/usageData';
 import { fmt, fmtUSD } from 'aitrack-lib/display/format';
+import { displayModelName } from 'aitrack-lib/display/modelNames';
 import {
   defaultTableStyle,
   renderTerminalTable,
@@ -97,7 +98,7 @@ function dayToRow(d: DayEntryAccumulator, index: number): Row {
 function modelToRow(m: ModelAccumulator, index: number): Row {
   return {
     rank: String(index + 1),
-    label: m.model,
+    label: displayModelName(m.model, { effort: true }),
     sub: m.provider,
     tokens: fmt(m.tokens),
     cost: fmtUSD(m.cost),

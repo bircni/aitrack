@@ -16,6 +16,6 @@ export function isDayKey(value: string): boolean {
 /**
  * Cache reads bill at a tenth of the base input rate. Holds for every Codex
  * model and every Claude model but Fable 5.1 / Mythos 5.1, which price their
- * own cache reads in `pricing/claude.ts`.
+ * own cache reads in `pricing/tables/claude.json`.
  */
 export const CACHE_READ_RATE_MULTIPLIER = 0.1;

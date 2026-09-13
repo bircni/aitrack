@@ -9,7 +9,7 @@
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "noEmit": false
   },
-  "include": ["src"],
+  "include": ["src/**/*.ts", "src/**/*.json"],
   "exclude": ["node_modules", "dist", "src/**/__tests__/**"],
   "references": [
     {

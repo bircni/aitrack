@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalizeClaudeModelId,
   stripModelAliasSuffix,
+  modelEffortLabel,
   stripModelEffortSuffix,
   stripModelVersionSuffixes,
 } from '../modelId.js';
@@ -34,6 +35,14 @@ describe('model id suffixes', () => {
     // Priced model variants, not effort knobs.
     expect(stripModelEffortSuffix('gpt-5.4-mini')).toBe('gpt-5.4-mini');
     expect(stripModelEffortSuffix('gpt-5.5-pro')).toBe('gpt-5.5-pro');
+    expect(stripModelEffortSuffix('muse-spark-1.3-extra-high')).toBe('muse-spark-1.3');
+  });
+
+  it('names the effort knob without the priced model id', () => {
+    expect(modelEffortLabel('claude-opus-4-8-thinking-medium')).toBe('medium');
+    expect(modelEffortLabel('gpt-5.5-extra-high-fast')).toBe('extra high fast');
+    expect(modelEffortLabel('gpt-5.4-mini')).toBeUndefined();
+    expect(modelEffortLabel('composer-1')).toBeUndefined();
   });
 
   it('canonicalizes Claude ids onto the family-first pricing key', () => {

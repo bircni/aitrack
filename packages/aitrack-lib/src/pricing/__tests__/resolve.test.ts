@@ -72,7 +72,24 @@ describe('resolveModelCost', () => {
 
   it('returns undefined for unknown providers', () => {
     expect(
-      resolveModelCost('cursor', 'cursor-fast', { inputTokens: 100, outputTokens: 50 }),
+      resolveModelCost('unknown_provider', 'cursor-fast', { inputTokens: 100, outputTokens: 50 }),
     ).toBeUndefined();
+  });
+
+  it('estimates Cursor cost from cache-write / cache-read / output buckets', () => {
+    const cost = resolveModelCost(
+      'cursor',
+      'composer-1',
+      {
+        inputTokens: 0,
+        outputTokens: 1_000_000,
+        rawInputTokens: 0,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+      },
+      undefined,
+      'merge',
+    );
+    expect(cost).toBe(10);
   });
 });

@@ -95,17 +95,23 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(map.get('2024-06-01')?.byModel['gpt-4']).toEqual({
       inputTokens: 900,
       outputTokens: 600,
+      rawInputTokens: 300,
+      cachedInputTokens: 450,
+      cacheCreationInputTokens: 150,
     });
     expect(map.get('2024-06-01')?.costUSD).toBeUndefined();
 
     expect(map.get('2024-06-02')?.inputTokens).toBe(800);
     expect(map.get('2024-06-02')?.outputTokens).toBe(1200);
-    // Cursor rows are tokens only — we do not invent a list-price cost.
-    expect(map.get('2024-06-02')?.byModel['claude-3-opus']).toEqual({
+    expect(map.get('2024-06-02')?.byModel['claude-3-opus']).toMatchObject({
       inputTokens: 800,
       outputTokens: 1200,
+      rawInputTokens: 800,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
     });
-    expect(map.get('2024-06-02')?.costUSD).toBeUndefined();
+    expect(map.get('2024-06-02')?.byModel['claude-3-opus']?.costUSD).toBeCloseTo(0.102);
+    expect(map.get('2024-06-02')?.costUSD).toBeCloseTo(0.102);
   });
 
   it('uses Tokens column when Total Tokens header is absent', () => {
@@ -134,6 +140,9 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(map.get('2024-01-01')?.byModel['gpt, test']).toEqual({
       inputTokens: 350,
       outputTokens: 25,
+      rawInputTokens: 200,
+      cachedInputTokens: 50,
+      cacheCreationInputTokens: 100,
     });
   });
 });
@@ -240,7 +249,18 @@ describe('readCursorData', () => {
     expect(map.get('2024-01-01')).toEqual({
       inputTokens: 35,
       outputTokens: 7,
-      byModel: { 'gpt-4': { inputTokens: 35, outputTokens: 7 } },
+      rawInputTokens: 20,
+      cachedInputTokens: 5,
+      cacheCreationInputTokens: 10,
+      byModel: {
+        'gpt-4': {
+          inputTokens: 35,
+          outputTokens: 7,
+          rawInputTokens: 20,
+          cachedInputTokens: 5,
+          cacheCreationInputTokens: 10,
+        },
+      },
     });
   });
 
@@ -258,6 +278,9 @@ describe('readCursorData', () => {
     expect(day?.costUSD).toBeUndefined();
     expect(day?.byModel['gpt-4']?.costUSD).toBeUndefined();
     expect(day?.byModel.claude?.costUSD).toBeUndefined();
+    expect(day?.rawInputTokens).toBe(50);
+    expect(day?.cachedInputTokens).toBe(10);
+    expect(day?.cacheCreationInputTokens).toBe(25);
   });
 
   it('returns an empty map when authentication attempts fail', async () => {

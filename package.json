@@ -16,7 +16,7 @@
   "type": "module",
   "scripts": {
     "build": "nx run-many -t build",
-    "dev": "nx run aitrack:dev",
+    "dev": "nx run aitrack:build && pnpm --filter aitrack exec tsx src/cli.ts",
     "lint": "nx run-many -t lint",
     "format": "oxfmt",
     "format:check": "nx run-many -t format:check",

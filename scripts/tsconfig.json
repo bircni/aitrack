@@ -4,7 +4,8 @@
     "composite": true,
     "declaration": true,
     "rootDir": "..",
-    "outDir": ".typecheck"
+    "outDir": ".typecheck",
+    "resolveJsonModule": true
   },
   "include": ["**/*.ts", "../commitlint.config.ts"],
   "exclude": ["node_modules", "dist"],

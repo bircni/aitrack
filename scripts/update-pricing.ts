@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-// Check in-code pricing tables (Claude + Codex) against vendor docs.
+// Check bundled pricing tables (Claude + Codex JSON) against vendor docs.
 //
 // Run: `pnpm run pricing:check`
 // Exits 0 if everything matches, 1 if drift is detected.
@@ -227,7 +227,7 @@ function checkClaude(): Promise<CheckResult> {
     url: CLAUDE_PRICING_URL,
     table: CLAUDE_PRICING_BY_ID,
     knownIds: Object.keys(CLAUDE_PRICING_BY_ID),
-    sourceFile: 'src/pricing/claude.ts',
+    sourceFile: 'src/pricing/tables/claude.json',
     lookup: (html) => (modelId) => {
       const heading = claudeHeading(modelId);
       const hits = findHits(html, heading, (c) => !/[\d.]/u.test(c));
@@ -309,7 +309,7 @@ function checkCodex(): Promise<CheckResult> {
     url: CODEX_PRICING_URL,
     table: CODEX_PRICING_CURRENT,
     knownIds: Object.keys(CODEX_PRICING_BY_ID),
-    sourceFile: 'src/pricing/codex.ts',
+    sourceFile: 'src/pricing/tables/codex.json',
     lookup: (html) => {
       const rows = codexPricingRows(html);
       return (modelId) => ({
@@ -334,11 +334,13 @@ async function main(): Promise<number> {
   console.log('');
   if (totalMissing > 0) {
     console.log(
-      `${String(totalMissing)} model(s) on docs page missing from src/pricing/*.ts — add them and re-run`,
+      `${String(totalMissing)} model(s) on docs page missing from src/pricing/tables/*.json — add them and re-run`,
     );
   }
   if (totalDrift > 0) {
-    console.log(`${String(totalDrift)} model(s) drift from current docs — update src/pricing/*.ts`);
+    console.log(
+      `${String(totalDrift)} model(s) drift from current docs — update src/pricing/tables/*.json`,
+    );
   } else if (totalMissing === 0 && totalUnverified > 0) {
     console.log(`No drift, but ${String(totalUnverified)} model(s) couldn't be found on the page.`);
   } else if (totalMissing === 0 && totalDrift === 0) {

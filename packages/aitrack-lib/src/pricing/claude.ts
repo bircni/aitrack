@@ -1,95 +1,15 @@
-// Per-model Claude pricing from https://platform.claude.com/docs/en/about-claude/pricing
-// Cache read = 0.10x input (0.025x on Fable 5.1 / Mythos 5.1); cache create (5min) = 1.25x input.
-// Keep entries keyed by normalized family-first id (with date/latest suffixes stripped).
-// Last updated: 2026-09-13. Run `pnpm tsx scripts/update-pricing.ts` to check for drift.
+// Per-model Claude pricing from tables/claude.json.
+// Last updated: 2026-09-13. Edit the JSON to change rates; run `pnpm run pricing:check` for drift.
 
-import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
-import { CLAUDE_FAMILIES, type ClaudeFamily, canonicalizeClaudeModelId } from '../data/modelId.js';
+import { CLAUDE_FAMILIES, canonicalizeClaudeModelId } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';
+import { costFromRates } from './rates.js';
+import { CLAUDE_FAMILY_FALLBACK, CLAUDE_MODELS, CLAUDE_PRICING_OVERRIDES } from './tables.js';
+import type { ClaudePricing } from './types.js';
 
-export interface ClaudePricing {
-  inputPerMillion: number;
-  outputPerMillion: number;
-  cacheReadPerMillion: number;
-  cacheCreatePerMillion: number;
-}
+export type { ClaudePricing };
+export { CLAUDE_MODELS as CLAUDE_PRICING_BY_ID, CLAUDE_PRICING_OVERRIDES } from './tables.js';
 
-// Fable 5.1 and Mythos 5.1 bill a cache hit at 2.5% of base input instead of
-// the 10% every other model charges. Claude Code usage is mostly cache reads,
-// so applying the usual rate here would overstate their cost roughly 4x.
-const REDUCED_CACHE_READ_RATE_MULTIPLIER = 0.025;
-
-function priceFromBase(
-  input: number,
-  output: number,
-  cacheReadRateMultiplier = CACHE_READ_RATE_MULTIPLIER,
-): ClaudePricing {
-  return {
-    inputPerMillion: input,
-    outputPerMillion: output,
-    cacheReadPerMillion: input * cacheReadRateMultiplier,
-    cacheCreatePerMillion: input * 1.25,
-  };
-}
-
-export const CLAUDE_PRICING_BY_ID: Record<string, ClaudePricing> = {
-  // Latest generation (Fable/Mythos tier: $10/$50)
-  'claude-fable-5-1': priceFromBase(10, 50, REDUCED_CACHE_READ_RATE_MULTIPLIER),
-  'claude-mythos-5-1': priceFromBase(10, 50, REDUCED_CACHE_READ_RATE_MULTIPLIER),
-  'claude-fable-5': priceFromBase(10, 50),
-  'claude-mythos-5': priceFromBase(10, 50),
-  // Current generation (Opus 4.5+ and Sonnet/Haiku 4.5+ tier)
-  'claude-opus-5': priceFromBase(5, 25),
-  'claude-opus-4-8': priceFromBase(5, 25),
-  'claude-opus-4-7': priceFromBase(5, 25),
-  'claude-opus-4-6': priceFromBase(5, 25),
-  'claude-opus-4-5': priceFromBase(5, 25),
-  'claude-sonnet-4-6': priceFromBase(3, 15),
-  'claude-sonnet-4-5': priceFromBase(3, 15),
-  // Anthropic kept the launch $2/$10 rate as the standard price; the planned
-  // Sept 2026 step-up to $3/$15 did not happen.
-  'claude-sonnet-5': priceFromBase(2, 10),
-  'claude-haiku-4-5': priceFromBase(1, 5),
-  // Older / deprecated
-  'claude-opus-4-1': priceFromBase(15, 75),
-  'claude-opus-4-0': priceFromBase(15, 75),
-  'claude-opus-4': priceFromBase(15, 75),
-  'claude-sonnet-4-0': priceFromBase(3, 15),
-  'claude-sonnet-4': priceFromBase(3, 15),
-  'claude-haiku-3-5': priceFromBase(0.8, 4),
-  // Claude 3 generation. Listed explicitly because the family fallback prices
-  // them at the modern tier, which is 3x too low for opus and 4x too high for
-  // haiku, and the wrong figure gets persisted as costUSD.
-  'claude-opus-3': priceFromBase(15, 75),
-  'claude-sonnet-3-7': priceFromBase(3, 15),
-  'claude-sonnet-3-5': priceFromBase(3, 15),
-  'claude-sonnet-3': priceFromBase(3, 15),
-  'claude-haiku-3': priceFromBase(0.25, 1.25),
-};
-
-// Historical pricing overrides. Each entry means "for usage dates strictly
-// BEFORE `before`, this model was priced as `pricing` instead of the entry
-// in CLAUDE_PRICING_BY_ID". Sort each list ascending by `before`.
-//
-// Anthropic normally ships a new model id at a new tier rather than re-pricing
-// an existing one, so this table stays small.
-export const CLAUDE_PRICING_OVERRIDES: Record<
-  string,
-  Array<{ before: string; pricing: ClaudePricing }>
-> = {};
-
-// Family fallback for unknown future models.
-const FAMILY_FALLBACK: Record<ClaudeFamily, ClaudePricing> = {
-  fable: priceFromBase(10, 50),
-  mythos: priceFromBase(10, 50),
-  opus: priceFromBase(5, 25),
-  sonnet: priceFromBase(3, 15),
-  haiku: priceFromBase(1, 5),
-};
-
-// Called once per assistant entry while reading the JSONL corpus, which holds
-// only a handful of distinct model strings, so the lowercase plus two regexes
-// are worth caching.
 const canonicalIdCache = new Map<string, string>();
 
 function canonicalClaudeModelId(model: string): string {
@@ -101,11 +21,7 @@ function canonicalClaudeModelId(model: string): string {
   return canonical;
 }
 
-export function findClaudePricing(
-  model: string,
-  usageDate?: string,
-  fallbacks?: FallbackCollector,
-): ClaudePricing {
+export function lookupClaudePricing(model: string, usageDate?: string): ClaudePricing | undefined {
   const id = canonicalClaudeModelId(model);
   if (usageDate) {
     const overrides = CLAUDE_PRICING_OVERRIDES[id];
@@ -115,35 +31,46 @@ export function findClaudePricing(
       }
     }
   }
-  const exact = CLAUDE_PRICING_BY_ID[id];
+  return CLAUDE_MODELS[id];
+}
+
+export function findClaudePricing(
+  model: string,
+  usageDate?: string,
+  fallbacks?: FallbackCollector,
+): ClaudePricing {
+  const exact = lookupClaudePricing(model, usageDate);
   if (exact) return exact;
+  const id = canonicalClaudeModelId(model);
   for (const family of CLAUDE_FAMILIES) {
     if (!id.includes(family)) {
       continue;
     }
 
     fallbacks?.record(id);
-    return FAMILY_FALLBACK[family];
+    return CLAUDE_FAMILY_FALLBACK[family];
   }
-  // Unrecognized entirely — still a guess, so it counts as a fallback hit.
   fallbacks?.record(id);
-  return FAMILY_FALLBACK.sonnet;
+  return CLAUDE_FAMILY_FALLBACK.sonnet;
 }
 
-/**
- * The one weighted-sum formula behind all three estimators below, which
- * previously each spelled out the same `(a*in + b*out + …)/1_000_000`.
- */
 function claudeCost(
   pricing: ClaudePricing,
   tokens: { raw: number; output: number; cacheRead: number; cacheCreate: number },
 ): number {
-  return (
-    (tokens.raw * pricing.inputPerMillion +
-      tokens.output * pricing.outputPerMillion +
-      tokens.cacheRead * pricing.cacheReadPerMillion +
-      tokens.cacheCreate * pricing.cacheCreatePerMillion) /
-    1_000_000
+  return costFromRates(
+    {
+      inputPerMillion: pricing.inputPerMillion,
+      outputPerMillion: pricing.outputPerMillion,
+      cacheReadPerMillion: pricing.cacheReadPerMillion,
+      cacheWritePerMillion: pricing.cacheCreatePerMillion,
+    },
+    {
+      raw: tokens.raw,
+      output: tokens.output,
+      cacheRead: tokens.cacheRead,
+      cacheWrite: tokens.cacheCreate,
+    },
   );
 }
 
@@ -168,9 +95,6 @@ export function estimateClaudeCostUSD(
   });
 }
 
-// Backfill estimator for synced rows that lack a costUSD value (older data).
-// The cache vs raw-input split has already been collapsed into a single
-// inputTokens number, so we apply full input pricing — an upper bound.
 export function estimateClaudeCostFromAggregateTokens(
   model: string,
   inputTokens: number,

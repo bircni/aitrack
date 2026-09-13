@@ -38,7 +38,7 @@ export function reportFallbackPricing(fallbacks: FallbackCollector): void {
   const ids = fallbacks.drain();
   if (ids.length === 0) return;
   log.warn(
-    `\nWarning: priced via family fallback (no exact pricing in src/pricing/): ${ids.join(', ')}`,
+    `\nWarning: priced via family fallback (no exact pricing in src/pricing/tables/): ${ids.join(', ')}`,
   );
-  log.warn('  These costs may be wrong — update src/pricing/ with the correct rates.');
+  log.warn('  These costs may be wrong — update src/pricing/tables/ with the correct rates.');
 }
