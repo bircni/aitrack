@@ -6,6 +6,8 @@ import { createFallbackCollector } from '../fallback.js';
 describe('codex pricing', () => {
   it('costs 1M+1M tokens correctly for known models', () => {
     expect(estimateCodexCostUSD('gpt-6-astra', 1_000_000, 1_000_000)).toBe(60);
+    expect(estimateCodexCostUSD('gpt-6-astra-high', 1_000_000, 1_000_000)).toBe(60);
+    expect(estimateCodexCostUSD('gpt-6-astra-xhigh', 1_000_000, 1_000_000)).toBe(60);
     expect(estimateCodexCostUSD('gpt-5.6-sol', 1_000_000, 1_000_000)).toBe(24);
     expect(estimateCodexCostUSD('gpt-5.6-terra', 1_000_000, 1_000_000)).toBe(14);
     expect(estimateCodexCostUSD('gpt-5.6-luna', 1_000_000, 1_000_000)).toBe(1.4);
@@ -34,6 +36,10 @@ describe('codex pricing', () => {
     const bare = findCodexPricing('gpt-5.9');
     expect(bare?.inputPerMillion).toBe(1.25);
     expect(bare?.outputPerMillion).toBe(10);
+    // unknown gpt-6 variant -> Astra-tier fallback, not the gpt-5 catch-all
+    const astraFamily = findCodexPricing('gpt-6-unknown');
+    expect(astraFamily?.inputPerMillion).toBe(10);
+    expect(astraFamily?.outputPerMillion).toBe(50);
   });
 
   it('bills cached input at 10% of base', () => {

@@ -1,4 +1,5 @@
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
+import { stripModelEffortSuffix, stripModelVersionSuffixes } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';
 
 // Per-model OpenAI (Codex) pricing.
@@ -8,7 +9,7 @@ import type { FallbackCollector } from './fallback.js';
 //   https://openrouter.ai/openai/gpt-5.1-codex
 // Codex sessions report aggregate input/output tokens plus a cached-input subset,
 // which is billed at 10% of the base input rate.
-// Last updated: 2026-09-05.
+// Last updated: 2026-09-13.
 
 export interface CodexPricing {
   inputPerMillion: number;
@@ -68,8 +69,9 @@ const FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> = [
   { match: /-nano$/u, pricing: { inputPerMillion: 0.2, outputPerMillion: 1.25 } },
   { match: /-mini$/u, pricing: { inputPerMillion: 0.25, outputPerMillion: 2 } },
   { match: /-codex(-max)?$/u, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
-  // Last resort for an unrecognized gpt-5 variant. Ordered after the suffix
-  // rules above so those still win.
+  // Last resort for an unrecognized gpt-6 / gpt-5 variant. Ordered after the
+  // suffix rules above so those still win.
+  { match: /^gpt-6/u, pricing: { inputPerMillion: 10, outputPerMillion: 50 } },
   { match: /^gpt-5/u, pricing: { inputPerMillion: 1.25, outputPerMillion: 10 } },
 ];
 
@@ -78,7 +80,7 @@ export function findCodexPricing(
   usageDate?: string,
   fallbacks?: FallbackCollector,
 ): CodexPricing | undefined {
-  const id = model.toLowerCase();
+  const id = stripModelEffortSuffix(stripModelVersionSuffixes(model.toLowerCase()));
   if (usageDate) {
     const overrides = CODEX_PRICING_OVERRIDES[id];
     if (overrides) {

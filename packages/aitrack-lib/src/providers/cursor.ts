@@ -42,8 +42,9 @@ export const cursorProvider: LiveProvider = {
     dark: ['#1e1e24', '#3a1800', '#7a3200', '#c45a00', '#f08820'],
   },
   pricing: {
-    // Cursor rows are priced when the CSV is aggregated (a costUSD is baked into
-    // the DayMap right there), so nothing routes a Cursor model through here.
+    // Cursor usage is tokens only. Their billed rates are not published in a
+    // form we can apply, so cost stays unset rather than guessing from Claude
+    // or OpenAI list prices.
     modelCount: 0,
     priceModelCost: () => undefined,
   },

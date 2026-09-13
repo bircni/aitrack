@@ -72,6 +72,43 @@ describe('buildUsageReport', () => {
     expect(report?.totals.tokens).toBe(1200);
     expect(report?.totals.costUSD).toBeCloseTo(1.2);
     expect(report?.totals.hasCost).toBe(true);
+    expect(report?.totals.hasCached).toBe(false);
+  });
+
+  it('forwards cached input so the usage table can show the cache discount', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        codex: new Map([
+          [
+            TODAY,
+            {
+              inputTokens: 1_000_000,
+              outputTokens: 10_000,
+              cachedInputTokens: 900_000,
+              costUSD: 1.6,
+              byModel: {
+                'gpt-6-astra': {
+                  inputTokens: 1_000_000,
+                  outputTokens: 10_000,
+                  cachedInputTokens: 900_000,
+                  costUSD: 1.6,
+                },
+              },
+            },
+          ],
+        ]),
+      },
+      machineData: [],
+    });
+
+    const report = await buildUsageReport({ period: 'today' });
+    expect(report?.providers[0]?.rows[0]).toMatchObject({
+      model: 'gpt-6-astra',
+      cachedInputTokens: 900_000,
+      hasCached: true,
+    });
+    expect(report?.totals.cachedInputTokens).toBe(900_000);
+    expect(report?.totals.hasCached).toBe(true);
   });
 
   it('marks rows without cost as hasCost false', async () => {

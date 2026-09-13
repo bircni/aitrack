@@ -8,12 +8,25 @@
  * release, so the readers keep it — two dated releases of one family stay
  * distinct in the stored byModel keys, and only pricing and display fold them
  * together.
+ *
+ * Cursor (and some Claude Code builds) also append a thinking/effort label
+ * (`-thinking-high`, `-medium`, `-xhigh`). That is a runtime knob, not a
+ * priced model, so pricing and display strip it. Readers still store the
+ * original string.
  */
 
 /** Claude families, in fallback-pricing order. */
 export const CLAUDE_FAMILIES = ['fable', 'mythos', 'opus', 'haiku', 'sonnet'] as const;
 export type ClaudeFamily = (typeof CLAUDE_FAMILIES)[number];
 
+const CLAUDE_FAMILY_PATTERN = CLAUDE_FAMILIES.join('|');
+const CLAUDE_VERSION_FIRST = new RegExp(
+  `^claude-(\\d+)(?:-(\\d+))?-(${CLAUDE_FAMILY_PATTERN})$`,
+  'u',
+);
+
+/** Cursor/Claude Code effort labels that are not part of the priced model id. */
+const MODEL_EFFORT_SUFFIX = /(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))+(?:-thinking)?$/u;
 /** Strip the `-latest` alias suffix. Applied by readers before storing a model. */
 export function stripModelAliasSuffix(model: string): string {
   return model.replace(/-latest$/u, '');
@@ -22,4 +35,34 @@ export function stripModelAliasSuffix(model: string): string {
 /** Strip both the `-latest` alias and a `-YYYYMMDD` release suffix. */
 export function stripModelVersionSuffixes(model: string): string {
   return model.replace(/-(?:latest|\d{8})$/u, '');
+}
+
+/**
+ * Strip a trailing thinking/effort label (`-thinking-high`, `-medium`,
+ * `-xhigh`, `-max`). Mini/pro/nano/codex stay put — those are priced models.
+ */
+export function stripModelEffortSuffix(model: string): string {
+  let current = model;
+  for (;;) {
+    const next = current.replace(MODEL_EFFORT_SUFFIX, '').replace(/-thinking$/u, '');
+    if (next === current) return current;
+    current = next;
+  }
+}
+
+/**
+ * Fold a Claude id onto the family-first, hyphenated key the pricing table
+ * uses. Handles version-first (`claude-4.6-opus`), dotted minors, dated
+ * releases, and Cursor effort suffixes (`-thinking-high`).
+ */
+export function canonicalizeClaudeModelId(model: string): string {
+  const id = stripModelEffortSuffix(stripModelVersionSuffixes(model.toLowerCase())).replace(
+    /(\d+)\.(\d+)/u,
+    '$1-$2',
+  );
+  const versionFirst = CLAUDE_VERSION_FIRST.exec(id);
+  const [, major, minor, family] = versionFirst ?? [];
+  return versionFirst && major && family
+    ? `claude-${family}-${major}${minor ? `-${minor}` : ''}`
+    : id;
 }

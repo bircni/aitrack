@@ -66,6 +66,44 @@ describe('usageCommand', () => {
     expect(out).toContain('claude-sonnet-4-6');
     expect(out).toContain('TOTAL');
     expect(out).toContain('$1.20');
+    expect(out).not.toContain('Cached');
+    expect(out).not.toContain('prompt-cache hits');
+  });
+
+  it('shows cached input and the cache-rate note for Codex rows', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        codex: new Map([
+          [
+            TODAY,
+            {
+              inputTokens: 5_000_000,
+              outputTokens: 20_000,
+              cachedInputTokens: 4_800_000,
+              costUSD: 7.21,
+              byModel: {
+                'gpt-6-astra': {
+                  inputTokens: 5_000_000,
+                  outputTokens: 20_000,
+                  cachedInputTokens: 4_800_000,
+                  costUSD: 7.21,
+                },
+              },
+            },
+          ],
+        ]),
+      },
+      machineData: [],
+    });
+
+    await usageCommand({ period: 'today', providers: ['codex'] });
+
+    const out = loggedOutput();
+    expect(out).toContain('gpt-6-astra');
+    expect(out).toContain('5.0M');
+    expect(out).toContain('4.8M');
+    expect(out).toContain('$7.21');
+    expect(out).toContain('Cached is included in Tokens');
   });
 
   it('prints JSON when requested', async () => {

@@ -30,7 +30,15 @@ function report(rowCount: number): UsageReport {
   return {
     windowLabel: 'this month',
     providers: [],
-    totals: { inputTokens: 0, outputTokens: 0, tokens: 0, costUSD: 0, hasCost: false },
+    totals: {
+      inputTokens: 0,
+      outputTokens: 0,
+      tokens: 0,
+      cachedInputTokens: 0,
+      hasCached: false,
+      costUSD: 0,
+      hasCost: false,
+    },
     rowCount,
   };
 }
@@ -92,6 +100,8 @@ describe('exportCommand', () => {
               inputTokens: 1000,
               outputTokens: 200,
               tokens: 1200,
+              cachedInputTokens: 0,
+              hasCached: false,
               costUSD: 3.5,
               hasCost: true,
             },
@@ -101,7 +111,15 @@ describe('exportCommand', () => {
           subtotalHasCost: true,
         },
       ],
-      totals: { inputTokens: 1000, outputTokens: 200, tokens: 1200, costUSD: 3.5, hasCost: true },
+      totals: {
+        inputTokens: 1000,
+        outputTokens: 200,
+        tokens: 1200,
+        cachedInputTokens: 0,
+        hasCached: false,
+        costUSD: 3.5,
+        hasCost: true,
+      },
       rowCount: 1,
     } satisfies UsageReport);
 
@@ -110,9 +128,11 @@ describe('exportCommand', () => {
     expect(mocks.renderReceiptPdf).not.toHaveBeenCalled();
     const [path, body] = mocks.writeFileSync.mock.calls[0] as [string, string];
     expect(path).toBe('aitrack-receipt.csv');
-    expect(body).toContain('provider,model,input_tokens,output_tokens,total_tokens,cost_usd');
-    expect(body).toContain('Claude Code,claude-opus-4-8,1000,200,1200,3.5000');
-    expect(body).toContain('TOTAL,,1000,200,1200,3.5000');
+    expect(body).toContain(
+      'provider,model,input_tokens,cached_input_tokens,output_tokens,total_tokens,cost_usd',
+    );
+    expect(body).toContain('Claude Code,claude-opus-4-8,1000,,200,1200,3.5000');
+    expect(body).toContain('TOTAL,,1000,,200,1200,3.5000');
     expect(loggedOutput()).toContain('Wrote CSV for this month → aitrack-receipt.csv');
   });
 

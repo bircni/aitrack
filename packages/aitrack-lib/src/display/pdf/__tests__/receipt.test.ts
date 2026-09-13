@@ -16,6 +16,8 @@ function sampleReport(): UsageReport {
             inputTokens: 800,
             outputTokens: 100,
             tokens: 900,
+            cachedInputTokens: 0,
+            hasCached: false,
             costUSD: 1,
             hasCost: true,
           },
@@ -24,6 +26,8 @@ function sampleReport(): UsageReport {
             inputTokens: 10,
             outputTokens: 5,
             tokens: 15,
+            cachedInputTokens: 0,
+            hasCached: false,
             costUSD: 0,
             hasCost: false,
           },
@@ -33,7 +37,15 @@ function sampleReport(): UsageReport {
         subtotalHasCost: true,
       },
     ],
-    totals: { inputTokens: 810, outputTokens: 105, tokens: 915, costUSD: 1, hasCost: true },
+    totals: {
+      inputTokens: 810,
+      outputTokens: 105,
+      tokens: 915,
+      cachedInputTokens: 0,
+      hasCached: false,
+      costUSD: 1,
+      hasCost: true,
+    },
     rowCount: 2,
   };
 }
@@ -62,6 +74,8 @@ describe('renderReceiptPdf', () => {
       inputTokens: 10,
       outputTokens: 5,
       tokens: 15,
+      cachedInputTokens: 0,
+      hasCached: false,
       costUSD: 0.01,
       hasCost: true,
     }));

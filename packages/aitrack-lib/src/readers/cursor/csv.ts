@@ -2,7 +2,12 @@ import { isDayKey } from '../../constants.js';
 import { addModelUsage, getOrCreateDay } from '../../data/dayMap.js';
 import { stripModelAliasSuffix } from '../../data/modelId.js';
 import type { DayMap } from '../../data/types.js';
-import { type CursorCostTokens, estimateCursorCostUSD } from '../../pricing/cursor.js';
+
+/** One Cursor CSV row's token counts used for aggregation. */
+interface CursorTokenTotals {
+  input: number;
+  output: number;
+}
 
 export interface CursorCsvRow {
   Date?: string;
@@ -70,7 +75,7 @@ export function parseCursorDateString(value?: string): string | null {
   return `${String(y)}-${m}-${day}`;
 }
 
-function createCursorTokenTotals(row: CursorCsvRow): CursorCostTokens | null {
+function createCursorTokenTotals(row: CursorCsvRow): CursorTokenTotals | null {
   const cacheWrite = parseCursorNumber(row['Input (w/ Cache Write)']) ?? 0;
   const rawInput = parseCursorNumber(row['Input (w/o Cache Write)']) ?? 0;
   const cacheRead = parseCursorNumber(row['Cache Read']) ?? 0;
@@ -81,21 +86,14 @@ function createCursorTokenTotals(row: CursorCsvRow): CursorCostTokens | null {
   // whose Total Tokens cell is blank or zero still counts when the per-column
   // figures carry real usage.
   if (inputTokens > 0 || outputTokens > 0) {
-    return {
-      input: inputTokens,
-      output: outputTokens,
-      rawInput,
-      cacheRead,
-      cacheWrite,
-      hasBreakdown: true,
-    };
+    return { input: inputTokens, output: outputTokens };
   }
 
   // Older exports only expose an aggregate Tokens column. Preserve their total
   // as input when no input/output breakdown is available.
   const total = parseCursorNumber(row['Total Tokens']) ?? parseCursorNumber(row.Tokens);
   if (!total) return null;
-  return { input: total, output: 0, rawInput: 0, cacheRead: 0, cacheWrite: 0, hasBreakdown: false };
+  return { input: total, output: 0 };
 }
 
 function processCursorCsvLines(lines: Iterable<string>, onRow: (row: CursorCsvRow) => void): void {
@@ -123,19 +121,13 @@ export function aggregateCursorCsvToDayMap(content: string): DayMap {
     if (!dateString || !rawModel || !tokenTotals) return;
 
     const model = stripModelAliasSuffix(rawModel);
-    const inputTokens = tokenTotals.input;
-    const outputTokens = tokenTotals.output;
-    // Cursor's CSV carries no cost. Price the row where the model maps to a
-    // list price we track (Claude / GPT-5 family); everything else stays
-    // unpriced, as it was before. The cache-read / cache-write split is used
-    // when the export provides it.
-    const costUSD = estimateCursorCostUSD(model, tokenTotals, dateString);
-
+    // Cursor's CSV has a Cost column on some exports, but those figures are
+    // plan-included / "Free" / vendor-billed amounts, not a list price we can
+    // stand behind. Token counts are recorded; cost stays unset.
     const day = getOrCreateDay(result, dateString);
     addModelUsage(day, model, {
-      inputTokens,
-      outputTokens,
-      ...(costUSD !== undefined && { costUSD }),
+      inputTokens: tokenTotals.input,
+      outputTokens: tokenTotals.output,
     });
   });
 

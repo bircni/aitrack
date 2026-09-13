@@ -6,7 +6,15 @@ import type { UsageReport } from '../../data/usageReport.js';
  * spreadsheet. One row per provider+model, then a TOTAL row; the cost cell is
  * left blank (not `0`) for providers with no known pricing.
  */
-const HEADER = ['provider', 'model', 'input_tokens', 'output_tokens', 'total_tokens', 'cost_usd'];
+const HEADER = [
+  'provider',
+  'model',
+  'input_tokens',
+  'cached_input_tokens',
+  'output_tokens',
+  'total_tokens',
+  'cost_usd',
+];
 
 function csvField(value: string | number): string {
   let text = String(value);
@@ -31,6 +39,7 @@ export function renderUsageReportCsv(report: UsageReport): string {
           provider.label,
           row.model,
           row.inputTokens,
+          row.hasCached ? row.cachedInputTokens : '',
           row.outputTokens,
           row.tokens,
           row.hasCost ? row.costUSD.toFixed(4) : '',
@@ -45,6 +54,7 @@ export function renderUsageReportCsv(report: UsageReport): string {
       'TOTAL',
       '',
       totals.inputTokens,
+      totals.hasCached ? totals.cachedInputTokens : '',
       totals.outputTokens,
       totals.tokens,
       totals.hasCost ? totals.costUSD.toFixed(4) : '',

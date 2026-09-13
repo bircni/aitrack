@@ -40,6 +40,8 @@ describe('aggregateModelsByDayMap', () => {
     expect(agg.get('sonnet')).toEqual({
       inputTokens: 300,
       outputTokens: 150,
+      cachedInputTokens: 0,
+      hasCached: false,
       costUSD: 3,
       hasCost: true,
       days: 2,
@@ -51,6 +53,19 @@ describe('aggregateModelsByDayMap', () => {
       ['2024-01-01', day({ empty: { inputTokens: 0, outputTokens: 0 } })],
     ]);
     expect(aggregateModelsByDayMap(dayMap).size).toBe(0);
+  });
+
+  it('sums cached input when the split is present', () => {
+    const dayMap: DayMap = new Map([
+      [
+        '2024-01-01',
+        day({ astra: { inputTokens: 1000, outputTokens: 10, cachedInputTokens: 900 } }),
+      ],
+    ]);
+    expect(aggregateModelsByDayMap(dayMap).get('astra')).toMatchObject({
+      cachedInputTokens: 900,
+      hasCached: true,
+    });
   });
 
   it('filters by year, start, and end dates', () => {
