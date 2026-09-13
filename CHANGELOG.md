@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.2.0] - 2026-09-13
+
+
+
+### CI
+
+- Run on workflow dispatch
+
+### Features
+
+- **pricing:** Add Cursor cost estimates and centralize rate tables (#85)
+
 ## [v2.1.0] - 2026-09-13
 
 
