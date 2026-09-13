@@ -48,7 +48,7 @@
     "provenance": true
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.8",
+    "@napi-rs/canvas": "^1.0.9",
     "chalk": "catalog:",
     "pdfkit": "^0.20.2"
   },
