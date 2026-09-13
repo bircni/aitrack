@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.1.0] - 2026-09-13
+
+
+
+### Bug Fixes
+
+- **init:** Keep extra config keys when re-running setup
+- **show:** Let Windows open heatmap paths that contain spaces
+- **cache:** Drop parse caches written in another timezone
+- **recompute:** Pull the data repo before rewriting costs
+- **cursor:** Abort stalled usage-export fetches
+- **git:** Treat clone URLs as operands and skip bad pending files
+- **export:** Prefix formula-like CSV cells
+- **display:** Share Claude families and Cursor cost heading
+- **pricing:** Drop Cursor list-price estimates and show cache hits (#83)
+
+### CI
+
+- Only build on main on tag push (#81)
+
+### Refactoring
+
+- Add exhaustive defaults to union switches
+
 ## [v2.0.1] - 2026-09-12
 
 
