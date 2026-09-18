@@ -11,13 +11,13 @@ overrides:
 # entry here, so the toolchain is bumped in one place instead of three — and
 # two packages can no longer end up compiling against different TypeScripts.
 catalog:
-  '@types/node': ^26.5.1
+  '@types/node': ^26.6.1
   '@typescript/native': 'npm:typescript@^7.0.2'
-  '@vitest/coverage-v8': '^5.0.0'
+  '@vitest/coverage-v8': ^5.0.1
   chalk: '^6.0.0'
   tsx: '^4.23.13'
   typescript: 'npm:@typescript/typescript6@^6.0.2'
-  vitest: '^5.0.0'
+  vitest: ^5.0.1
 
 allowBuilds:
   esbuild: true
