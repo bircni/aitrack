@@ -1,6 +1,6 @@
 import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
 import type { MachineFile } from 'aitrack-lib/data/types';
-import { loadPersistedMachines, usageEmptyMessage } from 'aitrack-lib/data/usageData';
+import { loadReportedMachines, usageEmptyMessage } from 'aitrack-lib/data/usageData';
 import { fmt, fmtUSD } from 'aitrack-lib/display/format';
 import {
   defaultTableStyle,
@@ -15,6 +15,7 @@ import { printJsonCommand } from '../cli/json.js';
 
 interface MachineSummary {
   hostname: string;
+  timezone: string;
   lastUpdated: string;
   days: number;
   inputTokens: number;
@@ -51,6 +52,7 @@ function summarizeMachine(file: MachineFile): MachineSummary {
   dayKeys.sort((a, b) => a.localeCompare(b));
   return {
     hostname: file.hostname,
+    timezone: file.timezone,
     lastUpdated: file.lastUpdated,
     days: dayKeys.length,
     inputTokens,
@@ -67,11 +69,9 @@ interface MachinesOptions {
   json?: boolean;
 }
 
-export function machinesCommand(options: MachinesOptions = {}): Promise<void> {
+export async function machinesCommand(options: MachinesOptions = {}): Promise<void> {
   const warnedNotConfigured = isUsageNotConfigured();
-  const machineData = warnedNotConfigured
-    ? []
-    : loadPersistedMachines().map((entry) => entry.machine);
+  const machineData = warnedNotConfigured ? [] : await loadReportedMachines();
 
   if (machineData.length === 0) {
     const message = usageEmptyMessage(warnedNotConfigured);
@@ -80,7 +80,7 @@ export function machinesCommand(options: MachinesOptions = {}): Promise<void> {
     } else {
       log.info(message);
     }
-    return Promise.resolve();
+    return;
   }
 
   const summaries = machineData
@@ -89,15 +89,20 @@ export function machinesCommand(options: MachinesOptions = {}): Promise<void> {
 
   if (options.json) {
     printJsonCommand('machines', { machines: summaries });
-    return Promise.resolve();
+    return;
   }
 
   const columns: Array<TerminalTableColumn<MachineSummary>> = [
     { header: 'Machine', align: 'left', cell: (m) => m.hostname },
+    { header: 'Timezone', align: 'left', cell: (m) => m.timezone },
     { header: 'Days', align: 'right', cell: (m) => String(m.days) },
     { header: 'Tokens', align: 'right', cell: (m) => fmt(m.totalTokens) },
     { header: 'Cost', align: 'right', cell: (m) => fmtUSD(m.costUSD) },
-    { header: 'Last sync', align: 'left', cell: (m) => m.lastUpdated.slice(0, 10) },
+    {
+      header: 'Last sync',
+      align: 'left',
+      cell: (m) => (m.lastUpdated === '' ? 'not synced' : m.lastUpdated.slice(0, 10)),
+    },
     {
       header: 'Providers',
       align: 'left',
@@ -107,5 +112,4 @@ export function machinesCommand(options: MachinesOptions = {}): Promise<void> {
 
   log.info(chalk.bold(`aitrack machines (${String(summaries.length)})`));
   log.info(renderTerminalTable(summaries, columns, { style: defaultTableStyle() }));
-  return Promise.resolve();
 }

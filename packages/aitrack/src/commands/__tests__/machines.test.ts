@@ -3,13 +3,13 @@ import type { MachineFile } from 'aitrack-lib/data/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  loadPersistedMachines: vi.fn(),
+  loadReportedMachines: vi.fn(),
   tryLoadConfig: vi.fn(),
   isCloned: vi.fn(),
 }));
 
 vi.mock('aitrack-lib/data/usageData', () => ({
-  loadPersistedMachines: mocks.loadPersistedMachines,
+  loadReportedMachines: mocks.loadReportedMachines,
   usageEmptyMessage: () => 'No data.',
 }));
 vi.mock('aitrack-lib/config', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
@@ -58,10 +58,7 @@ describe('machinesCommand', () => {
     const b = makeMachine('small', {
       '2026-01-01': [{ providerKey: 'codex', input: 50, output: 5 }],
     });
-    mocks.loadPersistedMachines.mockReturnValue([
-      { filePath: '/repo/data/small.json', machine: b },
-      { filePath: '/repo/data/big.json', machine: a },
-    ]);
+    mocks.loadReportedMachines.mockResolvedValue([b, a]);
 
     await machinesCommand();
 
@@ -79,7 +76,7 @@ describe('machinesCommand', () => {
     const machine = makeMachine('box', {
       '2026-01-01': [{ providerKey: 'claude_code', input: 1000, output: 100, cost: 5 }],
     });
-    mocks.loadPersistedMachines.mockReturnValue([{ filePath: '/repo/data/box.json', machine }]);
+    mocks.loadReportedMachines.mockResolvedValue([machine]);
 
     await machinesCommand({ json: true });
 
@@ -96,7 +93,7 @@ describe('machinesCommand', () => {
   });
 
   it('shows empty message when no machine data', async () => {
-    mocks.loadPersistedMachines.mockReturnValue([]);
+    mocks.loadReportedMachines.mockResolvedValue([]);
 
     await machinesCommand();
 
@@ -104,7 +101,7 @@ describe('machinesCommand', () => {
   });
 
   it('prints valid JSON when no machine data exists', async () => {
-    mocks.loadPersistedMachines.mockReturnValue([]);
+    mocks.loadReportedMachines.mockResolvedValue([]);
 
     await machinesCommand({ json: true });
 

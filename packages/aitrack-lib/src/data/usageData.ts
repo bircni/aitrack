@@ -7,6 +7,7 @@ import { resolveModelCost } from '../pricing/resolve.js';
 import { isSyncedProvider, liveProviders } from '../providers/index.js';
 import { machineTimezone } from '../timezone.js';
 import { addTokenCounts, getOrCreateDay } from './dayMap.js';
+import { isUsageNotConfigured } from './emptyState.js';
 import { buildLocalMachineFile, machineHasData, mergePersistedDays } from './localData.js';
 import { CURRENT_SCHEMA_VERSION } from './schema.js';
 import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';
@@ -117,6 +118,39 @@ function splitByProvider(machineFiles: MachineFile[]): ProviderData {
     overlayMachineFile(providers, file);
   }
   return providers;
+}
+
+/**
+ * Machines as reports should show them: other machines as synced, this machine
+ * overlaid with the local logs so its totals match `show`. A machine that has
+ * only been read locally is included with an empty `lastUpdated`.
+ */
+export async function loadReportedMachines(): Promise<MachineFile[]> {
+  if (isUsageNotConfigured()) return [];
+  const config = tryLoadConfig();
+  if (!config) return [];
+
+  const machineId = resolveMachineId(config);
+  const currentFile = machineDataFilename(machineId);
+  const local = await buildLocalMachineFile(machineId);
+  const hasLocal = machineHasData(local);
+  const machines: MachineFile[] = [];
+  let isCurrentIncluded = false;
+  for (const entry of loadPersistedMachines()) {
+    if (hasLocal && basename(entry.filePath) === currentFile) {
+      isCurrentIncluded = true;
+      machines.push({
+        ...entry.machine,
+        days: mergePersistedDays(entry.machine.days, local.days),
+      });
+      continue;
+    }
+    machines.push(entry.machine);
+  }
+  if (!isCurrentIncluded && hasLocal) {
+    machines.push({ ...local, lastUpdated: '' });
+  }
+  return machines;
 }
 
 /** Synced machine files that parsed, with the path used to identify the current one. */

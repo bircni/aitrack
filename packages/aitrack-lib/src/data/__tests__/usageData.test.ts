@@ -26,7 +26,12 @@ vi.mock(import('../localData.js'), async (importOriginal) => ({
 }));
 
 import type { DayEntry, MachineFile, ProviderDay } from '../types.js';
-import { loadMergedProviderData, loadPersistedMachines, mergeProviderDay } from '../usageData.js';
+import {
+  loadMergedProviderData,
+  loadPersistedMachines,
+  loadReportedMachines,
+  mergeProviderDay,
+} from '../usageData.js';
 
 function emptyDay(): DayEntry {
   return { inputTokens: 0, outputTokens: 0, byModel: {} };
@@ -451,5 +456,76 @@ describe('loadMergedProviderData', () => {
     // sync keeps the larger persisted record (mergePersistedDays); the display
     // has to agree or the day renders below what the synced file holds.
     expect(loaded?.providerData.claude_code?.get('2024-01-02')?.inputTokens).toBe(900_000);
+  });
+});
+
+describe('loadReportedMachines', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.tryLoadConfig.mockReturnValue({
+      repoUrl: 'git@example.com:me/data.git',
+      machineId: 'host',
+    });
+    mocks.resolveMachineId.mockReturnValue('host');
+    mocks.isCloned.mockReturnValue(true);
+    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
+  });
+
+  it('overlays this machine with the local logs and keeps the sync timestamp', async () => {
+    mocks.readDataFile.mockReturnValue({
+      ...SCHEMA_FIELDS,
+      hostname: 'host',
+      lastUpdated: 'last-sync',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { m: { inputTokens: 10, outputTokens: 0 } },
+            totals: { inputTokens: 10, outputTokens: 0 },
+          },
+        },
+      },
+    });
+    mocks.buildLocalMachineFile.mockResolvedValue({
+      ...SCHEMA_FIELDS,
+      hostname: 'host',
+      lastUpdated: 'fresh',
+      days: {
+        '2024-01-02': {
+          claude_code: {
+            byModel: { m: { inputTokens: 40, outputTokens: 0 } },
+            totals: { inputTokens: 40, outputTokens: 0 },
+          },
+        },
+      },
+    });
+
+    const machines = await loadReportedMachines();
+
+    expect(machines[0]?.lastUpdated).toBe('last-sync');
+    expect(machines[0]?.days['2024-01-01']?.claude_code?.totals.inputTokens).toBe(10);
+    expect(machines[0]?.days['2024-01-02']?.claude_code?.totals.inputTokens).toBe(40);
+  });
+
+  it('includes local-only usage as not yet synced', async () => {
+    mocks.listDataFiles.mockReturnValue([]);
+    mocks.buildLocalMachineFile.mockResolvedValue({
+      ...SCHEMA_FIELDS,
+      hostname: 'host',
+      lastUpdated: 'fresh',
+      days: {
+        '2024-01-02': {
+          claude_code: {
+            byModel: { m: { inputTokens: 40, outputTokens: 0 } },
+            totals: { inputTokens: 40, outputTokens: 0 },
+          },
+        },
+      },
+    });
+
+    const machines = await loadReportedMachines();
+
+    expect(machines).toHaveLength(1);
+    expect(machines[0]?.lastUpdated).toBe('');
+    expect(machines[0]?.days['2024-01-02']?.claude_code?.totals.inputTokens).toBe(40);
   });
 });
