@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { readdir, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 import type { CheckResult } from '../providers/checkResult.js';
@@ -47,11 +47,24 @@ export function listJsonlFiles(root: string): Promise<string[]> {
 export async function listUniqueSourceFiles(roots: string[]): Promise<string[]> {
   const perRoot = await Promise.all(roots.map((root) => listJsonlFiles(root)));
   const seen = new Set<string>();
-  return perRoot.flat().filter((file) => {
-    if (seen.has(file)) return false;
-    seen.add(file);
-    return true;
-  });
+  const files: string[] = [];
+  for (const file of perRoot.flat()) {
+    // String equality misses the same transcript reached through a symlink,
+    // which would double-count Codex (Claude message ids survive that).
+    let identity = file;
+    try {
+      identity = await realpath(file);
+    } catch {
+      // The file vanished between the listing and here. Keep the path we have
+      // so a later read can fail on its own instead of dropping it silently.
+    }
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    // Keep the path we listed. realpath is only the identity: on macOS it
+    // rewrites /var to /private/var, which would change every cached key.
+    files.push(file);
+  }
+  return files;
 }
 
 export async function jsonlSourceSummary(
