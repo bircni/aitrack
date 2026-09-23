@@ -28,6 +28,10 @@ interface TokenUsage {
   input_tokens?: number;
   cached_input_tokens?: number;
   output_tokens?: number;
+  /**
+   * Subset of `output_tokens`, not an extra bucket. Adding it on top would
+   * bill reasoning twice.
+   */
   reasoning_output_tokens?: number;
 }
 
@@ -111,27 +115,27 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult[
       null;
     if (info.total_token_usage) {
       const current = info.total_token_usage;
+      const currentInput = current.input_tokens ?? 0;
+      const currentOutput = current.output_tokens ?? 0;
+      // A missing cached count is "not reported", not a reset to zero. Only an
+      // input or output drop means the cumulative counter compacted.
       const isRolledBack =
-        (current.input_tokens ?? 0) < previousTotal.input_tokens ||
-        (current.output_tokens ?? 0) < previousTotal.output_tokens ||
-        (current.cached_input_tokens ?? 0) < previousTotal.cached_input_tokens;
+        currentInput < previousTotal.input_tokens || currentOutput < previousTotal.output_tokens;
 
       if (isRolledBack) {
         usage = tokenUsageValues(info.last_token_usage ?? current);
       } else {
+        const cachedNow = current.cached_input_tokens ?? previousTotal.cached_input_tokens;
         usage = {
-          inputTokens: Math.max(0, (current.input_tokens ?? 0) - previousTotal.input_tokens),
-          outputTokens: Math.max(0, (current.output_tokens ?? 0) - previousTotal.output_tokens),
-          cachedInputTokens: Math.max(
-            0,
-            (current.cached_input_tokens ?? 0) - previousTotal.cached_input_tokens,
-          ),
+          inputTokens: Math.max(0, currentInput - previousTotal.input_tokens),
+          outputTokens: Math.max(0, currentOutput - previousTotal.output_tokens),
+          cachedInputTokens: Math.max(0, cachedNow - previousTotal.cached_input_tokens),
         };
       }
       previousTotal = {
-        input_tokens: current.input_tokens ?? 0,
-        output_tokens: current.output_tokens ?? 0,
-        cached_input_tokens: current.cached_input_tokens ?? 0,
+        input_tokens: currentInput,
+        output_tokens: currentOutput,
+        cached_input_tokens: current.cached_input_tokens ?? previousTotal.cached_input_tokens,
       };
     } else if (info.last_token_usage) {
       usage = tokenUsageValues(info.last_token_usage);
