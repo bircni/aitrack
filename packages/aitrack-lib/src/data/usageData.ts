@@ -1,8 +1,10 @@
 import { basename } from 'node:path';
 
 import { resolveMachineId, tryLoadConfig } from '../config.js';
+import { errorMessage } from '../errors.js';
 import { isCloned, listDataFiles, readDataFile } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
+import { log } from '../output.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { isSyncedProvider, liveProviders } from '../providers/index.js';
 import { machineTimezone } from '../timezone.js';
@@ -221,7 +223,10 @@ function startLiveFetches(
       key: provider.descriptor.key,
       pending: provider.live
         .liveFetch({ maxAgeSeconds: liveMaxAgeSeconds })
-        .catch((): DayMap => new Map()),
+        .catch((error: unknown): DayMap => {
+          log.warn(`aitrack: ${provider.descriptor.label} skipped — ${errorMessage(error)}`);
+          return new Map();
+        }),
     }));
 }
 
