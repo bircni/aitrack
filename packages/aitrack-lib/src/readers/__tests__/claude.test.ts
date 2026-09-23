@@ -118,6 +118,37 @@ describe('parseJsonlFile', () => {
     expect(day?.costUSD).toBeCloseTo(0.0007275);
   });
 
+  it('prices a 1-hour cache write separately from the 5-minute write', async () => {
+    const file = join(tmpDir, 'a.jsonl');
+    writeJsonl(file, [
+      {
+        type: 'assistant',
+        timestamp: localTimestamp('2024-01-15'),
+        requestId: 'r1',
+        message: {
+          id: 'msg1',
+          model: 'claude-sonnet-4-6',
+          usage: {
+            input_tokens: 0,
+            output_tokens: 1,
+            cache_creation: {
+              ephemeral_5m_input_tokens: 100,
+              ephemeral_1h_input_tokens: 1_000_000,
+            },
+          },
+        },
+      },
+    ]);
+
+    const parsed = await parseJsonlFile(file, new Set());
+    const day = parsed.get('2024-01-15');
+    expect(day?.cacheCreationInputTokens).toBe(100);
+    expect(day?.cacheCreation1hInputTokens).toBe(1_000_000);
+    expect(day?.inputTokens).toBe(1_000_100);
+    // 100 * $3.75/M + 1M * $6/M + 1 output token * $15/M
+    expect(day?.costUSD).toBeCloseTo(6.000375);
+  });
+
   it('estimates Claude API-equivalent costs by exact model id', () => {
     // Opus 4.5+ all at $5/$25 (not the old $15/$75)
     expect(

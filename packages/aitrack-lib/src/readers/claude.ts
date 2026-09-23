@@ -6,7 +6,7 @@ import { addModelUsage, getOrCreateDay, mergeDayMaps, tryLocalDateString } from 
 import { stripModelAliasSuffix } from '../data/modelId.js';
 import type { DayMap } from '../data/types.js';
 import { environmentValue } from '../env.js';
-import { estimateClaudeCostUSD } from '../pricing/claude.js';
+import { claudeCacheWriteTokens, estimateClaudeCostUSD } from '../pricing/claude.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedParse } from './cache.js';
 import { streamJsonlObjects } from './jsonl.js';
@@ -38,6 +38,10 @@ interface ClaudeEntry {
       cache_read_input_tokens?: number;
       output_tokens?: number;
       cache_creation_input_tokens?: number;
+      cache_creation?: {
+        ephemeral_5m_input_tokens?: number;
+        ephemeral_1h_input_tokens?: number;
+      };
     };
   };
 }
@@ -67,10 +71,12 @@ export async function parseJsonlFile(
     if (dateString === null) continue;
     const model = stripModelAliasSuffix(entry.message?.model ?? 'unknown');
 
+    const writes = claudeCacheWriteTokens(usage);
     const inputTokens =
       (usage.input_tokens ?? 0) +
       (usage.cache_read_input_tokens ?? 0) +
-      (usage.cache_creation_input_tokens ?? 0);
+      writes.fiveMinute +
+      writes.oneHour;
     const outputTokens = usage.output_tokens ?? 0;
     const costUSD = estimateClaudeCostUSD(model, usage, dateString, fallbacks);
 
@@ -80,7 +86,8 @@ export async function parseJsonlFile(
       outputTokens,
       rawInputTokens: usage.input_tokens ?? 0,
       cachedInputTokens: usage.cache_read_input_tokens ?? 0,
-      cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
+      cacheCreationInputTokens: writes.fiveMinute,
+      ...(writes.oneHour > 0 && { cacheCreation1hInputTokens: writes.oneHour }),
       ...(costUSD !== undefined && { costUSD }),
     });
   }

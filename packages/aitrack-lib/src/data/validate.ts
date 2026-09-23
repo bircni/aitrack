@@ -52,6 +52,7 @@ function checkTokenCounts(value: unknown, path: string): Checked<TokenCounts> {
   for (const field of [
     'cachedInputTokens',
     'cacheCreationInputTokens',
+    'cacheCreation1hInputTokens',
     'rawInputTokens',
     'costUSD',
   ] as const) {
@@ -105,6 +106,7 @@ function checkProviderDay(
     'rawInputTokens',
     'cachedInputTokens',
     'cacheCreationInputTokens',
+    'cacheCreation1hInputTokens',
   ] as const) {
     if (totals[field] !== undefined && totals[field] !== sumField(modelCounts, field)) {
       return invalid(`${path}.totals.${field} must equal the sum of byModel.${field}`);

@@ -42,6 +42,10 @@ function mergeTokenBreakdown(dst: TokenCounts, source: TokenCounts): void {
     dst.cacheCreationInputTokens =
       (dst.cacheCreationInputTokens ?? 0) + source.cacheCreationInputTokens;
   }
+  if (source.cacheCreation1hInputTokens !== undefined) {
+    dst.cacheCreation1hInputTokens =
+      (dst.cacheCreation1hInputTokens ?? 0) + source.cacheCreation1hInputTokens;
+  }
 }
 
 /** Add source token fields onto dest (input, output, breakdown, cost). */
