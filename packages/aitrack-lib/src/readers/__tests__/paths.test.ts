@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 
@@ -75,6 +75,17 @@ describe('listUniqueSourceFiles', () => {
 
   it('skips roots that do not exist', async () => {
     expect(await listUniqueSourceFiles([join(root, 'missing')])).toEqual([]);
+  });
+
+  it('de-duplicates a directory reached through a symlink', async () => {
+    const link = join(root, 'link-to-root');
+    symlinkSync(root, link, 'dir');
+    try {
+      const files = await listUniqueSourceFiles([root, link]);
+      expect(files).toHaveLength(3);
+    } finally {
+      rmSync(link);
+    }
   });
 });
 
