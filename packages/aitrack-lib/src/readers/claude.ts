@@ -46,12 +46,33 @@ interface ClaudeEntry {
   };
 }
 
+interface CountedMessage {
+  dateString: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  rawInputTokens: number;
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheCreation1hInputTokens: number;
+  costUSD?: number;
+}
+
+/** Prefer more output, then more input. A later record wins a tie. */
+function isRicherUsage(next: CountedMessage, current: CountedMessage): boolean {
+  if (next.outputTokens !== current.outputTokens) return next.outputTokens > current.outputTokens;
+  if (next.inputTokens !== current.inputTokens) return next.inputTokens > current.inputTokens;
+  return true;
+}
+
 export async function parseJsonlFile(
   filePath: string,
   seen: Set<string>,
   fallbacks?: FallbackCollector,
 ): Promise<DayMap> {
   const result: DayMap = new Map();
+  const chosen = new Map<string, CountedMessage>();
+  const unkeyed: CountedMessage[] = [];
 
   for await (const parsed of streamJsonlObjects(filePath)) {
     const entry = parsed as unknown as ClaudeEntry;
@@ -59,17 +80,11 @@ export async function parseJsonlFile(
     if (entry.type !== 'assistant') continue;
     const usage = entry.message?.usage;
     if (!usage) continue;
-    if ((usage.output_tokens ?? 0) === 0) continue;
-
-    const key = `${entry.message?.id ?? ''}:${entry.requestId ?? ''}`;
-    if (key !== ':' && seen.has(key)) continue;
-    if (key !== ':') seen.add(key);
 
     const ts = entry.timestamp;
     if (!ts) continue;
     const dateString = tryLocalDateString(ts);
     if (dateString === null) continue;
-    const model = stripModelAliasSuffix(entry.message?.model ?? 'unknown');
 
     const writes = claudeCacheWriteTokens(usage);
     const inputTokens =
@@ -78,21 +93,58 @@ export async function parseJsonlFile(
       writes.fiveMinute +
       writes.oneHour;
     const outputTokens = usage.output_tokens ?? 0;
-    const costUSD = estimateClaudeCostUSD(model, usage, dateString, fallbacks);
+    if (inputTokens === 0 && outputTokens === 0) continue;
 
-    const day = getOrCreateDay(result, dateString);
-    addModelUsage(day, model, {
+    const model = stripModelAliasSuffix(entry.message?.model ?? 'unknown');
+    const costUSD = estimateClaudeCostUSD(model, usage, dateString, fallbacks);
+    const counted: CountedMessage = {
+      dateString,
+      model,
       inputTokens,
       outputTokens,
       rawInputTokens: usage.input_tokens ?? 0,
       cachedInputTokens: usage.cache_read_input_tokens ?? 0,
       cacheCreationInputTokens: writes.fiveMinute,
-      ...(writes.oneHour > 0 && { cacheCreation1hInputTokens: writes.oneHour }),
+      cacheCreation1hInputTokens: writes.oneHour,
       ...(costUSD !== undefined && { costUSD }),
-    });
+    };
+
+    // No id to dedupe on: count the row. A known id keeps the fullest record
+    // in this file (a later correction replaces a partial stream entry). Keys
+    // already counted by an earlier file stay skipped so a resumed transcript
+    // is not added twice.
+    const key = `${entry.message?.id ?? ''}:${entry.requestId ?? ''}`;
+    if (key === ':') {
+      unkeyed.push(counted);
+      continue;
+    }
+    if (seen.has(key)) continue;
+    const existing = chosen.get(key);
+    if (!existing || isRicherUsage(counted, existing)) chosen.set(key, counted);
   }
 
+  for (const [key, counted] of chosen) {
+    seen.add(key);
+    addCountedMessage(result, counted);
+  }
+  for (const counted of unkeyed) addCountedMessage(result, counted);
+
   return result;
+}
+
+function addCountedMessage(result: DayMap, counted: CountedMessage): void {
+  const day = getOrCreateDay(result, counted.dateString);
+  addModelUsage(day, counted.model, {
+    inputTokens: counted.inputTokens,
+    outputTokens: counted.outputTokens,
+    rawInputTokens: counted.rawInputTokens,
+    cachedInputTokens: counted.cachedInputTokens,
+    cacheCreationInputTokens: counted.cacheCreationInputTokens,
+    ...(counted.cacheCreation1hInputTokens > 0 && {
+      cacheCreation1hInputTokens: counted.cacheCreation1hInputTokens,
+    }),
+    ...(counted.costUSD !== undefined && { costUSD: counted.costUSD }),
+  });
 }
 
 /**
