@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { backup, DatabaseSync } from 'node:sqlite';
 
 export interface CursorAuthState {
   accessToken?: string;
@@ -40,19 +40,44 @@ function isSqliteLockedError(error: unknown): boolean {
   return error instanceof Error && /database is locked/iu.test(error.message);
 }
 
-async function withCursorStateSnapshot<T>(
-  databasePath: string,
-  callback: (snapshotPath: string) => T | Promise<T>,
-): Promise<T> {
-  const snapshotDir = await mkdtemp(join(tmpdir(), 'aitrack-cursor-'));
-  const snapshotPath = join(snapshotDir, 'state.vscdb');
+async function copyLockedDatabase(databasePath: string, snapshotPath: string): Promise<void> {
   await copyFile(databasePath, snapshotPath);
   for (const suffix of ['-shm', '-wal']) {
     const companionPath = `${databasePath}${suffix}`;
     if (!existsSync(companionPath)) continue;
     await copyFile(companionPath, `${snapshotPath}${suffix}`);
   }
+}
+
+/**
+ * A consistent copy of the state database.
+ *
+ * SQLite's backup API includes the WAL, so a read while Cursor is writing is
+ * not a torn file copy. If the database is still locked and cannot be opened,
+ * fall back to copying the files beside it.
+ */
+async function snapshotCursorDatabase(databasePath: string, snapshotPath: string): Promise<void> {
   try {
+    const source = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      await backup(source, snapshotPath);
+    } finally {
+      source.close();
+    }
+  } catch (error) {
+    if (!isSqliteLockedError(error)) throw error;
+    await copyLockedDatabase(databasePath, snapshotPath);
+  }
+}
+
+async function withCursorStateSnapshot<T>(
+  databasePath: string,
+  callback: (snapshotPath: string) => T | Promise<T>,
+): Promise<T> {
+  const snapshotDir = await mkdtemp(join(tmpdir(), 'aitrack-cursor-'));
+  const snapshotPath = join(snapshotDir, 'state.vscdb');
+  try {
+    await snapshotCursorDatabase(databasePath, snapshotPath);
     return await callback(snapshotPath);
   } finally {
     await rm(snapshotDir, { recursive: true, force: true });

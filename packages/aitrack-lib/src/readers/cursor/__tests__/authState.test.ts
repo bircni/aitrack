@@ -1,14 +1,18 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ open: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  open: vi.fn(),
+  backup: vi.fn((_source: unknown, _path: unknown) => Promise.resolve(1)),
+}));
 
 // The locked-database path cannot be provoked reliably with a real SQLite file
 // across platforms, so the driver is mocked and the recovery is what is tested.
 vi.mock('node:sqlite', () => ({
+  backup: mocks.backup,
   DatabaseSync: class {
     constructor(path: string) {
       mocks.open(path);
@@ -32,6 +36,8 @@ let databasePath: string;
 
 beforeEach(() => {
   mocks.open.mockReset();
+  mocks.backup.mockReset();
+  mocks.backup.mockResolvedValue(1);
   directory = mkdtempSync(join(tmpdir(), 'aitrack-cursor-state-'));
   databasePath = join(directory, 'state.vscdb');
   writeFileSync(databasePath, 'not-really-sqlite');
@@ -48,12 +54,13 @@ describe('readCursorAuthState', () => {
       refreshToken: 'refresh-token',
     });
     expect(mocks.open).toHaveBeenCalledTimes(1);
+    expect(mocks.backup).not.toHaveBeenCalled();
   });
 
-  it('retries against a snapshot when Cursor holds the database open', async () => {
+  it('retries against a sqlite backup when Cursor holds the database open', async () => {
     // Cursor keeps state.vscdb locked while it is running, which is most of the
     // time. Failing there would make the whole provider unusable, so the file is
-    // copied aside and read from the copy.
+    // snapshotted with SQLite's backup API and read from the copy.
     mocks.open.mockImplementationOnce((path: string) => {
       throw new Error(`database is locked: ${path}`);
     });
@@ -63,12 +70,13 @@ describe('readCursorAuthState', () => {
       refreshToken: 'refresh-token',
     });
 
-    expect(mocks.open).toHaveBeenCalledTimes(2);
-    const [[first], [second]] = mocks.open.mock.calls as [[string], [string]];
-    expect(first).toBe(databasePath);
-    // The retry reads a copy, never the file Cursor is holding.
-    expect(second).not.toBe(databasePath);
-    expect(second).toContain('state.vscdb');
+    expect(mocks.backup).toHaveBeenCalledTimes(1);
+    expect(mocks.open).toHaveBeenCalledTimes(3);
+    const paths = mocks.open.mock.calls.map((call) => call[0] as string);
+    expect(paths[0]).toBe(databasePath);
+    expect(paths[1]).toBe(databasePath);
+    expect(paths[2]).not.toBe(databasePath);
+    expect(paths[2]).toContain('state.vscdb');
   });
 
   it('copies the -wal and -shm companions alongside the snapshot', async () => {
@@ -80,13 +88,17 @@ describe('readCursorAuthState', () => {
     mocks.open.mockImplementationOnce(() => {
       throw new Error('database is locked');
     });
+    mocks.open.mockImplementationOnce(() => {
+      throw new Error('database is locked');
+    });
     mocks.open.mockImplementationOnce((path: string) => {
       snapshotDirectory = join(path, '..');
+      expect(existsSync(`${path}-wal`)).toBe(true);
+      expect(existsSync(`${path}-shm`)).toBe(true);
     });
 
     await readCursorAuthState(databasePath);
 
-    const { existsSync } = await import('node:fs');
     // The snapshot directory is removed afterwards, so check it is gone rather
     // than leaking into the temp directory.
     expect(snapshotDirectory).not.toBe('');
