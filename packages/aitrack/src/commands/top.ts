@@ -21,6 +21,7 @@ import {
   type TerminalTableColumn,
 } from 'aitrack-lib/display/terminalTable';
 import { log } from 'aitrack-lib/output';
+import { warnAboutPricingFallbacks } from 'aitrack-lib/pricing/scan';
 import { providerLabel } from 'aitrack-lib/providers/index';
 import chalk from 'chalk';
 
@@ -161,6 +162,8 @@ export async function topCommand(options: TopOptions): Promise<void> {
     }
     return;
   }
+
+  warnAboutPricingFallbacks(loaded.providerData);
 
   const filter = dateFilter(options);
   const suffix = windowSuffix(options);

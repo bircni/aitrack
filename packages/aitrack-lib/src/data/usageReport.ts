@@ -1,3 +1,4 @@
+import { warnAboutPricingFallbacks } from '../pricing/scan.js';
 import { orderedProviderKeys, providerLabel } from '../providers/index.js';
 import { aggregateModelsByDayMap } from './aggregate.js';
 import { isUsageNotConfigured, usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
@@ -236,6 +237,7 @@ export async function buildUsageReport(options: UsageReportOptions): Promise<Usa
   });
   if (!loaded) return null;
 
+  warnAboutPricingFallbacks(loaded.providerData);
   const window = computeUsageWindow(options);
   return buildUsageReportFromData(loaded.providerData, window);
 }
@@ -251,6 +253,7 @@ export async function buildUsageComparison(
   });
   if (!loaded) return null;
 
+  warnAboutPricingFallbacks(loaded.providerData);
   const current = buildUsageReportFromData(loaded.providerData, currentWindow);
   const previous = buildUsageReportFromData(loaded.providerData, previousWindow);
   return { current, previous, comparison: compareUsageReports(current, previous) };

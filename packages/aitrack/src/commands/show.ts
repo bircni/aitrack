@@ -10,6 +10,7 @@ import { renderToPng } from 'aitrack-lib/display/renderPng';
 import { renderTui } from 'aitrack-lib/display/tui';
 import { isCloned, writePendingMachineFile } from 'aitrack-lib/git';
 import { log } from 'aitrack-lib/output';
+import { warnAboutPricingFallbacks } from 'aitrack-lib/pricing/scan';
 
 function openFile(filePath: string): void {
   if (process.platform === 'win32') {
@@ -56,6 +57,8 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
     log.info(usageEmptyMessage(isUsageNotConfigured()));
     return;
   }
+
+  warnAboutPricingFallbacks(loaded.providerData);
 
   if (options.tui) {
     const output = renderTui(loaded.providerData, {

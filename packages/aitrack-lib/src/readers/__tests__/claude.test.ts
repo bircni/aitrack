@@ -97,7 +97,7 @@ describe('parseJsonlFile', () => {
         requestId: 'r1',
         message: {
           id: 'msg1',
-          model: 'claude',
+          model: 'claude-sonnet-4-6',
           usage: {
             input_tokens: 100,
             cache_read_input_tokens: 50,
@@ -160,7 +160,15 @@ describe('parseJsonlFile', () => {
     ).toBe(4.8);
   });
 
-  it('uses cache-specific pricing and defaults unknown Claude models to Sonnet', () => {
+  it('uses cache-specific pricing and leaves an unmatched model unpriced', () => {
+    expect(
+      estimateClaudeCostUSD('claude-sonnet-4-6', {
+        input_tokens: 1_000_000,
+        cache_read_input_tokens: 1_000_000,
+        cache_creation_input_tokens: 1_000_000,
+        output_tokens: 1_000_000,
+      }),
+    ).toBe(22.05);
     expect(
       estimateClaudeCostUSD('unknown', {
         input_tokens: 1_000_000,
@@ -168,7 +176,7 @@ describe('parseJsonlFile', () => {
         cache_creation_input_tokens: 1_000_000,
         output_tokens: 1_000_000,
       }),
-    ).toBe(22.05);
+    ).toBeUndefined();
   });
 
   it('reprices from stored cache breakdown without inflating cache reads', () => {

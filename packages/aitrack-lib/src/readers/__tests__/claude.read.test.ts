@@ -23,7 +23,7 @@ function assistantLine(id: string, inputTokens: number, outputTokens: number): o
     requestId: `req-${id}`,
     message: {
       id,
-      model: 'claude',
+      model: 'claude-sonnet-4-6',
       usage: { input_tokens: inputTokens, output_tokens: outputTokens },
     },
   };
@@ -56,10 +56,10 @@ describe('readClaudeData', () => {
     expect(result.get('2024-01-15')).toMatchObject({
       inputTokens: 30,
       outputTokens: 13,
-      byModel: { claude: { inputTokens: 30, outputTokens: 13 } },
+      byModel: { 'claude-sonnet-4-6': { inputTokens: 30, outputTokens: 13 } },
     });
     expect(result.get('2024-01-15')?.costUSD).toBeCloseTo(0.000285);
-    expect(result.get('2024-01-15')?.byModel.claude?.costUSD).toBeCloseTo(0.000285);
+    expect(result.get('2024-01-15')?.byModel['claude-sonnet-4-6']?.costUSD).toBeCloseTo(0.000285);
   });
 
   it('drops entries whose timestamp cannot be parsed', async () => {

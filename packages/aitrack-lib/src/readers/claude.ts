@@ -81,7 +81,7 @@ export async function parseJsonlFile(
       rawInputTokens: usage.input_tokens ?? 0,
       cachedInputTokens: usage.cache_read_input_tokens ?? 0,
       cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
-      costUSD,
+      ...(costUSD !== undefined && { costUSD }),
     });
   }
 

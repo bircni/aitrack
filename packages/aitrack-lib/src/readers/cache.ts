@@ -10,10 +10,11 @@ import { machineTimezone } from '../timezone.js';
 import { packageVersion } from '../version.js';
 
 /**
- * Bump when the cached shape changes. Entries written by another format are
- * dropped wholesale rather than migrated — they are rebuildable from the logs.
+ * Bump when the cached shape or the cost baked into it changes. Entries written
+ * by another format are dropped wholesale rather than migrated — they are
+ * rebuildable from the logs.
  */
-const CACHE_FORMAT = 1;
+const CACHE_FORMAT = 2;
 
 /** One transcript file's contribution, as cached. */
 export interface CachedParse {
