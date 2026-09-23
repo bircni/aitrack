@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildMachineData, machineHasData, mergePersistedDays } from '../localData.js';
+import {
+  buildMachineData,
+  machineHasData,
+  mergePersistedDays,
+  ratchetedProviderDays,
+} from '../localData.js';
 import type { DayMap } from '../types.js';
 
 const mocks = vi.hoisted(() => ({
@@ -118,6 +123,21 @@ describe('localData', () => {
 
       expect(Object.keys(merged)).toEqual(['2024-01-01', '2024-06-01']);
       expect(Object.keys(merged['2024-01-01'] ?? {})).toEqual(['claude_code', 'codex']);
+    });
+
+    it('counts provider-days the fresh read would not be allowed to shrink', () => {
+      expect(
+        ratchetedProviderDays(
+          { '2024-06-01': { claude_code: providerDay(200) } },
+          { '2024-06-01': { claude_code: providerDay(40) } },
+        ),
+      ).toBe(1);
+      expect(
+        ratchetedProviderDays(
+          { '2024-06-01': { claude_code: providerDay(40) } },
+          { '2024-06-01': { claude_code: providerDay(200) } },
+        ),
+      ).toBe(0);
     });
 
     it('returns the fresh days unchanged when nothing is persisted yet', () => {

@@ -68,7 +68,9 @@ describe('buildProgram', () => {
     await run('machines', '--json');
     expect(mocks.machinesCommand).toHaveBeenCalledWith({ json: true });
     await run('recompute-costs');
-    expect(mocks.recomputeCostsCommand).toHaveBeenCalled();
+    expect(mocks.recomputeCostsCommand).toHaveBeenCalledWith({ replaceLocal: undefined });
+    await run('recompute-costs', '--replace-local');
+    expect(mocks.recomputeCostsCommand).toHaveBeenCalledWith({ replaceLocal: true });
     await run('doctor');
     expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: undefined, json: undefined });
     await run('doctor', '--pricing-check');

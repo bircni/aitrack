@@ -6,6 +6,7 @@ import { reportMachineFileDiagnostics } from 'aitrack-lib/data/diagnostics';
 import {
   buildMachineData,
   mergePersistedDays,
+  ratchetedProviderDays,
   readLocalProviderMaps,
 } from 'aitrack-lib/data/localData';
 import { REPO_NOT_CLONED_MESSAGE } from 'aitrack-lib/data/messages';
@@ -151,6 +152,15 @@ async function pushLocalUsage(
 
   // Keep days the local logs no longer cover — see mergePersistedDays.
   const outgoingDays = mergePersistedDays(existingDays, freshData.days);
+  const keptDays = ratchetedProviderDays(existingDays, freshData.days);
+  if (keptDays > 0) {
+    log.info(
+      `Kept ${String(keptDays)} synced day(s) with more tokens than the local logs still show.`,
+    );
+    log.info(
+      '  Run: npx aitrack recompute-costs --replace-local   to rebuild this machine from the logs.',
+    );
+  }
   const outgoingData: MachineFile = { ...freshData, days: outgoingDays };
   const syncedDays = Object.keys(outgoingDays).length;
   // Normalize the persisted side through the same ordering so a file that is

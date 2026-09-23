@@ -186,8 +186,12 @@ export function buildProgram(): Command {
     .description(
       'Refresh costs: re-read local JSONL on this machine; reprice other machines from stored cache breakdown',
     )
-    .action(() => {
-      runAsync(recomputeCostsCommand);
+    .option(
+      '--replace-local',
+      'Rebuild this machine from the local logs, dropping synced days the logs no longer cover',
+    )
+    .action((options: { replaceLocal?: boolean }) => {
+      runAsync(() => recomputeCostsCommand({ replaceLocal: options.replaceLocal }));
     });
 
   program

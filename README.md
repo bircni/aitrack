@@ -109,18 +109,18 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 ## Commands
 
-| Command                         | What it does                                                                  |
-| ------------------------------- | ----------------------------------------------------------------------------- |
-| `aitrack init`                  | Configure a remote and stable machine ID, then clone the data repo            |
-| `aitrack sync`                  | Read local data, write it to the cloned repo, and push (`--dry-run` previews) |
-| `aitrack show`                  | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table) |
-| `aitrack usage <window>`        | Usage by provider and model for a rolling, calendar, or custom window         |
-| `aitrack export [window] [...]` | Export the same windows as an itemized PDF, or `--csv` (defaults to `month`)  |
-| `aitrack top [days\|models]`    | Rank busiest days or most-used models by cost (or `--sort tokens`)            |
-| `aitrack machines`              | Per-machine totals + last sync time (helpful for spotting stale machines)     |
-| `aitrack recompute-costs`       | Refresh costs: re-read local JSONL; reprice other machines from stored cache  |
-| `aitrack doctor`                | Check Node, git, config, source paths, Cursor auth, sync health, and pricing  |
-| `aitrack config list\|get\|set` | Inspect or update supported configuration keys                                |
+| Command                         | What it does                                                                                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `aitrack init`                  | Configure a remote and stable machine ID, then clone the data repo                                                                                                             |
+| `aitrack sync`                  | Read local data, write it to the cloned repo, and push (`--dry-run` previews)                                                                                                  |
+| `aitrack show`                  | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table)                                                                                                  |
+| `aitrack usage <window>`        | Usage by provider and model for a rolling, calendar, or custom window                                                                                                          |
+| `aitrack export [window] [...]` | Export the same windows as an itemized PDF, or `--csv` (defaults to `month`)                                                                                                   |
+| `aitrack top [days\|models]`    | Rank busiest days or most-used models by cost (or `--sort tokens`)                                                                                                             |
+| `aitrack machines`              | Per-machine totals + last sync time (helpful for spotting stale machines)                                                                                                      |
+| `aitrack recompute-costs`       | Refresh costs: re-read local JSONL; reprice other machines from stored cache. `--replace-local` rebuilds this machine from the logs and drops synced days they no longer cover |
+| `aitrack doctor`                | Check Node, git, config, source paths, Cursor auth, sync health, and pricing                                                                                                   |
+| `aitrack config list\|get\|set` | Inspect or update supported configuration keys                                                                                                                                 |
 
 **Usage and export windows:** `today`, `yesterday`, `date <YYYY-MM-DD>`, `range <from> <to>`, `thisweek`, `lastweek`, `week` (rolling 7 days), `thismonth`, `lastmonth`, `month` (rolling 30 days), `last <n>`, `year`, and `all`.
 
