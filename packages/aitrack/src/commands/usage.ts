@@ -199,6 +199,7 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
       rowCount: report?.rowCount ?? 0,
       ...(comparisonReport !== null && { comparison: comparisonReport.comparison }),
       ...(budget !== null && { budget }),
+      ...(report?.timezoneNote !== undefined && { timezoneNote: report.timezoneNote }),
       ...(message !== null && { message }),
     });
     return;
@@ -211,6 +212,7 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   }
 
   renderUsageReport(report);
+  if (report.timezoneNote) log.info(chalk.dim(report.timezoneNote));
 
   if (budget) renderBudgetLine(budget);
 

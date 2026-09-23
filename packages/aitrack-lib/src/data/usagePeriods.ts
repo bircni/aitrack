@@ -344,16 +344,18 @@ function rollingWindow(today: string, n: number): UsageWindow {
 
 export function computePreviousUsageWindow(
   options: UsageWindowOptions,
-  current: UsageWindow = computeUsageWindow(options),
+  current?: UsageWindow,
+  today = todayString(),
 ): UsageWindow {
+  const window = current ?? computeUsageWindow(options, today);
   return usagePeriodDefinition(options.period).previous(
     {
-      today: todayString(),
+      today,
       from: options.from,
       to: options.to,
       n: options.n,
     },
-    current,
+    window,
   );
 }
 
@@ -363,13 +365,21 @@ export function computePreviousUsageWindow(
  * Each period carries window, previous-window, and arg-parse functions, so
  * adding one is a single registry entry.
  */
-export function computeUsageWindow(options: UsageWindowOptions): UsageWindow {
+export function computeUsageWindow(
+  options: UsageWindowOptions,
+  today = todayString(),
+): UsageWindow {
   return usagePeriodDefinition(options.period).window({
-    today: todayString(),
+    today,
     from: options.from,
     to: options.to,
     n: options.n,
   });
+}
+
+/** Periods whose window moves with "today". `date`, `range`, and `all` do not. */
+export function periodAnchorsOnToday(period: UsagePeriod): boolean {
+  return period !== 'date' && period !== 'range' && period !== 'all';
 }
 
 /**

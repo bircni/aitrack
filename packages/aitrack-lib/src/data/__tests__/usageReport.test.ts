@@ -1,18 +1,28 @@
-import { makeDay } from '@aitrack/test-fixtures';
+import { makeDay, useTimeZone } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   loadMergedProviderData: vi.fn(),
 }));
 
-vi.mock('../usageData.js', () => ({
-  loadMergedProviderData: mocks.loadMergedProviderData,
-}));
+vi.mock('../usageData.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../usageData.js')>();
+  return { ...actual, loadMergedProviderData: mocks.loadMergedProviderData };
+});
 
 import { buildUsageComparison, buildUsageReport } from '../usageReport.js';
 
 const NOW = new Date('2026-06-15T10:00:00');
 const TODAY = '2026-06-15';
+
+function claudeDay(inputTokens: number) {
+  return {
+    claude_code: {
+      byModel: { m: { inputTokens, outputTokens: 0 } },
+      totals: { inputTokens, outputTokens: 0 },
+    },
+  };
+}
 
 describe('buildUsageReport', () => {
   beforeEach(() => {
@@ -166,5 +176,57 @@ describe('buildUsageReport', () => {
     await expect(buildUsageComparison({ period: 'all' })).rejects.toThrow(
       'does not have a comparable previous period',
     );
+  });
+
+  describe('per-machine timezones', () => {
+    useTimeZone('UTC');
+
+    beforeEach(() => {
+      vi.setSystemTime(new Date('2026-06-15T03:00:00Z'));
+    });
+
+    it('includes each machine on its own local today', async () => {
+      mocks.loadMergedProviderData.mockResolvedValue({
+        providerData: {},
+        machineData: [],
+        zonedSources: [
+          { timezone: 'UTC', days: { '2026-06-15': claudeDay(10) } },
+          {
+            timezone: 'America/Los_Angeles',
+            days: {
+              '2026-06-14': claudeDay(7),
+              '2026-06-15': claudeDay(100),
+            },
+          },
+        ],
+      });
+
+      const report = await buildUsageReport({ period: 'today' });
+
+      expect(report?.totals.tokens).toBe(17);
+      expect(report?.timezoneNote).toContain('America/Los_Angeles');
+    });
+
+    it('keeps an explicit date on the stored date keys', async () => {
+      mocks.loadMergedProviderData.mockResolvedValue({
+        providerData: {},
+        machineData: [],
+        zonedSources: [
+          { timezone: 'UTC', days: { '2026-06-15': claudeDay(10) } },
+          {
+            timezone: 'America/Los_Angeles',
+            days: {
+              '2026-06-14': claudeDay(7),
+              '2026-06-15': claudeDay(100),
+            },
+          },
+        ],
+      });
+
+      const report = await buildUsageReport({ period: 'date', from: '2026-06-15' });
+
+      expect(report?.totals.tokens).toBe(110);
+      expect(report?.timezoneNote).toBeUndefined();
+    });
   });
 });

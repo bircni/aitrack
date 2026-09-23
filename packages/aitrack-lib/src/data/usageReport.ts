@@ -1,13 +1,20 @@
 import { warnAboutPricingFallbacks } from '../pricing/scan.js';
 import { orderedProviderKeys, providerLabel } from '../providers/index.js';
+import { calendarDateInTimeZone, machineTimezone } from '../timezone.js';
 import { aggregateModelsByDayMap } from './aggregate.js';
+import { toLocalDateString } from './dayMap.js';
 import { isUsageNotConfigured, usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
 import { compareByCostThenTokens } from './sort.js';
 import type { ProviderData } from './types.js';
-import { loadMergedProviderData } from './usageData.js';
+import {
+  loadMergedProviderData,
+  providerDataForWindows,
+  type ZonedUsageSource,
+} from './usageData.js';
 import {
   computePreviousUsageWindow,
   computeUsageWindow,
+  periodAnchorsOnToday,
   type UsagePeriod,
   type UsageWindow,
 } from './usagePeriods.js';
@@ -58,6 +65,8 @@ export interface UsageReport {
   providers: UsageReportProvider[];
   totals: UsageReportTotals;
   rowCount: number;
+  /** Set when a relative window was evaluated in more than one timezone. */
+  timezoneNote?: string;
 }
 
 export interface UsageComparisonMetric {
@@ -90,6 +99,56 @@ export interface UsageComparisonReport {
   current: UsageReport;
   previous: UsageReport;
   comparison: UsageComparison;
+}
+
+function viewerToday(): string {
+  return calendarDateInTimeZone(machineTimezone()) ?? toLocalDateString(new Date());
+}
+
+function todayForZone(timezone: string): string {
+  return calendarDateInTimeZone(timezone) ?? viewerToday();
+}
+
+/** Other machines' zones, when a relative window has to follow more than one. */
+export function timezoneWindowNote(
+  sources: ZonedUsageSource[] | undefined,
+  period: UsagePeriod,
+): string | undefined {
+  if (!sources || !periodAnchorsOnToday(period)) return undefined;
+  const viewer = machineTimezone();
+  const others = [
+    ...new Set(
+      sources
+        .map((source) => source.timezone)
+        .filter((timezone) => timezone !== '' && timezone !== 'unknown' && timezone !== viewer),
+    ),
+  ];
+  if (others.length === 0) return undefined;
+  return `This window follows each machine's own timezone (${[viewer, ...others].join(', ')}).`;
+}
+
+function presentWindow(window: UsageWindow, isPrefiltered: boolean): UsageWindow {
+  return isPrefiltered ? { start: '0000-01-01', end: '9999-12-31', label: window.label } : window;
+}
+
+function windowedProviderData(
+  loaded: NonNullable<Awaited<ReturnType<typeof loadMergedProviderData>>>,
+  options: UsageReportOptions,
+  kind: 'current' | 'previous',
+): { providerData: ProviderData; window: UsageWindow } {
+  const labelToday = viewerToday();
+  const labelWindow =
+    kind === 'current'
+      ? computeUsageWindow(options, labelToday)
+      : computePreviousUsageWindow(options, computeUsageWindow(options, labelToday), labelToday);
+  if (!loaded.zonedSources) return { providerData: loaded.providerData, window: labelWindow };
+
+  const providerData = providerDataForWindows(loaded, (timezone) => {
+    const today = todayForZone(timezone);
+    const current = computeUsageWindow(options, today);
+    return kind === 'current' ? current : computePreviousUsageWindow(options, current, today);
+  });
+  return { providerData, window: presentWindow(labelWindow, true) };
 }
 
 function buildUsageReportFromData(providerData: ProviderData, window: UsageWindow): UsageReport {
@@ -238,15 +297,17 @@ export async function buildUsageReport(options: UsageReportOptions): Promise<Usa
   if (!loaded) return null;
 
   warnAboutPricingFallbacks(loaded.providerData);
-  const window = computeUsageWindow(options);
-  return buildUsageReportFromData(loaded.providerData, window);
+  const { providerData, window } = windowedProviderData(loaded, options, 'current');
+  const timezoneNote = timezoneWindowNote(loaded.zonedSources, options.period);
+  return {
+    ...buildUsageReportFromData(providerData, window),
+    ...(timezoneNote !== undefined && { timezoneNote }),
+  };
 }
 
 export async function buildUsageComparison(
   options: UsageReportOptions,
 ): Promise<UsageComparisonReport | null> {
-  const currentWindow = computeUsageWindow(options);
-  const previousWindow = computePreviousUsageWindow(options, currentWindow);
   const loaded = await loadMergedProviderData({
     providers: options.providers,
     refreshLive: options.refreshLive,
@@ -254,8 +315,14 @@ export async function buildUsageComparison(
   if (!loaded) return null;
 
   warnAboutPricingFallbacks(loaded.providerData);
-  const current = buildUsageReportFromData(loaded.providerData, currentWindow);
-  const previous = buildUsageReportFromData(loaded.providerData, previousWindow);
+  const currentWindow = windowedProviderData(loaded, options, 'current');
+  const previousWindow = windowedProviderData(loaded, options, 'previous');
+  const note = timezoneWindowNote(loaded.zonedSources, options.period);
+  const current = {
+    ...buildUsageReportFromData(currentWindow.providerData, currentWindow.window),
+    ...(note !== undefined && { timezoneNote: note }),
+  };
+  const previous = buildUsageReportFromData(previousWindow.providerData, previousWindow.window);
   return { current, previous, comparison: compareUsageReports(current, previous) };
 }
 

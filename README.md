@@ -134,6 +134,8 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 **`export` flags:** `-o <path>` (output path) and `--csv` (write a spreadsheet-friendly CSV — raw token counts, one row per provider+model plus a `TOTAL` row — instead of the PDF receipt; the default `-o` extension switches to `.csv`).
 
+Relative windows (`today`, `thisweek`, and the other windows anchored on today) are evaluated in each machine's recorded timezone. `date` and `range` use the stored date keys as written. A heatmap still draws those keys on one grid; `show` says so when the machines are not in the same zone.
+
 **Period comparison:** add `--compare` to any finite `usage` window to compare tokens, estimated
 cost, and per-model movement with the equivalent previous period. Calendar-to-date windows compare
 the same elapsed days—for example, `aitrack usage thisweek --compare` compares this week so far with
