@@ -38,7 +38,7 @@ export function findClaudePricing(
   model: string,
   usageDate?: string,
   fallbacks?: FallbackCollector,
-): ClaudePricing {
+): ClaudePricing | undefined {
   const exact = lookupClaudePricing(model, usageDate);
   if (exact) return exact;
   const id = canonicalClaudeModelId(model);
@@ -50,8 +50,9 @@ export function findClaudePricing(
     fallbacks?.record(id);
     return CLAUDE_FAMILY_FALLBACK[family];
   }
-  fallbacks?.record(id);
-  return CLAUDE_FAMILY_FALLBACK.sonnet;
+  // An id that names no family is not Sonnet. Guessing a price there is how a
+  // missing model field turned into a confident dollar total.
+  return undefined;
 }
 
 function claudeCost(
@@ -86,8 +87,10 @@ export function estimateClaudeCostUSD(
   usage: ClaudeMessageUsage,
   usageDate?: string,
   fallbacks?: FallbackCollector,
-): number {
-  return claudeCost(findClaudePricing(model, usageDate, fallbacks), {
+): number | undefined {
+  const pricing = findClaudePricing(model, usageDate, fallbacks);
+  if (!pricing) return undefined;
+  return claudeCost(pricing, {
     raw: usage.input_tokens ?? 0,
     output: usage.output_tokens ?? 0,
     cacheRead: usage.cache_read_input_tokens ?? 0,
@@ -101,8 +104,10 @@ export function estimateClaudeCostFromAggregateTokens(
   outputTokens: number,
   usageDate?: string,
   fallbacks?: FallbackCollector,
-): number {
-  return claudeCost(findClaudePricing(model, usageDate, fallbacks), {
+): number | undefined {
+  const pricing = findClaudePricing(model, usageDate, fallbacks);
+  if (!pricing) return undefined;
+  return claudeCost(pricing, {
     raw: inputTokens,
     output: outputTokens,
     cacheRead: 0,
@@ -135,9 +140,11 @@ export function estimateClaudeCostFromStoredCounts(
   fallbacks?: FallbackCollector,
 ): number | undefined {
   if (!claudeCountsHaveCostBreakdown(counts)) return undefined;
+  const pricing = findClaudePricing(model, usageDate, fallbacks);
+  if (!pricing) return undefined;
   const cacheRead = counts.cachedInputTokens ?? 0;
   const cacheCreate = counts.cacheCreationInputTokens ?? 0;
-  return claudeCost(findClaudePricing(model, usageDate, fallbacks), {
+  return claudeCost(pricing, {
     raw: counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheCreate),
     output: counts.outputTokens,
     cacheRead,

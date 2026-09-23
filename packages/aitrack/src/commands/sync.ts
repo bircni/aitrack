@@ -28,6 +28,7 @@ import {
   type FallbackCollector,
   reportFallbackPricing,
 } from 'aitrack-lib/pricing/fallback';
+import { recordPricingFallbacks } from 'aitrack-lib/pricing/scan';
 import { syncedProviders } from 'aitrack-lib/providers/index';
 
 export interface SyncDataOptions {
@@ -94,6 +95,8 @@ async function pushLocalUsage(
   // Cursor usage is loaded locally by report/display commands; it is never written to git.
   log.info('Reading local data...');
   const maps = await readLocalProviderMaps(fallbacks);
+  // Cache hits never call the pricer, so scan the maps that were actually loaded.
+  recordPricingFallbacks(maps, fallbacks);
 
   const freshData = buildMachineData(host, maps);
   const totalDays = new Set(Object.values(maps).flatMap((map) => [...map.keys()])).size;
