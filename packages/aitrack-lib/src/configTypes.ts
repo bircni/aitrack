@@ -12,7 +12,7 @@ interface BudgetConfig {
 
 export interface Config {
   repoUrl: string;
-  /** Stable machine identifier for data/{machineId}.json; defaults to os.hostname(). */
+  /** Stable machine identifier for data/{machineId}.json; defaults to the short hostname. */
   machineId?: string;
   /** Comma-separated Claude Code project roots; defaults to the standard Claude locations. */
   claudeProjectsDir?: string;

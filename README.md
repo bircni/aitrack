@@ -99,7 +99,7 @@ npx aitrack sync
 npx aitrack show
 ```
 
-`init` asks for your repo's remote URL (SSH or HTTPS — whatever you normally use) and a stable machine name, then clones the repo to `~/.config/aitrack/repo/`. The machine name defaults to your hostname and becomes `data/{machineId}.json`. `show` always reads **fresh local** Claude/Codex data, so you never need to `sync` first just to preview.
+`init` asks for your repo's remote URL (SSH or HTTPS — whatever you normally use) and a stable machine name, then clones the repo to `~/.config/aitrack/repo/`. The machine name defaults to the short hostname (the part before the first dot) and becomes `data/{machineId}.json`. `show` always reads **fresh local** Claude/Codex data, so you never need to `sync` first just to preview.
 
 ### Multiple machines
 
@@ -194,7 +194,7 @@ Stored at `~/.config/aitrack/config.json`:
 }
 ```
 
-`repoUrl` is the git remote used by `init` and `sync`. `machineId` becomes the `data/{machineId}.json` filename; `init` asks for it and defaults to your OS hostname. Keep it unique, stable, and valid as a filename on every machine you use. Changing it through the CLI migrates the old pending and synced file without overwriting an existing target.
+`repoUrl` is the git remote used by `init` and `sync`. `machineId` becomes the `data/{machineId}.json` filename; `init` asks for it and defaults to the short hostname. Keep it unique, stable, and valid as a filename on every machine you use. Changing it through the CLI migrates the old pending and synced file without overwriting an existing target.
 
 `claudeProjectsDir` and `codexSessionsDir` are optional comma-separated **additional** source roots. They do not replace the standard locations; aitrack recursively scans the configured, environment, and default roots and deduplicates identical paths. You can also add roots with `AITRACK_CLAUDE_PROJECTS_DIRS` or `AITRACK_CODEX_SESSION_DIRS`.
 

@@ -1,8 +1,7 @@
 import { mkdirSync } from 'node:fs';
-import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { loadConfig, resolveMachineId, saveConfig } from 'aitrack-lib/config';
+import { loadConfig, localMachineId, resolveMachineId, saveConfig } from 'aitrack-lib/config';
 import {
   adoptPendingDataFiles,
   cloneRepo,
@@ -113,7 +112,7 @@ export async function initCommand(): Promise<void> {
     cloneRepo(repoUrl);
   }
 
-  const machineId = await promptMachineId(existing?.machineId ?? hostname());
+  const machineId = await promptMachineId(existing?.machineId ?? localMachineId());
   if (!machineId) {
     log.info('Aborted.');
     return;
