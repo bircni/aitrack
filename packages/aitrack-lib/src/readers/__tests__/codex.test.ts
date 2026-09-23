@@ -217,4 +217,79 @@ describe('parseSessionFile', () => {
       },
     ]);
   });
+
+  it('does not treat a missing or shrinking cache count as a context reset', async () => {
+    const file = join(tmpDir, 's.jsonl');
+    writeJsonl(file, [
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-5.4' },
+      },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: {
+            total_token_usage: { input_tokens: 1000, output_tokens: 10, cached_input_tokens: 800 },
+          },
+        },
+      },
+      // Cached field omitted. That used to zero the baseline and make the next
+      // event count the whole cumulative cache again.
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: {
+            total_token_usage: { input_tokens: 1500, output_tokens: 20 },
+            last_token_usage: { input_tokens: 500, output_tokens: 10, cached_input_tokens: 400 },
+          },
+        },
+      },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: {
+            total_token_usage: { input_tokens: 2000, output_tokens: 30, cached_input_tokens: 900 },
+          },
+        },
+      },
+    ]);
+
+    const result = await parseSessionFile(file);
+    expect(result[0]).toMatchObject({
+      inputTokens: 2000,
+      outputTokens: 30,
+      cachedInputTokens: 900,
+    });
+  });
+
+  it('does not add reasoning tokens on top of output tokens', async () => {
+    const file = join(tmpDir, 's.jsonl');
+    writeJsonl(file, [
+      {
+        type: 'turn_context',
+        timestamp: localTimestamp('2024-01-15'),
+        payload: { model: 'gpt-5.4' },
+      },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: {
+            total_token_usage: {
+              input_tokens: 10,
+              output_tokens: 8,
+              reasoning_output_tokens: 5,
+            },
+          },
+        },
+      },
+    ]);
+
+    const sessions = await parseSessionFile(file);
+    expect(sessions[0]).toMatchObject({ outputTokens: 8 });
+  });
 });
