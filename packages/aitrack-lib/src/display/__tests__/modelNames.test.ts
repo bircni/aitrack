@@ -12,6 +12,8 @@ describe('displayModelName', () => {
     expect(displayModelName('gpt-5.1-codex')).toBe('GPT-5.1 Codex');
     expect(displayModelName('claude-fable-5-1-thinking-high')).toBe('Fable 5.1');
     expect(displayModelName('gpt-6-astra-high')).toBe('GPT-6 Astra');
+    expect(displayModelName('gpt-6-sol')).toBe('GPT-6 Sol');
+    expect(displayModelName('claude-opus-5-5')).toBe('Opus 5.5');
     expect(displayModelName('unknown-thing')).toBe('unknown-thing');
     expect(displayModelName('cursor-claude-sonnet-4-5')).toBe('Sonnet 4.5');
   });
@@ -38,6 +40,7 @@ describe('displayModelName', () => {
     expect(displayModelName('auto')).toBe('Auto');
     expect(displayModelName('cursor-grok-4.6')).toBe('Grok 4.6');
     expect(displayModelName('grok-4.6')).toBe('Grok 4.6');
+    expect(displayModelName('cursor-grok-4.7')).toBe('Grok 4.7');
     expect(displayModelName('cursor-grok-4.6-xhigh-fast')).toBe('Grok 4.6');
     expect(displayModelName('cursor-grok-4.6-xhigh-fast', { effort: true })).toBe(
       'Grok 4.6 xhigh fast',

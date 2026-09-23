@@ -1,5 +1,5 @@
 // Per-model Claude pricing from tables/claude.json.
-// Last updated: 2026-09-13. Edit the JSON to change rates; run `pnpm run pricing:check` for drift.
+// Last updated: 2026-09-23. Edit the JSON to change rates; run `pnpm run pricing:check` for drift.
 
 import { CLAUDE_FAMILIES, canonicalizeClaudeModelId } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';

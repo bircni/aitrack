@@ -31,9 +31,16 @@ describe('cursor pricing', () => {
 
   it('maps Cursor Router labels and Claude effort slugs onto catalog rates', () => {
     expect(applyCursorAlias('Opus 5 (Auto Balanced)')).toBe('claude-opus-5');
+    expect(applyCursorAlias('Opus 5.5 (Auto Balanced)')).toBe('claude-opus-5-5');
     expect(applyCursorAlias('claude-opus-4-8-thinking-max')).toBe('claude-opus-4-8');
+    expect(applyCursorAlias('claude-opus-5-5-thinking-medium')).toBe('claude-opus-5-5');
     expect(resolveCursorRates('claude-opus-5')?.inputPerMillion).toBe(5);
+    expect(resolveCursorRates('claude-opus-5-5')?.inputPerMillion).toBe(4);
+    expect(resolveCursorRates('claude-opus-5-5-fast')?.inputPerMillion).toBe(8);
     expect(resolveCursorRates('claude-opus-4-8-thinking-max')?.inputPerMillion).toBe(5);
+    expect(resolveCursorRates('gpt-6-sol')?.inputPerMillion).toBe(2);
+    expect(resolveCursorRates('gpt-6-luna')?.inputPerMillion).toBe(0.1);
+    expect(resolveCursorRates('grok-4.7')?.inputPerMillion).toBe(2);
   });
 
   it('applies the GPT-5.5 fast multiplier instead of the standard-speed rate', () => {
@@ -73,6 +80,6 @@ describe('cursor pricing', () => {
         cachedInputTokens: 1_000_000,
         cacheCreationInputTokens: 1_000_000,
       }),
-    ).toBeCloseTo(5.325);
+    ).toBeCloseTo(5.075);
   });
 });
