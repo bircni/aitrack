@@ -19,6 +19,7 @@ vi.mock('prompts', () => ({ default: mocks.prompts }));
 vi.mock('fs', () => ({ mkdirSync: mocks.mkdirSync }));
 vi.mock('aitrack-lib/config', () => ({
   loadConfig: mocks.loadConfig,
+  localMachineId: () => 'test-host',
   resolveMachineId: (config: { machineId?: string }) => config.machineId ?? 'test-host',
   saveConfig: mocks.saveConfig,
 }));
