@@ -10,8 +10,14 @@ export interface TokenCounts {
   cachedInputTokens?: number;
   /** Uncached input (Claude input_tokens, Cursor "Input (w/o Cache Write)"). */
   rawInputTokens?: number;
-  /** Cache writes (Claude cache_creation, Cursor "Input (w/ Cache Write)"). */
+  /**
+   * Cache writes billed at the 5-minute rate (Claude cache_creation, or the
+   * 5-minute slice when the transcript splits durations). Cursor's
+   * "Input (w/ Cache Write)" column lands here too.
+   */
   cacheCreationInputTokens?: number;
+  /** Claude 1-hour cache writes, billed at twice the base input rate. */
+  cacheCreation1hInputTokens?: number;
   costUSD?: number;
 }
 

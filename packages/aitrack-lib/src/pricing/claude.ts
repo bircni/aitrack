@@ -57,21 +57,33 @@ export function findClaudePricing(
 
 function claudeCost(
   pricing: ClaudePricing,
-  tokens: { raw: number; output: number; cacheRead: number; cacheCreate: number },
+  tokens: {
+    raw: number;
+    output: number;
+    cacheRead: number;
+    cacheCreate: number;
+    cacheCreate1h?: number;
+  },
 ): number {
-  return costFromRates(
-    {
-      inputPerMillion: pricing.inputPerMillion,
-      outputPerMillion: pricing.outputPerMillion,
-      cacheReadPerMillion: pricing.cacheReadPerMillion,
-      cacheWritePerMillion: pricing.cacheCreatePerMillion,
-    },
-    {
-      raw: tokens.raw,
-      output: tokens.output,
-      cacheRead: tokens.cacheRead,
-      cacheWrite: tokens.cacheCreate,
-    },
+  // 5-minute writes are 1.25× input (cacheCreatePerMillion). 1-hour writes are
+  // 2× the base input rate, including models whose cache hits are not 0.1×.
+  const oneHour = tokens.cacheCreate1h ?? 0;
+  return (
+    costFromRates(
+      {
+        inputPerMillion: pricing.inputPerMillion,
+        outputPerMillion: pricing.outputPerMillion,
+        cacheReadPerMillion: pricing.cacheReadPerMillion,
+        cacheWritePerMillion: pricing.cacheCreatePerMillion,
+      },
+      {
+        raw: tokens.raw,
+        output: tokens.output,
+        cacheRead: tokens.cacheRead,
+        cacheWrite: tokens.cacheCreate,
+      },
+    ) +
+    (oneHour * pricing.inputPerMillion * 2) / 1_000_000
   );
 }
 
@@ -80,6 +92,23 @@ export interface ClaudeMessageUsage {
   cache_read_input_tokens?: number;
   output_tokens?: number;
   cache_creation_input_tokens?: number;
+  cache_creation?: {
+    ephemeral_5m_input_tokens?: number;
+    ephemeral_1h_input_tokens?: number;
+  };
+}
+
+/** Split cache writes into the 5-minute and 1-hour buckets when the transcript does. */
+export function claudeCacheWriteTokens(usage: ClaudeMessageUsage): {
+  fiveMinute: number;
+  oneHour: number;
+} {
+  const fiveMinute = usage.cache_creation?.ephemeral_5m_input_tokens;
+  const oneHour = usage.cache_creation?.ephemeral_1h_input_tokens;
+  if ((fiveMinute ?? 0) + (oneHour ?? 0) > 0) {
+    return { fiveMinute: fiveMinute ?? 0, oneHour: oneHour ?? 0 };
+  }
+  return { fiveMinute: usage.cache_creation_input_tokens ?? 0, oneHour: 0 };
 }
 
 export function estimateClaudeCostUSD(
@@ -90,11 +119,13 @@ export function estimateClaudeCostUSD(
 ): number | undefined {
   const pricing = findClaudePricing(model, usageDate, fallbacks);
   if (!pricing) return undefined;
+  const writes = claudeCacheWriteTokens(usage);
   return claudeCost(pricing, {
     raw: usage.input_tokens ?? 0,
     output: usage.output_tokens ?? 0,
     cacheRead: usage.cache_read_input_tokens ?? 0,
-    cacheCreate: usage.cache_creation_input_tokens ?? 0,
+    cacheCreate: writes.fiveMinute,
+    cacheCreate1h: writes.oneHour,
   });
 }
 
@@ -119,11 +150,13 @@ export function claudeCountsHaveCostBreakdown(counts: {
   rawInputTokens?: number;
   cachedInputTokens?: number;
   cacheCreationInputTokens?: number;
+  cacheCreation1hInputTokens?: number;
 }): boolean {
   return (
     counts.rawInputTokens !== undefined ||
     counts.cachedInputTokens !== undefined ||
-    counts.cacheCreationInputTokens !== undefined
+    counts.cacheCreationInputTokens !== undefined ||
+    counts.cacheCreation1hInputTokens !== undefined
   );
 }
 
@@ -135,6 +168,7 @@ export function estimateClaudeCostFromStoredCounts(
     rawInputTokens?: number;
     cachedInputTokens?: number;
     cacheCreationInputTokens?: number;
+    cacheCreation1hInputTokens?: number;
   },
   usageDate?: string,
   fallbacks?: FallbackCollector,
@@ -144,10 +178,14 @@ export function estimateClaudeCostFromStoredCounts(
   if (!pricing) return undefined;
   const cacheRead = counts.cachedInputTokens ?? 0;
   const cacheCreate = counts.cacheCreationInputTokens ?? 0;
+  const cacheCreate1h = counts.cacheCreation1hInputTokens ?? 0;
   return claudeCost(pricing, {
-    raw: counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheCreate),
+    raw:
+      counts.rawInputTokens ??
+      Math.max(0, counts.inputTokens - cacheRead - cacheCreate - cacheCreate1h),
     output: counts.outputTokens,
     cacheRead,
     cacheCreate,
+    cacheCreate1h,
   });
 }

@@ -38,7 +38,13 @@ function isTokenCounts(value: unknown): value is TokenCounts {
   if (!isRecord(value)) return false;
   if (!isFiniteNumber(value.inputTokens) || !isFiniteNumber(value.outputTokens)) return false;
   return (
-    ['cachedInputTokens', 'rawInputTokens', 'cacheCreationInputTokens', 'costUSD'] as const
+    [
+      'cachedInputTokens',
+      'rawInputTokens',
+      'cacheCreationInputTokens',
+      'cacheCreation1hInputTokens',
+      'costUSD',
+    ] as const
   ).every((field) => value[field] === undefined || isFiniteNumber(value[field]));
 }
 

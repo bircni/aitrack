@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { CLAUDE_PRICING_OVERRIDES, type ClaudePricing, findClaudePricing } from '../claude.js';
+import {
+  CLAUDE_PRICING_OVERRIDES,
+  type ClaudePricing,
+  estimateClaudeCostFromStoredCounts,
+  estimateClaudeCostUSD,
+  findClaudePricing,
+} from '../claude.js';
 import { createFallbackCollector, type FallbackCollector } from '../fallback.js';
 
 function priced(model: string, usageDate?: string, fallbacks?: FallbackCollector): ClaudePricing {
@@ -89,6 +95,29 @@ describe('claude pricing', () => {
     expect(priced('claude-opus-3').inputPerMillion).toBe(15);
     expect(priced('claude-haiku-3').inputPerMillion).toBe(0.25);
     expect(priced('CLAUDE-OPUS-3').inputPerMillion).toBe(15);
+  });
+
+  it('bills a 1-hour cache write at twice the input rate', () => {
+    // Sonnet 4.6 input is $3/M, so 1M 1-hour writes are $6. The 5-minute rate
+    // for the same tokens would be $3.75.
+    expect(
+      estimateClaudeCostUSD('claude-sonnet-4-6', {
+        cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 1_000_000 },
+      }),
+    ).toBe(6);
+    expect(
+      estimateClaudeCostUSD('claude-sonnet-4-6', {
+        cache_creation_input_tokens: 1_000_000,
+      }),
+    ).toBe(3.75);
+    expect(
+      estimateClaudeCostFromStoredCounts('claude-sonnet-4-6', {
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        rawInputTokens: 0,
+        cacheCreation1hInputTokens: 1_000_000,
+      }),
+    ).toBe(6);
   });
 
   it('leaves an id that matches no family unpriced', () => {
