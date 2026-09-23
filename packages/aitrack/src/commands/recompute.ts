@@ -131,6 +131,7 @@ function loadMachineForRecompute(
   filePath: string,
   isCurrentMachine: boolean,
   localFresh: MachineFile,
+  replaceLocal: boolean,
 ): { machine: MachineFile; isTouched: boolean } | null {
   const raw = readFileSync(filePath, 'utf8');
   const checked = checkRawMachineFile(raw, filePath, { allowInconsistentCostTotals: true });
@@ -146,6 +147,20 @@ function loadMachineForRecompute(
     return {
       machine: { ...localFresh, days: mergePersistedDays(null, localFresh.days) },
       isTouched: true,
+    };
+  }
+
+  if (isCurrentMachine && replaceLocal) {
+    if (!machineHasData(localFresh)) {
+      log.warn(
+        'Refusing to replace this machine from the local logs — they have no usage. The synced file was left as it is.',
+      );
+      return { machine, isTouched: false };
+    }
+    const replaced = mergePersistedDays(null, localFresh.days);
+    return {
+      machine: { ...machine, days: replaced },
+      isTouched: tokensJson(replaced) !== tokensJson(machine.days),
     };
   }
 
@@ -167,7 +182,15 @@ function reportLegacySkipped(legacySkipped: number, state: 'skipped' | 'left unc
   );
 }
 
-export async function recomputeCostsCommand(): Promise<void> {
+export interface RecomputeCostsOptions {
+  /**
+   * Rebuild this machine from the local logs, including days the logs now
+   * report with fewer tokens, and drop days the logs no longer cover.
+   */
+  replaceLocal?: boolean;
+}
+
+export async function recomputeCostsCommand(options: RecomputeCostsOptions = {}): Promise<void> {
   const fallbacks = createFallbackCollector();
   const config = loadConfig();
   const machineId = resolveMachineId(config);
@@ -195,6 +218,7 @@ export async function recomputeCostsCommand(): Promise<void> {
       filePath,
       basename(filePath) === machineDataFilename(machineId),
       localFresh,
+      Boolean(options.replaceLocal),
     );
     if (!loaded) continue;
 

@@ -178,6 +178,57 @@ describe('recomputeCostsCommand', () => {
     expect(parsed.days['2024-01-01']?.claude_code?.totals.inputTokens).toBe(2_000_000);
   });
 
+  it('replaces the current machine with the local logs when asked', async () => {
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify({
+        hostname: 'host',
+        lastUpdated: 'old',
+        days: {
+          '2023-06-01': {
+            claude_code: {
+              byModel: { 'claude-sonnet-4-6': { inputTokens: 500, outputTokens: 100 } },
+              totals: { inputTokens: 500, outputTokens: 100 },
+            },
+          },
+          '2024-01-01': {
+            claude_code: {
+              byModel: { 'claude-sonnet-4-6': { inputTokens: 2_000_000, outputTokens: 200_000 } },
+              totals: { inputTokens: 2_000_000, outputTokens: 200_000 },
+            },
+          },
+        },
+      }),
+    );
+    mocks.buildMachineData.mockReturnValue({
+      hostname: 'host',
+      lastUpdated: 'now',
+      days: {
+        '2024-01-01': {
+          claude_code: {
+            byModel: { 'claude-sonnet-4-6': { inputTokens: 40, outputTokens: 10 } },
+            totals: { inputTokens: 40, outputTokens: 10 },
+          },
+        },
+      },
+    });
+    mocks.machineHasData.mockReturnValue(true);
+
+    await recomputeCostsCommand({ replaceLocal: true });
+
+    const parsed = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
+    expect(Object.keys(parsed.days)).toEqual(['2024-01-01']);
+    expect(parsed.days['2024-01-01']?.claude_code?.totals.inputTokens).toBe(40);
+  });
+
+  it('refuses --replace-local when the local logs are empty', async () => {
+    mocks.machineHasData.mockReturnValue(false);
+
+    await recomputeCostsCommand({ replaceLocal: true });
+
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Refusing to replace'));
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
   it('rebuilds the current machine from the local logs when its file cannot be parsed', async () => {
     // sync refuses to overwrite a file it cannot read back, so this is the only
     // path that gets the machine unstuck.

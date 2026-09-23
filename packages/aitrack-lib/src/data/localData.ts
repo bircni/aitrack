@@ -75,6 +75,25 @@ function dayTokens(day: ProviderDay): number {
  * Date and provider keys are sorted so the serialized file is stable and the
  * caller's change detection does not trip on key ordering alone.
  */
+/**
+ * How many persisted provider-days the fresh read would not replace, because
+ * it still covers that day but with fewer tokens.
+ */
+export function ratchetedProviderDays(
+  persisted: MachineFile['days'] | null,
+  fresh: MachineFile['days'],
+): number {
+  if (!persisted) return 0;
+  let kept = 0;
+  for (const [date, providers] of Object.entries(persisted)) {
+    for (const [providerKey, persistedDay] of Object.entries(providers)) {
+      const freshDay = fresh[date]?.[providerKey];
+      if (freshDay !== undefined && dayTokens(freshDay) < dayTokens(persistedDay)) kept++;
+    }
+  }
+  return kept;
+}
+
 export function mergePersistedDays(
   persisted: MachineFile['days'] | null,
   fresh: MachineFile['days'],

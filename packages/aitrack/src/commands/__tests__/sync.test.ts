@@ -34,6 +34,7 @@ vi.mock('aitrack-lib/data/localData', async () => {
   return {
     // The real merge helper — this is what keeps pruned-away history in the file.
     mergePersistedDays: actual.mergePersistedDays,
+    ratchetedProviderDays: actual.ratchetedProviderDays,
     buildMachineData: (host: string, providers: Record<string, DayMap>) => {
       const days: Record<string, Record<string, unknown>> = {};
       for (const [providerKey, dayMap] of Object.entries(providers)) {
