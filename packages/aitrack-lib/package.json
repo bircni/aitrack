@@ -1,6 +1,6 @@
 {
   "name": "aitrack-lib",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Core library behind aitrack: reading Claude Code, Codex & Cursor usage, pricing it, storing it in a git repo and rendering it.",
   "keywords": [
     "ai",

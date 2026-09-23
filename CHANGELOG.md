@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.3.0] - 2026-09-23
+
+
+
+### Bug Fixes
+
+- **pricing:** Leave unmatched Claude models unpriced
+- **sync:** Let recompute-costs trust the local logs
+- **codex:** Ignore cache-only drops when detecting a reset
+- **pricing:** Bill Claude one-hour cache writes at twice input
+- **usage:** Apply relative windows in each machine's timezone
+- **machines:** Show this machine's fresh logs and its timezone
+- **cursor:** Log a failed live fetch and snapshot state with sqlite backup
+- **init:** Default the machine name to the short hostname
+- **claude:** Keep the fullest usage for a message, including cache-only turns
+- **readers:** De-duplicate transcript paths through symlinks
+
+### Features
+
+- **pricing:** Add Opus 5.5, GPT-6 Sol/Luna, and Grok 4.7 (#88)
+
 ## [v2.2.0] - 2026-09-13
 
 
