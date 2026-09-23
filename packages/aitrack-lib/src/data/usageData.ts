@@ -5,8 +5,10 @@ import { isCloned, listDataFiles, readDataFile } from '../git.js';
 import { machineDataFilename } from '../machineId.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { isSyncedProvider, liveProviders } from '../providers/index.js';
+import { machineTimezone } from '../timezone.js';
 import { addTokenCounts, getOrCreateDay } from './dayMap.js';
 import { buildLocalMachineFile, machineHasData, mergePersistedDays } from './localData.js';
+import { CURRENT_SCHEMA_VERSION } from './schema.js';
 import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';
 
 export { usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
@@ -79,10 +81,24 @@ export interface PersistedMachine {
   machine: MachineFile;
 }
 
+/** One machine's days, still keyed by that machine's own calendar. */
+export interface ZonedUsageSource {
+  timezone: string;
+  days: MachineFile['days'];
+}
+
 export interface LoadedUsageData {
   providerData: ProviderData;
   machineData: MachineFile[];
   warnedNotConfigured?: boolean;
+  /**
+   * Per-machine days before they are merged. Relative usage windows are
+   * applied in each source's timezone. Absent on callers that only have the
+   * already-merged map.
+   */
+  zonedSources?: ZonedUsageSource[];
+  /** Live providers (Cursor), in the viewing machine's timezone. */
+  liveProviderData?: ProviderData;
 }
 
 function overlayMachineFile(providerData: ProviderData, machine: MachineFile): void {
@@ -118,7 +134,12 @@ function mergePersistedWithLocal(
   persisted: PersistedMachine[],
   localMachine: MachineFile | null,
   currentFile: string,
-): { machineData: MachineFile[]; providerData: ProviderData; isLocalMerged: boolean } {
+): {
+  machineData: MachineFile[];
+  reportMachines: MachineFile[];
+  providerData: ProviderData;
+  isLocalMerged: boolean;
+} {
   const machineData = persisted.map((entry) => entry.machine);
   const reportMachines: MachineFile[] = [];
   let isLocalMerged = false;
@@ -141,6 +162,7 @@ function mergePersistedWithLocal(
 
   return {
     machineData,
+    reportMachines,
     providerData: splitByProvider(reportMachines),
     isLocalMerged,
   };
@@ -187,6 +209,7 @@ export async function loadMergedProviderData(
   let machineData: MachineFile[] = [];
   let providerData: ProviderData = {};
   let isLocalMerged = false;
+  const zonedSources: ZonedUsageSource[] = [];
 
   if (config && isCloned()) {
     const merged = mergePersistedWithLocal(
@@ -197,16 +220,30 @@ export async function loadMergedProviderData(
     machineData = merged.machineData;
     providerData = merged.providerData;
     isLocalMerged = merged.isLocalMerged;
+    for (const machine of merged.reportMachines) {
+      zonedSources.push({
+        timezone: machine.timezone,
+        days: filterDaysByProviders(machine.days, providerFilter),
+      });
+    }
   }
 
   // Only when no persisted file absorbed it above; merging already covers it.
   if (localMachine !== null && !isLocalMerged && machineHasData(localMachine)) {
     overlayMachineFile(providerData, localMachine);
+    zonedSources.push({
+      timezone: localMachine.timezone,
+      days: filterDaysByProviders(localMachine.days, providerFilter),
+    });
   }
 
+  const liveProviderData: ProviderData = {};
   for (const { key, pending } of livePending) {
     const liveMap = await pending;
-    if (liveMap.size > 0) providerData[key] = liveMap;
+    if (liveMap.size > 0) {
+      liveProviderData[key] = liveMap;
+      providerData[key] = liveMap;
+    }
   }
 
   if (providerFilter) {
@@ -223,5 +260,67 @@ export async function loadMergedProviderData(
     providerData,
     machineData,
     warnedNotConfigured: isWarnedNotConfigured,
+    zonedSources,
+    liveProviderData,
   };
+}
+
+function filterDaysByProviders(
+  days: MachineFile['days'],
+  providerFilter: Set<string> | undefined,
+): MachineFile['days'] {
+  if (!providerFilter) return days;
+  const filtered: MachineFile['days'] = {};
+  for (const [date, providers] of Object.entries(days)) {
+    const kept = Object.fromEntries(
+      Object.entries(providers).filter(([providerKey]) => providerFilter.has(providerKey)),
+    );
+    if (Object.keys(kept).length > 0) filtered[date] = kept;
+  }
+  return filtered;
+}
+
+function daysInWindow(
+  days: MachineFile['days'],
+  window: { start: string; end: string },
+): MachineFile['days'] {
+  const filtered: MachineFile['days'] = {};
+  for (const [date, providers] of Object.entries(days)) {
+    if (date >= window.start && date <= window.end) filtered[date] = providers;
+  }
+  return filtered;
+}
+
+/**
+ * Merge zoned machine files after each has been clipped to its own window.
+ * Without `zonedSources`, the already-merged map is returned unchanged.
+ */
+export function providerDataForWindows(
+  loaded: LoadedUsageData,
+  windowFor: (timezone: string) => { start: string; end: string },
+): ProviderData {
+  if (!loaded.zonedSources) return loaded.providerData;
+
+  const data: ProviderData = {};
+  for (const source of loaded.zonedSources) {
+    overlayMachineFile(data, {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      hostname: source.timezone,
+      timezone: source.timezone,
+      dayBucket: 'local',
+      lastUpdated: '',
+      days: daysInWindow(source.days, windowFor(source.timezone)),
+    });
+  }
+
+  const { liveProviderData } = loaded;
+  if (!liveProviderData) return data;
+  const liveWindow = windowFor(machineTimezone());
+  for (const [key, dayMap] of Object.entries(liveProviderData)) {
+    const filtered = new Map(
+      [...dayMap].filter(([date]) => date >= liveWindow.start && date <= liveWindow.end),
+    );
+    if (filtered.size > 0) data[key] = filtered;
+  }
+  return data;
 }

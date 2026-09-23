@@ -11,6 +11,20 @@ import { renderTui } from 'aitrack-lib/display/tui';
 import { isCloned, writePendingMachineFile } from 'aitrack-lib/git';
 import { log } from 'aitrack-lib/output';
 import { warnAboutPricingFallbacks } from 'aitrack-lib/pricing/scan';
+import { machineTimezone } from 'aitrack-lib/timezone';
+
+function mixedCalendarNote(timezones: string[]): string | null {
+  const viewer = machineTimezone();
+  const others = [
+    ...new Set(
+      timezones.filter(
+        (timezone) => timezone !== '' && timezone !== 'unknown' && timezone !== viewer,
+      ),
+    ),
+  ];
+  if (others.length === 0) return null;
+  return `Heatmap days are each machine's local dates (${[viewer, ...others].join(', ')}).`;
+}
 
 function openFile(filePath: string): void {
   if (process.platform === 'win32') {
@@ -59,6 +73,10 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
   }
 
   warnAboutPricingFallbacks(loaded.providerData);
+  const calendarNote = mixedCalendarNote(
+    loaded.zonedSources?.map((source) => source.timezone) ?? [],
+  );
+  if (calendarNote) log.info(calendarNote);
 
   if (options.tui) {
     const output = renderTui(loaded.providerData, {
