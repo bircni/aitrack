@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-09-13",
+  "updatedAt": "2026-09-23",
   "source": "https://cursor.com/docs/models-and-pricing.md",
   "comment": "Cursor-native list prices and CSV slug aliases. Claude and Codex models resolve through those tables after aliasing. Unlisted models stay unpriced. Cache write/read are explicit; there is no long-context uplift because each CSV row is an aggregate.",
   "models": {
@@ -63,6 +63,18 @@
       "cacheReadPerMillion": 1,
       "cacheWritePerMillion": 4
     },
+    "grok-4.7": {
+      "inputPerMillion": 2,
+      "outputPerMillion": 6,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 2
+    },
+    "grok-4.7-fast": {
+      "inputPerMillion": 4,
+      "outputPerMillion": 12,
+      "cacheReadPerMillion": 1,
+      "cacheWritePerMillion": 4
+    },
     "grok-4.6": {
       "inputPerMillion": 2,
       "outputPerMillion": 6,
@@ -105,6 +117,12 @@
       "cacheReadPerMillion": 1,
       "cacheWritePerMillion": 12.5
     },
+    "claude-opus-5-5-fast": {
+      "inputPerMillion": 8,
+      "outputPerMillion": 40,
+      "cacheReadPerMillion": 0.4,
+      "cacheWritePerMillion": 10
+    },
     "claude-opus-5-fast": {
       "inputPerMillion": 10,
       "outputPerMillion": 50,
@@ -131,18 +149,19 @@
     },
     "gemini-3.7-flash": {
       "inputPerMillion": 0.75,
-      "outputPerMillion": 3.75,
+      "outputPerMillion": 3.5,
       "cacheReadPerMillion": 0.075,
       "cacheWritePerMillion": 0.75
     },
     "gemini-3.8-flash": {
       "inputPerMillion": 0.75,
-      "outputPerMillion": 3.75,
+      "outputPerMillion": 3.5,
       "cacheReadPerMillion": 0.075,
       "cacheWritePerMillion": 0.75
     }
   },
   "fastMultipliers": {
+    "claude-opus-5-5": 2,
     "claude-opus-5": 2,
     "gpt-5": 2,
     "gpt-5.1-codex": 2,
@@ -154,6 +173,8 @@
     "gpt-5.5": 2.5,
     "gpt-5.6-sol": 2,
     "gpt-6-astra": 2,
+    "gpt-6-sol": 2,
+    "gpt-6-luna": 2,
     "gpt-5.6-terra": 2,
     "gpt-5.6-luna": 2
   },
@@ -170,6 +191,18 @@
     { "pattern": "^composer-2\\.5-fast$", "canonical": "composer-2.5-fast" },
     { "pattern": "^github_bugbot$", "canonical": "github_bugbot" },
     {
+      "pattern": "^(?:cursor-)?grok-4[.-]7-fast(?:-(?:low|medium|high|xhigh))?$",
+      "canonical": "grok-4.7-fast"
+    },
+    {
+      "pattern": "^(?:cursor-)?grok-4[.-]7(?:-(?:low|medium|high|xhigh))?-fast$",
+      "canonical": "grok-4.7-fast"
+    },
+    {
+      "pattern": "^(?:cursor-)?grok-4[.-]7(?:-(?:build|low|medium|high|xhigh))?$",
+      "canonical": "grok-4.7"
+    },
+    {
       "pattern": "^(?:cursor-)?grok-4[.-]6-fast(?:-(?:low|medium|high|xhigh))?$",
       "canonical": "grok-4.6-fast"
     },
@@ -181,8 +214,8 @@
       "pattern": "^(?:cursor-)?grok-4[.-]6(?:-(?:build|low|medium|high|xhigh))?$",
       "canonical": "grok-4.6"
     },
-    { "pattern": "^grok-bot-default$", "canonical": "grok-4.6-fast" },
-    { "pattern": "^grok-bot-automation$", "canonical": "grok-4.6" },
+    { "pattern": "^grok-bot-default$", "canonical": "grok-4.7-fast" },
+    { "pattern": "^grok-bot-automation$", "canonical": "grok-4.7" },
     {
       "pattern": "^(?:cursor-)?grok-4[.-]5-fast(?:-(?:low|medium|high|xhigh))?$",
       "canonical": "grok-4.5-fast"
@@ -253,6 +286,14 @@
     {
       "pattern": "^claude-sonnet-4-6(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
       "canonical": "claude-sonnet-4-6"
+    },
+    {
+      "pattern": "^claude-opus-5-5(?:\\[1m\\])?(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?-fast$",
+      "canonical": "claude-opus-5-5-fast"
+    },
+    {
+      "pattern": "^claude-opus-5-5(?:\\[1m\\])?(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?$",
+      "canonical": "claude-opus-5-5"
     },
     {
       "pattern": "^claude-opus-5(?:\\[1m\\])?(?:-thinking)?(?:-(?:low|medium|high|xhigh|max))?-fast$",
@@ -332,6 +373,22 @@
       "canonical": "gpt-6-astra"
     },
     {
+      "pattern": "^gpt-6-sol(?:-(?:none|low|medium|high|xhigh|max|ultra))?-fast$",
+      "canonical": "gpt-6-sol-fast"
+    },
+    {
+      "pattern": "^gpt-6-sol(?:-(?:none|low|medium|high|xhigh|max|ultra))?$",
+      "canonical": "gpt-6-sol"
+    },
+    {
+      "pattern": "^gpt-6-luna(?:-(?:none|low|medium|high|xhigh|max))?-fast$",
+      "canonical": "gpt-6-luna-fast"
+    },
+    {
+      "pattern": "^gpt-6-luna(?:-(?:none|low|medium|high|xhigh|max))?$",
+      "canonical": "gpt-6-luna"
+    },
+    {
       "pattern": "^gpt-5\\.6-terra(?:-(?:none|low|medium|high|xhigh|max))?-fast$",
       "canonical": "gpt-5.6-terra-fast"
     },
@@ -356,6 +413,11 @@
     { "pattern": "(?i)^Composer 2 Fast \\(Auto[^)]*\\)$", "canonical": "composer-2-fast" },
     { "pattern": "(?i)^Composer 2 \\(Auto[^)]*\\)$", "canonical": "composer-2" },
     {
+      "pattern": "(?i)^(?:Cursor )?Grok 4\\.7 Fast \\(Auto[^)]*\\)$",
+      "canonical": "grok-4.7-fast"
+    },
+    { "pattern": "(?i)^(?:Cursor )?Grok 4\\.7 \\(Auto[^)]*\\)$", "canonical": "grok-4.7" },
+    {
       "pattern": "(?i)^(?:Cursor )?Grok 4\\.6 Fast \\(Auto[^)]*\\)$",
       "canonical": "grok-4.6-fast"
     },
@@ -372,6 +434,7 @@
       "canonical": "claude-sonnet-4-6"
     },
     { "pattern": "(?i)^(?:Claude )?Opus 4\\.8 \\(Auto[^)]*\\)$", "canonical": "claude-opus-4-8" },
+    { "pattern": "(?i)^(?:Claude )?Opus 5\\.5 \\(Auto[^)]*\\)$", "canonical": "claude-opus-5-5" },
     { "pattern": "(?i)^(?:Claude )?Opus 5 \\(Auto[^)]*\\)$", "canonical": "claude-opus-5" },
     { "pattern": "(?i)^(?:Claude )?Sonnet 5 \\(Auto[^)]*\\)$", "canonical": "claude-sonnet-5" },
     { "pattern": "(?i)^(?:Claude )?Fable 5\\.1 \\(Auto[^)]*\\)$", "canonical": "claude-fable-5-1" },
@@ -379,6 +442,8 @@
     { "pattern": "(?i)^GPT-5\\.5 \\(Auto[^)]*\\)$", "canonical": "gpt-5.5" },
     { "pattern": "(?i)^GPT-5\\.6 Sol \\(Auto[^)]*\\)$", "canonical": "gpt-5.6-sol" },
     { "pattern": "(?i)^GPT-6 Astra \\(Auto[^)]*\\)$", "canonical": "gpt-6-astra" },
+    { "pattern": "(?i)^GPT-6 Sol \\(Auto[^)]*\\)$", "canonical": "gpt-6-sol" },
+    { "pattern": "(?i)^GPT-6 Luna \\(Auto[^)]*\\)$", "canonical": "gpt-6-luna" },
     { "pattern": "(?i)^GPT-5\\.6 Terra \\(Auto[^)]*\\)$", "canonical": "gpt-5.6-terra" },
     { "pattern": "(?i)^GPT-5\\.6 Luna \\(Auto[^)]*\\)$", "canonical": "gpt-5.6-luna" },
     { "pattern": "(?i)^Gemini 3\\.6 Flash(?: \\([^)]*\\))?$", "canonical": "gemini-3.6-flash" },

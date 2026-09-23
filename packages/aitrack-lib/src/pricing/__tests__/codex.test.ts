@@ -8,6 +8,8 @@ describe('codex pricing', () => {
     expect(estimateCodexCostUSD('gpt-6-astra', 1_000_000, 1_000_000)).toBe(60);
     expect(estimateCodexCostUSD('gpt-6-astra-high', 1_000_000, 1_000_000)).toBe(60);
     expect(estimateCodexCostUSD('gpt-6-astra-xhigh', 1_000_000, 1_000_000)).toBe(60);
+    expect(estimateCodexCostUSD('gpt-6-sol', 1_000_000, 1_000_000)).toBe(12);
+    expect(estimateCodexCostUSD('gpt-6-luna', 1_000_000, 1_000_000)).toBe(0.6);
     expect(estimateCodexCostUSD('gpt-5.6-sol', 1_000_000, 1_000_000)).toBe(24);
     expect(estimateCodexCostUSD('gpt-5.6-terra', 1_000_000, 1_000_000)).toBe(14);
     expect(estimateCodexCostUSD('gpt-5.6-luna', 1_000_000, 1_000_000)).toBe(1.4);

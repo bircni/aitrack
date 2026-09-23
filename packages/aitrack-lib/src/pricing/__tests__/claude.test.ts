@@ -13,6 +13,17 @@ describe('claude pricing', () => {
       cacheCreatePerMillion: 6.25,
     });
 
+    // Opus 5.5 bills cache hits at 0.05x input, not 0.1x.
+    expect(findClaudePricing('claude-opus-5-5')).toEqual({
+      inputPerMillion: 4,
+      outputPerMillion: 20,
+      cacheReadPerMillion: 0.2,
+      cacheCreatePerMillion: 5,
+    });
+    expect(findClaudePricing('claude-opus-5-5-thinking-medium')).toEqual(
+      findClaudePricing('claude-opus-5-5'),
+    );
+
     // Fable 5.1 and Mythos 5.1 bill cache hits at 0.025x input, not 0.1x.
     expect(findClaudePricing('claude-fable-5-1')).toEqual({
       inputPerMillion: 10,
