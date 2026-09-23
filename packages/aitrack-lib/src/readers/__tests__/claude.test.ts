@@ -239,19 +239,64 @@ describe('parseJsonlFile', () => {
     expect(result.size).toBe(0);
   });
 
-  it('skips assistant entries with zero output tokens', async () => {
+  it('counts a cache-only turn and ignores a message with no tokens', async () => {
     const file = join(tmpDir, 'a.jsonl');
     writeJsonl(file, [
       {
         type: 'assistant',
         timestamp: localTimestamp('2024-01-15'),
         requestId: 'r1',
-        message: { id: 'msg1', model: 'claude', usage: { input_tokens: 100, output_tokens: 0 } },
+        message: {
+          id: 'msg1',
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 100, output_tokens: 0 },
+        },
+      },
+      {
+        type: 'assistant',
+        timestamp: localTimestamp('2024-01-15'),
+        requestId: 'r2',
+        message: {
+          id: 'msg2',
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 0, output_tokens: 0 },
+        },
       },
     ]);
 
     const result = await parseJsonlFile(file, new Set());
-    expect(result.size).toBe(0);
+    expect(result.get('2024-01-15')?.inputTokens).toBe(100);
+    expect(result.get('2024-01-15')?.outputTokens).toBe(0);
+  });
+
+  it('keeps the fullest record when the same message is streamed more than once', async () => {
+    const file = join(tmpDir, 'a.jsonl');
+    writeJsonl(file, [
+      {
+        type: 'assistant',
+        timestamp: localTimestamp('2024-01-15'),
+        requestId: 'r1',
+        message: {
+          id: 'msg1',
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 10, output_tokens: 1 },
+        },
+      },
+      {
+        type: 'assistant',
+        timestamp: localTimestamp('2024-01-15'),
+        requestId: 'r1',
+        message: {
+          id: 'msg1',
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 100, output_tokens: 50 },
+        },
+      },
+    ]);
+
+    const result = await parseJsonlFile(file, new Set());
+    expect(result.get('2024-01-15')?.inputTokens).toBe(100);
+    expect(result.get('2024-01-15')?.outputTokens).toBe(50);
   });
 
   it('accumulates multiple messages across different days', async () => {
