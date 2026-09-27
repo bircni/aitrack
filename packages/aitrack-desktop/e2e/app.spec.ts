@@ -85,7 +85,7 @@ test('onboarding, a linked session, a rating that survives relaunch, and both th
     expect(reduced === 'drift' || reduced === 'none').toBe(true);
     expect(still).toBe('none');
     await settle(page);
-    await expect(page).toHaveScreenshot('tokens-dark.png', {
+    await expect.soft(page).toHaveScreenshot('tokens-dark.png', {
       animations: 'disabled',
       fullPage: true,
     });
@@ -108,7 +108,7 @@ test('onboarding, a linked session, a rating that survives relaunch, and both th
     await expect(page.getByText('Depth 0')).toBeVisible();
     await expect(page.getByText('Chart')).toBeVisible();
     await settle(page);
-    await expect(page).toHaveScreenshot('tokens-light.png', {
+    await expect.soft(page).toHaveScreenshot('tokens-light.png', {
       animations: 'disabled',
       fullPage: true,
     });
