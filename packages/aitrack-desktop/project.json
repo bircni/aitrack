@@ -24,6 +24,15 @@
         "cwd": "{projectRoot}"
       }
     },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
     "test:e2e": {
       "executor": "nx:run-commands",
       "dependsOn": ["build"],
@@ -33,7 +42,6 @@
         "cwd": "{projectRoot}"
       }
     },
-    "lint": {},
     "format:check": {},
     "check:unused": {
       "executor": "nx:run-commands",
