@@ -25,9 +25,19 @@ export function toLocalDateString(ts: string | Date): string {
  * machine file, counted in all-time totals, and skipped by every year or
  * window filter. Readers use this instead so bad input is dropped at the edge.
  */
+let cachedDayInput = '';
+let cachedDayOutput: string | null = null;
+
 export function tryLocalDateString(ts: string | Date): string | null {
-  const d = typeof ts === 'string' ? new Date(ts) : ts;
-  return Number.isNaN(d.getTime()) ? null : toLocalDateString(d);
+  if (typeof ts !== 'string') {
+    return Number.isNaN(ts.getTime()) ? null : toLocalDateString(ts);
+  }
+  if (ts === cachedDayInput) return cachedDayOutput;
+  const d = new Date(ts);
+  const result = Number.isNaN(d.getTime()) ? null : toLocalDateString(d);
+  cachedDayInput = ts;
+  cachedDayOutput = result;
+  return result;
 }
 
 /** Accumulate the optional cache/raw token breakdown fields. */

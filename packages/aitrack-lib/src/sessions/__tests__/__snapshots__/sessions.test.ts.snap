@@ -1,0 +1,24 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildLeverageReport > compares linked commits with the human baseline and flags a small sample 1`] = `
+[
+  "lead-time: Median minutes from the first edit in a linked session to the commit.",
+  "size: Mean added plus deleted lines per commit.",
+  "churn-7: Share of a commit’s added lines that blame no longer attributes to it after 7 days.",
+  "churn-30: Share of a commit’s added lines that blame no longer attributes to it after 30 days.",
+  "tests: Share of commits that change at least one test file.",
+  "test-lines: Lines added or removed in test files, divided by all lines those commits changed.",
+  "reverts: Share of commits that revert an earlier commit. Supplementary, not the quality definition.",
+  "lead-time: Median minutes from the first edit in a linked session to the commit.",
+  "throughput: Linked commits divided by the local days those commits landed on.",
+  "lines-per-hour: Added and deleted lines on linked commits, divided by session time. Gaps over 15 minutes are not counted as active.",
+  "turns-per-commit: Assistant turns on the linked sessions, divided by linked commits. A session linked to two commits is counted twice.",
+  "churn-7: Share of added lines that blame no longer attributes to the commit after 7 days.",
+  "tests: Share of linked commits that change at least one test file.",
+  "test-lines: Lines added or removed in test files, divided by all lines the linked commits changed.",
+  "reverts: Share of linked commits that revert an earlier commit.",
+  "cost-per-commit: Estimated API cost of sessions that shipped a commit, divided by linked commits. Each session’s cost is counted once.",
+  "cost-per-100-lines: Estimated API cost of linked sessions per 100 lines those commits added.",
+  "unshipped: Cost of sessions you marked discarded, plus sessions with no linked commit 48 hours after they ended.",
+]
+`;

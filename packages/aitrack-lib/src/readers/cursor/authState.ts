@@ -21,19 +21,46 @@ function normalizeCursorDatabaseValue(value: unknown): string | undefined {
   return undefined;
 }
 
-function readCursorAuthStateFromDatabase(databasePath: string): CursorAuthState {
+function readOpenDatabase<T>(databasePath: string, read: (database: DatabaseSync) => T): T {
   const database = new DatabaseSync(databasePath, { readOnly: true });
   try {
-    const query = database.prepare('SELECT value FROM ItemTable WHERE key = ? LIMIT 1');
-    const accessRow = query.get('cursorAuth/accessToken') as { value?: unknown } | undefined;
-    const refreshRow = query.get('cursorAuth/refreshToken') as { value?: unknown } | undefined;
-    return {
-      accessToken: normalizeCursorDatabaseValue(accessRow?.value),
-      refreshToken: normalizeCursorDatabaseValue(refreshRow?.value),
-    };
+    return read(database);
   } finally {
     database.close();
   }
+}
+
+/**
+ * Read Cursor's state database without writing to it.
+ *
+ * A locked database (Cursor has it open) is snapshotted, including the WAL,
+ * and the read runs against the copy.
+ */
+export function readCursorDatabase<T>(
+  databasePath: string,
+  read: (database: DatabaseSync) => T,
+): Promise<T> {
+  try {
+    const value = readOpenDatabase(databasePath, read);
+    return Promise.resolve(value);
+  } catch (error) {
+    if (!isSqliteLockedError(error)) {
+      return Promise.reject(error instanceof Error ? error : new Error('cursor state read failed'));
+    }
+    return withCursorStateSnapshot(databasePath, (snapshotPath) =>
+      readOpenDatabase(snapshotPath, read),
+    );
+  }
+}
+
+function readCursorAuthStateFromDatabase(database: DatabaseSync): CursorAuthState {
+  const query = database.prepare('SELECT value FROM ItemTable WHERE key = ? LIMIT 1');
+  const accessRow = query.get('cursorAuth/accessToken') as { value?: unknown } | undefined;
+  const refreshRow = query.get('cursorAuth/refreshToken') as { value?: unknown } | undefined;
+  return {
+    accessToken: normalizeCursorDatabaseValue(accessRow?.value),
+    refreshToken: normalizeCursorDatabaseValue(refreshRow?.value),
+  };
 }
 
 function isSqliteLockedError(error: unknown): boolean {
@@ -84,14 +111,6 @@ async function withCursorStateSnapshot<T>(
   }
 }
 
-export async function readCursorAuthState(databasePath: string): Promise<CursorAuthState> {
-  try {
-    return readCursorAuthStateFromDatabase(databasePath);
-  } catch (error) {
-    if (!isSqliteLockedError(error)) throw error;
-    const state = await withCursorStateSnapshot(databasePath, (snapshotPath) =>
-      readCursorAuthStateFromDatabase(snapshotPath),
-    );
-    return state;
-  }
+export function readCursorAuthState(databasePath: string): Promise<CursorAuthState> {
+  return readCursorDatabase(databasePath, readCursorAuthStateFromDatabase);
 }

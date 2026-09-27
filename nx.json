@@ -26,6 +26,7 @@
       "include": [
         "packages/aitrack/**/*",
         "packages/aitrack-lib/**/*",
+        "packages/aitrack-desktop/**/*",
         "packages/test-fixtures/**/*",
         "scripts/**/*"
       ],

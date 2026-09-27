@@ -13,6 +13,9 @@
     },
     {
       "path": "./scripts"
+    },
+    {
+      "path": "./packages/aitrack-desktop"
     }
   ]
 }

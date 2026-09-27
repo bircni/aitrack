@@ -21,5 +21,7 @@ catalog:
 
 allowBuilds:
   esbuild: true
+  electron: true
+  electron-winstaller: true
   simple-git-hooks: true
   nx: true

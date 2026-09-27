@@ -8,4 +8,7 @@ coverage/
 .vite/
 .typecheck/
 *.tsbuildinfo
+packages/aitrack-desktop/out/
+packages/aitrack-desktop/release/
+packages/aitrack-desktop/e2e/artifacts/
 .env

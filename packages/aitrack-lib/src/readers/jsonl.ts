@@ -1,37 +1,52 @@
 import { createReadStream } from 'node:fs';
-import { createInterface } from 'node:readline';
 
 import { isRecord } from '../data/guards.js';
 
 /**
  * Stream the JSON objects from a JSONL file, one per line.
  *
- * Both the Claude and Codex readers opened the same read stream, the same
- * `createInterface({ crlfDelay: Infinity })`, and skipped blank lines,
- * half-written lines (the transcript is appended to while it is read), and
- * lines that parse to a non-object. That boilerplate lives here now; each
- * reader keeps only its own per-entry logic.
+ * Blank lines, half-written trailing lines (the transcript is appended while
+ * it is read), and lines that parse to a non-object are skipped. Each reader
+ * keeps only its own per-entry logic.
  */
 export async function* streamJsonlObjects(
   filePath: string,
 ): AsyncGenerator<Record<string, unknown>> {
-  const rl = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
-  });
-
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      // A truncated or half-written line — skip it rather than failing the file.
-      continue;
+  let carry = '';
+  const input = createReadStream(filePath, { encoding: 'utf8', highWaterMark: 1024 * 1024 });
+  for await (const chunk of input) {
+    const piece = typeof chunk === 'string' ? chunk : '';
+    const text = carry.length === 0 ? piece : carry + piece;
+    let start = 0;
+    while (start < text.length) {
+      const newline = text.indexOf('\n', start);
+      if (newline === -1) break;
+      const parsed = parseLine(text.slice(start, newline));
+      if (parsed !== null) yield parsed;
+      start = newline + 1;
     }
-    // A bare number or string parses fine and would otherwise be cast to a
-    // shape it never had.
-    if (!isRecord(parsed)) continue;
-    yield parsed;
+    carry = text.slice(start);
+  }
+  if (carry.length > 0) {
+    const parsed = parseLine(carry);
+    if (parsed !== null) yield parsed;
+  }
+}
+
+function parseLine(line: string): Record<string, unknown> | null {
+  let start = 0;
+  while (start < line.length) {
+    const code = line.codePointAt(start);
+    if (code !== 32 && code !== 9 && code !== 13) break;
+    start += 1;
+  }
+  if (start === line.length) return null;
+  const body = start === 0 ? line : line.slice(start);
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    // A truncated or half-written line — skip it rather than failing the file.
+    return null;
   }
 }

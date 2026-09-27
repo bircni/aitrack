@@ -21,6 +21,12 @@ Each machine pushes Claude Code and Codex usage to a git repo _you_ control. Pul
 
 ---
 
+## Desktop app
+
+The desktop app watches Claude Code, Codex, and Cursor on this machine, links sessions to git commits, and shows speed, quality, and cost with the reason behind each number. It does not change those tools or your repositories. The only networked write is an explicit push to a data repo you already configured with `aitrack init`.
+
+Unsigned builds are attached to [GitHub Releases](https://github.com/bircni/aitrack/releases). On macOS, open the app once from Finder and choose Open if Gatekeeper blocks it. On Windows, choose More info, then Run anyway, if SmartScreen warns. Signing is wired through `CSC_*` and `resources/entitlements.mac.plist` and stays off until a certificate is configured.
+
 ## Why aitrack?
 
 - 📊 **One picture of everything** — Claude Code + Codex merged across your machines, with current-machine Cursor usage available on demand.

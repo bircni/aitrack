@@ -24,6 +24,17 @@
     },
     "packages/test-fixtures": {
       "project": ["src/**/*.ts"]
+    },
+    "packages/aitrack-desktop": {
+      "entry": [
+        "e2e/**/*.ts",
+        "src/main/index.ts",
+        "src/main/ingestWorker.ts",
+        "src/**/__tests__/**/*.test.ts",
+        "src/**/__tests__/**/*.test.tsx"
+      ],
+      "project": ["src/**/*.{ts,tsx}", "*.config.ts", "e2e/**/*.ts"],
+      "ignoreDependencies": ["pdfkit", "tailwindcss"]
     }
   },
   "rules": {
