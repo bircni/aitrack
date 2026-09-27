@@ -1,4 +1,4 @@
-import { readdirSync, statSync, watch, type FSWatcher } from 'node:fs';
+import { existsSync, readdirSync, statSync, watch, type FSWatcher } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -28,24 +28,37 @@ export function watchSourceRoots(
 }
 
 function attach(root: string, kick: (filePath: string) => void, watchers: FSWatcher[]): void {
+  if (!existsSync(root)) return;
   try {
-    watchers.push(
-      watch(root, { recursive: true }, (_event, filename) => {
-        kick(watchedPath(root, filename));
-      }),
-    );
+    watchers.push(listen(root, { recursive: true }, kick));
   } catch {
     watchShallow(root, kick, watchers);
   }
 }
 
+function listen(
+  root: string,
+  options: { recursive: boolean } | undefined,
+  kick: (filePath: string) => void,
+): FSWatcher {
+  const watcher =
+    options === undefined
+      ? watch(root, (_event, filename) => {
+          kick(watchedPath(root, filename));
+        })
+      : watch(root, options, (_event, filename) => {
+          kick(watchedPath(root, filename));
+        });
+  watcher.on('error', () => {
+    watcher.close();
+  });
+  return watcher;
+}
+
 function watchShallow(root: string, kick: (filePath: string) => void, watchers: FSWatcher[]): void {
+  if (!existsSync(root)) return;
   try {
-    watchers.push(
-      watch(root, (_event, filename) => {
-        kick(watchedPath(root, filename));
-      }),
-    );
+    watchers.push(listen(root, undefined, kick));
   } catch {
     return;
   }
