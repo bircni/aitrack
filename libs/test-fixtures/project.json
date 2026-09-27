@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "name": "@aitrack/test-fixtures",
   "projectType": "library",
-  "sourceRoot": "packages/test-fixtures/src",
+  "sourceRoot": "libs/test-fixtures/src",
   "targets": {
     "lint": {},
     "format:check": {},

@@ -14,15 +14,15 @@
         "tsx"
       ]
     },
-    "packages/aitrack-lib": {
+    "libs/aitrack-lib": {
       "entry": ["src/index.ts", "src/**/*.ts"],
       "project": ["src/**/*.ts"]
     },
-    "packages/aitrack": {
+    "apps/aitrack": {
       "entry": ["src/**/__tests__/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
-    "packages/test-fixtures": {
+    "libs/test-fixtures": {
       "project": ["src/**/*.ts"]
     }
   },

@@ -50,7 +50,7 @@ describe('release tooling', () => {
 
   it('previews the next tag and pushes only that exact tag', () => {
     const package_ = JSON.parse(
-      readFileSync(new URL('../../packages/aitrack/package.json', import.meta.url), 'utf8'),
+      readFileSync(new URL('../../apps/aitrack/package.json', import.meta.url), 'utf8'),
     ) as {
       version: string;
     };

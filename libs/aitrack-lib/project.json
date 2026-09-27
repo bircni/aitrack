@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "name": "aitrack-lib",
   "projectType": "library",
-  "sourceRoot": "packages/aitrack-lib/src",
+  "sourceRoot": "libs/aitrack-lib/src",
   "targets": {
     "lint": {},
     "format:check": {},

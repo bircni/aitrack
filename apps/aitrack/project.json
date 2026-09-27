@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "name": "aitrack",
   "projectType": "application",
-  "sourceRoot": "packages/aitrack/src",
+  "sourceRoot": "apps/aitrack/src",
   "targets": {
     "lint": {},
     "format:check": {},

@@ -3,13 +3,13 @@
   "files": [],
   "references": [
     {
-      "path": "./packages/test-fixtures"
+      "path": "./libs/test-fixtures"
     },
     {
-      "path": "./packages/aitrack-lib"
+      "path": "./libs/aitrack-lib"
     },
     {
-      "path": "./packages/aitrack"
+      "path": "./apps/aitrack"
     },
     {
       "path": "./scripts"

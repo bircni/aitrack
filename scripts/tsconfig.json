@@ -11,7 +11,7 @@
   "exclude": ["node_modules", "dist"],
   "references": [
     {
-      "path": "../packages/aitrack-lib"
+      "path": "../libs/aitrack-lib"
     }
   ]
 }

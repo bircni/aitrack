@@ -174,7 +174,7 @@ the same weekdays last week. Comparison data is also included with `--json`.
 
 ### Cost handling
 
-Claude Code, Codex, and Cursor costs are API-equivalent estimates from per-model list pricing, not subscription charges. Rates live in `packages/aitrack-lib/src/pricing/tables/*.json` so a price change is a JSON edit. Claude estimates account for regular input, cache reads, cache creation, and output. Cache creation uses the 5-minute write rate (1.25× input) unless the transcript splits out 1-hour writes, which are 2× input. Claude 4.6 and later list prices cover the full context window at those base rates, so there is no separate long-context surcharge to apply. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Cursor estimates use the same CSV token buckets (uncached input, cache write, cache read, output) and ignore the export's Cost column, which is plan-included rather than a list price. Cursor CSV rows are aggregates, so long-context rate tiers are not applied. Unknown Claude or Codex model IDs that name a known family use that family's rates and emit a warning from `sync`, `show`, `usage`, `top`, and `export`. An id that matches no family stays unpriced, as do unknown Cursor models. If stored Claude or Codex estimates are missing or pricing changed, run `aitrack recompute-costs`.
+Claude Code, Codex, and Cursor costs are API-equivalent estimates from per-model list pricing, not subscription charges. Rates live in `libs/aitrack-lib/src/pricing/tables/*.json` so a price change is a JSON edit. Claude estimates account for regular input, cache reads, cache creation, and output. Cache creation uses the 5-minute write rate (1.25× input) unless the transcript splits out 1-hour writes, which are 2× input. Claude 4.6 and later list prices cover the full context window at those base rates, so there is no separate long-context surcharge to apply. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Cursor estimates use the same CSV token buckets (uncached input, cache write, cache read, output) and ignore the export's Cost column, which is plan-included rather than a list price. Cursor CSV rows are aggregates, so long-context rate tiers are not applied. Unknown Claude or Codex model IDs that name a known family use that family's rates and emit a warning from `sync`, `show`, `usage`, `top`, and `export`. An id that matches no family stays unpriced, as do unknown Cursor models. If stored Claude or Codex estimates are missing or pricing changed, run `aitrack recompute-costs`.
 
 ---
 
@@ -263,7 +263,7 @@ Each machine's file in the repo:
 
 ## Using the library
 
-The CLI is a thin shell over [`aitrack-lib`](packages/aitrack-lib), which is published
+The CLI is a thin shell over [`aitrack-lib`](libs/aitrack-lib), which is published
 separately. Read a provider's local usage, price it, and render it yourself:
 
 ```sh
@@ -287,8 +287,8 @@ This repo is an [nx](https://nx.dev/) monorepo:
 
 | Package                                        | Published as  | What it is                                           |
 | ---------------------------------------------- | ------------- | ---------------------------------------------------- |
-| [`packages/aitrack`](packages/aitrack)         | `aitrack`     | The `aitrack` command line                           |
-| [`packages/aitrack-lib`](packages/aitrack-lib) | `aitrack-lib` | Readers, pricing, the data model, storage, renderers |
+| [`apps/aitrack`](apps/aitrack)         | `aitrack`     | The `aitrack` command line                           |
+| [`libs/aitrack-lib`](libs/aitrack-lib) | `aitrack-lib` | Readers, pricing, the data model, storage, renderers |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full layout and the development workflow.
 

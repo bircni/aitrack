@@ -13,10 +13,10 @@
   "exclude": ["node_modules", "dist", "src/**/__tests__/**"],
   "references": [
     {
-      "path": "../aitrack-lib/tsconfig.build.json"
+      "path": "../../libs/aitrack-lib/tsconfig.build.json"
     },
     {
-      "path": "../test-fixtures"
+      "path": "../../libs/test-fixtures"
     }
   ]
 }

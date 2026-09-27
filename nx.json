@@ -5,9 +5,9 @@
     {
       "plugin": "@nx/js/typescript",
       "include": [
-        "packages/aitrack/**/*",
-        "packages/aitrack-lib/**/*",
-        "packages/test-fixtures/**/*",
+        "apps/aitrack/**/*",
+        "libs/aitrack-lib/**/*",
+        "libs/test-fixtures/**/*",
         "scripts/**/*"
       ],
       "options": {
@@ -24,9 +24,9 @@
     {
       "plugin": "@nx/js/typescript",
       "include": [
-        "packages/aitrack/**/*",
-        "packages/aitrack-lib/**/*",
-        "packages/test-fixtures/**/*",
+        "apps/aitrack/**/*",
+        "libs/aitrack-lib/**/*",
+        "libs/test-fixtures/**/*",
         "scripts/**/*"
       ],
       "options": {

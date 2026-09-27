@@ -1,5 +1,6 @@
 packages:
-  - packages/*
+  - apps/*
+  - libs/*
 
 overrides:
   '@nx/devkit@22.3.3>minimatch': 10.2.6

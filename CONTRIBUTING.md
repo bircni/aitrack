@@ -7,9 +7,9 @@ git clone https://github.com/bircni/aitrack.git
 cd aitrack
 pnpm install
 pnpm run build
-node packages/aitrack/dist/cli.js init
-node packages/aitrack/dist/cli.js sync
-node packages/aitrack/dist/cli.js show
+node apps/aitrack/dist/cli.js init
+node apps/aitrack/dist/cli.js sync
+node apps/aitrack/dist/cli.js show
 ```
 
 Use `pnpm run dev -- init` (or `sync`, `show`) to run from TypeScript without building.
@@ -19,7 +19,13 @@ Use `pnpm run dev -- init` (or `sync`, `show`) to run from TypeScript without bu
 This is an [nx](https://nx.dev/) monorepo of pnpm workspace packages.
 
 ```
-packages/
+apps/
+  aitrack/            The CLI: `aitrack` on the command line
+    src/
+      cli.ts          Commander entrypoint
+      cli/            Pure CLI parsing/validation helpers
+      commands/       Command handlers (show, sync, usage, …)
+libs/
   aitrack-lib/        The library: everything that is not the command line
     src/
       config.ts       Local config (~/.config/aitrack)
@@ -32,11 +38,6 @@ packages/
       pricing/        Cost resolution; rates and aliases in pricing/tables/*.json
       providers/      Provider registry and descriptors
       store/          Machine files on disk and their schema migrations
-  aitrack/            The CLI: `aitrack` on the command line
-    src/
-      cli.ts          Commander entrypoint
-      cli/            Pure CLI parsing/validation helpers
-      commands/       Command handlers (show, sync, usage, …)
   test-fixtures/      Fixtures shared by both test suites. Never published.
 scripts/              Repo tooling: release, release notes, pricing drift
 ```
