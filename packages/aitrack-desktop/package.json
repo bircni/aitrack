@@ -3,9 +3,9 @@
   "version": "2.3.0",
   "private": true,
   "description": "Desktop app for aitrack. Watches Claude Code, Codex and Cursor, links sessions to commits, and explains the leverage.",
+  "homepage": "https://github.com/bircni/aitrack",
   "license": "MIT",
   "author": "Nicolas <bircni@icloud.com>",
-  "homepage": "https://github.com/bircni/aitrack",
   "type": "module",
   "main": "./out/main/index.js",
   "dependencies": {

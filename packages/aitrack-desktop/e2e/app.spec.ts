@@ -147,6 +147,7 @@ function launch(home: string): Promise<ElectronApplication> {
       HOME: home,
       USERPROFILE: home,
       AITRACK_DESKTOP_SHOW: '1',
+      AITRACK_DESKTOP_E2E: '1',
       AITRACK_USER_DATA: join(home, 'electron-data'),
       AITRACK_CLAUDE_PROJECTS_DIRS: join(home, 'claude-projects'),
       AITRACK_CODEX_SESSION_DIRS: join(home, 'codex'),

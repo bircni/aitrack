@@ -63,9 +63,11 @@ function trayImage(): Electron.NativeImage {
 function createWindow(): BrowserWindow {
   const mac = process.platform === 'darwin';
   const win = process.platform === 'win32';
+  const e2e = process.env.AITRACK_DESKTOP_E2E === '1';
   const window = new BrowserWindow({
-    width: 1280,
-    height: 840,
+    width: e2e ? 960 : 1280,
+    height: e2e ? 640 : 840,
+    resizable: !e2e,
     minWidth: 960,
     minHeight: 640,
     show: false,
