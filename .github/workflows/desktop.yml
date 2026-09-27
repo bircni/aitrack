@@ -53,6 +53,14 @@ jobs:
           sudo apt-get install -y xvfb
           xvfb-run --auto-servernum pnpm exec nx run aitrack-desktop:test:e2e
 
+      - name: Upload end-to-end screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-screenshots-${{ matrix.os }}
+          path: packages/aitrack-desktop/e2e/artifacts/results
+          if-no-files-found: ignore
+
       - name: Package
         run: pnpm exec nx run aitrack-desktop:package
 
