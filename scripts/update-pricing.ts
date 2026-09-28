@@ -21,20 +21,8 @@ import {
 const CLAUDE_PRICING_URL = 'https://platform.claude.com/docs/en/about-claude/pricing';
 const CODEX_PRICING_URL = 'https://developers.openai.com/api/docs/pricing';
 
-// Find ALL occurrences of `needle` where the next char isn't a continuation
-// of an identifier (avoids matching "gpt-5.1" inside "gpt-5.1-codex" or
-// "Claude Opus 4" inside "Claude Opus 4.7").
-function findHits(html: string, needle: string, isBoundary: (c: string) => boolean): number[] {
-  const hits: number[] = [];
-  let start = 0;
-  for (;;) {
-    const at = html.indexOf(needle, start);
-    if (at === -1) break;
-    const after = html[at + needle.length];
-    if (!after || isBoundary(after)) hits.push(at);
-    start = at + needle.length;
-  }
-  return hits;
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 function collectPrices(html: string): number[] {
@@ -58,20 +46,31 @@ function pricesAt(html: string, hits: number[], windowSize: number): number[] {
 }
 
 const CLAUDE_FAMILY_PATTERN = 'Opus|Sonnet|Haiku|Fable|Mythos';
-const CLAUDE_HEADING_PRICE_WINDOW = 400;
+const CLAUDE_HEADING_TEXT_PATTERN = `Claude (${CLAUDE_FAMILY_PATTERN}) (\\d+(?:\\.\\d+)?)`;
 
-function claudeHeadingPattern(): RegExp {
-  return new RegExp(`Claude (${CLAUDE_FAMILY_PATTERN}) \\d+(?:\\.\\d+)?`, 'gu');
+function claudeSectionHeadingPattern(): RegExp {
+  return new RegExp(`(?:^|>|\\n)\\s*(${CLAUDE_HEADING_TEXT_PATTERN})\\s*(?:<|\\n|$)`, 'gu');
+}
+
+function findStandaloneClaudeHeadingHits(html: string, heading: string): number[] {
+  const re = new RegExp(`(?:^|>|\\n)\\s*(${escapeRegExp(heading)})\\s*(?:<|\\n|$)`, 'gu');
+  const hits: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const fullHeading = m[1];
+    if (fullHeading === undefined) continue;
+    hits.push(m.index + m[0].indexOf(fullHeading));
+  }
+  return hits;
 }
 
 function nextClaudeHeadingIndex(html: string, start: number): number | undefined {
-  const headingPattern = claudeHeadingPattern();
+  const headingPattern = claudeSectionHeadingPattern();
   headingPattern.lastIndex = start;
   let nextHeading: RegExpExecArray | null;
   while ((nextHeading = headingPattern.exec(html)) !== null) {
-    if (/\$\d/u.test(html.slice(nextHeading.index, nextHeading.index + CLAUDE_HEADING_PRICE_WINDOW))) {
-      return nextHeading.index;
-    }
+    const fullHeading = nextHeading[1];
+    if (fullHeading !== undefined) return nextHeading.index + nextHeading[0].indexOf(fullHeading);
   }
   return undefined;
 }
@@ -114,18 +113,20 @@ function claudeModelId(family: string, version: string): string {
 
 // Scan the docs page for priced Claude models we don't track yet.
 export function discoverClaudeModelsOnPage(html: string): string[] {
-  const re = new RegExp(`Claude (${CLAUDE_FAMILY_PATTERN}) (\\d+(?:\\.\\d+)?)`, 'gu');
+  const re = claudeSectionHeadingPattern();
   const found = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
-    const after = html[m.index + m[0].length];
-    if (after && /[\d.]/u.test(after)) continue;
+    const heading = m[1];
     const prices = collectPrices(
-      html.slice(m.index, nextClaudeHeadingIndex(html, m.index + 1) ?? html.length),
+      html.slice(
+        m.index + (heading ? m[0].indexOf(heading) : 0),
+        nextClaudeHeadingIndex(html, m.index + 1) ?? html.length,
+      ),
     );
     if (prices.length === 0) continue;
-    const family = m[1];
-    const version = m[2];
+    const family = m[2];
+    const version = m[3];
     if (family === undefined || version === undefined) continue;
     found.add(claudeModelId(family, version));
   }
@@ -259,7 +260,7 @@ function checkClaude(): Promise<CheckResult> {
     sourceFile: 'src/pricing/tables/claude.json',
     lookup: (html) => (modelId) => {
       const heading = claudeHeading(modelId);
-      const hits = findHits(html, heading, (c) => !/[\d.]/u.test(c));
+      const hits = findStandaloneClaudeHeadingHits(html, heading);
       return { prices: claudePricesAt(html, hits), where: heading };
     },
     discover: discoverClaudeModelsOnPage,

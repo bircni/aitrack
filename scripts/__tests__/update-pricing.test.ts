@@ -22,12 +22,12 @@ describe('pricing checker discovery', () => {
 
   it('keeps scanning a Claude section until the next Claude heading', () => {
     const html = [
-      'Claude Fable 5.1',
+      '<h2>Claude Fable 5.1</h2>',
       '<span>$10</span>',
       '<span>$0.25</span>',
       'x'.repeat(900),
       '<span>$50</span>',
-      'Claude Mythos 5.1',
+      '<h2>Claude Mythos 5.1</h2>',
       '<span>$10</span>',
       '<span>$50</span>',
     ].join('');
@@ -36,10 +36,10 @@ describe('pricing checker discovery', () => {
 
   it('stops a Claude section at the next Claude heading', () => {
     const html = [
-      'Claude Sonnet 4',
+      '<h2>Claude Sonnet 4</h2>',
       '<span>$3</span>',
       'x'.repeat(900),
-      'Claude Opus 4',
+      '<h2>Claude Opus 4</h2>',
       '<span>$15</span>',
       '<span>$75</span>',
     ].join('');
@@ -48,12 +48,12 @@ describe('pricing checker discovery', () => {
 
   it('ignores unpriced Claude mentions when looking for the next section boundary', () => {
     const html = [
-      'Claude Fable 5.1',
+      '<h2>Claude Fable 5.1</h2>',
       '<span>$10</span>',
       'See Claude Mythos 5.1 in the release notes for more background.',
       'x'.repeat(900),
       '<span>$50</span>',
-      'Claude Mythos 5.1',
+      '<h2>Claude Mythos 5.1</h2>',
       '<span>$10</span>',
       '<span>$50</span>',
     ].join('');
