@@ -46,6 +46,20 @@ describe('pricing checker discovery', () => {
     expect(claudePricesAt(html, [html.indexOf('Claude Sonnet 4')])).toEqual([3]);
   });
 
+  it('ignores unpriced Claude mentions when looking for the next section boundary', () => {
+    const html = [
+      'Claude Fable 5.1',
+      '<span>$10</span>',
+      'See Claude Mythos 5.1 in the release notes for more background.',
+      'x'.repeat(900),
+      '<span>$50</span>',
+      'Claude Mythos 5.1',
+      '<span>$10</span>',
+      '<span>$50</span>',
+    ].join('');
+    expect(claudePricesAt(html, [html.indexOf('Claude Fable 5.1')])).toEqual([10, 50]);
+  });
+
   it('discovers priced Codex model ids that are not already in the local table', () => {
     const html = [
       '<div data-content-switcher-pane="true" data-value="standard">',

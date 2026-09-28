@@ -58,12 +58,22 @@ function pricesAt(html: string, hits: number[], windowSize: number): number[] {
 }
 
 const CLAUDE_HEADING_PATTERN = /Claude (Opus|Sonnet|Haiku|Fable|Mythos) \d+(?:\.\d+)?/gu;
+const CLAUDE_HEADING_PRICE_WINDOW = 400;
+
+function nextClaudeHeadingIndex(html: string, start: number): number | undefined {
+  CLAUDE_HEADING_PATTERN.lastIndex = start;
+  let nextHeading: RegExpExecArray | null;
+  while ((nextHeading = CLAUDE_HEADING_PATTERN.exec(html)) !== null) {
+    if (/\$\d/u.test(html.slice(nextHeading.index, nextHeading.index + CLAUDE_HEADING_PRICE_WINDOW))) {
+      return nextHeading.index;
+    }
+  }
+  return undefined;
+}
 
 export function claudePricesAt(html: string, hits: number[]): number[] {
   return hits.flatMap((index) => {
-    CLAUDE_HEADING_PATTERN.lastIndex = index + 1;
-    const nextHeading = CLAUDE_HEADING_PATTERN.exec(html);
-    const end = nextHeading?.index ?? html.length;
+    const end = nextClaudeHeadingIndex(html, index + 1) ?? html.length;
     return collectPrices(html.slice(index, end));
   });
 }
@@ -105,9 +115,9 @@ export function discoverClaudeModelsOnPage(html: string): string[] {
   while ((m = re.exec(html)) !== null) {
     const after = html[m.index + m[0].length];
     if (after && /[\d.]/u.test(after)) continue;
-    CLAUDE_HEADING_PATTERN.lastIndex = m.index + 1;
-    const nextHeading = CLAUDE_HEADING_PATTERN.exec(html);
-    const prices = collectPrices(html.slice(m.index, nextHeading?.index ?? html.length));
+    const prices = collectPrices(
+      html.slice(m.index, nextClaudeHeadingIndex(html, m.index + 1) ?? html.length),
+    );
     if (prices.length === 0) continue;
     const family = m[1];
     const version = m[2];
