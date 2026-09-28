@@ -57,7 +57,11 @@ function pricesAt(html: string, hits: number[], windowSize: number): number[] {
   return hits.flatMap((index) => collectPrices(html.slice(index, index + windowSize)));
 }
 
-const CLAUDE_HEADING_PATTERN = /Claude (Opus|Sonnet|Haiku|Fable|Mythos) \d+(?:\.\d+)?/gu;
+const CLAUDE_FAMILY_PATTERN = 'Opus|Sonnet|Haiku|Fable|Mythos';
+const CLAUDE_HEADING_PATTERN = new RegExp(
+  `Claude (${CLAUDE_FAMILY_PATTERN}) \\d+(?:\\.\\d+)?`,
+  'gu',
+);
 const CLAUDE_HEADING_PRICE_WINDOW = 400;
 
 function nextClaudeHeadingIndex(html: string, start: number): number | undefined {
@@ -109,7 +113,7 @@ function claudeModelId(family: string, version: string): string {
 
 // Scan the docs page for priced Claude models we don't track yet.
 export function discoverClaudeModelsOnPage(html: string): string[] {
-  const re = /Claude (Opus|Sonnet|Haiku|Fable|Mythos) (\d+(?:\.\d+)?)/gu;
+  const re = new RegExp(`Claude (${CLAUDE_FAMILY_PATTERN}) (\\d+(?:\\.\\d+)?)`, 'gu');
   const found = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
