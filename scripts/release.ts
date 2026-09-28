@@ -100,14 +100,14 @@ function readRepoPackage(): { version: string; packageManager?: string } {
  */
 const VERSIONED_PACKAGES = [
   'package.json',
-  'packages/aitrack-lib/package.json',
-  'packages/aitrack/package.json',
+  'libs/aitrack-lib/package.json',
+  'apps/aitrack/package.json',
 ];
 
 /** The CLI's version: it is what the `vX.Y.Z` tag names. */
 function getPackageVersion(): string {
   const package_ = JSON.parse(
-    readFileSync(new URL('packages/aitrack/package.json', REPO_ROOT), 'utf8'),
+    readFileSync(new URL('apps/aitrack/package.json', REPO_ROOT), 'utf8'),
   ) as { version: string };
   return package_.version;
 }
