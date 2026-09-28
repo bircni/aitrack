@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.3.1] - 2026-09-28
+
+
+
+### Bug Fixes
+
+- **pricing:** Read complete Claude pricing rows (#96)
+
 ## [v2.3.0] - 2026-09-23
 
 
