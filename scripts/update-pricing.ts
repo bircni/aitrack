@@ -118,11 +118,9 @@ export function discoverClaudeModelsOnPage(html: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const heading = m[1];
+    const headingStart = m.index + (heading ? m[0].indexOf(heading) : 0);
     const prices = collectPrices(
-      html.slice(
-        m.index + (heading ? m[0].indexOf(heading) : 0),
-        nextClaudeHeadingIndex(html, m.index + 1) ?? html.length,
-      ),
+      html.slice(headingStart, nextClaudeHeadingIndex(html, headingStart + 1) ?? html.length),
     );
     if (prices.length === 0) continue;
     const family = m[2];
