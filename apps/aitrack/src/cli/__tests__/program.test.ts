@@ -41,6 +41,18 @@ async function run(...arguments_: string[]): Promise<void> {
   });
 }
 
+/**
+ * Argument errors route through runAsync, which sets exitCode rather than
+ * calling process.exit, so stdout can flush before Node leaves.
+ */
+async function runAndSettle(...argv: string[]): Promise<typeof process.exitCode> {
+  await run(...argv);
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  return process.exitCode;
+}
+
 describe('buildProgram', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -170,18 +182,6 @@ describe('buildProgram', () => {
     afterEach(() => {
       process.exitCode = undefined;
     });
-
-    /**
-     * Argument errors route through runAsync, which sets exitCode rather than
-     * calling process.exit, so stdout can flush before Node leaves.
-     */
-    async function runAndSettle(...argv: string[]): Promise<typeof process.exitCode> {
-      await run(...argv);
-      await new Promise((resolve) => {
-        setImmediate(resolve);
-      });
-      return process.exitCode;
-    }
 
     it('rejects an invalid top kind', async () => {
       expect(await runAndSettle('top', 'weeks')).toBe(1);
