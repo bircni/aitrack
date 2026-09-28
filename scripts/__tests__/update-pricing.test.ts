@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   claudeHeading,
+  claudePricesAt,
   discoverClaudeModelsOnPage,
   discoverCodexModelsOnPage,
   compareProviderPricing,
@@ -17,6 +18,32 @@ describe('pricing checker discovery', () => {
   it('discovers priced Fable and Mythos models from Claude docs text', () => {
     const html = 'Claude Fable 5 <span>$10</span> Claude Mythos 5 <span>$50</span>';
     expect(discoverClaudeModelsOnPage(html)).toEqual(['claude-fable-5', 'claude-mythos-5']);
+  });
+
+  it('keeps scanning a Claude section until the next Claude heading', () => {
+    const html = [
+      'Claude Fable 5.1',
+      '<span>$10</span>',
+      '<span>$0.25</span>',
+      'x'.repeat(900),
+      '<span>$50</span>',
+      'Claude Mythos 5.1',
+      '<span>$10</span>',
+      '<span>$50</span>',
+    ].join('');
+    expect(claudePricesAt(html, [html.indexOf('Claude Fable 5.1')])).toEqual([10, 0.25, 50]);
+  });
+
+  it('stops a Claude section at the next Claude heading', () => {
+    const html = [
+      'Claude Sonnet 4',
+      '<span>$3</span>',
+      'x'.repeat(900),
+      'Claude Opus 4',
+      '<span>$15</span>',
+      '<span>$75</span>',
+    ].join('');
+    expect(claudePricesAt(html, [html.indexOf('Claude Sonnet 4')])).toEqual([3]);
   });
 
   it('discovers priced Codex model ids that are not already in the local table', () => {

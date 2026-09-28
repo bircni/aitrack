@@ -37,23 +37,35 @@ function findHits(html: string, needle: string, isBoundary: (c: string) => boole
   return hits;
 }
 
+function collectPrices(html: string): number[] {
+  const found: number[] = [];
+  const re = /\$([\d.]+)/gu;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const amount = m[1];
+    if (amount === undefined) continue;
+    const v = Number.parseFloat(amount);
+    if (!Number.isNaN(v)) found.push(v);
+  }
+  return found;
+}
+
 // Collect dollar amounts from every heading occurrence's window. The first
 // hit isn't always the canonical pricing row (e.g. a model can be referenced
 // in a tool-pricing aside before its main row), so we union across all hits.
 function pricesAt(html: string, hits: number[], windowSize: number): number[] {
-  const found: number[] = [];
-  for (const index of hits) {
-    const window = html.slice(index, index + windowSize);
-    const re = /\$([\d.]+)/gu;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(window)) !== null) {
-      const amount = m[1];
-      if (amount === undefined) continue;
-      const v = Number.parseFloat(amount);
-      if (!Number.isNaN(v)) found.push(v);
-    }
-  }
-  return found;
+  return hits.flatMap((index) => collectPrices(html.slice(index, index + windowSize)));
+}
+
+const CLAUDE_HEADING_PATTERN = /Claude (Opus|Sonnet|Haiku|Fable|Mythos) \d+(?:\.\d+)?/gu;
+
+export function claudePricesAt(html: string, hits: number[]): number[] {
+  return hits.flatMap((index) => {
+    CLAUDE_HEADING_PATTERN.lastIndex = index + 1;
+    const nextHeading = CLAUDE_HEADING_PATTERN.exec(html);
+    const end = nextHeading?.index ?? html.length;
+    return collectPrices(html.slice(index, end));
+  });
 }
 
 async function fetchHtml(url: string): Promise<string> {
@@ -93,7 +105,9 @@ export function discoverClaudeModelsOnPage(html: string): string[] {
   while ((m = re.exec(html)) !== null) {
     const after = html[m.index + m[0].length];
     if (after && /[\d.]/u.test(after)) continue;
-    const prices = pricesAt(html, [m.index], 800);
+    CLAUDE_HEADING_PATTERN.lastIndex = m.index + 1;
+    const nextHeading = CLAUDE_HEADING_PATTERN.exec(html);
+    const prices = collectPrices(html.slice(m.index, nextHeading?.index ?? html.length));
     if (prices.length === 0) continue;
     const family = m[1];
     const version = m[2];
@@ -231,7 +245,7 @@ function checkClaude(): Promise<CheckResult> {
     lookup: (html) => (modelId) => {
       const heading = claudeHeading(modelId);
       const hits = findHits(html, heading, (c) => !/[\d.]/u.test(c));
-      return { prices: pricesAt(html, hits, 800), where: heading };
+      return { prices: claudePricesAt(html, hits), where: heading };
     },
     discover: discoverClaudeModelsOnPage,
   });
