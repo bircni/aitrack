@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
-import { basename, sep } from 'node:path';
+import { readdir } from 'node:fs/promises';
+import { basename, dirname, join, sep } from 'node:path';
 
 import { isRecord } from '../../data/guards.js';
 import { streamJsonlObjects } from '../../readers/jsonl.js';
@@ -12,15 +13,30 @@ import {
   textOfContent,
   touchesFromToolContent,
 } from '../text.js';
-import type { ReadSessionResult, Session, SessionTurn } from '../types.js';
+import type { FileTouch, ReadSessionResult, Session, SessionTurn } from '../types.js';
 
 const TIMESTAMP_TAG = /<timestamp>([^<]+)<\/timestamp>/u;
+const USER_QUERY = /<user_query>\s*([\s\S]*?)\s*<\/user_query>/u;
+const CONTEXT_TAG =
+  /<(?:manually_attached_skills|available_subagent_types|open_and_recently_viewed_files|agent_transcripts|system_reminder)>/u;
+
+/** True for a nested agent transcript. Those belong to the parent chat, not their own session. */
+export function isCursorSubagentTranscript(filePath: string): boolean {
+  return filePath.split(sep).includes('subagents');
+}
+
+interface DraftTurn {
+  role: 'user' | 'assistant';
+  startedAt: string | null;
+  toolCalls: number;
+}
 
 /**
- * Read one Cursor agent transcript.
+ * Read one Cursor chat.
  *
- * Cursor's usage export is per day, so these sessions carry time, files and
- * conversation shape, not token totals (`tokensKnown` is false).
+ * A chat is the parent `agent-transcripts/<id>/<id>.jsonl`. Tool calls between
+ * two user queries are one reply, and files under `subagents/` are part of
+ * that same chat. Cursor has no per-session tokens (`tokensKnown` is false).
  */
 export async function readCursorSessionFile(
   filePath: string,
@@ -32,46 +48,92 @@ export async function readCursorSessionFile(
     slug === null
       ? null
       : resolveEncodedPath(slug, exists, process.platform === 'win32' ? 'win32' : 'posix');
-  const turns: SessionTurn[] = [];
-  const touches: ReadSessionResult['session']['fileTouches'] = [];
+  const drafts: DraftTurn[] = [];
+  const touches: FileTouch[] = [];
+  const seenTouches = new Map<string, { first: FileTouch; last: FileTouch | null }>();
   const userBits: string[] = [];
-  const assistantBits: string[] = [];
+  let assistantText = '';
   let sawObject = false;
   let recognized = 0;
 
-  for await (const entry of streamJsonlObjects(filePath)) {
-    sawObject = true;
+  const addTouch = (touch: FileTouch): void => {
+    const key = `${touch.kind}\u0000${touch.path}`;
+    const slot = seenTouches.get(key);
+    if (slot === undefined) {
+      seenTouches.set(key, { first: touch, last: null });
+      return;
+    }
+    if (touch.at === null) return;
+    const firstAt = slot.first.at;
+    if (firstAt === null || touch.at < firstAt) {
+      slot.last = slot.last ?? slot.first;
+      slot.first = touch;
+      return;
+    }
+    const lastAt = slot.last?.at ?? null;
+    if (lastAt === null || touch.at > lastAt) slot.last = touch;
+  };
+
+  const absorb = (entry: Record<string, unknown>, prompts: boolean): void => {
     const role = entry.role === 'user' || entry.role === 'assistant' ? entry.role : null;
-    if (role === null) continue;
+    if (role === null) return;
     recognized += 1;
     const content = isRecord(entry.message) ? entry.message.content : undefined;
     const text = textOfContent(content);
     const at = timestampFrom(entry, text);
-    const toolCalls = countToolUses(content);
-    const index = turns.length;
-    turns.push({
-      index,
-      startedAt: at,
-      endedAt: null,
-      role,
-      model: null,
-      inputTokens: 0,
-      cachedInputTokens: 0,
-      outputTokens: 0,
-      rawInputTokens: 0,
-      cacheCreationInputTokens: 0,
-      cacheCreation1hInputTokens: 0,
-      costUSD: null,
-      toolCalls,
-      sidechain: false,
+    if (role === 'user') {
+      if (!prompts) return;
+      const prompt = promptOf(text);
+      if (prompt === null) return;
+      drafts.push({ role: 'user', startedAt: at, toolCalls: 0 });
+      userBits.push(prompt);
+      return;
+    }
+    const last = drafts.at(-1);
+    if (last?.role !== 'assistant') {
+      drafts.push({ role: 'assistant', startedAt: at, toolCalls: 0 });
+    }
+    const current = drafts.at(-1);
+    if (current === undefined) return;
+    current.startedAt ??= at;
+    current.toolCalls += countToolUses(content);
+    if (prompts && text !== '') assistantText = text;
+    const index = drafts.length - 1;
+    for (const touch of touchesFromToolContent(content, at, index)) addTouch(touch);
+  };
+
+  for await (const entry of streamJsonlObjects(filePath)) {
+    sawObject = true;
+    absorb(entry, true);
+  }
+  if (!isCursorSubagentTranscript(filePath)) {
+    await foldSubagents(filePath, (entry) => {
+      absorb(entry, false);
     });
-    for (const touch of touchesFromToolContent(content, at, index)) touches.push(touch);
-    if (text === '') continue;
-    if (role === 'user') userBits.push(text);
-    else assistantBits.push(text);
+  }
+  for (const slot of seenTouches.values()) {
+    touches.push(slot.first);
+    if (slot.last !== null && slot.last.at !== slot.first.at) touches.push(slot.last);
   }
 
+  const turns: SessionTurn[] = drafts.map((draft, index) => ({
+    index,
+    startedAt: draft.startedAt,
+    endedAt: null,
+    role: draft.role,
+    model: null,
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    rawInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheCreation1hInputTokens: 0,
+    costUSD: null,
+    toolCalls: draft.toolCalls,
+    sidechain: false,
+  }));
   const derived = deriveSession(turns, touches, []);
+  const title = userBits[0] === undefined ? derived.title : titleFromPrompt(userBits[0]);
   return {
     session: {
       id: sessionId('cursor', externalId),
@@ -84,14 +146,47 @@ export async function readCursorSessionFile(
       tokensKnown: false,
       fileTouches: touches,
       ...derived,
+      title,
     },
     signals: {
-      userExcerpt: clipExcerpt(stripTags(userBits.join('\n'))),
-      assistantExcerpt: clipExcerpt(stripTags(assistantBits.at(-1) ?? '')),
+      userExcerpt: clipExcerpt(userBits.join('\n')),
+      assistantExcerpt: clipExcerpt(stripTags(assistantText)),
     },
     dedupeKeys: [],
     usage: null,
   };
+}
+
+async function foldSubagents(
+  parentFile: string,
+  absorb: (entry: Record<string, unknown>) => void,
+): Promise<void> {
+  const dir = join(dirname(parentFile), 'subagents');
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!name.endsWith('.jsonl')) continue;
+    for await (const entry of streamJsonlObjects(join(dir, name))) absorb(entry);
+  }
+}
+
+function promptOf(text: string): string | null {
+  const tagged = USER_QUERY.exec(text);
+  const inner = tagged?.[1];
+  if (inner !== undefined && inner.trim() !== '') return inner.trim();
+  if (CONTEXT_TAG.test(text)) return null;
+  const stripped = stripTags(text).trim();
+  return stripped === '' ? null : stripped;
+}
+
+function titleFromPrompt(prompt: string): string {
+  const flat = prompt.replaceAll(/\s+/gu, ' ').trim();
+  if (flat.length <= 90) return flat;
+  return `${flat.slice(0, 89)}…`;
 }
 
 /** Fill timestamps from `composerData` when the transcript itself has none. */

@@ -107,6 +107,7 @@ export {
   readCommitRefs,
   readCommitsOnBranches,
   readComposerBounds,
+  isCursorSubagentTranscript,
   readCursorSessionFile,
   readCursorTracking,
   readRemoteUrl,

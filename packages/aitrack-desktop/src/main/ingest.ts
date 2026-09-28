@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { readdir, stat } from 'node:fs/promises';
+import { basename, dirname, join } from 'node:path';
+import { setImmediate } from 'node:timers';
 
 import { mergeDayMaps } from 'aitrack-lib/data/dayMap';
 import type { DayMap } from 'aitrack-lib/data/types';
@@ -19,6 +20,7 @@ import {
   readCommitsOnBranches,
   readRemoteUrl,
   readRepoRoot,
+  isCursorSubagentTranscript,
   readCursorTracking,
   runAllowedGit,
 } from 'aitrack-lib/sessions/index';
@@ -67,11 +69,34 @@ export function enabledProviders(store: DesktopStore): ProviderFlags {
 }
 
 const CURSOR_CACHE_SECONDS = 6 * 60 * 60;
+const CURSOR_SHAPE = 'chat';
 
-export async function ingestAll(
-  store: DesktopStore,
-  options?: Partial<ProviderFlags> & { refreshCursor?: boolean; full?: boolean },
-): Promise<IngestSummary> {
+type IngestOptions = Partial<ProviderFlags> & { refreshCursor?: boolean; full?: boolean };
+
+let ingestGate: Promise<IngestSummary> | null = null;
+let ingestNext: Promise<IngestSummary> | null = null;
+let ingestNextJob: { store: DesktopStore; options?: IngestOptions } | null = null;
+
+export function ingestAll(store: DesktopStore, options?: IngestOptions): Promise<IngestSummary> {
+  if (ingestGate !== null) {
+    ingestNextJob = { store, options };
+    ingestNext ??= ingestGate.then(() => {
+      ingestNext = null;
+      const job = ingestNextJob;
+      ingestNextJob = null;
+      if (job === null) return { sessions: 0, repos: 0, commits: 0, links: 0 };
+      return ingestAll(job.store, job.options);
+    });
+    return ingestNext;
+  }
+  const run = runIngest(store, options).finally(() => {
+    ingestGate = null;
+  });
+  ingestGate = run;
+  return run;
+}
+
+async function runIngest(store: DesktopStore, options?: IngestOptions): Promise<IngestSummary> {
   const claude = options?.claude ?? true;
   const codex = options?.codex ?? true;
   const cursor = options?.cursor ?? true;
@@ -106,27 +131,25 @@ export async function ingestAll(
       );
     }
 
+    if (cursor && store.setting<string>('cursorShape', '') !== CURSOR_SHAPE) {
+      store.dropProvider('cursor');
+    }
     const cursorRoots = cursor ? cursorProjectRoots() : [];
     if (cursorRoots.length > 0 && pool !== null) {
-      sessions += await readProvider(
-        store,
-        'cursor',
-        await listUniqueSourceFiles(cursorRoots),
-        pending,
-        pool,
-      );
+      const listed = await listUniqueSourceFiles(cursorRoots);
+      const files = listed.filter((file) => !isCursorSubagentTranscript(file));
+      sessions += await readProvider(store, 'cursor', files, pending, pool);
     }
+    if (cursor) store.setSetting('cursorShape', CURSOR_SHAPE);
 
     if (cursor) await readCursorState(store);
 
     const repos = await discoverRepos(store, pending);
     let commits = 0;
-    let links = 0;
     for (const repo of repos) {
-      const imported = await importRepo(store, repo.id, repo.root, full);
-      commits += imported;
-      links += await linkRepo(store, repo.id, repo.root, pending);
+      commits += await importRepo(store, repo.id, repo.root, full);
     }
+    const links = await linkAll(store, repos, pending);
     await measureSomeChurn(store, repos);
     await refreshUsage(store, { claude, codex, cursor }, refreshCursor, claudeUsage, codexUsage);
     storeDailyMetrics(store);
@@ -154,7 +177,13 @@ async function readProvider(
     try {
       const info = await stat(file);
       const cursor = store.sourceCursor(file);
-      if (cursor !== null && cursor.size === info.size && cursor.mtimeMs === info.mtimeMs) continue;
+      const sameFile =
+        cursor !== null && cursor.size === info.size && cursor.mtimeMs === info.mtimeMs;
+      let subagentChanged = false;
+      if (cursor !== null && sameFile && provider === 'cursor') {
+        subagentChanged = await subagentsNewer(file, cursor.mtimeMs);
+      }
+      if (sameFile && !subagentChanged) continue;
       const offset = cursor === null || cursor.offset > info.size ? 0 : cursor.offset;
       // A half-written last line is read again on the next tick. The session parse
       // still starts at the beginning so token totals include every finished line.
@@ -166,6 +195,9 @@ async function readProvider(
       const parsedOffset = await completeLineOffset(file);
       store.markSource(file, provider, info.size, info.mtimeMs, result.session.id, parsedOffset);
       count += 1;
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unreadable transcript';
       store.log('read-error', `${file}: ${message}`);
@@ -293,22 +325,59 @@ async function importRepo(
   }
 }
 
+async function subagentsNewer(parentFile: string, sinceMs: number): Promise<boolean> {
+  let names: string[];
+  try {
+    names = await readdir(join(dirname(parentFile), 'subagents'));
+  } catch {
+    return false;
+  }
+  for (const name of names) {
+    if (!name.endsWith('.jsonl')) continue;
+    const info = await stat(join(dirname(parentFile), 'subagents', name));
+    if (info.mtimeMs > sinceMs) return true;
+  }
+  return false;
+}
+
+async function linkAll(
+  store: DesktopStore,
+  repos: Array<{ id: string; root: string }>,
+  pending: Array<{ session: Session; signals: SessionSignals }>,
+): Promise<number> {
+  const sessions = store
+    .sessionsForLinking()
+    .filter((session) => session.cwd !== null && !session.cwdUncertain);
+  const rootByCwd = new Map<string, string | null>();
+  const byRoot = new Map<string, Session[]>();
+  for (const session of sessions) {
+    const cwd = session.cwd;
+    if (cwd === null) continue;
+    let top = rootByCwd.get(cwd);
+    if (top === undefined) {
+      top = await readRepoRoot(cwd);
+      rootByCwd.set(cwd, top);
+    }
+    if (top === null) continue;
+    const list = byRoot.get(top);
+    if (list === undefined) byRoot.set(top, [session]);
+    else list.push(session);
+  }
+  let links = 0;
+  for (const repo of repos) {
+    links += await linkRepo(store, repo.id, repo.root, pending, byRoot.get(repo.root) ?? []);
+  }
+  return links;
+}
+
 async function linkRepo(
   store: DesktopStore,
   repoId: string,
   root: string,
   pending: Array<{ session: Session; signals: SessionSignals }>,
+  inRepo: Session[],
 ): Promise<number> {
   const commits = store.commitsForRepo(repoId);
-  const sessions = store
-    .sessionsForLinking()
-    .filter((session) => session.cwd !== null && !session.cwdUncertain);
-  const inRepo: Session[] = [];
-  for (const session of sessions) {
-    if (session.cwd === null) continue;
-    const top = await readRepoRoot(session.cwd);
-    if (top === root) inRepo.push(session);
-  }
   const branchNames = [...new Set(inRepo.flatMap((session) => session.branches))];
   let refs = new Map<string, string[]>();
   try {
@@ -318,20 +387,21 @@ async function linkRepo(
   }
   const signalsById = new Map(pending.map((item) => [item.session.id, item.signals]));
   const cursor = store.cursorCommitPercentages();
+  const linkable = commits.map((commit) => ({
+    sha: commit.sha,
+    authorTime: commit.authorTime,
+    paths: store.commitPaths(commit.id),
+    branches: refs.get(commit.sha) ?? [],
+    subject: commit.subject,
+    body: commit.body,
+    cursorAiPercentage: cursor.get(commit.sha) ?? null,
+  }));
   const links: Array<CommitLink & { commitId: number }> = [];
   for (const session of inRepo) {
     const scored = linkSession(
       session,
       signalsById.get(session.id) ?? { userExcerpt: '', assistantExcerpt: '' },
-      commits.map((commit) => ({
-        sha: commit.sha,
-        authorTime: commit.authorTime,
-        paths: store.commitPaths(commit.id),
-        branches: refs.get(commit.sha) ?? [],
-        subject: commit.subject,
-        body: commit.body,
-        cursorAiPercentage: cursor.get(commit.sha) ?? null,
-      })),
+      linkable,
       {
         repoRoot: root,
         windowBeforeMs: store.setting<number>('linkBeforeMin', 5) * 60 * 1000,

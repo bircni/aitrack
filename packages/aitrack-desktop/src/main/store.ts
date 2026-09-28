@@ -7,6 +7,7 @@ import type {
   CommitLink,
   CursorCommitAttribution,
   ParsedCommit,
+  FileTouchKind,
   Session,
   SessionRating,
 } from 'aitrack-lib/sessions/index';
@@ -386,6 +387,29 @@ export class DesktopStore {
     this.db.exec('DELETE FROM source_files');
   }
 
+  /** Drop one provider so a reader change can rebuild it without rereading the others. */
+  dropProvider(provider: string): void {
+    this.transaction(() => {
+      this.db
+        .prepare(
+          'DELETE FROM commit_links WHERE session_id IN (SELECT id FROM sessions WHERE provider = ?)',
+        )
+        .run(provider);
+      this.db
+        .prepare(
+          'DELETE FROM file_touches WHERE session_id IN (SELECT id FROM sessions WHERE provider = ?)',
+        )
+        .run(provider);
+      this.db
+        .prepare(
+          'DELETE FROM turns WHERE session_id IN (SELECT id FROM sessions WHERE provider = ?)',
+        )
+        .run(provider);
+      this.db.prepare('DELETE FROM sessions WHERE provider = ?').run(provider);
+      this.db.prepare('DELETE FROM source_files WHERE provider = ?').run(provider);
+    });
+  }
+
   sourceCursor(path: string): { size: number; mtimeMs: number; offset: number } | null {
     const row = this.db
       .prepare('SELECT size, mtime_ms, parsed_offset FROM source_files WHERE path = ?')
@@ -526,11 +550,13 @@ export class DesktopStore {
     if (row === undefined) return null;
     const turns = this.db
       .prepare(
-        'SELECT idx, role, started_at, model, tool_calls, sidechain FROM turns WHERE session_id = ? ORDER BY idx',
+        'SELECT idx, role, started_at, model, tool_calls, sidechain FROM turns WHERE session_id = ? ORDER BY idx LIMIT 80',
       )
       .all(id) as Array<Record<string, unknown>>;
     const files = this.db
-      .prepare('SELECT path, kind FROM file_touches WHERE session_id = ? ORDER BY id')
+      .prepare(
+        'SELECT path, kind FROM file_touches WHERE session_id = ? GROUP BY path, kind ORDER BY MIN(id) LIMIT 24',
+      )
       .all(id) as Array<{ path: string; kind: string }>;
     const links = this.db
       .prepare(
@@ -570,7 +596,25 @@ export class DesktopStore {
 
   sessionsForLinking(): Session[] {
     const rows = this.db.prepare('SELECT * FROM sessions').all() as Array<Record<string, unknown>>;
-    return rows.map((row) => this.hydrateSession(row));
+    const grouped = new Map<string, Session['fileTouches']>();
+    const touches = this.db
+      .prepare(
+        `SELECT session_id, path, kind, at, turn_index FROM file_touches WHERE kind != 'read'`,
+      )
+      .all() as Array<Record<string, unknown>>;
+    for (const touch of touches) {
+      const id = String(touch.session_id);
+      const item = {
+        path: String(touch.path),
+        kind: touchKind(touch.kind),
+        at: stringOrNull(touch.at),
+        turnIndex: numberOf(touch.turn_index),
+      };
+      const list = grouped.get(id);
+      if (list === undefined) grouped.set(id, [item]);
+      else list.push(item);
+    }
+    return rows.map((row) => this.sessionForLink(row, grouped.get(String(row.id)) ?? []));
   }
 
   upsertRepo(rootPath: string, name: string, remoteUrl: string | null): string {
@@ -1158,16 +1202,12 @@ export class DesktopStore {
     return { sessions, commits, links };
   }
 
-  private hydrateSession(row: Record<string, unknown>): Session {
-    const id = String(row.id);
-    const touches = this.db
-      .prepare('SELECT path, kind, at, turn_index FROM file_touches WHERE session_id = ?')
-      .all(id) as Array<Record<string, unknown>>;
-    const turns = this.db
-      .prepare('SELECT * FROM turns WHERE session_id = ? ORDER BY idx')
-      .all(id) as Array<Record<string, unknown>>;
+  private sessionForLink(
+    row: Record<string, unknown>,
+    fileTouches: Session['fileTouches'],
+  ): Session {
     return {
-      id,
+      id: String(row.id),
       provider: String(row.provider) as Session['provider'],
       externalId: String(row.external_id),
       sourcePath: String(row.source_path),
@@ -1182,28 +1222,8 @@ export class DesktopStore {
       partial: numberOf(row.partial) === 1,
       tokensKnown: numberOf(row.tokens_known) === 1,
       title: stringOrNull(row.title),
-      turns: turns.map((turn) => ({
-        index: numberOf(turn.idx),
-        startedAt: stringOrNull(turn.started_at),
-        endedAt: stringOrNull(turn.ended_at),
-        role: turn.role === 'user' ? 'user' : 'assistant',
-        model: stringOrNull(turn.model),
-        inputTokens: numberOf(turn.input_tokens),
-        cachedInputTokens: 0,
-        outputTokens: numberOf(turn.output_tokens),
-        rawInputTokens: 0,
-        cacheCreationInputTokens: 0,
-        cacheCreation1hInputTokens: 0,
-        costUSD: turn.cost_usd === null ? null : numberOf(turn.cost_usd),
-        toolCalls: numberOf(turn.tool_calls),
-        sidechain: numberOf(turn.sidechain) === 1,
-      })),
-      fileTouches: touches.map((touch) => ({
-        path: String(touch.path),
-        kind: String(touch.kind) as Session['fileTouches'][number]['kind'],
-        at: stringOrNull(touch.at),
-        turnIndex: numberOf(touch.turn_index),
-      })),
+      turns: [],
+      fileTouches,
       inputTokens: numberOf(row.input_tokens),
       cachedInputTokens: numberOf(row.cached_tokens),
       outputTokens: numberOf(row.output_tokens),
@@ -1225,6 +1245,12 @@ export class DesktopStore {
       throw error;
     }
   }
+}
+
+function touchKind(value: unknown): FileTouchKind {
+  if (value === 'read' || value === 'edit' || value === 'create' || value === 'delete')
+    return value;
+  return 'edit';
 }
 
 function sessionRow(row: Record<string, unknown>): SessionRow {

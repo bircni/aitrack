@@ -23,7 +23,12 @@ export { resolveEncodedPath } from './slug.js';
 export { isTestPath } from './testPaths.js';
 export { readClaudeSessionFile } from './readers/claude.js';
 export { readCodexSessionFile } from './readers/codex.js';
-export { applyComposerBounds, cursorProjectSlug, readCursorSessionFile } from './readers/cursor.js';
+export {
+  applyComposerBounds,
+  cursorProjectSlug,
+  isCursorSubagentTranscript,
+  readCursorSessionFile,
+} from './readers/cursor.js';
 export { readComposerBounds, readCursorTracking } from './readers/cursorState.js';
 export { ALLOWED_GIT_COMMANDS, GitCommandError, assertAllowedGitArgs } from './git/allow.js';
 export {

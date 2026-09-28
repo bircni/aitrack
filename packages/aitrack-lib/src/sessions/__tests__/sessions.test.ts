@@ -319,6 +319,80 @@ describe('readCursorSessionFile', () => {
     expect(session.tokensKnown).toBe(false);
     expect(session.inputTokens).toBe(0);
     expect(session.fileTouches[0]).toMatchObject({ path: 'src/button.tsx', kind: 'create' });
+    expect(session.title).toBe('fix the button');
+    expect(session.userMessages).toBe(1);
+    expect(session.assistantMessages).toBe(1);
+  });
+
+  it('keeps one reply for a run of tool calls and folds subagents into the chat', async () => {
+    const dir = join(tmpDir, 'cursor', 'projects', 'Users-me-app', 'agent-transcripts', 'chat');
+    const file = join(dir, 'chat.jsonl');
+    mkdirSync(join(dir, 'subagents'), { recursive: true });
+    writeJsonl(file, [
+      {
+        role: 'user',
+        message: {
+          content: [
+            {
+              type: 'text',
+              text: '<timestamp>Sunday, Sep 27, 2026, 10:53 AM (UTC+2)</timestamp>\n<user_query>add a desktop app</user_query>',
+            },
+          ],
+        },
+      },
+      {
+        role: 'user',
+        message: {
+          content: [
+            { type: 'text', text: '<timestamp>Sunday, Sep 27, 2026, 10:54 AM (UTC+2)</timestamp>' },
+          ],
+        },
+      },
+      {
+        role: 'assistant',
+        message: { content: [{ type: 'tool_use', name: 'Read', input: { path: 'README.md' } }] },
+      },
+      {
+        role: 'assistant',
+        message: {
+          content: [{ type: 'tool_use', name: 'StrReplace', input: { path: 'src/app.ts' } }],
+        },
+      },
+      {
+        role: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Done.' },
+            { type: 'tool_use', name: 'Read', input: { path: 'README.md' } },
+          ],
+        },
+      },
+    ]);
+    writeJsonl(join(dir, 'subagents', 'child.jsonl'), [
+      {
+        role: 'user',
+        message: {
+          content: [{ type: 'text', text: '<user_query>Implement the renderer</user_query>' }],
+        },
+      },
+      {
+        role: 'assistant',
+        message: {
+          content: [{ type: 'tool_use', name: 'Write', input: { path: 'src/main.tsx' } }],
+        },
+      },
+    ]);
+
+    const { session } = await readCursorSessionFile(file, () => false);
+    expect(session.title).toBe('add a desktop app');
+    expect(session.userMessages).toBe(1);
+    expect(session.assistantMessages).toBe(1);
+    expect(session.toolCalls).toBe(4);
+    expect(session.fileTouches.map((touch) => touch.path).toSorted()).toEqual([
+      'README.md',
+      'src/app.ts',
+      'src/main.tsx',
+    ]);
   });
 });
 
