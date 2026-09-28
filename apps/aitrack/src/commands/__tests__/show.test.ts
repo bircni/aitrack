@@ -72,19 +72,19 @@ function withPlatform(platform: NodeJS.Platform, callback: () => Promise<void>):
   });
 }
 
+function getRenderCall(): [ProviderData, RenderOptions] {
+  const call = mocks.renderToPng.mock.calls[0];
+  expect(call).toBeDefined();
+  if (call === undefined) throw new Error('expected renderToPng to be called');
+  return call as [ProviderData, RenderOptions];
+}
+
+function getRenderedProviderData(): ProviderData {
+  return getRenderCall()[0];
+}
+
 describe('showCommand', () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
-
-  function getRenderCall(): [ProviderData, RenderOptions] {
-    const call = mocks.renderToPng.mock.calls[0];
-    expect(call).toBeDefined();
-    if (call === undefined) throw new Error('expected renderToPng to be called');
-    return call as [ProviderData, RenderOptions];
-  }
-
-  function getRenderedProviderData(): ProviderData {
-    return getRenderCall()[0];
-  }
 
   beforeEach(() => {
     vi.clearAllMocks();

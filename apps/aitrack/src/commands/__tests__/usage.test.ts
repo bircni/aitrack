@@ -22,6 +22,18 @@ const NOW = new Date('2026-06-15T10:00:00');
 const TODAY = '2026-06-15';
 const TODAY_LOCALE = `${NOW.toLocaleDateString()} ${NOW.toLocaleTimeString()}`;
 
+function withJuneUsage() {
+  mocks.loadMergedProviderData.mockResolvedValue({
+    providerData: {
+      claude_code: new Map([
+        ['2026-06-03', makeDay(1_000_000, 20_000, 90, 'claude-opus-4-8')],
+        ['2026-06-14', makeDay(900_000, 18_000, 82.5, 'claude-opus-4-8')],
+      ]),
+    },
+    machineData: [],
+  });
+}
+
 describe('usageCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -574,18 +586,6 @@ describe('usageCommand', () => {
   });
 
   describe('monthly budget', () => {
-    function withJuneUsage() {
-      mocks.loadMergedProviderData.mockResolvedValue({
-        providerData: {
-          claude_code: new Map([
-            ['2026-06-03', makeDay(1_000_000, 20_000, 90, 'claude-opus-4-8')],
-            ['2026-06-14', makeDay(900_000, 18_000, 82.5, 'claude-opus-4-8')],
-          ]),
-        },
-        machineData: [],
-      });
-    }
-
     it('flags month-to-date spend against budget.monthly for the thismonth window', async () => {
       withJuneUsage();
       mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x', budget: { monthlyUSD: 200 } });

@@ -24,6 +24,12 @@ import {
   tryLoadConfig,
 } from '../config.js';
 
+function writeRawConfig(raw: string): void {
+  const dir = join(TEST_HOME, '.config', 'aitrack');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'config.json'), raw, 'utf8');
+}
+
 describe('config', () => {
   beforeAll(() => mkdirSync(TEST_HOME, { recursive: true }));
   afterAll(() => {
@@ -94,12 +100,6 @@ describe('config', () => {
     expect(() => loadConfig()).toThrow('No config found');
     expect(tryLoadConfig()).toBeNull();
   });
-
-  function writeRawConfig(raw: string): void {
-    const dir = join(TEST_HOME, '.config', 'aitrack');
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'config.json'), raw, 'utf8');
-  }
 
   it('returns null for malformed JSON', () => {
     writeRawConfig('{ not valid json');
