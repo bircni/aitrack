@@ -58,16 +58,17 @@ function pricesAt(html: string, hits: number[], windowSize: number): number[] {
 }
 
 const CLAUDE_FAMILY_PATTERN = 'Opus|Sonnet|Haiku|Fable|Mythos';
-const CLAUDE_HEADING_PATTERN = new RegExp(
-  `Claude (${CLAUDE_FAMILY_PATTERN}) \\d+(?:\\.\\d+)?`,
-  'gu',
-);
 const CLAUDE_HEADING_PRICE_WINDOW = 400;
 
+function claudeHeadingPattern(): RegExp {
+  return new RegExp(`Claude (${CLAUDE_FAMILY_PATTERN}) \\d+(?:\\.\\d+)?`, 'gu');
+}
+
 function nextClaudeHeadingIndex(html: string, start: number): number | undefined {
-  CLAUDE_HEADING_PATTERN.lastIndex = start;
+  const headingPattern = claudeHeadingPattern();
+  headingPattern.lastIndex = start;
   let nextHeading: RegExpExecArray | null;
-  while ((nextHeading = CLAUDE_HEADING_PATTERN.exec(html)) !== null) {
+  while ((nextHeading = headingPattern.exec(html)) !== null) {
     if (/\$\d/u.test(html.slice(nextHeading.index, nextHeading.index + CLAUDE_HEADING_PRICE_WINDOW))) {
       return nextHeading.index;
     }
