@@ -21,41 +21,6 @@ import {
 const CLAUDE_PRICING_URL = 'https://platform.claude.com/docs/en/about-claude/pricing';
 const CODEX_PRICING_URL = 'https://developers.openai.com/api/docs/pricing';
 
-// Find ALL occurrences of `needle` where the next char isn't a continuation
-// of an identifier (avoids matching "gpt-5.1" inside "gpt-5.1-codex" or
-// "Claude Opus 4" inside "Claude Opus 4.7").
-function findHits(html: string, needle: string, isBoundary: (c: string) => boolean): number[] {
-  const hits: number[] = [];
-  let start = 0;
-  for (;;) {
-    const at = html.indexOf(needle, start);
-    if (at === -1) break;
-    const after = html[at + needle.length];
-    if (!after || isBoundary(after)) hits.push(at);
-    start = at + needle.length;
-  }
-  return hits;
-}
-
-// Collect dollar amounts from every heading occurrence's window. The first
-// hit isn't always the canonical pricing row (e.g. a model can be referenced
-// in a tool-pricing aside before its main row), so we union across all hits.
-function pricesAt(html: string, hits: number[], windowSize: number): number[] {
-  const found: number[] = [];
-  for (const index of hits) {
-    const window = html.slice(index, index + windowSize);
-    const re = /\$([\d.]+)/gu;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(window)) !== null) {
-      const amount = m[1];
-      if (amount === undefined) continue;
-      const v = Number.parseFloat(amount);
-      if (!Number.isNaN(v)) found.push(v);
-    }
-  }
-  return found;
-}
-
 async function fetchHtml(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { 'user-agent': 'aitrack-update-pricing-script' },
@@ -85,22 +50,50 @@ function claudeModelId(family: string, version: string): string {
   return `claude-${family.toLowerCase()}-${version.slice(0, dot)}-${version.slice(dot + 1)}`;
 }
 
-// Scan the docs page for priced Claude models we don't track yet.
-export function discoverClaudeModelsOnPage(html: string): string[] {
-  const re = /Claude (Opus|Sonnet|Haiku|Fable|Mythos) (\d+(?:\.\d+)?)/gu;
-  const found = new Set<string>();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    const after = html[m.index + m[0].length];
-    if (after && /[\d.]/u.test(after)) continue;
-    const prices = pricesAt(html, [m.index], 800);
-    if (prices.length === 0) continue;
-    const family = m[1];
-    const version = m[2];
-    if (family === undefined || version === undefined) continue;
-    found.add(claudeModelId(family, version));
+// Read complete table rows: markup for status buttons and unit labels can put
+// the output price more than 800 characters after the model name.
+function claudePricingRows(html: string): Array<{ modelId: string; prices: number[] }> {
+  const rows: Array<{ modelId: string; prices: number[] }> = [];
+  for (const row of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/giu)) {
+    const cells = [...(row[1] ?? '').matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/giu)];
+    const name = (cells[0]?.[1] ?? '')
+      .replaceAll(/<[^>]*>/gu, ' ')
+      .replaceAll(/\s+/gu, ' ')
+      .trim();
+    const model = /^Claude (Opus|Sonnet|Haiku|Fable|Mythos) (\d+(?:\.\d+)?)(?![\d.])/u.exec(name);
+    if (!model?.[1] || !model[2]) continue;
+    // Base input and output are the first two cells after the name. Ignore
+    // cache and batch prices, which must not mask a change to base pricing.
+    const prices = cells.slice(1, 3).flatMap((cell) => {
+      const amount = /\$([\d.]+)/u.exec(cell[1] ?? '')?.[1];
+      if (amount === undefined) return [];
+      const price = Number(amount);
+      return Number.isFinite(price) ? [price] : [];
+    });
+    rows.push({ modelId: claudeModelId(model[1], model[2]), prices });
   }
-  return [...found].toSorted((a, b) => a.localeCompare(b));
+  return rows;
+}
+
+export function claudePricingLookup(
+  html: string,
+): (modelId: string) => { prices: number[]; where: string } {
+  const rows = claudePricingRows(html);
+  return (modelId) => ({
+    prices: rows.find((row) => row.modelId === modelId)?.prices ?? [],
+    where: claudeHeading(modelId),
+  });
+}
+
+// Only models with base prices in a table row count as priced discoveries.
+export function discoverClaudeModelsOnPage(html: string): string[] {
+  return [
+    ...new Set(
+      claudePricingRows(html)
+        .filter((row) => row.prices.length === 2)
+        .map((row) => row.modelId),
+    ),
+  ].toSorted((a, b) => a.localeCompare(b));
 }
 
 export interface ProviderCheck<P extends { inputPerMillion: number; outputPerMillion: number }> {
@@ -228,11 +221,7 @@ function checkClaude(): Promise<CheckResult> {
     table: CLAUDE_PRICING_BY_ID,
     knownIds: Object.keys(CLAUDE_PRICING_BY_ID),
     sourceFile: 'src/pricing/tables/claude.json',
-    lookup: (html) => (modelId) => {
-      const heading = claudeHeading(modelId);
-      const hits = findHits(html, heading, (c) => !/[\d.]/u.test(c));
-      return { prices: pricesAt(html, hits, 800), where: heading };
-    },
+    lookup: claudePricingLookup,
     discover: discoverClaudeModelsOnPage,
   });
 }
