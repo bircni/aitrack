@@ -42,6 +42,9 @@ export { type ReadCursorDataOptions, readCursorData } from './readers/cursor/ind
 // Pricing
 export * from './pricing/resolve.js';
 
+// Live quota limits (session/weekly windows, reset times)
+export * from './quota/index.js';
+
 // The data repo: cloning it, reading machine files, writing ours back
 export {
   adoptPendingDataFiles,

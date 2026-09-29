@@ -21,16 +21,15 @@ vi.mock('fs', () => ({
   writeFileSync: mocks.writeFileSync,
   readFileSync: mocks.readFileSync,
 }));
-vi.mock('aitrack-lib/config', () => ({
+vi.mock('../config.js', () => ({
   loadConfig: mocks.loadConfig,
   resolveMachineId: (config: { machineId?: string }) => config.machineId ?? 'host',
 }));
-vi.mock('aitrack-lib/readers/claude', () => ({ readClaudeData: mocks.readClaudeData }));
-vi.mock('aitrack-lib/readers/codex', () => ({ readCodexData: mocks.readCodexData }));
-vi.mock('aitrack-lib/data/localData', async () => {
-  const actual = await vi.importActual<typeof import('aitrack-lib/data/localData')>(
-    'aitrack-lib/data/localData',
-  );
+vi.mock('../readers/claude.js', () => ({ readClaudeData: mocks.readClaudeData }));
+vi.mock('../readers/codex.js', () => ({ readCodexData: mocks.readCodexData }));
+vi.mock('../data/localData.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../data/localData.js')>('../data/localData.js');
   return {
     // The real merge helper — this is what keeps pruned-away history in the file.
     mergePersistedDays: actual.mergePersistedDays,
@@ -63,7 +62,7 @@ vi.mock('aitrack-lib/data/localData', async () => {
     }),
   };
 });
-vi.mock('aitrack-lib/git', () => ({
+vi.mock('../git.js', () => ({
   LOCAL_REPO: '/repo',
   isCloned: mocks.isCloned,
   pull: mocks.pull,
@@ -78,10 +77,10 @@ vi.mock('aitrack-lib/git', () => ({
 }));
 
 import { loggedOutput } from '@aitrack/test-fixtures';
-import type { DayMap } from 'aitrack-lib/data/types';
-import type { FallbackCollector } from 'aitrack-lib/pricing/fallback';
 
-import { syncCommand, syncData } from '../sync.js';
+import type { DayMap } from '../data/types.js';
+import type { FallbackCollector } from '../pricing/fallback.js';
+import { syncData } from '../sync.js';
 
 /** Header fields a file already on the current schema carries. */
 const SCHEMA_FIELDS = { schemaVersion: 2, timezone: 'UTC', dayBucket: 'local' } as const;
@@ -95,7 +94,7 @@ function dayMap(inputTokens: number, outputTokens: number, model = 'model'): Day
   ]);
 }
 
-describe('syncCommand', () => {
+describe('syncData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.isCloned.mockReturnValue(true);
@@ -136,13 +135,13 @@ describe('syncCommand', () => {
   it('throws when the repo has not been cloned', async () => {
     mocks.isCloned.mockReturnValue(false);
 
-    await expect(syncCommand()).rejects.toThrow('Repo not cloned');
+    await expect(syncData()).rejects.toThrow('Repo not cloned');
   });
 
   it('writes codex-only data and pushes it', async () => {
     mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
 
-    await syncCommand();
+    await syncData();
 
     expect(console.log).toHaveBeenCalledWith('Found: Codex (1 days)');
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
@@ -150,7 +149,7 @@ describe('syncCommand', () => {
       expect.stringContaining('"codex"'),
       'utf8',
     );
-    expect(mocks.commitAndPush).toHaveBeenCalledWith('host');
+    expect(mocks.commitAndPush).toHaveBeenCalledWith('host', {});
   });
 
   it('keeps persisted days that the local logs have already pruned', async () => {
@@ -172,7 +171,7 @@ describe('syncCommand', () => {
       }),
     );
 
-    await syncCommand();
+    await syncData();
 
     const written = mocks.writeFileSync.mock.calls[0]?.[1] as string;
     const parsed = JSON.parse(written) as { days: Record<string, unknown> };
@@ -186,7 +185,7 @@ describe('syncCommand', () => {
     mocks.readFileSync.mockReturnValue('{ not json');
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    await expect(syncCommand()).rejects.toThrow('Refusing to overwrite');
+    await expect(syncData()).rejects.toThrow('Refusing to overwrite');
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
     expect(mocks.commitAndPush).not.toHaveBeenCalled();
@@ -198,7 +197,7 @@ describe('syncCommand', () => {
       throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
     });
 
-    await expect(syncCommand()).rejects.toThrow('permission denied');
+    await expect(syncData()).rejects.toThrow('permission denied');
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
@@ -207,10 +206,10 @@ describe('syncCommand', () => {
     mocks.commitAndPush.mockReturnValue(true);
     mocks.hasMachineDataChanges.mockReturnValue(true);
 
-    await syncCommand();
+    await syncData();
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(mocks.commitAndPush).toHaveBeenCalledWith('host');
+    expect(mocks.commitAndPush).toHaveBeenCalledWith('host', {});
     expect(console.log).toHaveBeenCalledWith('Done! Pushed machine data migration for host.');
   });
 
@@ -221,14 +220,14 @@ describe('syncCommand', () => {
     });
     mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
 
-    await syncCommand();
+    await syncData();
 
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
       expect.stringContaining('work-laptop.json'),
       expect.any(String),
       'utf8',
     );
-    expect(mocks.commitAndPush).toHaveBeenCalledWith('work-laptop');
+    expect(mocks.commitAndPush).toHaveBeenCalledWith('work-laptop', {});
   });
 
   it('rejects an unsafe configured machineId before writing a data file', async () => {
@@ -238,7 +237,7 @@ describe('syncCommand', () => {
     });
     mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
 
-    await expect(syncCommand()).rejects.toThrow('Machine name');
+    await expect(syncData()).rejects.toThrow('Machine name');
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
     expect(mocks.commitAndPush).not.toHaveBeenCalled();
@@ -247,7 +246,7 @@ describe('syncCommand', () => {
   it('dry-runs without pulling, writing, committing, or cleaning pending data', async () => {
     mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
 
-    await syncCommand({ dryRun: true });
+    await syncData({ dryRun: true });
 
     expect(mocks.pull).not.toHaveBeenCalled();
     expect(mocks.mkdirSync).not.toHaveBeenCalled();
@@ -275,7 +274,7 @@ describe('syncCommand', () => {
     mocks.readClaudeData.mockResolvedValue(dayMap(30, 15, 'claude'));
     mocks.readFileSync.mockReturnValue(JSON.stringify(existing));
 
-    await syncCommand();
+    await syncData();
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
     expect(mocks.hasMachineDataChanges).toHaveBeenCalledWith('host');
@@ -304,7 +303,7 @@ describe('syncCommand', () => {
     mocks.hasMachineDataChanges.mockReturnValue(false);
     mocks.pushPendingCommits.mockReturnValue(true);
 
-    await syncCommand();
+    await syncData();
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
     expect(mocks.pushPendingCommits).toHaveBeenCalled();
@@ -334,10 +333,10 @@ describe('syncCommand', () => {
     mocks.commitAndPush.mockReturnValue(true);
     mocks.hasMachineDataChanges.mockReturnValue(true);
 
-    await syncCommand();
+    await syncData();
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(mocks.commitAndPush).toHaveBeenCalledWith('new-host');
+    expect(mocks.commitAndPush).toHaveBeenCalledWith('new-host', {});
     expect(console.log).toHaveBeenCalledWith('Done! Pushed data/new-host.json (1 days)');
   });
 });

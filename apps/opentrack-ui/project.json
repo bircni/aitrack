@@ -1,0 +1,70 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "opentrack-ui",
+  "projectType": "application",
+  "sourceRoot": "apps/opentrack-ui/src",
+  "targets": {
+    "lint": {},
+    "format:check": {},
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{projectRoot}",
+        "commands": [
+          "tsc --build tsconfig.json --emitDeclarationOnly",
+          "svelte-check --tsconfig ./tsconfig.web.json --fail-on-warnings"
+        ],
+        "parallel": false
+      }
+    },
+    "check:unused": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "knip --workspace opentrack-ui"
+      }
+    },
+    "build-sidecar": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "main": "apps/opentrack-ui/src/sidecar/index.ts",
+        "outputPath": "apps/opentrack-ui/dist-sidecar/js",
+        "outputFileName": "index.cjs",
+        "tsConfig": "apps/opentrack-ui/tsconfig.json",
+        "platform": "node",
+        "target": "node24",
+        "format": ["cjs"],
+        "bundle": true,
+        "thirdParty": true,
+        "skipTypeCheck": true,
+        "generatePackageJson": false,
+        "esbuildConfig": "apps/opentrack-ui/esbuild.sidecar.ts",
+        "declaration": false
+      }
+    },
+    "sea": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build-sidecar"],
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/sea-config.json",
+        {
+          "dependentTasksOutputFiles": "**/*.cjs"
+        },
+        "platform"
+      ],
+      "outputs": ["{projectRoot}/dist-sidecar/opentrack-sidecar.exe"],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "node --build-sea sea-config.json"
+      }
+    },
+    "test": {
+      "configurations": {
+        "ci": {
+          "coverage": true
+        }
+      }
+    }
+  }
+}

@@ -10,7 +10,13 @@ vi.mock('../usageData.js', async (importOriginal) => {
   return { ...actual, loadMergedProviderData: mocks.loadMergedProviderData };
 });
 
-import { buildUsageComparison, buildUsageReport } from '../usageReport.js';
+import type { LoadedUsageData } from '../usageData.js';
+import {
+  buildUsageComparison,
+  buildUsageReport,
+  buildUsageReportFromLoaded,
+  buildUsageReportsFromLoaded,
+} from '../usageReport.js';
 
 const NOW = new Date('2026-06-15T10:00:00');
 const TODAY = '2026-06-15';
@@ -227,6 +233,29 @@ describe('buildUsageReport', () => {
 
       expect(report?.totals.tokens).toBe(110);
       expect(report?.timezoneNote).toBeUndefined();
+    });
+
+    it('builds several windows from one merge with the same numbers as one at a time', () => {
+      const periods = (['today', 'yesterday', 'week', 'month'] as const).map((period) => ({
+        period,
+      }));
+      for (const otherZone of ['UTC', 'America/Los_Angeles']) {
+        const loaded: LoadedUsageData = {
+          providerData: {},
+          machineData: [],
+          zonedSources: [
+            { timezone: 'UTC', days: { '2026-06-15': claudeDay(10), '2026-06-01': claudeDay(3) } },
+            {
+              timezone: otherZone,
+              days: { '2026-06-14': claudeDay(7), '2026-06-15': claudeDay(100) },
+            },
+          ],
+        };
+
+        expect(buildUsageReportsFromLoaded(loaded, periods)).toEqual(
+          periods.map((options) => buildUsageReportFromLoaded(loaded, options)),
+        );
+      }
     });
   });
 });

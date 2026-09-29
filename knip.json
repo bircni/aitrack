@@ -22,6 +22,10 @@
       "entry": ["src/**/__tests__/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
+    "apps/opentrack-ui": {
+      "entry": ["src/sidecar/index.ts", "src/**/__tests__/**/*.test.ts"],
+      "project": ["src/**/*.{ts,svelte}"]
+    },
     "libs/test-fixtures": {
       "project": ["src/**/*.ts"]
     }

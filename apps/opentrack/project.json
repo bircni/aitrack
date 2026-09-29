@@ -1,0 +1,47 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "opentrack",
+  "projectType": "application",
+  "sourceRoot": "apps/opentrack/src",
+  "implicitDependencies": ["opentrack-ui"],
+  "targets": {
+    "format:check": {
+      "executor": "nx:run-commands",
+      "inputs": ["{projectRoot}/src/**/*.rs", "{workspaceRoot}/rustfmt.toml"],
+      "options": {
+        "command": "cargo fmt --check -p opentrack"
+      }
+    },
+    "build": {
+      "executor": "@monodon/rust:build",
+      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "outputs": ["{workspaceRoot}/target/debug"],
+      "options": {}
+    },
+    "test": {
+      "executor": "@monodon/rust:test",
+      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "options": {}
+    },
+    "lint": {
+      "executor": "@monodon/rust:lint",
+      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "options": {}
+    },
+    "dev": {
+      "executor": "@monodon/rust:run",
+      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "continuous": true,
+      "options": {}
+    },
+    "package": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "outputs": ["{workspaceRoot}/target/release/bundle"],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "tauri build"
+      }
+    }
+  }
+}

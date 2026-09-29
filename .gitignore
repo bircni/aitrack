@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-sidecar/
 aitrack*.png
 aitrack*.pdf
 coverage/
@@ -9,3 +10,5 @@ coverage/
 .typecheck/
 *.tsbuildinfo
 .env
+/target/
+apps/opentrack/gen/

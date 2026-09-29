@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "outDir": ".typecheck",
+    "paths": {
+      "aitrack-lib": ["../../libs/aitrack-lib/src/index.ts"],
+      "aitrack-lib/*": ["../../libs/aitrack-lib/src/*.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "*.ts"],
+  "exclude": ["node_modules", "dist", "src/renderer/main.ts"],
+  "references": [
+    {
+      "path": "../../libs/aitrack-lib"
+    }
+  ]
+}

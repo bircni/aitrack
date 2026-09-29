@@ -12,7 +12,7 @@
     "es2024": true,
     "node": true
   },
-  "ignorePatterns": ["coverage", "dist", "node_modules", "aitrack*.png"],
+  "ignorePatterns": ["coverage", "dist", "dist-sidecar", "node_modules", "aitrack*.png"],
   "rules": {
     "unicorn/filename-case": "off",
     "unicorn/no-null": "off",

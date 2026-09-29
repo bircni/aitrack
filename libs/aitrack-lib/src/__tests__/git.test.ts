@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   spawnSync: vi.fn(),
+  execFile: vi.fn(),
   existsSync: vi.fn(),
   readdirSync: vi.fn(),
   readFileSync: vi.fn(),
@@ -13,7 +14,27 @@ const mocks = vi.hoisted(() => ({
   rmSync: vi.fn(),
 }));
 
-vi.mock('child_process', () => ({ spawnSync: mocks.spawnSync }));
+vi.mock('child_process', () => ({ spawnSync: mocks.spawnSync, execFile: mocks.execFile }));
+
+/** Queue results for the async git calls (the network ones), in call order. */
+function asyncGitReplies(...replies: Array<{ status: number; stdout?: string; stderr?: string }>) {
+  for (const { status, stdout = '', stderr = '' } of replies) {
+    mocks.execFile.mockImplementationOnce(
+      (
+        _command: string,
+        _args: string[],
+        _options: unknown,
+        callback: (...r: unknown[]) => void,
+      ) => {
+        const error = status === 0 ? null : Object.assign(new Error('failed'), { code: status });
+        queueMicrotask(() => {
+          callback(error, stdout, stderr); // execFile never calls back synchronously.
+        });
+      },
+    );
+  }
+}
+
 vi.mock('fs', () => ({
   constants: { COPYFILE_EXCL: 1 },
   existsSync: mocks.existsSync,
@@ -45,11 +66,13 @@ import {
   writeMachineFile,
   writePendingMachineFile,
 } from '../git.js';
+import { withRepoLock } from '../git/lock.js';
 
 describe('git helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.spawnSync.mockReset().mockReturnValue({ status: 0 });
+    mocks.execFile.mockReset();
   });
 
   it('detects, clones, and removes the local data repository', () => {
@@ -68,7 +91,7 @@ describe('git helpers', () => {
         'git@example.com:me/data.git',
         expect.stringContaining(join('aitrack', 'repo')),
       ],
-      { stdio: 'inherit' },
+      { stdio: 'inherit', windowsHide: true },
     );
     expect(mocks.rmSync).toHaveBeenCalledWith(expect.stringContaining(join('aitrack', 'repo')), {
       recursive: true,
@@ -84,187 +107,225 @@ describe('git helpers', () => {
     }).toThrow('git clone failed with exit code 1');
   });
 
-  it('does not pull when the remote has no heads', () => {
-    mocks.spawnSync.mockReturnValueOnce({ status: 0, stdout: '' });
+  it('does not pull when the remote has no heads', async () => {
+    asyncGitReplies({ status: 0, stdout: '' });
 
-    pull();
+    await pull();
 
-    expect(mocks.spawnSync).toHaveBeenCalledTimes(1);
-    expect(mocks.spawnSync).toHaveBeenCalledWith(
+    expect(mocks.execFile).toHaveBeenCalledTimes(1);
+    expect(mocks.execFile).toHaveBeenCalledWith(
       'git',
       ['ls-remote', '--heads', 'origin'],
-      expect.objectContaining({ stdio: 'pipe' }),
+      expect.anything(),
+      expect.any(Function),
     );
   });
 
-  it('pulls fast-forward-only when the remote has a branch', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
-      .mockReturnValueOnce({ status: 0 });
+  it('pulls fast-forward-only when the remote has a branch', async () => {
+    asyncGitReplies({ status: 0, stdout: 'refs/heads/main' }, { status: 0 });
 
-    pull();
+    await pull({ timeoutMs: 1000 });
 
-    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+    expect(mocks.execFile).toHaveBeenCalledWith(
+      'git',
+      ['ls-remote', '--heads', 'origin'],
+      expect.objectContaining({ windowsHide: true }),
+      expect.any(Function),
+    );
+    expect(mocks.execFile).toHaveBeenLastCalledWith(
       'git',
       ['pull', '--ff-only', '--quiet'],
-      expect.objectContaining({ stdio: 'inherit' }),
+      expect.objectContaining({ windowsHide: true }),
+      expect.any(Function),
     );
   });
 
-  it('reports commits the upstream does not have yet', () => {
-    mocks.spawnSync
-      // hasUpstream
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      // rev-list --count @{upstream}..HEAD
-      .mockReturnValueOnce({ status: 0, stdout: '1\n' });
+  it('gives up on a git that never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const kill = vi.fn();
+      mocks.execFile.mockReturnValueOnce({ pid: undefined, kill });
+      await Promise.all([
+        expect(pull({ timeoutMs: 1000 })).rejects.toThrow('git ls-remote --heads origin timed out'),
+        vi.advanceTimersByTimeAsync(1000),
+      ]);
+      expect(kill).toHaveBeenCalled();
+      const options = mocks.execFile.mock.calls[0]?.[2] as { env?: Record<string, string> };
+      expect(options.env?.GIT_TERMINAL_PROMPT).toBe('0');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
-    expect(hasUnpushedCommits()).toBe(true);
-    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+  it('reports commits the upstream does not have yet', async () => {
+    asyncGitReplies(
+      // hasUpstream
+      { status: 0, stdout: 'origin/main' },
+      // rev-list --count @{upstream}..HEAD
+      { status: 0, stdout: '1\n' },
+    );
+
+    expect(await hasUnpushedCommits()).toBe(true);
+    expect(mocks.execFile).toHaveBeenLastCalledWith(
       'git',
       ['rev-list', '--count', '@{upstream}..HEAD'],
-      expect.objectContaining({ stdio: 'pipe' }),
+      expect.anything(),
+      expect.any(Function),
     );
   });
 
-  it('reports nothing unpushed when the branch matches its upstream', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      .mockReturnValueOnce({ status: 0, stdout: '0\n' });
+  it('reports nothing unpushed when the branch matches its upstream', async () => {
+    asyncGitReplies({ status: 0, stdout: 'origin/main' }, { status: 0, stdout: '0\n' });
 
-    expect(hasUnpushedCommits()).toBe(false);
+    expect(await hasUnpushedCommits()).toBe(false);
   });
 
-  it('reports nothing unpushed when the branch has no upstream', () => {
-    mocks.spawnSync.mockReturnValueOnce({ status: 1, stdout: '' });
+  it('reports nothing unpushed when the branch has no upstream', async () => {
+    asyncGitReplies({ status: 1 });
 
-    expect(hasUnpushedCommits()).toBe(false);
+    expect(await hasUnpushedCommits()).toBe(false);
   });
 
-  it('treats a failing rev-list as nothing to retry rather than throwing', () => {
-    mocks.spawnSync
+  it('treats a failing rev-list as nothing to retry rather than throwing', async () => {
+    asyncGitReplies(
       // hasUpstream succeeds...
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
+      { status: 0, stdout: 'origin/main' },
       // ...but rev-list blows up (e.g. a fresh repo with no commits yet)
-      .mockReturnValueOnce({ status: 128, stdout: '', stderr: 'fatal: bad revision' });
+      { status: 128, stderr: 'fatal: bad revision' },
+    );
 
-    expect(hasUnpushedCommits()).toBe(false);
+    expect(await hasUnpushedCommits()).toBe(false);
   });
 
-  it('pushes commits stranded by an earlier failed push', () => {
-    mocks.spawnSync
-      // hasUnpushedCommits: hasUpstream, then rev-list
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      .mockReturnValueOnce({ status: 0, stdout: '2\n' })
-      // pushWithRetry: hasUpstream, then push
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      .mockReturnValueOnce({ status: 0, stdout: '' });
+  it('pushes commits stranded by an earlier failed push, asking for the upstream once', async () => {
+    asyncGitReplies(
+      // hasUpstream, rev-list, push
+      { status: 0, stdout: 'origin/main' },
+      { status: 0, stdout: '2\n' },
+      { status: 0 },
+    );
 
-    expect(pushPendingCommits()).toBe(true);
-    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+    expect(await pushPendingCommits()).toBe(true);
+    expect(mocks.execFile).toHaveBeenCalledTimes(3);
+    expect(mocks.execFile).toHaveBeenLastCalledWith(
       'git',
       ['push'],
-      expect.objectContaining({ stdio: 'pipe' }),
+      expect.anything(),
+      expect.any(Function),
     );
   });
 
-  it('does not push when the branch is already in sync', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      .mockReturnValueOnce({ status: 0, stdout: '0\n' });
+  it('does not push when the branch is already in sync', async () => {
+    asyncGitReplies({ status: 0, stdout: 'origin/main' }, { status: 0, stdout: '0\n' });
 
-    expect(pushPendingCommits()).toBe(false);
+    expect(await pushPendingCommits()).toBe(false);
   });
 
-  it('rebases instead of failing when a stranded commit diverged the branch', () => {
-    mocks.spawnSync
+  it('runs overlapping repo operations one after the other', async () => {
+    const order: string[] = [];
+    const first = withRepoLock(async () => {
+      order.push('first start');
+      await Promise.resolve();
+      order.push('first end');
+    });
+    const second = withRepoLock(async () => {
+      order.push('second start');
+      await withRepoLock(() => Promise.resolve(order.push('nested')));
+    });
+    await Promise.all([first, second]);
+    expect(order).toEqual(['first start', 'first end', 'second start', 'nested']);
+  });
+
+  it('rebases instead of failing when a stranded commit diverged the branch', async () => {
+    asyncGitReplies(
       // ls-remote
-      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
+      { status: 0, stdout: 'refs/heads/main' },
       // pull --ff-only rejects the diverged branch
-      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'Not possible to fast-forward' })
+      { status: 1, stderr: 'Not possible to fast-forward' },
       // hasUnpushedCommits: hasUpstream, then rev-list
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      .mockReturnValueOnce({ status: 0, stdout: '1\n' })
+      { status: 0, stdout: 'origin/main' },
+      { status: 0, stdout: '1\n' },
       // pull --rebase
-      .mockReturnValueOnce({ status: 0, stdout: '' });
+      { status: 0 },
+    );
 
-    pull();
+    await pull();
 
-    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+    expect(mocks.execFile).toHaveBeenLastCalledWith(
       'git',
       ['pull', '--rebase', '--quiet'],
-      expect.objectContaining({ stdio: 'pipe' }),
+      expect.anything(),
+      expect.any(Function),
     );
   });
 
-  it('aborts a conflicted rebase so the repo is not left mid-rebase', () => {
+  it('aborts a conflicted rebase so the repo is not left mid-rebase', async () => {
     // A failed `pull --rebase` can stop with conflicts applied and the branch
     // detached. Leaving that behind makes every later aitrack command fail with
     // a confusing git error the user never asked for.
-    mocks.spawnSync
+    asyncGitReplies(
       // ls-remote
-      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
+      { status: 0, stdout: 'refs/heads/main' },
       // pull --ff-only rejects the diverged branch
-      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'Not possible to fast-forward' })
+      { status: 1, stderr: 'Not possible to fast-forward' },
       // hasUnpushedCommits: hasUpstream, then rev-list
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      .mockReturnValueOnce({ status: 0, stdout: '1\n' })
+      { status: 0, stdout: 'origin/main' },
+      { status: 0, stdout: '1\n' },
       // pull --rebase hits a conflict
-      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'could not apply' })
+      { status: 1, stderr: 'could not apply' },
       // rebase --abort
-      .mockReturnValueOnce({ status: 0, stdout: '' });
+      { status: 0 },
+    );
     // isRebaseInProgress reads .git/rebase-merge from disk, not git.
     mocks.existsSync.mockImplementation((path: string) => path.includes('rebase-'));
 
-    expect(() => {
-      pull();
-    }).toThrow('git pull --rebase --quiet failed');
+    await expect(pull()).rejects.toThrow('git pull --rebase --quiet failed');
 
-    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+    expect(mocks.execFile).toHaveBeenLastCalledWith(
       'git',
       ['rebase', '--abort'],
-      expect.objectContaining({ stdio: 'pipe' }),
+      expect.anything(),
+      expect.any(Function),
     );
   });
 
-  it('still reports the rebase failure when the abort itself fails', () => {
+  it('still reports the rebase failure when the abort itself fails', async () => {
     // Nothing can be done about a failed abort, but the original rebase error
     // is what explains the situation, so it must not be replaced.
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
-      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'Not possible to fast-forward' })
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      .mockReturnValueOnce({ status: 0, stdout: '1\n' })
-      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'could not apply' })
+    asyncGitReplies(
+      { status: 0, stdout: 'refs/heads/main' },
+      { status: 1, stderr: 'Not possible to fast-forward' },
+      { status: 0, stdout: 'origin/main' },
+      { status: 0, stdout: '1\n' },
+      { status: 1, stderr: 'could not apply' },
       // rebase --abort fails too
-      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'abort failed' });
+      { status: 1, stderr: 'abort failed' },
+    );
     mocks.existsSync.mockImplementation((path: string) => path.includes('rebase-'));
 
-    expect(() => {
-      pull();
-    }).toThrow('git pull --rebase --quiet failed');
+    await expect(pull()).rejects.toThrow('git pull --rebase --quiet failed');
   });
 
-  it('surfaces a fast-forward failure that no local commit explains', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: 'refs/heads/main' })
-      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'some other failure' })
+  it('surfaces a fast-forward failure that no local commit explains', async () => {
+    asyncGitReplies(
+      { status: 0, stdout: 'refs/heads/main' },
+      { status: 1, stderr: 'some other failure' },
       // hasUnpushedCommits: no upstream
-      .mockReturnValueOnce({ status: 1, stdout: '' });
+      { status: 1 },
+    );
 
-    expect(() => {
-      pull();
-    }).toThrow('git pull --ff-only --quiet failed');
+    await expect(pull()).rejects.toThrow(
+      'git pull --ff-only --quiet failed with exit code 1: some other failure',
+    );
   });
 
-  it('returns false when there are no staged data changes', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0 })
-      .mockReturnValueOnce({ status: 0, stdout: '' });
+  it('returns false when there are no staged data changes', async () => {
+    asyncGitReplies({ status: 0 }, { status: 0, stdout: '' });
 
-    expect(commitAndPush('host')).toBe(false);
-    expect(mocks.spawnSync).toHaveBeenCalledTimes(2);
-    expect(mocks.spawnSync.mock.calls[0]?.[1]).toEqual(['add', '--', ':(literal)data/host.json']);
-    expect(mocks.spawnSync.mock.calls[1]?.[1]).toEqual([
+    expect(await commitAndPush('host')).toBe(false);
+    expect(mocks.execFile).toHaveBeenCalledTimes(2);
+    expect(mocks.execFile.mock.calls[0]?.[1]).toEqual(['add', '--', ':(literal)data/host.json']);
+    expect(mocks.execFile.mock.calls[1]?.[1]).toEqual([
       'diff',
       '--cached',
       '--name-only',
@@ -273,52 +334,55 @@ describe('git helpers', () => {
     ]);
   });
 
-  it('stages the whole data dir and reports when nothing was committed', () => {
-    mocks.spawnSync
+  it('stages the whole data dir and reports when nothing was committed', async () => {
+    asyncGitReplies(
       // add data/
-      .mockReturnValueOnce({ status: 0 })
+      { status: 0 },
       // diff --cached: nothing staged
-      .mockReturnValueOnce({ status: 0, stdout: '' });
+      { status: 0, stdout: '' },
+    );
 
-    expect(commitDataChanges('recompute costs')).toBe(false);
-    expect(mocks.spawnSync.mock.calls[0]?.[1]).toEqual(['add', 'data/']);
+    expect(await commitDataChanges('recompute costs')).toBe(false);
+    expect(mocks.execFile.mock.calls[0]?.[1]).toEqual(['add', 'data/']);
   });
 
-  it('commits every staged data file when recomputing costs across machines', () => {
-    mocks.spawnSync
+  it('commits every staged data file when recomputing costs across machines', async () => {
+    asyncGitReplies(
       // add data/
-      .mockReturnValueOnce({ status: 0 })
+      { status: 0 },
       // diff --cached: two machines changed
-      .mockReturnValueOnce({ status: 0, stdout: 'data/host.json\ndata/laptop.json\n' })
+      { status: 0, stdout: 'data/host.json\ndata/laptop.json\n' },
       // commit
-      .mockReturnValueOnce({ status: 0, stdout: '' })
+      { status: 0 },
       // pushWithRetry: hasUpstream, then push
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      .mockReturnValueOnce({ status: 0, stdout: '' });
+      { status: 0, stdout: 'origin/main' },
+      { status: 0 },
+    );
 
-    expect(commitDataChanges('recompute costs')).toBe(true);
-    expect(mocks.spawnSync.mock.calls[2]?.[1]).toEqual(['commit', '-m', 'recompute costs']);
+    expect(await commitDataChanges('recompute costs')).toBe(true);
+    expect(mocks.execFile.mock.calls[2]?.[1]).toEqual(['commit', '-m', 'recompute costs']);
   });
 
-  it('commits a staged deletion instead of failing to read the file back', () => {
+  it('commits a staged deletion instead of failing to read the file back', async () => {
     // The user cleared their history by deleting the machine file. Reading it
     // back unconditionally aborted the sync with a raw ENOENT.
     mocks.existsSync.mockReturnValue(false);
     mocks.readFileSync.mockImplementation(() => {
       throw new Error('ENOENT: no such file or directory');
     });
-    mocks.spawnSync
+    asyncGitReplies(
       // add
-      .mockReturnValueOnce({ status: 0 })
+      { status: 0 },
       // diff --cached
-      .mockReturnValueOnce({ status: 0, stdout: 'D  data/host.json\n' })
+      { status: 0, stdout: 'D  data/host.json\n' },
       // commit
-      .mockReturnValueOnce({ status: 0, stdout: '' })
+      { status: 0 },
       // pushWithRetry: hasUpstream, then push
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main' })
-      .mockReturnValueOnce({ status: 0, stdout: '' });
+      { status: 0, stdout: 'origin/main' },
+      { status: 0 },
+    );
 
-    expect(commitAndPush('host')).toBe(true);
+    expect(await commitAndPush('host')).toBe(true);
     expect(mocks.readFileSync).not.toHaveBeenCalled();
 
     // These two are not reset in beforeEach, and a throwing readFileSync would
@@ -327,77 +391,80 @@ describe('git helpers', () => {
     mocks.readFileSync.mockReset();
   });
 
-  it('surfaces commit failures when there are staged data changes', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0 })
-      .mockReturnValueOnce({ status: 0, stdout: 'A  data/host.json\n' })
-      .mockReturnValueOnce({ status: 1 });
-    expect(() => commitAndPush('host')).toThrow('git commit -m sync: host');
+  it('surfaces commit failures when there are staged data changes', async () => {
+    asyncGitReplies({ status: 0 }, { status: 0, stdout: 'A  data/host.json\n' }, { status: 1 });
+    await expect(commitAndPush('host')).rejects.toThrow('git commit -m sync: host');
   });
 
-  it('sets upstream only when the branch has none', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0 })
-      .mockReturnValueOnce({ status: 0, stdout: 'A  data/host.json\n' })
-      .mockReturnValueOnce({ status: 0 })
-      .mockReturnValueOnce({ status: 1 })
-      .mockReturnValueOnce({ status: 0, stdout: 'main\n' })
-      .mockReturnValueOnce({ status: 0 });
+  it('sets upstream only when the branch has none', async () => {
+    asyncGitReplies(
+      // add, diff --cached, commit
+      { status: 0 },
+      { status: 0, stdout: 'A  data/host.json\n' },
+      { status: 0 },
+      // hasUpstream: none, then branch --show-current, then push
+      { status: 1 },
+      { status: 0, stdout: 'main\n' },
+      { status: 0 },
+    );
 
-    expect(commitAndPush('host')).toBe(true);
-    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+    expect(await commitAndPush('host')).toBe(true);
+    expect(mocks.execFile).toHaveBeenLastCalledWith(
       'git',
       ['push', '-u', 'origin', 'HEAD'],
-      expect.objectContaining({ stdio: 'pipe' }),
+      expect.anything(),
+      expect.any(Function),
     );
   });
 
-  it('does not disguise a genuine push failure as a missing upstream', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0 })
-      .mockReturnValueOnce({ status: 0, stdout: 'data/host.json\n' })
-      .mockReturnValueOnce({ status: 0 })
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main\n' })
-      .mockReturnValueOnce({ status: 1, stderr: 'remote: permission denied' });
+  it('does not disguise a genuine push failure as a missing upstream', async () => {
+    asyncGitReplies(
+      { status: 0 },
+      { status: 0, stdout: 'data/host.json\n' },
+      { status: 0 },
+      { status: 0, stdout: 'origin/main\n' },
+      { status: 1, stderr: 'remote: permission denied' },
+    );
 
-    expect(() => commitAndPush('host')).toThrow('permission denied');
+    await expect(commitAndPush('host')).rejects.toThrow('permission denied');
     expect(
-      mocks.spawnSync.mock.calls.some((call) => Array.isArray(call[1]) && call[1].includes('-u')),
+      mocks.execFile.mock.calls.some((call) => Array.isArray(call[1]) && call[1].includes('-u')),
     ).toBe(false);
   });
 
-  it('rebases and retries a non-fast-forward push', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0 })
-      .mockReturnValueOnce({ status: 0, stdout: 'data/host.json\n' })
-      .mockReturnValueOnce({ status: 0 })
-      .mockReturnValueOnce({ status: 0, stdout: 'origin/main\n' })
-      .mockReturnValueOnce({
-        status: 1,
-        stderr: ' ! [rejected] main -> main (fetch first)',
-      })
-      .mockReturnValueOnce({ status: 0 })
-      .mockReturnValueOnce({ status: 0 });
+  it('rebases and retries a non-fast-forward push', async () => {
+    asyncGitReplies(
+      { status: 0 },
+      { status: 0, stdout: 'data/host.json\n' },
+      { status: 0 },
+      { status: 0, stdout: 'origin/main\n' },
+      { status: 1, stderr: ' ! [rejected] main -> main (fetch first)' },
+      // pull --rebase, then the retried push
+      { status: 0 },
+      { status: 0 },
+    );
 
-    expect(commitAndPush('host')).toBe(true);
-    expect(mocks.spawnSync).toHaveBeenCalledWith(
+    expect(await commitAndPush('host')).toBe(true);
+    expect(mocks.execFile).toHaveBeenCalledWith(
       'git',
       ['pull', '--rebase', '--quiet'],
-      expect.objectContaining({ stdio: 'pipe' }),
+      expect.anything(),
+      expect.any(Function),
     );
     expect(
-      mocks.spawnSync.mock.calls.filter((call) => Array.isArray(call[1]) && call[1][0] === 'push'),
+      mocks.execFile.mock.calls.filter((call) => Array.isArray(call[1]) && call[1][0] === 'push'),
     ).toHaveLength(2);
   });
 
-  it('checks literal git status only for a bracketed machine target', () => {
-    mocks.spawnSync.mockReturnValue({ status: 0, stdout: '?? data/new-host[1].json\n' });
+  it('checks literal git status only for a bracketed machine target', async () => {
+    asyncGitReplies({ status: 0, stdout: '?? data/new-host[1].json\n' });
 
-    expect(hasMachineDataChanges('new-host[1]')).toBe(true);
-    expect(mocks.spawnSync).toHaveBeenCalledWith(
+    expect(await hasMachineDataChanges('new-host[1]')).toBe(true);
+    expect(mocks.execFile).toHaveBeenCalledWith(
       'git',
       ['status', '--porcelain', '--', ':(literal)data/new-host[1].json'],
-      expect.objectContaining({ stdio: 'pipe' }),
+      expect.anything(),
+      expect.any(Function),
     );
   });
 

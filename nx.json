@@ -44,7 +44,21 @@
         "testTargetName": "test",
         "testMode": "run"
       }
-    }
+    },
+    {
+      "plugin": "@nx/vite/plugin",
+      "include": ["apps/opentrack-ui/**/*"],
+      "options": {
+        "buildTargetName": "build",
+        "typecheckTargetName": "renderer:typecheck",
+        "devTargetName": "renderer:dev",
+        "previewTargetName": "renderer:preview",
+        "serveStaticTargetName": "renderer:serve-static",
+        "buildDepsTargetName": "renderer:build-deps",
+        "watchDepsTargetName": "renderer:watch-deps"
+      }
+    },
+    "@monodon/rust"
   ],
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
@@ -105,12 +119,7 @@
     "test": {
       "inputs": ["default", "^production"],
       "cache": true,
-      "outputs": ["{projectRoot}/coverage"],
-      "configurations": {
-        "ci": {
-          "command": "vitest run --coverage"
-        }
-      }
+      "outputs": ["{projectRoot}/coverage"]
     },
     "test:smoke": {
       "dependsOn": ["build"],

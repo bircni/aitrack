@@ -200,7 +200,7 @@ export async function recomputeCostsCommand(options: RecomputeCostsOptions = {})
   }
 
   log.info('Pulling latest from remote...');
-  pull();
+  await pull();
 
   const files = listDataFiles();
   if (files.length === 0) {
@@ -242,7 +242,9 @@ export async function recomputeCostsCommand(options: RecomputeCostsOptions = {})
 
   reportFallbackPricing(fallbacks);
 
-  const isPushed = commitDataChanges(`recompute: refresh costs at ${new Date().toISOString()}`);
+  const isPushed = await commitDataChanges(
+    `recompute: refresh costs at ${new Date().toISOString()}`,
+  );
   if (!isPushed) {
     log.info('No file actually changed on disk — pricing already current.');
     return;

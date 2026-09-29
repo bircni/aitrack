@@ -1,4 +1,3 @@
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { tryLoadConfig } from '../config.js';
@@ -9,18 +8,14 @@ import { estimateCodexCostUSD } from '../pricing/codex.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedParse } from './cache.js';
 import { streamJsonlObjects } from './jsonl.js';
-import { resolveSourceRoots } from './paths.js';
+import { codexHomeDirs, resolveSourceRoots } from './paths.js';
 import { parseProviderSources } from './pipeline.js';
 
 export function getCodexPaths(): string[] {
-  const codexHome = environmentValue('CODEX_HOME');
   return resolveSourceRoots({
     envValue: environmentValue('AITRACK_CODEX_SESSION_DIRS'),
     configValue: tryLoadConfig()?.codexSessionsDir,
-    defaults: [
-      ...(codexHome ? [join(codexHome, 'sessions')] : []),
-      join(homedir(), '.codex', 'sessions'),
-    ],
+    defaults: codexHomeDirs().map((dir) => join(dir, 'sessions')),
   });
 }
 

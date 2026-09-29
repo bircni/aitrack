@@ -7,6 +7,7 @@ import { isUsageNotConfigured, usageEmptyMessage, usageEmptyWindowMessage } from
 import { compareByCostThenTokens } from './sort.js';
 import type { ProviderData } from './types.js';
 import {
+  type LoadedUsageData,
   loadMergedProviderData,
   providerDataForWindows,
   type ZonedUsageSource,
@@ -297,12 +298,63 @@ export async function buildUsageReport(options: UsageReportOptions): Promise<Usa
   if (!loaded) return null;
 
   warnAboutPricingFallbacks(loaded.providerData);
+  return buildUsageReportFromLoaded(loaded, options);
+}
+
+/** One window's report from data already loaded, so several windows share one read. */
+export function buildUsageReportFromLoaded(
+  loaded: LoadedUsageData,
+  options: UsageReportOptions,
+): UsageReport {
   const { providerData, window } = windowedProviderData(loaded, options, 'current');
   const timezoneNote = timezoneWindowNote(loaded.zonedSources, options.period);
   return {
     ...buildUsageReportFromData(providerData, window),
     ...(timezoneNote !== undefined && { timezoneNote }),
   };
+}
+
+/**
+ * Several windows' reports from one load. When every source's calendar is on
+ * the viewer's date, each window is the same for every source, so one merge
+ * over their combined span serves all of them.
+ */
+export function buildUsageReportsFromLoaded(
+  loaded: LoadedUsageData,
+  optionsList: UsageReportOptions[],
+): UsageReport[] {
+  const { zonedSources } = loaded;
+  const labelToday = viewerToday();
+  const zones = new Set([
+    machineTimezone(),
+    ...(zonedSources ?? []).map((source) => source.timezone),
+  ]);
+  if (
+    optionsList.length === 0 ||
+    (zonedSources && [...zones].some((timezone) => todayForZone(timezone) !== labelToday))
+  ) {
+    return optionsList.map((options) => buildUsageReportFromLoaded(loaded, options));
+  }
+
+  const windowed = optionsList.map((options) => ({
+    options,
+    window: computeUsageWindow(options, labelToday),
+  }));
+  const span = {
+    start: windowed.reduce(
+      (min, { window }) => (window.start < min ? window.start : min),
+      '9999-12-31',
+    ),
+    end: windowed.reduce((max, { window }) => (window.end > max ? window.end : max), '0000-01-01'),
+  };
+  const providerData = providerDataForWindows(loaded, () => span);
+  return windowed.map(({ options, window }) => {
+    const timezoneNote = timezoneWindowNote(zonedSources, options.period);
+    return {
+      ...buildUsageReportFromData(providerData, window),
+      ...(timezoneNote !== undefined && { timezoneNote }),
+    };
+  });
 }
 
 export async function buildUsageComparison(

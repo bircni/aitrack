@@ -33,6 +33,8 @@ Each machine pushes Claude Code and Codex usage to a git repo _you_ control. Pul
 > **Synced via git:** Claude Code, Codex (OpenAI).
 > **Cursor** is selected by default, read through the current machine's Cursor session, and **never** written to your repo. Pass `--providers claude,codex` to provider-aware commands to exclude it (see [Where data comes from](#where-data-comes-from)).
 
+Prefer a tray icon? [opentrack](apps/opentrack-ui/README.md) shows live session and weekly limits, reset times and pacing next to the same usage and cost data.
+
 ---
 
 ## See it
@@ -285,8 +287,8 @@ Every module is reachable both from the package root and at its own subpath.
 
 This repo is an [nx](https://nx.dev/) monorepo:
 
-| Package                                        | Published as  | What it is                                           |
-| ---------------------------------------------- | ------------- | ---------------------------------------------------- |
+| Package                                | Published as  | What it is                                           |
+| -------------------------------------- | ------------- | ---------------------------------------------------- |
 | [`apps/aitrack`](apps/aitrack)         | `aitrack`     | The `aitrack` command line                           |
 | [`libs/aitrack-lib`](libs/aitrack-lib) | `aitrack-lib` | Readers, pricing, the data model, storage, renderers |
 

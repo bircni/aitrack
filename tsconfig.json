@@ -12,6 +12,9 @@
       "path": "./apps/aitrack"
     },
     {
+      "path": "./apps/opentrack-ui"
+    },
+    {
       "path": "./scripts"
     }
   ]

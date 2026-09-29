@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +19,15 @@ const TEST_HOME = vi.hoisted(() => {
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:os')>();
   return { ...actual, homedir: () => TEST_HOME };
+});
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    readFileSync: vi.fn(actual.readFileSync),
+    renameSync: vi.fn(actual.renameSync),
+  };
 });
 
 import type { DayMap } from '../../data/types.js';
@@ -151,13 +168,31 @@ describe('openParseCache', () => {
     await expect(openParseCache('claude').lookup(gone)).resolves.toBeNull();
   });
 
-  it('does not throw when the cache file cannot be replaced', () => {
+  it('reuses an unchanged cache in memory and does not rewrite it when nothing changed', async () => {
+    await seedCache();
+    vi.mocked(readFileSync).mockClear();
+    vi.mocked(renameSync).mockClear();
+
+    for (let run = 0; run < 2; run++) {
+      const cache = openParseCache('claude');
+      const entry = await cache.lookup(SOURCE);
+      expect(entry?.keys).toEqual(['k1']);
+      cache.save();
+    }
+
+    expect(vi.mocked(readFileSync)).not.toHaveBeenCalled();
+    expect(vi.mocked(renameSync)).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the cache file cannot be replaced', async () => {
     // A directory sitting where the cache file goes makes the rename fail; the
     // command it was speeding up must not care.
     mkdirSync(CACHE_FILE, { recursive: true });
+    const cache = openParseCache('claude');
+    await cache.record(SOURCE, { days: days(10), keys: ['k1'] });
 
     expect(() => {
-      openParseCache('claude').save();
+      cache.save();
     }).not.toThrow();
     expect(existsSync(`${CACHE_FILE}.${String(process.pid)}.tmp`)).toBe(false);
   });
