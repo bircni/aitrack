@@ -38,7 +38,12 @@ describe('cursor pricing', () => {
     expect(resolveCursorRates('claude-opus-5-5')?.inputPerMillion).toBe(4);
     expect(resolveCursorRates('claude-opus-5-5-fast')?.inputPerMillion).toBe(8);
     expect(resolveCursorRates('claude-opus-4-8-thinking-max')?.inputPerMillion).toBe(5);
+    expect(applyCursorAlias('Sonnet 5.5 (Auto Balanced)')).toBe('claude-sonnet-5-5');
+    expect(applyCursorAlias('GPT-6.1 Sol (Auto Balanced)')).toBe('gpt-6.1-sol');
+    expect(resolveCursorRates('claude-sonnet-5-5')?.inputPerMillion).toBe(2);
     expect(resolveCursorRates('gpt-6-sol')?.inputPerMillion).toBe(2);
+    expect(resolveCursorRates('gpt-6.1-sol')?.inputPerMillion).toBe(2);
+    expect(resolveCursorRates('gpt-6.1-sol-high-fast')?.inputPerMillion).toBe(4);
     expect(resolveCursorRates('gpt-6-luna')?.inputPerMillion).toBe(0.1);
     expect(resolveCursorRates('grok-4.7')?.inputPerMillion).toBe(2);
   });
