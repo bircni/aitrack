@@ -112,7 +112,8 @@ fn on_sidecar_event(app: &AppHandle, name: &str, data: Value) {
                 .and_then(Value::as_str)
                 .and_then(|encoded| base64::engine::general_purpose::STANDARD.decode(encoded).ok());
             if let Some(rgba) = rgba.filter(|pixels| size > 0 && pixels.len() == (size * size * 4) as usize) {
-                let _ = tray.set_icon(Some(Image::new_owned(rgba, size, size)));
+                let template = data.get("template").and_then(Value::as_bool).unwrap_or(false);
+                let _ = tray.set_icon_with_as_template(Some(Image::new_owned(rgba, size, size)), template);
             }
             let tooltip = data.get("tooltip").and_then(Value::as_str);
             let _ = tray.set_tooltip(tooltip);

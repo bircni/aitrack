@@ -19,6 +19,8 @@ export const DEFAULT_SETTINGS: Settings = {
   pullSyncedData: true,
   trayProvider: 'auto',
   trayWindow: 'highest',
+  trayStyle: 'icon',
+  trayColored: true,
 };
 
 function pick<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -62,6 +64,8 @@ export function normalizeSettings(input: unknown): Settings {
     pullSyncedData: bool(raw.pullSyncedData, d.pullSyncedData),
     trayProvider: pick(raw.trayProvider, ['auto', ...QUOTA_PROVIDERS], d.trayProvider),
     trayWindow: pick(raw.trayWindow, ['highest', 'session', 'weekly'], d.trayWindow),
+    trayStyle: pick(raw.trayStyle, ['icon', 'bars'], d.trayStyle),
+    trayColored: bool(raw.trayColored, d.trayColored),
   };
 }
 

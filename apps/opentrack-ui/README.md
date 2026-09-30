@@ -13,7 +13,10 @@ reads — including other machines synced through your aitrack data repo.
 - **Usage** — today, yesterday and the last 30 days per provider, a daily trend and a per-model
   breakdown. Numbers come from the same report builder as `aitrack usage`, so they match the CLI.
 - **Tray icon** — the opentrack "O" filled like a pie, coloured by pace. It follows the most used
-  provider and limit by default; Settings picks a provider and session or weekly instead.
+  provider and limit by default; Settings picks a provider and session or weekly instead. Choose
+  **Bars** for a rounded progress bar per available limit (session, weekly and model limits),
+  grouped by provider in dashboard order, or **Icon** for
+  the "O". Turn off **Colored tray icon** for monochrome; macOS adapts it to the menu-bar appearance.
 
 ## Where data comes from
 
@@ -59,7 +62,11 @@ pnpm nx run opentrack:test       # Rust unit tests
 pnpm nx run opentrack:package    # installer, in target/release/bundle/nsis
 ```
 
-Needs a Rust toolchain (`rustup`) in addition to Node.
+Needs a Rust toolchain (`rustup`) in addition to Node. `pnpm install` downloads the official
+Node runtime pinned in this package for the sidecar build: some system builds, including
+Homebrew's Node, disable SEA support. The `sea` target uses that local runtime through
+`pnpm exec`, so it does not depend on the Node binary on your PATH. On macOS it also applies
+an ad hoc signature with `codesign` so the generated executable can run locally.
 
 Releases are built by `.github/workflows/opentrack-release.yml` on an `opentrack-v*` tag. Builds
 are not code-signed, so Windows SmartScreen and macOS Gatekeeper ask for confirmation.

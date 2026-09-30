@@ -80,6 +80,8 @@ export interface Settings {
   trayProvider: 'auto' | QuotaProviderKey;
   /** Its window; `highest` takes whichever is most used. */
   trayWindow: TrayWindow;
+  trayStyle: 'icon' | 'bars';
+  trayColored: boolean;
 }
 
 export type Screen = 'dashboard' | 'settings';

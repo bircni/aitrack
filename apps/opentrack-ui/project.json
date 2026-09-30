@@ -48,6 +48,8 @@
       "cache": true,
       "inputs": [
         "{projectRoot}/sea-config.json",
+        "{projectRoot}/package.json",
+        "{workspaceRoot}/scripts/build-opentrack-sea.ts",
         {
           "dependentTasksOutputFiles": "**/*.cjs"
         },
@@ -56,7 +58,7 @@
       "outputs": ["{projectRoot}/dist-sidecar/opentrack-sidecar.exe"],
       "options": {
         "cwd": "{projectRoot}",
-        "command": "node --build-sea sea-config.json"
+        "command": "pnpm exec node ../../scripts/build-opentrack-sea.ts"
       }
     },
     "test": {

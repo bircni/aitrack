@@ -20,6 +20,8 @@ export interface TrayImage {
   rgba: string;
   size: number;
   tooltip: string;
+  /** Let macOS choose the monochrome foreground for its menu-bar appearance. */
+  template: boolean;
 }
 
 export type SidecarMessage =

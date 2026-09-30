@@ -63,11 +63,15 @@ describe('settings', () => {
       providers: [{ key: 'cursor', enabled: false }, { key: 'cursor' }, { key: 'bogus' }, null],
       globalShortcut: '  Alt+U ',
       notifications: 'yes',
+      trayStyle: 'square',
+      trayColored: 'yes',
     });
     expect(settings.theme).toBe('system');
     expect(settings.display).toBe('left');
     expect(settings.globalShortcut).toBe('Alt+U');
     expect(settings.notifications).toBe(true);
+    expect(settings.trayStyle).toBe('icon');
+    expect(settings.trayColored).toBe(true);
     expect(settings.providers).toEqual([
       { key: 'cursor', label: 'Cursor', enabled: false },
       { key: 'claude_code', label: 'Claude Code', enabled: true },
@@ -78,11 +82,18 @@ describe('settings', () => {
   it('round-trips through disk and tolerates a corrupt file', async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'opentrack-'));
     const path = join(tmpDir, 'nested', 'settings.json');
-    await writeJsonFile(path, { ...DEFAULT_SETTINGS, theme: 'dark' });
+    await writeJsonFile(path, {
+      ...DEFAULT_SETTINGS,
+      theme: 'dark',
+      trayStyle: 'bars',
+      trayColored: false,
+    });
     const written: unknown = JSON.parse(readFileSync(path, 'utf8'));
     expect(written).toMatchObject({ theme: 'dark' });
     const loaded = await loadSettings(path);
     expect(loaded.theme).toBe('dark');
+    expect(loaded.trayStyle).toBe('bars');
+    expect(loaded.trayColored).toBe(false);
     writeFileSync(path, '{');
     expect(await loadSettings(path)).toEqual(DEFAULT_SETTINGS);
   });
@@ -150,6 +161,10 @@ describe('tray icon', () => {
       tone: 'warn',
       usedPercent: 48,
       tooltip: 'opentrack\nClaude Code: 20% session\nClaude Code: 48% session',
+      bars: [
+        { tone: 'calm', usedPercent: 20 },
+        { tone: 'warn', usedPercent: 48 },
+      ],
     });
     expect(summarizeTray([], NOW, AUTO).tone).toBe('neutral');
     // No reset time means no pace, so fullness alone decides, as on the meter.
@@ -163,7 +178,14 @@ describe('tray icon', () => {
     const providers = [provider([sessionWindow(60, 2.5)]), codex];
     expect(
       summarizeTray(providers, NOW, { trayProvider: 'codex', trayWindow: 'weekly' }),
-    ).toMatchObject({ usedPercent: 10, tone: 'calm' });
+    ).toMatchObject({
+      usedPercent: 10,
+      tone: 'calm',
+      bars: [
+        { usedPercent: 90, tone: 'crit' },
+        { usedPercent: 10, tone: 'calm' },
+      ],
+    });
     // Claude has no weekly window, so it falls back to its most used one.
     expect(
       summarizeTray(providers, NOW, { trayProvider: 'claude_code', trayWindow: 'weekly' }),
@@ -183,6 +205,93 @@ describe('tray icon', () => {
     expect(alphaAt(16, 5)).toBe(0); // Gap between ring and pie
     expect(alphaAt(19, 10)).toBe(255); // Just clockwise of 12 o'clock: used
     expect(alphaAt(16, 16)).toBe(71); // Past the wedge: left, faint
+  });
+
+  it('shows session and weekly bars for each provider instead of only its chosen limit', () => {
+    const weekly = { ...sessionWindow(40, 2.5), id: 'weekly', label: 'Weekly' };
+    const providers = [
+      provider([sessionWindow(20, 2.5), weekly]),
+      {
+        ...provider([sessionWindow(60, 2.5), { ...weekly, usedPercent: 80 }]),
+        key: 'codex' as const,
+        label: 'Codex',
+      },
+    ];
+    const summary = summarizeTray(providers, NOW, {
+      trayProvider: 'auto',
+      trayWindow: 'session',
+      trayStyle: 'bars',
+    });
+    expect(summary.bars.map(({ usedPercent }) => usedPercent)).toEqual([20, 40, 60, 80]);
+    expect(summary.tooltip).toBe(
+      'opentrack\nClaude Code Session: 20%\nClaude Code Weekly: 40%\nCodex Session: 60%\nCodex Weekly: 80%',
+    );
+    const selected = summarizeTray(providers, NOW, {
+      trayProvider: 'codex',
+      trayWindow: 'weekly',
+      trayStyle: 'bars',
+    });
+    expect(selected.bars.map(({ usedPercent }) => usedPercent)).toEqual([60, 80]);
+    expect(selected.tooltip).toBe('opentrack\nCodex Session: 60%\nCodex Weekly: 80%');
+  });
+
+  it('fits four or more limit bars inside the tray without clipping', () => {
+    for (const count of [4, 6]) {
+      const pixels = renderTrayIcon(32, 100, 'calm', {
+        style: 'bars',
+        colored: false,
+        bars: Array.from({ length: count }, () => ({ usedPercent: 100, tone: 'calm' as const })),
+      });
+      const filledRows = Array.from(
+        { length: 32 },
+        (_, y) => (pixels[(y * 32 + 16) * 4 + 3] ?? 0) > 150,
+      );
+      const starts = filledRows.filter((filled, y) => filled && !filledRows[y - 1]);
+      expect(starts).toHaveLength(count);
+      expect(filledRows[0]).toBe(false);
+      expect(filledRows[31]).toBe(false);
+    }
+  });
+
+  it('draws separate rounded progress bars with gaps and individual tones', () => {
+    const size = 32;
+    const pixels = renderTrayIcon(size, 100, 'crit', {
+      style: 'bars',
+      colored: true,
+      bars: [
+        { usedPercent: 25, tone: 'calm' },
+        { usedPercent: 60, tone: 'warn' },
+        { usedPercent: 100, tone: 'crit' },
+      ],
+    });
+    const at = (x: number, y: number) => [
+      ...pixels.subarray((y * size + x) * 4, (y * size + x) * 4 + 4),
+    ];
+    expect(at(6, 7)).toEqual([52, 168, 83, 255]);
+    expect(at(20, 7)).toEqual([52, 168, 83, 71]);
+    expect(at(16, 11)[3]).toBe(0);
+    expect(at(10, 15)).toEqual([242, 153, 0, 255]);
+    expect(at(25, 23)).toEqual([217, 48, 37, 255]);
+    expect(at(0, 0)[3]).toBe(0);
+  });
+
+  it('keeps progress but removes tone colors for both monochrome styles', () => {
+    for (const style of ['icon', 'bars'] as const) {
+      const options = { style, colored: false, bars: [{ usedPercent: 50, tone: 'crit' as const }] };
+      const pixels = renderTrayIcon(32, 50, 'crit', options);
+      expect(pixels).toEqual(
+        renderTrayIcon(32, 50, 'calm', {
+          ...options,
+          bars: [{ usedPercent: 50, tone: 'calm' }],
+        }),
+      );
+      for (let offset = 0; offset < pixels.length; offset += 4) {
+        expect(pixels[offset]).toBe(pixels[offset + 1]);
+        expect(pixels[offset]).toBe(pixels[offset + 2]);
+      }
+      expect(pixels.includes(255)).toBe(true);
+      expect(pixels.includes(71)).toBe(true);
+    }
   });
 });
 

@@ -77,13 +77,23 @@ async function main(): Promise<void> {
       onState: (state) => {
         send({ event: 'state', data: state });
         const summary = summarizeTray(state.providers, Date.now(), settings);
-        const key = `${String(summary.usedPercent)}\n${summary.tone}\n${summary.tooltip}`;
+        const key = JSON.stringify([summary, settings.trayStyle, settings.trayColored]);
         if (key === lastTray) return;
         lastTray = key;
-        const rgba = renderTrayIcon(TRAY_ICON_SIZE, summary.usedPercent, summary.tone).toString(
-          'base64',
-        );
-        send({ event: 'tray', data: { rgba, size: TRAY_ICON_SIZE, tooltip: summary.tooltip } });
+        const rgba = renderTrayIcon(TRAY_ICON_SIZE, summary.usedPercent, summary.tone, {
+          style: settings.trayStyle,
+          colored: settings.trayColored,
+          bars: summary.bars,
+        }).toString('base64');
+        send({
+          event: 'tray',
+          data: {
+            rgba,
+            size: TRAY_ICON_SIZE,
+            tooltip: summary.tooltip,
+            template: !settings.trayColored,
+          },
+        });
       },
       onAlert: (alert) => {
         send({ event: 'alert', data: { title: alert.title, body: alert.body } });

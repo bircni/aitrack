@@ -123,31 +123,54 @@
     </select>
   </label>
   <label class="row" for="set-tray-provider">
-    <span>Tray icon</span>
+    <span>Tray provider</span>
     <select
       id="set-tray-provider"
       value={enabled.some(({ key }) => key === settings.trayProvider) ? settings.trayProvider : 'auto'}
       onchange={(event) =>
         onPatch({ trayProvider: event.currentTarget.value as Settings['trayProvider'] })}
     >
-      <option value="auto">Most used</option>
+      <option value="auto">{settings.trayStyle === 'bars' ? 'All providers' : 'Most used'}</option>
       {#each enabled as provider (provider.key)}
         <option value={provider.key}>{provider.label}</option>
       {/each}
     </select>
   </label>
-  <label class="row" for="set-tray-window">
-    <span>Tray limit</span>
+  {#if settings.trayStyle === 'icon'}
+    <label class="row" for="set-tray-window">
+      <span>Tray limit</span>
+      <select
+        id="set-tray-window"
+        value={settings.trayWindow}
+        onchange={(event) =>
+          onPatch({ trayWindow: event.currentTarget.value as Settings['trayWindow'] })}
+      >
+        <option value="highest">Most used</option>
+        <option value="session">Session</option>
+        <option value="weekly">Weekly</option>
+      </select>
+    </label>
+  {/if}
+  <label class="row" for="set-tray-style">
+    <span>Tray style</span>
     <select
-      id="set-tray-window"
-      value={settings.trayWindow}
-      onchange={(event) =>
-        onPatch({ trayWindow: event.currentTarget.value as Settings['trayWindow'] })}
+      id="set-tray-style"
+      value={settings.trayStyle}
+      onchange={(event) => onPatch({ trayStyle: event.currentTarget.value as Settings['trayStyle'] })}
     >
-      <option value="highest">Most used</option>
-      <option value="session">Session</option>
-      <option value="weekly">Weekly</option>
+      <option value="icon">Icon</option>
+      <option value="bars">Bars</option>
     </select>
+  </label>
+  <label class="row" for="set-tray-colored">
+    <span>Colored tray icon</span>
+    <input
+      id="set-tray-colored"
+      class="switch"
+      type="checkbox"
+      checked={settings.trayColored}
+      onchange={(event) => onPatch({ trayColored: event.currentTarget.checked })}
+    />
   </label>
 </section>
 
