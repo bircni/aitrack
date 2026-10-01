@@ -11,6 +11,7 @@
     problemLine,
     spendLabel,
   } from './format.js';
+  import Icon from './Icon.svelte';
   import LimitMeter from './LimitMeter.svelte';
   import ProviderIcon from './ProviderIcon.svelte';
 
@@ -36,7 +37,7 @@
   }
 </script>
 
-<section class="provider" aria-label={provider.label}>
+<section class="provider provider--{provider.key}" aria-label={provider.label}>
   <button
     class="p-head"
     type="button"
@@ -44,11 +45,16 @@
     disabled={!provider.usage}
     onclick={() => (open = !open)}
   >
-    <ProviderIcon provider={provider.key} />
-    <span class="p-name">{provider.label}</span>
-    {#if provider.quota?.plan}<span class="p-plan">{provider.quota.plan}</span>{/if}
+    <span class="p-mark"><ProviderIcon provider={provider.key} size={18} /></span>
+    <span class="p-identity">
+      <span class="p-name">{provider.label}</span>
+      {#if provider.quota?.plan}<span class="p-plan">{provider.quota.plan}</span>{/if}
+    </span>
     {#if provider.refreshing}<span class="p-busy" role="img" aria-label="Refreshing"></span>{/if}
-    <span class="p-cost">{spendLabel(spend)}</span>
+    <span class="p-cost">{provider.usage ? spendLabel(spend) : '—'}</span>
+    {#if provider.usage}
+      <span class="p-chevron" class:expanded={open}><Icon name="chevron-down" size={13} /></span>
+    {/if}
   </button>
 
   {#if problem && provider.quotaError}

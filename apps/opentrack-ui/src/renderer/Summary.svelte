@@ -6,10 +6,14 @@
     isPriced,
     PERIOD_LABELS,
     type Period,
+    periodSpend,
+    spendLabel,
     sparkline,
     splitAmount,
     totalSpend,
   } from './format.js';
+
+  import ProviderIcon from './ProviderIcon.svelte';
 
   interface Props {
     providers: ProviderState[];
@@ -67,4 +71,23 @@
       </svg>
     {/if}
   </div>
+  {#if providers.length > 0}
+    <div class="summary-providers" aria-label="Spend by provider">
+      {#each providers as provider (provider.key)}
+        {@const value = periodSpend(provider.usage, period)}
+        <div
+          class="summary-provider"
+          title={provider.usage
+            ? `${provider.label}: ${formatTokens(value.tokens)} tokens`
+            : `${provider.label}: usage unavailable`}
+        >
+          <span class="summary-provider-name">
+            <ProviderIcon provider={provider.key} size={12} />
+            {provider.key === 'claude_code' ? 'Claude' : provider.label}
+          </span>
+          <span class="summary-provider-value">{provider.usage ? spendLabel(value) : '—'}</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 </section>
