@@ -89,8 +89,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
-        node: [24, 26]
+        os: [macos-latest, windows-latest, ubuntu-latest]
+        node: [26]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

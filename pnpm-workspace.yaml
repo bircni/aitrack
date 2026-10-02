@@ -3,22 +3,29 @@ packages:
   - libs/*
 
 overrides:
-  '@nx/devkit@22.3.3>minimatch': 10.2.6
+  # nx ships axios <1.20.0 with several high/moderate advisories. Drop once
+  # nx depends on >=1.20.0 itself.
+  'nx>axios': '^1.20.0'
+  # brace-expansion 5.0.9 (via nx / minimatch) has DoS advisories fixed in
+  # 5.0.12. Keep 2.x alone; only pin the vulnerable 5.x line.
+  'brace-expansion@^5.0.0': '5.0.12'
+  '@nx/devkit>minimatch': 10.2.6
+  'nx>minimatch': 10.2.6
   # nx pins smol-toml to an exact 1.6.1, which is vulnerable to a denial of
   # service on malformed TOML. Drop this once nx ships >=1.7.1 itself.
-  'nx>smol-toml': '^1.8.0'
+  'nx>smol-toml': '^1.9.0'
 
 # Versions every package shares. `catalog:` in a package.json resolves to the
 # entry here, so the toolchain is bumped in one place instead of three — and
 # two packages can no longer end up compiling against different TypeScripts.
 catalog:
-  '@types/node': ^26.6.2
+  '@types/node': ^26.6.3
   '@typescript/native': 'npm:typescript@^7.0.2'
-  '@vitest/coverage-v8': ^5.0.1
-  chalk: '^6.0.0'
+  '@vitest/coverage-v8': ^5.0.3
+  chalk: '^6.0.1'
   tsx: '^4.23.15'
   typescript: 'npm:@typescript/typescript6@^6.0.2'
-  vitest: ^5.0.1
+  vitest: ^5.0.3
 
 allowBuilds:
   esbuild: true
