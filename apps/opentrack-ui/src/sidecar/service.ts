@@ -16,11 +16,11 @@ import type {
   Settings,
   Spend,
 } from '../shared/types.js';
+import { EMPTY_PERIOD } from '../shared/types.js';
 import { type Alert, dueAlerts, type FiredAlerts, pruneFired } from './alerts.js';
 import type { UsageSummary } from './usage.js';
 
-export const QUOTA_INTERVAL_MS = 5 * 60_000;
-export const USAGE_INTERVAL_MS = 5 * 60_000;
+export const REFRESH_INTERVAL_MS = 5 * 60_000;
 export const PULL_INTERVAL_MS = 30 * 60_000;
 export const FAILURE_BACKOFF_MS = 60_000;
 const QUOTA_FORMATS: readonly QuotaFormat[] = ['percent', 'dollars', 'count'];
@@ -31,8 +31,8 @@ const RETRY_AFTER_FAILURE_MS: Record<QuotaErrorKind, number> = {
   rateLimited: FAILURE_BACKOFF_MS,
   noCredentials: FAILURE_BACKOFF_MS,
   expired: FAILURE_BACKOFF_MS,
-  auth: QUOTA_INTERVAL_MS,
-  invalidResponse: QUOTA_INTERVAL_MS,
+  auth: REFRESH_INTERVAL_MS,
+  invalidResponse: REFRESH_INTERVAL_MS,
 };
 
 /** What survives a restart, so the popup has numbers before the first refresh. */
@@ -61,19 +61,33 @@ function isPeriod(value: unknown): value is PeriodUsage {
   );
 }
 
-function isProviderUsage(value: unknown): value is ProviderUsage {
-  return (
-    isRecord(value) &&
-    isPeriod(value.today) &&
-    isPeriod(value.yesterday) &&
-    isPeriod(value.last7Days) &&
-    isPeriod(value.last30Days) &&
-    isPeriod(value.allTime) &&
-    Array.isArray(value.daily) &&
-    value.daily.every(
-      (day) => isRecord(day) && typeof day.date === 'string' && isFiniteNumber(day.costUSD),
-    )
-  );
+/** Pre-allTime caches keep other periods; missing allTime becomes an empty period. */
+function readProviderUsage(value: unknown): ProviderUsage | undefined {
+  if (
+    !isRecord(value) ||
+    !isPeriod(value.today) ||
+    !isPeriod(value.yesterday) ||
+    !isPeriod(value.last7Days) ||
+    !isPeriod(value.last30Days) ||
+    !Array.isArray(value.daily)
+  ) {
+    return undefined;
+  }
+  const daily: ProviderUsage['daily'] = [];
+  for (const day of value.daily) {
+    if (!isRecord(day) || typeof day.date !== 'string' || !isFiniteNumber(day.costUSD)) {
+      return undefined;
+    }
+    daily.push({ date: day.date, costUSD: day.costUSD });
+  }
+  return {
+    today: value.today,
+    yesterday: value.yesterday,
+    last7Days: value.last7Days,
+    last30Days: value.last30Days,
+    allTime: isPeriod(value.allTime) ? value.allTime : EMPTY_PERIOD,
+    daily,
+  };
 }
 
 function isWindow(value: unknown): value is QuotaWindow {
@@ -106,12 +120,15 @@ function isSnapshot(value: unknown): value is QuotaSnapshot {
   );
 }
 
-function providerEntries<T>(value: unknown, keep: (entry: unknown) => entry is T) {
+function providerMap<T>(
+  value: unknown,
+  read: (entry: unknown) => T | undefined,
+): Partial<Record<QuotaProviderKey, T>> {
   const entries: Partial<Record<QuotaProviderKey, T>> = {};
   if (!isRecord(value)) return entries;
   for (const key of QUOTA_PROVIDERS) {
-    const entry = value[key];
-    if (keep(entry)) entries[key] = entry;
+    const entry = read(value[key]);
+    if (entry !== undefined) entries[key] = entry;
   }
   return entries;
 }
@@ -121,9 +138,9 @@ export function normalizeCachedState(input: unknown): CachedState {
   const raw = isRecord(input) ? input : {};
   const usage = isRecord(raw.usage) ? raw.usage : undefined;
   return {
-    quotas: providerEntries(raw.quotas, isSnapshot),
+    quotas: providerMap(raw.quotas, (entry) => (isSnapshot(entry) ? entry : undefined)),
     usage: usage && {
-      providers: providerEntries(usage.providers, isProviderUsage),
+      providers: providerMap(usage.providers, readProviderUsage),
       machineCount: isFiniteNumber(usage.machineCount) ? usage.machineCount : 1,
     },
     fired: Object.fromEntries(
@@ -131,7 +148,9 @@ export function normalizeCachedState(input: unknown): CachedState {
         (entry): entry is [string, string] => typeof entry[1] === 'string',
       ),
     ),
-    rateLimitedUntil: providerEntries(raw.rateLimitedUntil, isFiniteNumber),
+    rateLimitedUntil: providerMap(raw.rateLimitedUntil, (entry) =>
+      isFiniteNumber(entry) ? entry : undefined,
+    ),
   };
 }
 
@@ -287,7 +306,7 @@ export class QuotaService {
     runtime.refreshing = false;
     if (result.ok) {
       runtime.error = undefined;
-      runtime.nextAttemptAt = now + QUOTA_INTERVAL_MS;
+      runtime.nextAttemptAt = now + REFRESH_INTERVAL_MS;
       this.cache.quotas[key] = result.snapshot;
       this.alertFor(key, result.snapshot, now);
     } else {
@@ -335,7 +354,7 @@ export class QuotaService {
       this.cache.usage = summary;
       this.usageError = warning;
       if (pull) this.nextPullAt = now + PULL_INTERVAL_MS;
-      this.nextUsageAt = now + USAGE_INTERVAL_MS;
+      this.nextUsageAt = now + REFRESH_INTERVAL_MS;
     } catch (error) {
       this.usageError = errorMessage(error);
       this.nextUsageAt = now + FAILURE_BACKOFF_MS;

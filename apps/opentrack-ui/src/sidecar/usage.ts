@@ -5,6 +5,7 @@ import { buildUsageReportsFromLoaded, type UsageReport } from 'aitrack-lib/data/
 import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 
 import type { DailyUsage, PeriodUsage, ProviderUsage, QuotaProviderKey } from '../shared/types.js';
+import { EMPTY_PERIOD } from '../shared/types.js';
 
 const TREND_DAYS = 30;
 
@@ -12,8 +13,6 @@ export interface UsageSummary {
   providers: Partial<Record<QuotaProviderKey, ProviderUsage>>;
   machineCount: number;
 }
-
-const EMPTY_PERIOD: PeriodUsage = { tokens: 0, costUSD: 0, hasCost: false, models: [] };
 
 function periodFor(report: UsageReport | undefined, key: string): PeriodUsage {
   const provider = report?.providers.find((entry) => entry.key === key);

@@ -132,6 +132,15 @@ describe('alerts', () => {
     );
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.title).toBe('Codex session on pace to run out');
+    const fired = Object.fromEntries(alerts.map((alert) => [alert.key, alert.resetsAt]));
+    expect(
+      dueAlerts(
+        'Codex',
+        snapshot([sessionWindow(80, 2.5)]),
+        fired,
+        NOW,
+      ),
+    ).toEqual([]);
   });
 
   it('prunes alerts for windows that have reset', () => {

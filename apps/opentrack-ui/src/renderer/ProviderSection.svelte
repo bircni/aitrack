@@ -6,6 +6,7 @@
   import {
     formatCost,
     formatTokens,
+    PERIOD_LABELS,
     type Period,
     periodSpend,
     problemLine,
@@ -96,14 +97,15 @@
 
   {#if open && provider.usage}
     <div class="details" transition:slide={{ duration: 160 }}>
-      <div class="d-row"><span>Today</span><span>{reading(provider.usage.today)}</span></div>
+      <div class="d-row"><span>{PERIOD_LABELS.today}</span><span>{reading(provider.usage.today)}</span></div>
       <div class="d-row"><span>Yesterday</span><span>{reading(provider.usage.yesterday)}</span></div>
-      <div class="d-row"><span>7 days</span><span>{reading(provider.usage.last7Days)}</span></div>
-      <div class="d-row"><span>30 days</span><span>{reading(provider.usage.last30Days)}</span></div>
-      <div class="d-row"><span>all</span><span>{reading(provider.usage.allTime)}</span></div>
-      {#if provider.usage.last30Days.models.length > 0}
+      <div class="d-row"><span>{PERIOD_LABELS.week}</span><span>{reading(provider.usage.last7Days)}</span></div>
+      <div class="d-row"><span>{PERIOD_LABELS.month}</span><span>{reading(provider.usage.last30Days)}</span></div>
+      <div class="d-row"><span>{PERIOD_LABELS.all}</span><span>{reading(provider.usage.allTime)}</span></div>
+      {#if spend.models.length > 0}
         <div class="d-rule"></div>
-        {#each provider.usage.last30Days.models as model (model.model)}
+        <div class="d-heading">Models · {PERIOD_LABELS[period]}</div>
+        {#each spend.models as model (model.model)}
           <div class="d-row d-model">
             <span>{model.model}</span><span>{reading(model)}</span>
           </div>

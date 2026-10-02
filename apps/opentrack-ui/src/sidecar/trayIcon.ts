@@ -65,17 +65,17 @@ export function summarizeTray(
     if (!followed) continue;
     usedPercent = Math.max(usedPercent, shown.usedPercent);
     for (const window of windows) {
-      bars.push({
-        tone: meterTone(window, projectPace(window, now)),
-        usedPercent: clampPercent(window.usedPercent),
-      });
+      const windowTone = meterTone(window, projectPace(window, now));
+      bars.push({ tone: windowTone, usedPercent: clampPercent(window.usedPercent) });
       barLines.push(
         `${provider.label} ${window.label}: ${String(Math.round(window.usedPercent))}%`,
       );
-    }
-    for (const window of choice.trayWindow === 'highest' ? windows : [shown]) {
-      const next = meterTone(window, projectPace(window, now));
-      if (TONES.indexOf(next) > TONES.indexOf(tone)) tone = next;
+      if (
+        (choice.trayWindow === 'highest' || window === shown) &&
+        TONES.indexOf(windowTone) > TONES.indexOf(tone)
+      ) {
+        tone = windowTone;
+      }
     }
   }
   return {

@@ -4,12 +4,14 @@ import { clampPercent, type PaceProjection } from 'aitrack-lib/quota/pacing';
 import { formatWhen } from '../shared/pace.js';
 import type {
   DailyUsage,
+  PeriodUsage,
   ProviderUsage,
   QuotaError,
   QuotaWindow,
   Settings,
   Spend,
 } from '../shared/types.js';
+import { EMPTY_PERIOD } from '../shared/types.js';
 
 export { fmt as formatTokens, fmtUSDCost as formatCost };
 
@@ -19,13 +21,11 @@ export const PERIOD_LABELS: Record<Period, string> = {
   today: 'Today',
   week: '7 days',
   month: '30 days',
-  all: 'all',
+  all: 'All time',
 };
 
-const NO_SPEND: Spend = { costUSD: 0, tokens: 0, hasCost: false };
-
-export function periodSpend(usage: ProviderUsage | undefined, period: Period): Spend {
-  if (!usage) return NO_SPEND;
+export function periodSpend(usage: ProviderUsage | undefined, period: Period): PeriodUsage {
+  if (!usage) return EMPTY_PERIOD;
   if (period === 'today') return usage.today;
   if (period === 'month') return usage.last30Days;
   if (period === 'all') return usage.allTime;
@@ -49,7 +49,7 @@ export function totalSpend(usages: Array<ProviderUsage | undefined>, period: Per
       tokens: total.tokens + spend.tokens,
       hasCost: total.hasCost || spend.hasCost,
     };
-  }, NO_SPEND);
+  }, EMPTY_PERIOD);
 }
 
 /** Daily cost summed across providers, aligned on date. */

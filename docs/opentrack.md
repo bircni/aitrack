@@ -10,8 +10,9 @@ reads — including other machines synced through your aitrack data repo.
   session and weekly windows and credits; Cursor total, Auto and API usage and on-demand spend.
 - **Pacing** — whether each limit is on track to last until it resets, with an even-pace marker
   and alerts when one is almost used up or on pace to run out.
-- **Usage** — today, yesterday and the last 30 days per provider, a daily trend and a per-model
-  breakdown. Numbers come from the same report builder as `aitrack usage`, so they match the CLI.
+- **Usage** — today, yesterday, the last 7 / 30 days and all-time per provider, a daily trend
+  and a per-model breakdown. Numbers come from the same report builder as `aitrack usage`, so
+  they match the CLI.
 - **Tray icon** — the opentrack "O" filled like a pie, coloured by pace. It follows the most used
   provider and limit by default; Settings picks a provider and session or weekly instead. Choose
   **Bars** for a rounded progress bar per available limit (session, weekly and model limits),

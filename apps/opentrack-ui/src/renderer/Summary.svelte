@@ -27,7 +27,7 @@
   const usages = $derived(providers.map((provider) => provider.usage));
   const spend = $derived(totalSpend(usages, period));
   const amount = $derived(splitAmount(spend.costUSD));
-  const daily = $derived(combinedDaily(usages));
+  const daily = $derived(period === 'all' ? [] : combinedDaily(usages));
   const curve = $derived(sparkline(daily.map((day) => day.costUSD), 112, 36));
   const peak = $derived(Math.max(0, ...daily.map((day) => day.costUSD)));
 </script>

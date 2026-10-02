@@ -3,16 +3,16 @@ import type { QuotaResult } from 'aitrack-lib/quota/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AppState, QuotaProviderKey } from '../../shared/types.js';
+import { EMPTY_PERIOD } from '../../shared/types.js';
 import type { Alert } from '../alerts.js';
 import {
   FAILURE_BACKOFF_MS,
   normalizeCachedState,
   PULL_INTERVAL_MS,
-  QUOTA_INTERVAL_MS,
+  REFRESH_INTERVAL_MS,
   QuotaService,
   type CachedState,
   type ServiceDeps,
-  USAGE_INTERVAL_MS,
 } from '../service.js';
 import { DEFAULT_SETTINGS } from '../settings.js';
 
@@ -127,7 +127,7 @@ describe('QuotaService', () => {
     await h.service.refresh();
     await h.service.refresh();
     expect(h.calls).toHaveLength(3);
-    h.advance(QUOTA_INTERVAL_MS);
+    h.advance(REFRESH_INTERVAL_MS);
     await h.service.refresh();
     expect(h.calls).toHaveLength(6);
     expect(h.pulls).toEqual([true, false]);
@@ -169,7 +169,7 @@ describe('QuotaService', () => {
     });
     await h.service.refresh();
     fail = true;
-    h.advance(QUOTA_INTERVAL_MS);
+    h.advance(REFRESH_INTERVAL_MS);
     await h.service.refresh();
     const [claude] = h.service.state().providers;
     expect(claude?.quota).toBeDefined();
@@ -255,7 +255,7 @@ describe('QuotaService', () => {
     expect(h.pulls).toEqual([false]);
     expect(h.reused).toEqual([MACHINE]);
 
-    h.advance(USAGE_INTERVAL_MS);
+    h.advance(REFRESH_INTERVAL_MS);
     const refreshing = h.service.refresh();
     const queued = h.service.sync();
     await Promise.all([refreshing, queued]);
@@ -330,6 +330,46 @@ describe('QuotaService', () => {
     expect(normalizeCachedState('garbage')).toEqual({
       quotas: {},
       usage: undefined,
+      fired: {},
+      rateLimitedUntil: {},
+    });
+  });
+
+  it('fills missing allTime on a pre-upgrade usage cache', () => {
+    const empty = EMPTY_PERIOD;
+    const today = { tokens: 10, costUSD: 1, hasCost: true, models: [] };
+    const daily = [{ date: '2026-06-01', costUSD: 1 }];
+    expect(
+      normalizeCachedState({
+        usage: {
+          providers: {
+            claude_code: {
+              today,
+              yesterday: empty,
+              last7Days: empty,
+              last30Days: empty,
+              daily,
+            },
+          },
+          machineCount: 2,
+        },
+        fired: {},
+      }),
+    ).toEqual({
+      quotas: {},
+      usage: {
+        providers: {
+          claude_code: {
+            today,
+            yesterday: empty,
+            last7Days: empty,
+            last30Days: empty,
+            allTime: empty,
+            daily,
+          },
+        },
+        machineCount: 2,
+      },
       fired: {},
       rateLimitedUntil: {},
     });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { formatWhen, meterTone } from '../../shared/pace.js';
 import type { PeriodUsage, ProviderUsage, QuotaWindow } from '../../shared/types.js';
+import { EMPTY_PERIOD } from '../../shared/types.js';
 import {
   combinedDaily,
   fillPercent,
@@ -58,7 +59,7 @@ describe('spend', () => {
     expect(periodSpend(claude, 'month').costUSD).toBe(13);
     expect(periodSpend(claude, 'all').costUSD).toBe(23);
     expect(periodSpend(claude, 'week')).toBe(claude.last7Days);
-    expect(periodSpend(undefined, 'week')).toEqual({ costUSD: 0, tokens: 0, hasCost: false });
+    expect(periodSpend(undefined, 'week')).toBe(EMPTY_PERIOD);
     expect(spendLabel({ costUSD: 0, tokens: 0, hasCost: false })).toBe('$0.00');
     expect(spendLabel({ costUSD: 0, tokens: 500, hasCost: false })).toBe('—');
     expect(totalSpend([claude, undefined, usage([0], 0)], 'today')).toEqual({

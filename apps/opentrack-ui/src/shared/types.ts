@@ -22,6 +22,8 @@ export interface PeriodUsage extends Spend {
   models: ModelUsage[];
 }
 
+export const EMPTY_PERIOD: PeriodUsage = { tokens: 0, costUSD: 0, hasCost: false, models: [] };
+
 export interface DailyUsage {
   date: string;
   costUSD: number;
