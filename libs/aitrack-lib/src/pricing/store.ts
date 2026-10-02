@@ -6,11 +6,7 @@ import { environmentValue } from '../env.js';
 import { APP_DIR } from '../paths.js';
 import { type CompactCatalog } from './codecs.js';
 import { ModelPricing, modelPricingFromPack } from './modelPricing.js';
-import {
-  type PricingManifest,
-  type PricingSupplement,
-  pricingPackUrls,
-} from './packMeta.js';
+import { type PricingManifest, type PricingSupplement, pricingPackUrls } from './packMeta.js';
 import { supplementFromTables } from './supplementFromTables.js';
 
 export const PRICING_CACHE_DIR = join(APP_DIR, 'pricing');

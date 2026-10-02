@@ -265,6 +265,8 @@ export function findCatalogRates(
     }
   }
   if (hits.length === 0) return undefined;
-  hits.sort((a, b) => preferProviderKey(a.key) - preferProviderKey(b.key) || a.key.length - b.key.length);
+  hits.sort(
+    (a, b) => preferProviderKey(a.key) - preferProviderKey(b.key) || a.key.length - b.key.length,
+  );
   return hits[0];
 }

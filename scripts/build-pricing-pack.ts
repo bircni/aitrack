@@ -232,7 +232,9 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
   let modelsDevCompact: CompactCatalog;
 
   if (options.offline) {
-    litellmCompact = JSON.parse(await readFile(join(PACK, 'litellm.json'), 'utf8')) as CompactCatalog;
+    litellmCompact = JSON.parse(
+      await readFile(join(PACK, 'litellm.json'), 'utf8'),
+    ) as CompactCatalog;
     modelsDevCompact = JSON.parse(
       await readFile(join(PACK, 'models_dev.json'), 'utf8'),
     ) as CompactCatalog;
@@ -308,8 +310,7 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
   };
 }
 
-const isMain =
-  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMain) {
   const write = process.argv.includes('--write');

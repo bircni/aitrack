@@ -39,7 +39,10 @@ describe('PricingStore', () => {
       cacheCreatePerMillion: 11.25,
     };
 
-    const emptyCatalog = { retrievedAt: '2099-01-01T00:00:00.000Z', models: { stub: { i: 1, o: 2, cw: 1, cr: 0.1 } } };
+    const emptyCatalog = {
+      retrievedAt: '2099-01-01T00:00:00.000Z',
+      models: { stub: { i: 1, o: 2, cw: 1, cr: 0.1 } },
+    };
     const files: Record<string, string> = {
       'manifest.json': JSON.stringify({
         schemaVersion: 1,

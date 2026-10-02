@@ -67,11 +67,7 @@ export class ModelPricing {
   private readonly codexFamilyFallback: Array<{ match: RegExp; pricing: CodexPricing }>;
   private readonly memo = new Map<string, ResolvedModelRates | null>();
 
-  constructor(
-    supplement: PricingSupplement,
-    primary: PricingCatalog,
-    secondary: PricingCatalog,
-  ) {
+  constructor(supplement: PricingSupplement, primary: PricingCatalog, secondary: PricingCatalog) {
     this.supplement = supplement;
     this.updatedAt = supplement.updatedAt;
     this.primary = primary;

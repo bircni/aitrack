@@ -16,6 +16,8 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { errorMessage } from '../libs/aitrack-lib/src/errors.js';
+import { CLAUDE_PRICING_BY_ID } from '../libs/aitrack-lib/src/pricing/claude.js';
 import {
   catalogFromLiteLLM,
   catalogFromModelsDev,
@@ -23,8 +25,6 @@ import {
   type ModelRates,
   type PricingCatalog,
 } from '../libs/aitrack-lib/src/pricing/codecs.js';
-import { errorMessage } from '../libs/aitrack-lib/src/errors.js';
-import { CLAUDE_PRICING_BY_ID } from '../libs/aitrack-lib/src/pricing/claude.js';
 import {
   CODEX_PRICING_BY_ID,
   CODEX_PRICING_CURRENT,
@@ -165,10 +165,7 @@ async function fetchCatalogs(): Promise<{ primary: PricingCatalog; secondary: Pr
   if (!modelsDevRes.ok) throw new Error(`models.dev HTTP ${String(modelsDevRes.status)}`);
   const retrievedAt = new Date().toISOString();
   return {
-    primary: catalogFromLiteLLM(
-      (await litellmRes.json()) as Record<string, unknown>,
-      retrievedAt,
-    ),
+    primary: catalogFromLiteLLM((await litellmRes.json()) as Record<string, unknown>, retrievedAt),
     secondary: catalogFromModelsDev(
       (await modelsDevRes.json()) as Record<string, unknown>,
       retrievedAt,
@@ -176,7 +173,10 @@ async function fetchCatalogs(): Promise<{ primary: PricingCatalog; secondary: Pr
   };
 }
 
-function checkClaude(catalogs: { primary: PricingCatalog; secondary: PricingCatalog }): CheckResult {
+function checkClaude(catalogs: {
+  primary: PricingCatalog;
+  secondary: PricingCatalog;
+}): CheckResult {
   console.log('\n── Claude (LiteLLM anthropic/* + models.dev) ──');
   const findings = compareAgainstCatalog({
     label: 'Claude',
@@ -208,7 +208,10 @@ function checkCodex(catalogs: { primary: PricingCatalog; secondary: PricingCatal
   return tallyFindings(findings);
 }
 
-function checkCursor(catalogs: { primary: PricingCatalog; secondary: PricingCatalog }): CheckResult {
+function checkCursor(catalogs: {
+  primary: PricingCatalog;
+  secondary: PricingCatalog;
+}): CheckResult {
   console.log('\n── Cursor natives (supplement is authoritative; catalogs are informational) ──');
   const findings = compareAgainstCatalog({
     label: 'Cursor',

@@ -5,11 +5,7 @@ import {
   catalogFromLiteLLM,
   findCatalogRates,
 } from '../../libs/aitrack-lib/src/pricing/codecs.js';
-import {
-  catalogIo,
-  compareAgainstCatalog,
-  tallyFindings,
-} from '../update-pricing.js';
+import { catalogIo, compareAgainstCatalog, tallyFindings } from '../update-pricing.js';
 
 describe('pricing checker against catalogs', () => {
   const primary = catalogFromLiteLLM({
@@ -45,9 +41,7 @@ describe('pricing checker against catalogs', () => {
       primary,
       secondary,
     });
-    expect(findings).toEqual([
-      { kind: 'ok', modelId: 'claude-sonnet-4-6', summary: '$3/$15' },
-    ]);
+    expect(findings).toEqual([{ kind: 'ok', modelId: 'claude-sonnet-4-6', summary: '$3/$15' }]);
   });
 
   it('flags drift when catalog IO differs', () => {
