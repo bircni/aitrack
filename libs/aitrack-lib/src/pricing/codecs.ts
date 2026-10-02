@@ -236,11 +236,7 @@ function keyMatchesProviders(key: string, providers: string[]): boolean {
 }
 
 /** True when every qualified `…/modelId` owner in the catalog is an allowed provider. */
-function bareAliasAllowed(
-  catalog: PricingCatalog,
-  modelId: string,
-  providers: string[],
-): boolean {
+function bareAliasAllowed(catalog: PricingCatalog, modelId: string, providers: string[]): boolean {
   const suffix = `/${modelId}`;
   for (const key of catalog.entries.keys()) {
     if (key.endsWith(suffix) && !keyMatchesProviders(key, providers)) return false;
