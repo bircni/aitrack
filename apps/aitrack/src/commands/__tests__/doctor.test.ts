@@ -46,6 +46,26 @@ vi.mock('aitrack-lib/readers/cursor/auth', () => ({
   getCursorStateDatabasePath: mocks.getCursorStateDatabasePath,
   readCursorAuthState: mocks.readCursorAuthState,
 }));
+vi.mock('aitrack-lib/pricing/syncPack', () => ({
+  syncPricingPack: vi.fn(async () => ({
+    updatedAt: '2026-09-29T00:00:00.000Z',
+    refreshed: false,
+    detail: 'cache still fresh',
+  })),
+}));
+vi.mock('aitrack-lib/pricing/store', async () => {
+  const actual = await vi.importActual<typeof import('aitrack-lib/pricing/store')>(
+    'aitrack-lib/pricing/store',
+  );
+  return {
+    ...actual,
+    currentModelPricing: () => ({
+      claudeModelCount: () => 26,
+      codexModelCount: () => 21,
+      cursorModelCount: () => 26,
+    }),
+  };
+});
 
 import { doctorCommand, duplicateMachineCheck } from '../doctor.js';
 
@@ -115,6 +135,7 @@ describe('doctorCommand', () => {
     expect(out).toContain('Claude Code source: 1 JSONL file(s)');
     expect(out).toContain('Codex source: 1 JSONL file(s)');
     expect(out).toContain('Cursor source: auth token found');
+    expect(out).toContain('Pricing cache:');
     expect(process.exitCode).toBeUndefined();
   });
 

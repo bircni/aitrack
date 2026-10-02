@@ -44,7 +44,7 @@ describe('cursor pricing', () => {
     expect(resolveCursorRates('gpt-6-sol')?.inputPerMillion).toBe(2);
     expect(resolveCursorRates('gpt-6.1-sol')?.inputPerMillion).toBe(2);
     expect(resolveCursorRates('gpt-6.1-sol-high-fast')?.inputPerMillion).toBe(4);
-    expect(resolveCursorRates('gpt-6-luna')?.inputPerMillion).toBe(0.1);
+    expect(resolveCursorRates('gpt-6-luna')?.inputPerMillion).toBeCloseTo(0.1);
     expect(resolveCursorRates('grok-4.7')?.inputPerMillion).toBe(2);
   });
 

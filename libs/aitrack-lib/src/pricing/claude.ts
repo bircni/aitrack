@@ -1,14 +1,15 @@
-// Per-model Claude pricing from tables/claude.json.
-// Last updated: 2026-09-29. Edit the JSON to change rates; run `pnpm run pricing:check` for drift.
+// Per-model Claude pricing. Rates come from local tables/*.json, overlaid by
+// the orphan `pricing` branch cache when refreshed. Run `pnpm run pricing:check`.
 
 import { CLAUDE_FAMILIES, canonicalizeClaudeModelId } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';
 import { costFromRates } from './rates.js';
-import { CLAUDE_FAMILY_FALLBACK, CLAUDE_MODELS, CLAUDE_PRICING_OVERRIDES } from './tables.js';
+import { currentModelPricing } from './store.js';
+import { CLAUDE_MODELS, CLAUDE_PRICING_OVERRIDES } from './tables.js';
 import type { ClaudePricing } from './types.js';
 
 export type { ClaudePricing };
-export { CLAUDE_MODELS as CLAUDE_PRICING_BY_ID, CLAUDE_PRICING_OVERRIDES } from './tables.js';
+export { CLAUDE_MODELS as CLAUDE_PRICING_BY_ID, CLAUDE_PRICING_OVERRIDES };
 
 const canonicalIdCache = new Map<string, string>();
 
@@ -23,6 +24,8 @@ function canonicalClaudeModelId(model: string): string {
 
 export function lookupClaudePricing(model: string, usageDate?: string): ClaudePricing | undefined {
   const id = canonicalClaudeModelId(model);
+  // Date overrides stay on the mutable tables export so tests (and rare
+  // in-process patches) can extend them without rebuilding the pricing pack.
   if (usageDate) {
     const overrides = CLAUDE_PRICING_OVERRIDES[id];
     if (overrides) {
@@ -31,7 +34,7 @@ export function lookupClaudePricing(model: string, usageDate?: string): ClaudePr
       }
     }
   }
-  return CLAUDE_MODELS[id];
+  return currentModelPricing().lookupClaude(id, usageDate);
 }
 
 export function findClaudePricing(
@@ -48,7 +51,7 @@ export function findClaudePricing(
     }
 
     fallbacks?.record(id);
-    return CLAUDE_FAMILY_FALLBACK[family];
+    return currentModelPricing().claudeFamilyFallback(family);
   }
   // An id that names no family is not Sonnet. Guessing a price there is how a
   // missing model field turned into a confident dollar total.

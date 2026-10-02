@@ -30,6 +30,7 @@ import {
   reportFallbackPricing,
 } from 'aitrack-lib/pricing/fallback';
 import { recordPricingFallbacks } from 'aitrack-lib/pricing/scan';
+import { syncPricingPack } from 'aitrack-lib/pricing/syncPack';
 import { syncedProviders } from 'aitrack-lib/providers/index';
 
 export interface SyncDataOptions {
@@ -65,6 +66,9 @@ export async function syncData(options: SyncDataOptions = {}): Promise<MachineFi
   // models into the next.
   const fallbacks = createFallbackCollector();
   try {
+    // Refresh cached rates from the orphan `pricing` branch when due (no-op if
+    // fresh / offline). Bundled pack remains the fallback.
+    await syncPricingPack();
     return await pushLocalUsage(options, fallbacks);
   } finally {
     // Fallback hits accumulate while the logs are read, so they exist however

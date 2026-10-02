@@ -1,127 +1,41 @@
 #!/usr/bin/env tsx
-// Check bundled pricing tables (Claude + Codex JSON) against vendor docs.
-//
-// Run: `pnpm run pricing:check`
-// Exits 0 if everything matches, 1 if drift is detected.
+/**
+ * Check (and optionally rebuild) pricing against LiteLLM + models.dev.
+ *
+ * Sources:
+ *   - tables/*.json             local offline baseline (Cursor, overrides, cache)
+ *   - orphan `pricing` branch   live pack installs refresh into ~/.config/aitrack/pricing/
+ *   - artifacts/pricing-pack/   built by pricing:update for CI to publish (not shipped)
+ *
+ * Run:
+ *   pnpm run pricing:check              # fetch catalogs, compare, exit 1 on drift
+ *   pnpm run pricing:update             # rebuild artifacts/pricing-pack from live feeds
+ *   pnpm run pricing:update -- --write  # also patch Claude/Codex IO in tables
+ */
 
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-// Imported from the library's source rather than through the `aitrack-lib`
-// package, which resolves to `dist/`: this script is a tsx-only repo tool, and
-// making it depend on a build would mean building the library to check whether
-// a vendor changed a price.
+import {
+  catalogFromLiteLLM,
+  catalogFromModelsDev,
+  findCatalogRates,
+  type ModelRates,
+  type PricingCatalog,
+} from '../libs/aitrack-lib/src/pricing/codecs.js';
 import { errorMessage } from '../libs/aitrack-lib/src/errors.js';
 import { CLAUDE_PRICING_BY_ID } from '../libs/aitrack-lib/src/pricing/claude.js';
 import {
   CODEX_PRICING_BY_ID,
   CODEX_PRICING_CURRENT,
 } from '../libs/aitrack-lib/src/pricing/codex.js';
+import { CURSOR_MODELS } from '../libs/aitrack-lib/src/pricing/cursor.js';
+import { buildPricingPack } from './build-pricing-pack.js';
 
-const CLAUDE_PRICING_URL = 'https://platform.claude.com/docs/en/about-claude/pricing';
-const CODEX_PRICING_URL = 'https://developers.openai.com/api/docs/pricing';
+const LITELLM_URL =
+  'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
+const MODELS_DEV_URL = 'https://models.dev/api.json';
 
-async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: { 'user-agent': 'aitrack-update-pricing-script' },
-  });
-  if (!res.ok) throw new Error(`HTTP ${String(res.status)}`);
-  return res.text();
-}
-
-// ── Claude ────────────────────────────────────────────────────────────────
-
-// `claude-opus-4-7` -> `Claude Opus 4.7`
-export function claudeHeading(modelId: string): string {
-  const m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?$/u.exec(modelId);
-  if (!m) return modelId;
-  const familyId = m[1];
-  const majorVersion = m[2];
-  if (familyId === undefined || majorVersion === undefined) return modelId;
-  const family = familyId.charAt(0).toUpperCase() + familyId.slice(1);
-  const version = m[3] ? `${majorVersion}.${m[3]}` : majorVersion;
-  return `Claude ${family} ${version}`;
-}
-
-// `Claude Opus 4.8` -> `claude-opus-4-8`
-function claudeModelId(family: string, version: string): string {
-  const dot = version.indexOf('.');
-  if (dot === -1) return `claude-${family.toLowerCase()}-${version}`;
-  return `claude-${family.toLowerCase()}-${version.slice(0, dot)}-${version.slice(dot + 1)}`;
-}
-
-// Read complete table rows: markup for status buttons and unit labels can put
-// the output price more than 800 characters after the model name.
-function claudePricingRows(html: string): Array<{ modelId: string; prices: number[] }> {
-  const rows: Array<{ modelId: string; prices: number[] }> = [];
-  for (const row of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/giu)) {
-    const cells = [...(row[1] ?? '').matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/giu)];
-    const name = (cells[0]?.[1] ?? '')
-      .replaceAll(/<[^>]*>/gu, ' ')
-      .replaceAll(/\s+/gu, ' ')
-      .trim();
-    const model = /^Claude (Opus|Sonnet|Haiku|Fable|Mythos) (\d+(?:\.\d+)?)(?![\d.])/u.exec(name);
-    if (!model?.[1] || !model[2]) continue;
-    // Base input and output are the first two cells after the name. Ignore
-    // cache and batch prices, which must not mask a change to base pricing.
-    const prices = cells.slice(1, 3).flatMap((cell) => {
-      const amount = /\$([\d.]+)/u.exec(cell[1] ?? '')?.[1];
-      if (amount === undefined) return [];
-      const price = Number(amount);
-      return Number.isFinite(price) ? [price] : [];
-    });
-    rows.push({ modelId: claudeModelId(model[1], model[2]), prices });
-  }
-  return rows;
-}
-
-export function claudePricingLookup(
-  html: string,
-): (modelId: string) => { prices: number[]; where: string } {
-  const rows = claudePricingRows(html);
-  return (modelId) => ({
-    prices: rows.find((row) => row.modelId === modelId)?.prices ?? [],
-    where: claudeHeading(modelId),
-  });
-}
-
-// Only models with base prices in a table row count as priced discoveries.
-export function discoverClaudeModelsOnPage(html: string): string[] {
-  return [
-    ...new Set(
-      claudePricingRows(html)
-        .filter((row) => row.prices.length === 2)
-        .map((row) => row.modelId),
-    ),
-  ].toSorted((a, b) => a.localeCompare(b));
-}
-
-export interface ProviderCheck<P extends { inputPerMillion: number; outputPerMillion: number }> {
-  label: string;
-  url: string;
-  /** Entries to verify against the docs page. */
-  table: Record<string, P>;
-  /** Every id the source file knows, used to spot models missing from it. */
-  knownIds: string[];
-  sourceFile: string;
-  /** Built once per fetched page, then asked for each model's prices. */
-  lookup: (html: string) => (modelId: string) => { prices: number[]; where: string };
-  discover: (html: string) => string[];
-}
-
-export interface CheckResult {
-  drift: number;
-  unverified: number;
-  missing: number;
-}
-
-/**
- * One model's verdict against the docs page.
- *
- * Comparison is kept apart from fetching and printing so it can be tested — it
- * is the part that decides whether a release ships wrong prices, and it used to
- * be welded to `fetchHtml` and `console.log`.
- */
 export type PricingFinding =
   | { kind: 'ok'; modelId: string; summary: string }
   | {
@@ -135,31 +49,75 @@ export type PricingFinding =
   | { kind: 'unverified'; modelId: string; summary: string; where: string }
   | { kind: 'missing'; modelId: string };
 
-export function compareProviderPricing<
-  P extends { inputPerMillion: number; outputPerMillion: number },
->(check: ProviderCheck<P>, html: string): PricingFinding[] {
-  const findings: PricingFinding[] = [];
-  const pricesFor = check.lookup(html);
+export interface CheckResult {
+  drift: number;
+  unverified: number;
+  missing: number;
+}
 
-  for (const [modelId, pricing] of Object.entries(check.table)) {
-    const summary = `$${String(pricing.inputPerMillion)}/${String(pricing.outputPerMillion)}`;
-    const { prices, where } = pricesFor(modelId);
-    if (prices.length === 0) {
-      findings.push({ kind: 'unverified', modelId, summary, where });
+function nearly(a: number, b: number): boolean {
+  return Math.abs(a - b) < 1e-9;
+}
+
+function ratesSummary(input: number, output: number): string {
+  return `$${String(input)}/$${String(output)}`;
+}
+
+export function compareAgainstCatalog(options: {
+  label: string;
+  table: Record<string, { inputPerMillion: number; outputPerMillion: number }>;
+  knownIds: string[];
+  sourceFile: string;
+  providers: string[];
+  primary: PricingCatalog;
+  secondary: PricingCatalog;
+  discover?: boolean;
+}): PricingFinding[] {
+  const findings: PricingFinding[] = [];
+  const known = new Set(options.knownIds);
+
+  for (const [modelId, pricing] of Object.entries(options.table)) {
+    const summary = ratesSummary(pricing.inputPerMillion, pricing.outputPerMillion);
+    const hit =
+      findCatalogRates(options.primary, modelId, options.providers) ??
+      findCatalogRates(options.secondary, modelId, options.providers);
+    if (!hit) {
+      findings.push({
+        kind: 'unverified',
+        modelId,
+        summary,
+        where: `${options.providers.join('|')}/${modelId}`,
+      });
       continue;
     }
-    const isInOk = prices.includes(pricing.inputPerMillion);
-    const isOutOk = prices.includes(pricing.outputPerMillion);
+    const isInOk = nearly(pricing.inputPerMillion, hit.rates.inputPerMillion);
+    const isOutOk = nearly(pricing.outputPerMillion, hit.rates.outputPerMillion);
     findings.push(
       isInOk && isOutOk
         ? { kind: 'ok', modelId, summary }
-        : { kind: 'drift', modelId, summary, isInOk, isOutOk, saw: prices.slice(0, 6) },
+        : {
+            kind: 'drift',
+            modelId,
+            summary,
+            isInOk,
+            isOutOk,
+            saw: [hit.rates.inputPerMillion, hit.rates.outputPerMillion],
+          },
     );
   }
 
-  const known = new Set(check.knownIds);
-  for (const modelId of check.discover(html)) {
-    if (!known.has(modelId)) findings.push({ kind: 'missing', modelId });
+  if (options.discover) {
+    const discovered = new Set<string>();
+    for (const catalog of [options.primary, options.secondary]) {
+      for (const key of catalog.entries.keys()) {
+        const bare = key.includes('/') ? key.slice(key.indexOf('/') + 1) : key;
+        if (known.has(bare) || known.has(key)) continue;
+        if (!options.providers.some((p) => key.startsWith(`${p}/`))) continue;
+        if (discovered.has(bare)) continue;
+        discovered.add(bare);
+        findings.push({ kind: 'missing', modelId: bare });
+      }
+    }
   }
 
   return findings;
@@ -174,166 +132,174 @@ export function tallyFindings(findings: PricingFinding[]): CheckResult {
 }
 
 function reportFinding(finding: PricingFinding, sourceFile: string): void {
-  const id = finding.modelId.padEnd(22);
+  const id = finding.modelId.padEnd(28);
   switch (finding.kind) {
     case 'ok': {
-      console.log(`\u2713 ${id} ${finding.summary}`);
+      console.log(`✓ ${id} ${finding.summary}`);
       break;
     }
     case 'drift': {
       console.log(
-        `\u2717 ${id} ${finding.summary}  — input=${finding.isInOk ? 'ok' : 'MISS'} output=${finding.isOutOk ? 'ok' : 'MISS'}  (saw: ${finding.saw.join(', ')})`,
+        `✗ ${id} ${finding.summary}  — input=${finding.isInOk ? 'ok' : 'MISS'} output=${finding.isOutOk ? 'ok' : 'MISS'}  (catalog: ${finding.saw.join('/')})`,
       );
       break;
     }
     case 'unverified': {
-      console.log(`? ${id} ${finding.summary}  — "${finding.where}" not on page`);
+      console.log(`? ${id} ${finding.summary}  — not in catalogs (${finding.where})`);
       break;
     }
     case 'missing': {
-      console.log(`+ ${id} — on docs page but missing from ${sourceFile}`);
+      console.log(`+ ${id} — in catalogs but missing from ${sourceFile}`);
       break;
     }
   }
 }
 
-async function checkProvider<P extends { inputPerMillion: number; outputPerMillion: number }>(
-  check: ProviderCheck<P>,
-): Promise<CheckResult> {
-  console.log(`\n── ${check.label} (${check.url}) ──`);
-  let html: string;
-  try {
-    html = await fetchHtml(check.url);
-  } catch (error) {
-    console.error('Fetch failed:', errorMessage(error));
-    return { drift: 1, unverified: 0, missing: 0 };
-  }
+async function fetchCatalogs(): Promise<{ primary: PricingCatalog; secondary: PricingCatalog }> {
+  console.log('Fetching LiteLLM + models.dev for compare…');
+  const [litellmRes, modelsDevRes] = await Promise.all([
+    fetch(LITELLM_URL, { headers: { 'user-agent': 'aitrack-pricing-check' } }),
+    fetch(MODELS_DEV_URL, { headers: { 'user-agent': 'aitrack-pricing-check' } }),
+  ]);
+  if (!litellmRes.ok) throw new Error(`LiteLLM HTTP ${String(litellmRes.status)}`);
+  if (!modelsDevRes.ok) throw new Error(`models.dev HTTP ${String(modelsDevRes.status)}`);
+  const retrievedAt = new Date().toISOString();
+  return {
+    primary: catalogFromLiteLLM(
+      (await litellmRes.json()) as Record<string, unknown>,
+      retrievedAt,
+    ),
+    secondary: catalogFromModelsDev(
+      (await modelsDevRes.json()) as Record<string, unknown>,
+      retrievedAt,
+    ),
+  };
+}
 
-  const findings = compareProviderPricing(check, html);
-  for (const finding of findings) reportFinding(finding, check.sourceFile);
+function checkClaude(catalogs: { primary: PricingCatalog; secondary: PricingCatalog }): CheckResult {
+  console.log('\n── Claude (LiteLLM anthropic/* + models.dev) ──');
+  const findings = compareAgainstCatalog({
+    label: 'Claude',
+    table: CLAUDE_PRICING_BY_ID,
+    knownIds: Object.keys(CLAUDE_PRICING_BY_ID),
+    sourceFile: 'tables/claude.json',
+    providers: ['anthropic'],
+    primary: catalogs.primary,
+    secondary: catalogs.secondary,
+    discover: false,
+  });
+  for (const finding of findings) reportFinding(finding, 'tables/claude.json');
   return tallyFindings(findings);
 }
 
-function checkClaude(): Promise<CheckResult> {
-  return checkProvider({
-    label: 'Claude',
-    url: CLAUDE_PRICING_URL,
-    table: CLAUDE_PRICING_BY_ID,
-    knownIds: Object.keys(CLAUDE_PRICING_BY_ID),
-    sourceFile: 'src/pricing/tables/claude.json',
-    lookup: claudePricingLookup,
-    discover: discoverClaudeModelsOnPage,
-  });
-}
-
-// ── Codex ─────────────────────────────────────────────────────────────────
-
-interface CodexPricingRow {
-  modelId: string;
-  prices: number[];
-}
-
-function codexPricingRows(html: string): CodexPricingRow[] {
-  const rowPattern = /\[1,\[\[0,&quot;([^[]*?)&quot;\]/gu;
-  const matches = [...html.matchAll(rowPattern)];
-  const rows: CodexPricingRow[] = [];
-
-  for (const [index, match] of matches.entries()) {
-    const label = match[1];
-    if (!label) continue;
-    const modelMatch = /^(gpt-\d+(?:\.\d+)?(?:-[a-z0-9]+)*)(?:\s|$)/iu.exec(label);
-    const modelId = modelMatch?.[1]?.toLowerCase();
-    if (!modelId) continue;
-
-    const rowStart = match.index + match[0].length;
-    const rowEnd = matches[index + 1]?.index ?? html.length;
-    const rowHtml = html.slice(rowStart, rowEnd);
-    const prices = [...rowHtml.matchAll(/\[0,(-?\d+(?:\.\d+)?)\]/gu)].flatMap((priceMatch) => {
-      const raw = priceMatch[1];
-      if (!raw) return [];
-      const price = Number(raw);
-      return Number.isFinite(price) ? [price] : [];
-    });
-    rows.push({ modelId, prices });
-  }
-
-  return rows;
-}
-
-function standardPricingPane(html: string): string {
-  const paneMarker = '<div data-content-switcher-pane="true" data-value="standard">';
-  const start = html.indexOf(paneMarker);
-  if (start === -1) return '';
-  const next = html.indexOf('<div data-content-switcher-pane="true"', start + paneMarker.length);
-  return html.slice(start, next === -1 ? html.length : next);
-}
-
-function isCurrentGptVersion(modelId: string, minimumGpt5Minor: number): boolean {
-  const match = /^gpt-(\d+)(?:\.(\d+))?/u.exec(modelId);
-  if (!match?.[1]) return false;
-  const major = Number(match[1]);
-  if (major > 5) return true;
-  return major === 5 && match[2] !== undefined && Number(match[2]) >= minimumGpt5Minor;
-}
-
-export function discoverCodexModelsOnPage(html: string): string[] {
-  const currentStandardRows = codexPricingRows(standardPricingPane(html)).filter((row) =>
-    isCurrentGptVersion(row.modelId, 4),
-  );
-  const codexSpecificRows = codexPricingRows(html).filter(
-    (row) => /-codex(?:-|$)/u.test(row.modelId) && isCurrentGptVersion(row.modelId, 3),
-  );
-  return [
-    ...new Set(
-      [...currentStandardRows, ...codexSpecificRows]
-        .filter((row) => row.prices.length >= 2)
-        .map((row) => row.modelId),
-    ),
-  ].toSorted((a, b) => a.localeCompare(b));
-}
-
-function checkCodex(): Promise<CheckResult> {
-  return checkProvider({
+function checkCodex(catalogs: { primary: PricingCatalog; secondary: PricingCatalog }): CheckResult {
+  console.log('\n── Codex current (LiteLLM openai/* + models.dev) ──');
+  const findings = compareAgainstCatalog({
     label: 'Codex',
-    url: CODEX_PRICING_URL,
     table: CODEX_PRICING_CURRENT,
     knownIds: Object.keys(CODEX_PRICING_BY_ID),
-    sourceFile: 'src/pricing/tables/codex.json',
-    lookup: (html) => {
-      const rows = codexPricingRows(html);
-      return (modelId) => ({
-        prices: rows.find((row) => row.modelId === modelId)?.prices ?? [],
-        where: modelId,
-      });
-    },
-    discover: discoverCodexModelsOnPage,
+    sourceFile: 'tables/codex.json',
+    providers: ['openai'],
+    primary: catalogs.primary,
+    secondary: catalogs.secondary,
+    discover: false,
   });
+  for (const finding of findings) reportFinding(finding, 'tables/codex.json');
+  return tallyFindings(findings);
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────
+function checkCursor(catalogs: { primary: PricingCatalog; secondary: PricingCatalog }): CheckResult {
+  console.log('\n── Cursor natives (supplement is authoritative; catalogs are informational) ──');
+  const findings = compareAgainstCatalog({
+    label: 'Cursor',
+    table: CURSOR_MODELS,
+    knownIds: Object.keys(CURSOR_MODELS),
+    sourceFile: 'tables/cursor.json',
+    providers: ['cursor', 'xai', 'google', 'openai', 'anthropic'],
+    primary: catalogs.primary,
+    secondary: catalogs.secondary,
+    discover: false,
+  });
+  let ok = 0;
+  let infoDrift = 0;
+  let supplementOnly = 0;
+  for (const finding of findings) {
+    if (finding.kind === 'ok') {
+      ok += 1;
+      reportFinding(finding, 'tables/cursor.json');
+    } else if (finding.kind === 'drift') {
+      infoDrift += 1;
+      console.log(
+        `i ${finding.modelId.padEnd(28)} ${finding.summary}  — catalog ${finding.saw.join('/')} (supplement wins)`,
+      );
+    } else if (finding.kind === 'unverified') {
+      supplementOnly += 1;
+    }
+  }
+  console.log(
+    `  (${String(ok)} match catalogs, ${String(infoDrift)} intentional overrides, ${String(supplementOnly)} supplement-only)`,
+  );
+  return { drift: 0, unverified: 0, missing: 0 };
+}
 
-async function main(): Promise<number> {
-  const claude = await checkClaude();
-  const codex = await checkCodex();
+/** Exported for unit tests — catalog hit helper. */
+export function catalogIo(
+  catalogs: { primary: PricingCatalog; secondary: PricingCatalog },
+  modelId: string,
+  providers: string[],
+): ModelRates | undefined {
+  return (
+    findCatalogRates(catalogs.primary, modelId, providers) ??
+    findCatalogRates(catalogs.secondary, modelId, providers)
+  )?.rates;
+}
 
-  const totalDrift = claude.drift + codex.drift;
+async function main(argv: string[]): Promise<number> {
+  const doUpdate = argv.includes('--update') || argv.includes('update');
+  const doWrite = argv.includes('--write');
+
+  if (doUpdate || doWrite) {
+    console.log('Rebuilding artifacts/pricing-pack from live feeds…');
+    try {
+      await buildPricingPack({ writeTablesFromFeeds: doWrite });
+    } catch (error) {
+      console.error('Pack build failed:', errorMessage(error));
+      return 1;
+    }
+  }
+
+  let catalogs: { primary: PricingCatalog; secondary: PricingCatalog };
+  try {
+    catalogs = await fetchCatalogs();
+  } catch (error) {
+    console.error('Catalog fetch failed:', errorMessage(error));
+    return 1;
+  }
+
+  const claude = checkClaude(catalogs);
+  const codex = checkCodex(catalogs);
+  const cursor = checkCursor(catalogs);
+
+  const totalDrift = claude.drift + codex.drift + cursor.drift;
   const totalUnverified = claude.unverified + codex.unverified;
   const totalMissing = claude.missing + codex.missing;
 
   console.log('');
   if (totalMissing > 0) {
     console.log(
-      `${String(totalMissing)} model(s) on docs page missing from src/pricing/tables/*.json — add them and re-run`,
+      `${String(totalMissing)} model(s) in catalogs missing from tables — add them (or re-run with --write after deciding) and re-check`,
     );
   }
   if (totalDrift > 0) {
     console.log(
-      `${String(totalDrift)} model(s) drift from current docs — update src/pricing/tables/*.json`,
+      `${String(totalDrift)} model(s) drift from catalogs — update tables/*.json or run: pnpm run pricing:update -- --write`,
     );
   } else if (totalMissing === 0 && totalUnverified > 0) {
-    console.log(`No drift, but ${String(totalUnverified)} model(s) couldn't be found on the page.`);
+    console.log(
+      `No drift on verified models; ${String(totalUnverified)} Claude/Codex model(s) not in catalogs (aliases/historical OK).`,
+    );
   } else if (totalMissing === 0 && totalDrift === 0) {
-    console.log('All pricing matches docs.');
+    console.log('All verified pricing matches LiteLLM / models.dev catalogs.');
   }
 
   return totalDrift > 0 || totalMissing > 0 ? 1 : 0;
@@ -341,7 +307,7 @@ async function main(): Promise<number> {
 
 const entryPoint = process.argv[1];
 if (entryPoint && import.meta.url === pathToFileURL(resolve(entryPoint)).href) {
-  main()
+  main(process.argv.slice(2))
     .then((code) => {
       process.exit(code);
     })

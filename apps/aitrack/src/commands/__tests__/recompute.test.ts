@@ -45,6 +45,13 @@ vi.mock('fs', () => ({
   writeFileSync: mocks.writeFileSync,
 }));
 vi.mock('child_process', () => ({ execSync: mocks.execSync }));
+vi.mock('aitrack-lib/pricing/syncPack', () => ({
+  syncPricingPack: vi.fn(async () => ({
+    updatedAt: '2026-09-29T00:00:00.000Z',
+    refreshed: false,
+    detail: 'cache still fresh',
+  })),
+}));
 
 import type { MachineFile } from 'aitrack-lib/data/types';
 import { resolveModelCost } from 'aitrack-lib/pricing/resolve';

@@ -27,6 +27,7 @@ import {
   reportFallbackPricing,
 } from 'aitrack-lib/pricing/fallback';
 import { resolveModelCost } from 'aitrack-lib/pricing/resolve';
+import { syncPricingPack } from 'aitrack-lib/pricing/syncPack';
 import { getProvider, syncedProviderKeys } from 'aitrack-lib/providers/index';
 
 /**
@@ -201,6 +202,7 @@ export async function recomputeCostsCommand(options: RecomputeCostsOptions = {})
 
   log.info('Pulling latest from remote...');
   pull();
+  await syncPricingPack();
 
   const files = listDataFiles();
   if (files.length === 0) {

@@ -1,28 +1,11 @@
 import type { ClaudeFamily } from '../data/modelId.js';
+import { currentModelPricing } from './store.js';
 import claudeTable from './tables/claude.json' with { type: 'json' };
 import codexTable from './tables/codex.json' with { type: 'json' };
 import cursorTable from './tables/cursor.json' with { type: 'json' };
-import type { ClaudePricing, CodexPricing, CursorPricing } from './types.js';
+import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
 
-export interface PricingOverride<P> {
-  before: string;
-  pricing: P;
-}
-
-interface CursorAliasRule {
-  pattern: string;
-  canonical: string;
-}
-
-interface CompiledAlias {
-  pattern: RegExp;
-  canonical: string;
-}
-
-function compilePattern(pattern: string): RegExp {
-  // Swift-style (?i) prefix — JS needs the i flag instead.
-  return pattern.startsWith('(?i)') ? new RegExp(pattern.slice(4), 'iu') : new RegExp(pattern, 'u');
-}
+export type { PricingOverride };
 
 export const CLAUDE_MODELS: Record<string, ClaudePricing> = claudeTable.models;
 export const CLAUDE_FAMILY_FALLBACK: Record<ClaudeFamily, ClaudePricing> =
@@ -51,15 +34,7 @@ export const CODEX_FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing
 export const CURSOR_MODELS: Record<string, CursorPricing> = cursorTable.models;
 export const CURSOR_FAST_MULTIPLIERS: Record<string, number> = cursorTable.fastMultipliers;
 
-const CURSOR_ALIASES: CompiledAlias[] = cursorTable.aliases.map((rule: CursorAliasRule) => ({
-  pattern: compilePattern(rule.pattern),
-  canonical: rule.canonical,
-}));
-
-/** First matching alias, or the original slug. */
+/** First matching alias, or the original slug. Uses the live pricing pack. */
 export function applyCursorAlias(model: string): string {
-  for (const rule of CURSOR_ALIASES) {
-    if (rule.pattern.test(model)) return rule.canonical;
-  }
-  return model;
+  return currentModelPricing().applyCursorAlias(model);
 }
