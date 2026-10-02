@@ -38,7 +38,7 @@ libs/
       pricing/        Cost resolution; editable rates in pricing/tables/*.json
                       (live pack published on orphan branch `pricing`, not bundled)
       providers/      Provider registry and descriptors
-    store/          Machine files on disk and their schema migrations
+      store/          Machine files on disk and their schema migrations
   test-fixtures/      Fixtures shared by both test suites. Never published.
 scripts/              Repo tooling: release, release notes, pricing pack build/check
 ```
@@ -58,6 +58,8 @@ pnpm run pricing:update            # fetch catalogs → artifacts/pricing-pack/
 pnpm run pricing:update -- --write # also patch Claude/Codex IO into tables/*.json
 pnpm run pricing:check             # optional local compare of tables vs catalogs
 ```
+
+Shared pricing calculations, catalog access, table conversion, and stored-day repricing belong in `aitrack-lib`. Apps and scripts handle command arguments, presentation, and file publishing.
 
 Tests are colocated per module in one `__tests__` folder each.
 

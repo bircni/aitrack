@@ -10,7 +10,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'libs/aitrack-lib/src/pricing/tables/**'
+      - 'libs/aitrack-lib/src/pricing/**'
       - 'scripts/build-pricing-pack.ts'
       - '.github/workflows/publish-pricing-branch.yml'
   schedule:

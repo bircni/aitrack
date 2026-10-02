@@ -46,8 +46,8 @@ export interface PricingManifest {
     litellm: string;
     modelsDev: string;
   };
-  /** Optional SHA-256 hex digests for cache validation. */
-  hashes?: Partial<Record<'supplement' | 'litellm' | 'modelsDev', string>>;
+  /** SHA-256 hex digests for cache validation. */
+  hashes: Record<'supplement' | 'litellm' | 'modelsDev', string>;
 }
 
 export const PRICING_BRANCH = 'pricing';

@@ -10,8 +10,8 @@ import {
   readLocalProviderMaps,
 } from 'aitrack-lib/data/localData';
 import { REPO_NOT_CLONED_MESSAGE } from 'aitrack-lib/data/messages';
-import type { MachineFile, ProviderDay } from 'aitrack-lib/data/types';
-import { approximatelyEqual, checkRawMachineFile } from 'aitrack-lib/data/validate';
+import type { MachineFile } from 'aitrack-lib/data/types';
+import { checkRawMachineFile } from 'aitrack-lib/data/validate';
 import {
   commitDataChanges,
   isCloned,
@@ -21,14 +21,9 @@ import {
 } from 'aitrack-lib/git';
 import { machineDataFilename } from 'aitrack-lib/machineId';
 import { log } from 'aitrack-lib/output';
-import {
-  createFallbackCollector,
-  type FallbackCollector,
-  reportFallbackPricing,
-} from 'aitrack-lib/pricing/fallback';
-import { resolveModelCost } from 'aitrack-lib/pricing/resolve';
+import { createFallbackCollector, reportFallbackPricing } from 'aitrack-lib/pricing/fallback';
+import { repriceMachineDays } from 'aitrack-lib/pricing/reprice';
 import { syncPricingPack } from 'aitrack-lib/pricing/syncPack';
-import { getProvider, syncedProviderKeys } from 'aitrack-lib/providers/index';
 
 /**
  * Days serialized without their costs, for change detection.
@@ -41,86 +36,6 @@ import { getProvider, syncedProviderKeys } from 'aitrack-lib/providers/index';
  */
 function tokensJson(days: MachineFile['days']): string {
   return JSON.stringify(days, (key, value: unknown) => (key === 'costUSD' ? undefined : value));
-}
-
-interface RepriceResult {
-  /** Whether any stored cost was replaced. */
-  isTouched: boolean;
-  /** Claude model-days left alone because they predate the cache breakdown. */
-  legacySkipped: number;
-}
-
-/**
- * Recompute every model cost in one provider-day and re-derive the day total.
- *
- * Costs are only rewritten when they differ beyond float noise: the readers sum
- * a cost per JSONL entry while this derives it from the summed tokens, so an
- * unchanged day would otherwise look repriced on every run.
- */
-function repriceProviderDay(
-  providerKey: string,
-  date: string,
-  providerDay: ProviderDay,
-  fallbacks: FallbackCollector,
-): RepriceResult {
-  let dayTotal = 0;
-  let modelCount = 0;
-  let isCostComplete = true;
-  let isTouched = false;
-  let legacySkipped = 0;
-
-  for (const [model, counts] of Object.entries(providerDay.byModel)) {
-    modelCount++;
-    const cost = resolveModelCost(providerKey, model, counts, date, 'recompute', fallbacks);
-    if (cost === undefined) {
-      if (counts.costUSD === undefined) {
-        isCostComplete = false;
-      } else {
-        dayTotal += counts.costUSD;
-        if (getProvider(providerKey)?.pricing.repriceRequiresBreakdown) legacySkipped++;
-      }
-      continue;
-    }
-    if (counts.costUSD === undefined || !approximatelyEqual(counts.costUSD, cost)) {
-      counts.costUSD = cost;
-      isTouched = true;
-    }
-    dayTotal += cost;
-  }
-
-  // A day total is only safe to re-derive once every model in it has a cost.
-  if (
-    modelCount > 0 &&
-    isCostComplete &&
-    (providerDay.totals.costUSD === undefined ||
-      !approximatelyEqual(providerDay.totals.costUSD, dayTotal))
-  ) {
-    providerDay.totals.costUSD = dayTotal;
-    isTouched = true;
-  }
-
-  return { isTouched, legacySkipped };
-}
-
-/** Reprice every synced provider-day in a machine file, in place. */
-function repriceMachineDays(
-  days: MachineFile['days'],
-  fallbacks: FallbackCollector,
-): RepriceResult {
-  let isTouched = false;
-  let legacySkipped = 0;
-
-  for (const [date, providers] of Object.entries(days)) {
-    for (const providerKey of syncedProviderKeys()) {
-      const providerDay = providers[providerKey];
-      if (!providerDay) continue;
-      const result = repriceProviderDay(providerKey, date, providerDay, fallbacks);
-      isTouched ||= result.isTouched;
-      legacySkipped += result.legacySkipped;
-    }
-  }
-
-  return { isTouched, legacySkipped };
 }
 
 /**

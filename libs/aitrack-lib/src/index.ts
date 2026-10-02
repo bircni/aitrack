@@ -41,9 +41,11 @@ export { type ReadCursorDataOptions, readCursorData } from './readers/cursor/ind
 
 // Pricing
 export * from './pricing/resolve.js';
+export * from './pricing/reprice.js';
+export * from './pricing/catalogs.js';
+export * from './pricing/supplementFromTables.js';
 export {
   currentModelPricing,
-  ensurePricingStore,
   resetSharedPricingStore,
   sharedPricingStore,
 } from './pricing/store.js';

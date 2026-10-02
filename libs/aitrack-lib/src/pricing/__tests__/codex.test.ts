@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { estimateCodexCostUSD, findCodexPricing } from '../codex.js';
 import { createFallbackCollector } from '../fallback.js';
-import { currentModelPricing } from '../store.js';
 
 describe('codex pricing', () => {
   it('costs 1M+1M tokens correctly for known models', () => {
@@ -57,27 +56,6 @@ describe('codex pricing', () => {
     expect(estimateCodexCostUSD('gpt-5.1-codex', 1_000_000, 100_000, 900_000)).toBeCloseTo(1.2375);
     // No cache argument -> same as cached=0
     expect(estimateCodexCostUSD('gpt-5.1-codex', 1_000_000, 100_000)).toBeCloseTo(2.25);
-  });
-
-  it('honors date-versioned pricing overrides', () => {
-    // Simulate Anthropic-style scenario: a model's price changes mid-life.
-    // Before 2026-04-01 gpt-5.4 cost $4 / $20; after, $2.50 / $15 (current).
-    const overrides = currentModelPricing().getSupplement().codex.overrides;
-    const previous = overrides['gpt-5.4'];
-    overrides['gpt-5.4'] = [
-      { before: '2026-04-01', pricing: { inputPerMillion: 4, outputPerMillion: 20 } },
-    ];
-    try {
-      // Old session: should use the override.
-      expect(estimateCodexCostUSD('gpt-5.4', 1_000_000, 1_000_000, 0, '2026-03-15')).toBe(24);
-      // New session: should use current pricing.
-      expect(estimateCodexCostUSD('gpt-5.4', 1_000_000, 1_000_000, 0, '2026-05-15')).toBe(17.5);
-      // No date: latest pricing.
-      expect(estimateCodexCostUSD('gpt-5.4', 1_000_000, 1_000_000)).toBe(17.5);
-    } finally {
-      if (previous === undefined) delete overrides['gpt-5.4'];
-      else overrides['gpt-5.4'] = previous;
-    }
   });
 
   it('prices gpt-5.6 sessions at the rate in effect on the usage date', () => {

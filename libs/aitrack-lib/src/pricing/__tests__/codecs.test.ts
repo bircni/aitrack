@@ -6,7 +6,6 @@ import {
   catalogFromModelsDev,
   compactFromCatalog,
   findCatalogRates,
-  mergeCatalogs,
 } from '../codecs.js';
 
 describe('pricing codecs', () => {
@@ -74,13 +73,7 @@ describe('pricing codecs', () => {
     });
   });
 
-  it('merges catalogs and skips zero-cost models.dev rows', () => {
-    const base = catalogFromLiteLLM({
-      'openai/gpt-5.6-sol': {
-        input_cost_per_token: 4e-6,
-        output_cost_per_token: 20e-6,
-      },
-    });
+  it('skips zero-cost and aggregator models.dev rows', () => {
     const overlay = catalogFromModelsDev({
       openai: {
         models: {
@@ -94,10 +87,9 @@ describe('pricing codecs', () => {
         },
       },
     });
-    const merged = mergeCatalogs(base, overlay);
-    expect(merged.entries.get('openai/gpt-5.6-sol')?.inputPerMillion).toBe(5);
-    expect(merged.entries.has('freebie')).toBe(false);
-    expect(findCatalogRates(merged, 'gpt-5.6-sol', ['openai'])?.rates.outputPerMillion).toBe(25);
+    expect(overlay.entries.get('openai/gpt-5.6-sol')?.inputPerMillion).toBe(5);
+    expect(overlay.entries.has('freebie')).toBe(false);
+    expect(overlay.entries.has('ignored')).toBe(false);
   });
 
   it('round-trips compact catalogs', () => {

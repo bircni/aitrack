@@ -197,13 +197,7 @@ export function catalogFromModelsDev(
   retrievedAt = new Date().toISOString(),
 ): PricingCatalog {
   const entries = new Map<string, ModelRates>();
-  const preferred = [...MODELS_DEV_PROVIDERS];
-  const otherProviders = Object.keys(root)
-    .filter((name) => !MODELS_DEV_PROVIDERS.has(name))
-    .toSorted((a, b) => a.localeCompare(b));
-
-  for (const providerName of [...preferred, ...otherProviders]) {
-    if (!MODELS_DEV_PROVIDERS.has(providerName)) continue;
+  for (const providerName of MODELS_DEV_PROVIDERS) {
     const provider = root[providerName];
     if (!provider || typeof provider !== 'object' || Array.isArray(provider)) continue;
     const models = (provider as Record<string, unknown>).models;
@@ -238,15 +232,6 @@ export function catalogFromModelsDev(
 
   if (entries.size === 0) throw new Error('models.dev feed produced no usable entries');
   return { retrievedAt, entries };
-}
-
-export function mergeCatalogs(base: PricingCatalog, overlay: PricingCatalog): PricingCatalog {
-  const entries = new Map(base.entries);
-  for (const [key, rates] of overlay.entries) entries.set(key, rates);
-  return {
-    retrievedAt: overlay.retrievedAt ?? base.retrievedAt,
-    entries,
-  };
 }
 
 export function findCatalogRates(

@@ -1,21 +1,9 @@
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
-import { CLAUDE_FAMILIES, type ClaudeFamily } from '../data/modelId.js';
-import {
-  catalogFromCompact,
-  findCatalogRates,
-  type ModelRates,
-  type PricingCatalog,
-} from './codecs.js';
+import { type ClaudeFamily } from '../data/modelId.js';
+import { findPricingCatalogRates, type PricingCatalogs } from './catalogs.js';
+import { catalogFromCompact, type PricingCatalog } from './codecs.js';
 import type { PricingSupplement } from './packMeta.js';
 import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
-
-export interface ResolvedModelRates {
-  inputPerMillion: number;
-  outputPerMillion: number;
-  cacheReadPerMillion: number;
-  cacheWritePerMillion: number;
-  source: 'supplement' | 'catalog' | 'family_fallback' | 'fast_multiplier';
-}
 
 interface CompiledAlias {
   pattern: RegExp;
@@ -40,38 +28,20 @@ function pickOverride<P>(
   return undefined;
 }
 
-function cursorFromRates(rates: ModelRates): CursorPricing {
-  return {
-    inputPerMillion: rates.inputPerMillion,
-    outputPerMillion: rates.outputPerMillion,
-    cacheReadPerMillion: rates.cacheReadIsExplicit
-      ? rates.cacheReadPerMillion
-      : rates.inputPerMillion * CACHE_READ_RATE_MULTIPLIER,
-    cacheWritePerMillion: rates.cacheWriteIsExplicit
-      ? rates.cacheWritePerMillion
-      : rates.inputPerMillion,
-  };
-}
-
 /**
- * OpenQuota-style resolution over a first-party supplement plus LiteLLM /
- * models.dev catalogs. Supplement always wins (Cursor natives, date overrides,
- * correct Anthropic cache multipliers).
+ * First-party rates and overrides, with catalog gap filling for Claude and Codex.
  */
 export class ModelPricing {
   readonly updatedAt: string;
   private readonly supplement: PricingSupplement;
-  private readonly primary: PricingCatalog;
-  private readonly secondary: PricingCatalog;
+  private readonly catalogs: PricingCatalogs;
   private readonly aliases: CompiledAlias[];
   private readonly codexFamilyFallback: Array<{ match: RegExp; pricing: CodexPricing }>;
-  private readonly memo = new Map<string, ResolvedModelRates | null>();
 
   constructor(supplement: PricingSupplement, primary: PricingCatalog, secondary: PricingCatalog) {
     this.supplement = supplement;
     this.updatedAt = supplement.updatedAt;
-    this.primary = primary;
-    this.secondary = secondary;
+    this.catalogs = { primary, secondary };
     this.aliases = supplement.cursor.aliases.map((rule) => ({
       pattern: compilePattern(rule.pattern),
       canonical: rule.canonical,
@@ -135,107 +105,10 @@ export class ModelPricing {
     return Object.keys(this.supplement.cursor.models).length;
   }
 
-  /** Raw supplement tables for callers that still export static maps. */
-  getSupplement(): PricingSupplement {
-    return this.supplement;
-  }
-
-  resolveRates(model: string, usageDate?: string): ResolvedModelRates | undefined {
-    const memoKey = `${model}\0${usageDate ?? ''}`;
-    const cached = this.memo.get(memoKey);
-    if (cached !== undefined) return cached ?? undefined;
-
-    const aliased = this.applyCursorAlias(model);
-    const resolved = this.lookupRates(aliased, usageDate);
-    this.memo.set(memoKey, resolved ?? null);
-    return resolved;
-  }
-
-  private lookupRates(modelId: string, usageDate?: string): ResolvedModelRates | undefined {
-    const cursor = this.lookupCursorNative(modelId);
-    if (cursor) {
-      return { ...cursor, source: 'supplement' };
-    }
-
-    const claude = this.lookupClaude(modelId, usageDate);
-    if (claude) {
-      return {
-        inputPerMillion: claude.inputPerMillion,
-        outputPerMillion: claude.outputPerMillion,
-        cacheReadPerMillion: claude.cacheReadPerMillion,
-        cacheWritePerMillion: claude.cacheCreatePerMillion,
-        source: 'supplement',
-      };
-    }
-
-    const codex = this.lookupCodex(modelId, usageDate);
-    if (codex) {
-      return {
-        inputPerMillion: codex.inputPerMillion,
-        outputPerMillion: codex.outputPerMillion,
-        cacheReadPerMillion: codex.inputPerMillion * CACHE_READ_RATE_MULTIPLIER,
-        cacheWritePerMillion: codex.inputPerMillion,
-        source: 'supplement',
-      };
-    }
-
-    if (modelId.endsWith('-fast')) {
-      const base = modelId.slice(0, -'-fast'.length);
-      if (base) {
-        const baseRates = this.lookupRates(base, usageDate);
-        const multiplier = this.cursorFastMultiplier(base);
-        if (baseRates && multiplier !== undefined) {
-          return {
-            inputPerMillion: baseRates.inputPerMillion * multiplier,
-            outputPerMillion: baseRates.outputPerMillion * multiplier,
-            cacheReadPerMillion: baseRates.cacheReadPerMillion * multiplier,
-            cacheWritePerMillion: baseRates.cacheWritePerMillion * multiplier,
-            source: 'fast_multiplier',
-          };
-        }
-      }
-    }
-
-    const catalog = this.catalogCursor(modelId);
-    if (catalog) {
-      return { ...catalog, source: 'catalog' };
-    }
-
-    for (const family of CLAUDE_FAMILIES) {
-      if (!modelId.includes(family)) continue;
-      const fallback = this.claudeFamilyFallback(family);
-      return {
-        inputPerMillion: fallback.inputPerMillion,
-        outputPerMillion: fallback.outputPerMillion,
-        cacheReadPerMillion: fallback.cacheReadPerMillion,
-        cacheWritePerMillion: fallback.cacheCreatePerMillion,
-        source: 'family_fallback',
-      };
-    }
-
-    return undefined;
-  }
-
-  /** Catalog coverage for tooling / doctor; resolve still prefers the supplement. */
-  catalogModelCount(): number {
-    return this.primary.entries.size + this.secondary.entries.size;
-  }
-
-  catalogCursor(modelId: string): CursorPricing | undefined {
-    const hit =
-      findCatalogRates(this.primary, modelId, ['cursor', 'xai', 'google', 'openai', 'anthropic']) ??
-      findCatalogRates(this.secondary, modelId, ['cursor', 'xai', 'google', 'openai', 'anthropic']);
-    if (!hit) return undefined;
-    return cursorFromRates(hit.rates);
-  }
-
   /** Gap-fill Claude rates from catalogs when the supplement has no row. */
   lookupCatalogClaude(modelId: string): ClaudePricing | undefined {
-    const hit =
-      findCatalogRates(this.primary, modelId, ['anthropic']) ??
-      findCatalogRates(this.secondary, modelId, ['anthropic']);
-    if (!hit) return undefined;
-    const rates = hit.rates;
+    const rates = findPricingCatalogRates(this.catalogs, modelId, ['anthropic']);
+    if (!rates) return undefined;
     return {
       inputPerMillion: rates.inputPerMillion,
       outputPerMillion: rates.outputPerMillion,
@@ -250,13 +123,11 @@ export class ModelPricing {
 
   /** Gap-fill Codex rates from catalogs when the supplement has no row. */
   lookupCatalogCodex(modelId: string): CodexPricing | undefined {
-    const hit =
-      findCatalogRates(this.primary, modelId, ['openai']) ??
-      findCatalogRates(this.secondary, modelId, ['openai']);
-    if (!hit) return undefined;
+    const rates = findPricingCatalogRates(this.catalogs, modelId, ['openai']);
+    if (!rates) return undefined;
     return {
-      inputPerMillion: hit.rates.inputPerMillion,
-      outputPerMillion: hit.rates.outputPerMillion,
+      inputPerMillion: rates.inputPerMillion,
+      outputPerMillion: rates.outputPerMillion,
     };
   }
 }

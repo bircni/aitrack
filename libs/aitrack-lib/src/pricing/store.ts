@@ -1,20 +1,19 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { environmentValue } from '../env.js';
 import { APP_DIR } from '../paths.js';
-import { type CompactCatalog } from './codecs.js';
+import type { CompactCatalog } from './codecs.js';
 import { type ModelPricing, modelPricingFromPack } from './modelPricing.js';
-import { type PricingManifest, type PricingSupplement, pricingPackUrls } from './packMeta.js';
+import { type PricingSupplement, pricingPackUrls } from './packMeta.js';
 import { supplementFromTables } from './supplementFromTables.js';
+import { isCompactCatalog, isPricingManifest, isPricingSupplement } from './validation.js';
 
 export const PRICING_CACHE_DIR = join(APP_DIR, 'pricing');
-
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FAILURE_RETRY_MS = 30 * 60 * 1000;
-
 const EMPTY_CATALOG: CompactCatalog = { retrievedAt: '1970-01-01T00:00:00.000Z', models: {} };
 
 interface SourceState {
@@ -22,432 +21,252 @@ interface SourceState {
   fetchedAt?: string;
   failedAt?: string;
 }
-
+const SOURCES = ['manifest', 'supplement', 'litellm', 'modelsDev'] as const;
+type Source = (typeof SOURCES)[number];
 interface CacheState {
-  sources: {
-    manifest?: SourceState;
-    supplement?: SourceState;
-    litellm?: SourceState;
-    modelsDev?: SourceState;
-  };
+  sources: Partial<Record<Source, SourceState>>;
 }
-
 export interface PricingRefreshResult {
   updated: boolean;
   reason: string;
   updatedAt: string;
 }
 
-function sha256Hex(body: string | Buffer): string {
-  return createHash('sha256').update(body).digest('hex');
-}
-
-function parseIso(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const ms = Date.parse(value);
-  return Number.isFinite(ms) ? ms : undefined;
-}
-
 function isStale(state: SourceState | undefined, now: number): boolean {
-  const failedAt = parseIso(state?.failedAt);
-  // Honor the failure backoff even when the cache is missing or past TTL —
-  // otherwise every command retries immediately after a failed first fetch.
-  if (failedAt !== undefined && now - failedAt < FAILURE_RETRY_MS) return false;
-  const fetchedAt = parseIso(state?.fetchedAt);
-  if (fetchedAt === undefined) return true;
-  return now - fetchedAt >= REFRESH_INTERVAL_MS;
+  if (state?.failedAt && now - Date.parse(state.failedAt) < FAILURE_RETRY_MS) return false;
+  return !state?.fetchedAt || !(now - Date.parse(state.fetchedAt) < REFRESH_INTERVAL_MS);
 }
 
-function readJsonFileSync(path: string): unknown {
+function parseBody<T>(body: string, validate: (value: unknown) => value is T, hash?: string): T {
+  if (hash && createHash('sha256').update(body).digest('hex') !== hash) {
+    throw new Error('hash mismatch');
+  }
+  const value: unknown = JSON.parse(body);
+  if (!validate(value)) throw new Error('invalid pricing payload');
+  return value;
+}
+
+function readState(path: string): CacheState {
   try {
-    return JSON.parse(readFileSync(path, 'utf8')) as unknown;
+    const value = JSON.parse(readFileSync(path, 'utf8')) as { sources?: unknown } | null;
+    if (!value?.sources || typeof value.sources !== 'object' || Array.isArray(value.sources))
+      return { sources: {} };
+    for (const source of Object.values(value.sources) as unknown[]) {
+      if (
+        !source ||
+        typeof source !== 'object' ||
+        Array.isArray(source) ||
+        ['etag', 'fetchedAt', 'failedAt']
+          .map((key) => (source as Record<string, unknown>)[key])
+          .some((field) => field !== undefined && typeof field !== 'string')
+      ) {
+        return { sources: {} };
+      }
+    }
+    return value as CacheState;
   } catch {
-    return undefined;
+    return { sources: {} };
   }
 }
 
-async function readJsonFile(path: string): Promise<unknown> {
+async function writeAtomic(path: string, body: string): Promise<void> {
+  const tmp = `${path}.${randomUUID()}.tmp`;
   try {
-    return JSON.parse(await readFile(path, 'utf8')) as unknown;
-  } catch {
-    return undefined;
+    await writeFile(tmp, body, 'utf8');
+    await rename(tmp, path);
+  } finally {
+    await rm(tmp, { force: true }).catch(() => undefined);
   }
-}
-
-async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
-  const tmp = `${path}.${String(process.pid)}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-  await rename(tmp, path);
-}
-
-interface FetchResult {
-  status: number;
-  etag?: string;
-  body?: string;
-}
-
-async function fetchText(url: string, etag?: string): Promise<FetchResult> {
-  const headers: Record<string, string> = {
-    'user-agent': 'aitrack-pricing-store',
-  };
-  if (etag) headers['if-none-match'] = etag;
-  const response = await fetch(url, { headers });
-  if (response.status === 304) {
-    return { status: 304, etag: response.headers.get('etag') ?? etag };
-  }
-  if (!response.ok) {
-    throw new Error(`HTTP ${String(response.status)} for ${url}`);
-  }
-  return {
-    status: response.status,
-    etag: response.headers.get('etag') ?? undefined,
-    body: await response.text(),
-  };
-}
-
-function newerSupplement(a: PricingSupplement, b: PricingSupplement): PricingSupplement {
-  const aMs = parseIso(a.updatedAt) ?? 0;
-  const bMs = parseIso(b.updatedAt) ?? 0;
-  return bMs > aMs ? b : a;
-}
-
-function isPricingSupplement(value: unknown): value is PricingSupplement {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.updatedAt === 'string' &&
-    record.claude !== undefined &&
-    record.codex !== undefined &&
-    record.cursor !== undefined
-  );
-}
-
-function isCompactCatalog(value: unknown): value is CompactCatalog {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  return (
-    record.models !== undefined &&
-    typeof record.models === 'object' &&
-    record.models !== null &&
-    !Array.isArray(record.models)
-  );
-}
-
-function isCacheState(value: unknown): value is CacheState {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  return (
-    record.sources !== undefined && typeof record.sources === 'object' && record.sources !== null
-  );
 }
 
 function pricingFromParts(
   supplement: PricingSupplement,
-  litellm?: CompactCatalog,
-  modelsDev?: CompactCatalog,
+  litellm = EMPTY_CATALOG,
+  modelsDev = EMPTY_CATALOG,
 ): ModelPricing {
-  return modelPricingFromPack({
-    supplement,
-    litellm: litellm ?? EMPTY_CATALOG,
-    modelsDev: modelsDev ?? EMPTY_CATALOG,
-  });
+  return modelPricingFromPack({ supplement, litellm, modelsDev });
 }
 
-/**
- * Local `tables/*.json` baseline + disk cache from the orphan `pricing` branch.
- * No prebuilt pack is shipped in the npm package.
- *
- * Construction (and `current()`) loads any on-disk overlay synchronously so
- * standalone commands see cached rates without waiting for sync/doctor.
- * Call `refreshIfDue()` (or let sync/doctor kick it) to pull newer rates.
- */
+/** Local tables with a complete, validated disk overlay. Network refresh is optional. */
 export class PricingStore {
   private snapshot: ModelPricing;
-  private localSupplement: PricingSupplement;
-  private state: CacheState;
+  private readonly localSupplement = supplementFromTables();
+  private state: CacheState = { sources: {} };
   private refreshInFlight: Promise<PricingRefreshResult> | undefined;
-  private readonly cacheDir: string;
 
-  constructor(cacheDir = PRICING_CACHE_DIR) {
-    this.cacheDir = cacheDir;
-    this.localSupplement = supplementFromTables();
-    this.state = { sources: {} };
+  constructor(private readonly cacheDir = PRICING_CACHE_DIR) {
     this.snapshot = pricingFromParts(this.localSupplement);
     this.hydrateFromDiskSync();
   }
 
   private hydrateFromDiskSync(): void {
-    const state = readJsonFileSync(join(this.cacheDir, 'state.json'));
-    this.state = isCacheState(state) ? state : { sources: {} };
-    const cachedSupplementRaw = readJsonFileSync(join(this.cacheDir, 'supplement.json'));
-    const cachedLitellmRaw = readJsonFileSync(join(this.cacheDir, 'litellm.json'));
-    const cachedModelsDevRaw = readJsonFileSync(join(this.cacheDir, 'models_dev.json'));
-    const cachedSupplement = isPricingSupplement(cachedSupplementRaw)
-      ? cachedSupplementRaw
-      : undefined;
-    const cachedLitellm = isCompactCatalog(cachedLitellmRaw) ? cachedLitellmRaw : undefined;
-    const cachedModelsDev = isCompactCatalog(cachedModelsDevRaw) ? cachedModelsDevRaw : undefined;
-    const supplement = cachedSupplement
-      ? newerSupplement(this.localSupplement, cachedSupplement)
-      : this.localSupplement;
-    this.snapshot = pricingFromParts(supplement, cachedLitellm, cachedModelsDev);
+    this.state = readState(join(this.cacheDir, 'state.json'));
+    try {
+      const load = <T>(file: string, validate: (value: unknown) => value is T, hash?: string): T =>
+        parseBody(readFileSync(join(this.cacheDir, file), 'utf8'), validate, hash);
+      const manifest = load('manifest.json', isPricingManifest);
+      const supplement = load(
+        manifest.files.supplement,
+        isPricingSupplement,
+        manifest.hashes.supplement,
+      );
+      const litellm = load(manifest.files.litellm, isCompactCatalog, manifest.hashes.litellm);
+      const modelsDev = load(manifest.files.modelsDev, isCompactCatalog, manifest.hashes.modelsDev);
+      this.snapshot = pricingFromParts(this.newerSupplement(supplement), litellm, modelsDev);
+    } catch {
+      this.snapshot = pricingFromParts(this.localSupplement);
+      // An incomplete cache must recover immediately, except during failure backoff.
+      for (const source of Object.values(this.state.sources)) source.fetchedAt = undefined;
+    }
   }
 
-  /** Ensure the cache directory exists and re-read disk. Safe to call once at startup. */
-  async init(): Promise<ModelPricing> {
-    await mkdir(this.cacheDir, { recursive: true });
-    this.localSupplement = supplementFromTables();
-    this.hydrateFromDiskSync();
-    return this.snapshot;
+  private newerSupplement(remote: PricingSupplement): PricingSupplement {
+    return Date.parse(remote.updatedAt) > Date.parse(this.localSupplement.updatedAt)
+      ? remote
+      : this.localSupplement;
   }
 
   current(): ModelPricing {
     return this.snapshot;
   }
-
-  localUpdatedAt(): string {
-    return this.localSupplement.updatedAt;
-  }
-
   refreshIfDue(force = false): Promise<PricingRefreshResult> {
     if (environmentValue('AITRACK_NO_PRICING_REFRESH') === '1') {
-      return Promise.resolve({
-        updated: false,
-        reason: 'disabled by AITRACK_NO_PRICING_REFRESH=1',
-        updatedAt: this.snapshot.updatedAt,
-      });
+      return Promise.resolve(this.result(false, 'disabled by AITRACK_NO_PRICING_REFRESH=1'));
     }
     if (this.refreshInFlight) return this.refreshInFlight;
-
-    const now = Date.now();
-    const due =
-      force ||
-      isStale(this.state.sources.manifest, now) ||
-      isStale(this.state.sources.supplement, now) ||
-      isStale(this.state.sources.litellm, now) ||
-      isStale(this.state.sources.modelsDev, now);
-
-    if (!due) {
-      return Promise.resolve({
-        updated: false,
-        reason: 'cache still fresh',
-        updatedAt: this.snapshot.updatedAt,
-      });
+    if (!force && !SOURCES.some((key) => isStale(this.state.sources[key], Date.now()))) {
+      return Promise.resolve(this.result(false, 'cache still fresh'));
     }
-
     this.refreshInFlight = this.refresh().finally(() => {
       this.refreshInFlight = undefined;
     });
     return this.refreshInFlight;
   }
 
+  private result(updated: boolean, reason: string): PricingRefreshResult {
+    return { updated, reason, updatedAt: this.snapshot.updatedAt };
+  }
+
   private async refresh(): Promise<PricingRefreshResult> {
-    await mkdir(this.cacheDir, { recursive: true });
-    const urls = pricingPackUrls();
     const nowIso = new Date().toISOString();
-
     try {
-      const manifestFetch = await fetchText(urls.manifest, this.state.sources.manifest?.etag);
-      let manifest: PricingManifest | undefined;
-      if (manifestFetch.status === 304) {
-        this.state.sources.manifest = {
-          ...this.state.sources.manifest,
-          fetchedAt: nowIso,
-          failedAt: undefined,
-        };
-        manifest = (await readJsonFile(join(this.cacheDir, 'manifest.json'))) as
-          | PricingManifest
-          | undefined;
-      } else {
-        if (!manifestFetch.body) throw new Error('empty manifest');
-        manifest = JSON.parse(manifestFetch.body) as PricingManifest;
-        if (manifest.schemaVersion !== 1) {
-          throw new Error(`unsupported pricing pack schema ${String(manifest.schemaVersion)}`);
-        }
-        await writeJsonAtomic(join(this.cacheDir, 'manifest.json'), manifest);
-        this.state.sources.manifest = {
-          etag: manifestFetch.etag,
-          fetchedAt: nowIso,
-          failedAt: undefined,
-        };
-      }
-
-      if (!manifest) throw new Error('manifest unavailable');
-
-      const supplement = await this.refreshFile<PricingSupplement>({
-        name: 'supplement',
-        url: urls.supplement,
-        fileName: 'supplement.json',
-        expectedHash: manifest.hashes?.supplement,
-        validate: (value): value is PricingSupplement => {
-          if (!value || typeof value !== 'object') return false;
-          const record = value as Record<string, unknown>;
-          return (
-            typeof record.updatedAt === 'string' &&
-            record.claude !== undefined &&
-            record.codex !== undefined &&
-            record.cursor !== undefined
-          );
-        },
-      });
-
-      const litellm = await this.refreshFile<CompactCatalog>({
-        name: 'litellm',
-        url: urls.litellm,
-        fileName: 'litellm.json',
-        expectedHash: manifest.hashes?.litellm,
-        validate: (value): value is CompactCatalog => {
-          if (!value || typeof value !== 'object') return false;
-          const record = value as Record<string, unknown>;
-          return (
-            record.models !== undefined &&
-            typeof record.models === 'object' &&
-            record.models !== null &&
-            Object.keys(record.models).length > 0
-          );
-        },
-      });
-
-      const modelsDev = await this.refreshFile<CompactCatalog>({
-        name: 'modelsDev',
-        url: urls.modelsDev,
-        fileName: 'models_dev.json',
-        expectedHash: manifest.hashes?.modelsDev,
-        validate: (value): value is CompactCatalog => {
-          if (!value || typeof value !== 'object') return false;
-          const record = value as Record<string, unknown>;
-          return (
-            record.models !== undefined &&
-            typeof record.models === 'object' &&
-            record.models !== null &&
-            Object.keys(record.models).length > 0
-          );
-        },
-      });
-
-      await writeJsonAtomic(join(this.cacheDir, 'state.json'), this.state);
-
-      const nextSupplement = newerSupplement(
-        this.localSupplement,
-        supplement.value ?? this.localSupplement,
+      await mkdir(this.cacheDir, { recursive: true });
+      const urls = pricingPackUrls();
+      const manifest = await this.refreshFile(
+        'manifest',
+        urls.manifest,
+        'manifest.json',
+        isPricingManifest,
       );
-      const next = pricingFromParts(nextSupplement, litellm.value, modelsDev.value);
+      const supplement = await this.refreshFile(
+        'supplement',
+        urls.supplement,
+        'supplement.json',
+        isPricingSupplement,
+        manifest.value.hashes.supplement,
+      );
+      const litellm = await this.refreshFile(
+        'litellm',
+        urls.litellm,
+        'litellm.json',
+        isCompactCatalog,
+        manifest.value.hashes.litellm,
+      );
+      const modelsDev = await this.refreshFile(
+        'modelsDev',
+        urls.modelsDev,
+        'models_dev.json',
+        isCompactCatalog,
+        manifest.value.hashes.modelsDev,
+      );
+      const next = pricingFromParts(
+        this.newerSupplement(supplement.value),
+        litellm.value,
+        modelsDev.value,
+      );
+      const files = [supplement, litellm, modelsDev, manifest];
+      const nextState: CacheState = { sources: {} };
+      // Commit the manifest last, after the complete pack is validated.
+      for (const file of files) {
+        if (file.changed) await writeAtomic(join(this.cacheDir, file.fileName), file.body);
+        nextState.sources[file.name] = { etag: file.etag, fetchedAt: nowIso };
+      }
+      await writeAtomic(join(this.cacheDir, 'state.json'), JSON.stringify(nextState));
       const updated =
         next.updatedAt !== this.snapshot.updatedAt ||
-        supplement.changed ||
-        litellm.changed ||
-        modelsDev.changed;
+        files.slice(0, 3).some((file) => file.changed);
+      this.state = nextState;
       this.snapshot = next;
-      return {
+      return this.result(
         updated,
-        reason: updated ? 'pricing pack refreshed from pricing branch' : 'remote pack unchanged',
-        updatedAt: next.updatedAt,
-      };
+        updated ? 'pricing pack refreshed from pricing branch' : 'remote pack unchanged',
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      for (const key of ['manifest', 'supplement', 'litellm', 'modelsDev'] as const) {
-        this.state.sources[key] = {
-          ...this.state.sources[key],
-          failedAt: nowIso,
-        };
+      for (const key of SOURCES) {
+        this.state.sources[key] = { ...this.state.sources[key], failedAt: nowIso };
       }
-      await writeJsonAtomic(join(this.cacheDir, 'state.json'), this.state).catch(() => undefined);
-      return {
-        updated: false,
-        reason: `refresh failed: ${message}`,
-        updatedAt: this.snapshot.updatedAt,
-      };
+      await writeAtomic(join(this.cacheDir, 'state.json'), JSON.stringify(this.state)).catch(
+        () => undefined,
+      );
+      return this.result(
+        false,
+        `refresh failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
-  private async refreshFile<T>({
-    name,
-    url,
-    fileName,
-    expectedHash,
-    validate,
-  }: {
-    name: 'supplement' | 'litellm' | 'modelsDev';
-    url: string;
-    fileName: string;
-    expectedHash?: string;
-    validate: (value: unknown) => value is T;
-  }): Promise<{ value?: T; changed: boolean }> {
-    const nowIso = new Date().toISOString();
-    const path = join(this.cacheDir, fileName);
-    let fetchResult = await fetchText(url, this.state.sources[name]?.etag);
-
-    if (fetchResult.status === 304) {
-      const cachedBody = await readFile(path, 'utf8').catch(() => undefined);
-      let cachedValue: T | undefined;
-      let cacheOk = false;
-      if (cachedBody !== undefined) {
-        try {
-          const parsed: unknown = JSON.parse(cachedBody);
-          const hashOk = !expectedHash || sha256Hex(cachedBody) === expectedHash;
-          if (hashOk && validate(parsed)) {
-            cachedValue = parsed;
-            cacheOk = true;
-          }
-        } catch {
-          cacheOk = false;
-        }
-      }
-      if (cacheOk) {
-        this.state.sources[name] = {
-          ...this.state.sources[name],
-          fetchedAt: nowIso,
-          failedAt: undefined,
+  private async refreshFile<T>(
+    name: Source,
+    url: string,
+    fileName: string,
+    validate: (value: unknown) => value is T,
+    hash?: string,
+  ) {
+    const etag = this.state.sources[name]?.etag;
+    const fetchFile = (conditional: boolean) =>
+      fetch(url, {
+        headers: {
+          'user-agent': 'aitrack-pricing-store',
+          ...(conditional && etag ? { 'if-none-match': etag } : {}),
+        },
+        signal: AbortSignal.timeout(5_000),
+      });
+    let response = await fetchFile(true);
+    if (response.status === 304) {
+      try {
+        const body = await readFile(join(this.cacheDir, fileName), 'utf8');
+        return {
+          name,
+          fileName,
+          body,
+          value: parseBody(body, validate, hash),
+          etag: response.headers.get('etag') ?? etag,
+          changed: false,
         };
-        return { value: cachedValue, changed: false };
-      }
-      // Corrupt/missing cache with a lingering ETag — drop it and fetch fresh.
-      this.state.sources[name] = {
-        ...this.state.sources[name],
-        etag: undefined,
-      };
-      fetchResult = await fetchText(url);
-    }
-
-    if (!fetchResult.body) throw new Error(`empty ${name}`);
-    if (expectedHash) {
-      const digest = sha256Hex(fetchResult.body);
-      if (digest !== expectedHash) {
-        throw new Error(`${name} hash mismatch (expected ${expectedHash}, got ${digest})`);
+      } catch {
+        response = await fetchFile(false);
       }
     }
-    const parsed: unknown = JSON.parse(fetchResult.body);
-    if (!validate(parsed)) throw new Error(`invalid ${name} payload`);
-    await writeJsonAtomic(path, parsed);
-    this.state.sources[name] = {
-      etag: fetchResult.etag,
-      fetchedAt: nowIso,
-      failedAt: undefined,
+    if (!response.ok) throw new Error(`HTTP ${String(response.status)} for ${url}`);
+    const body = await response.text();
+    return {
+      name,
+      fileName,
+      body,
+      value: parseBody(body, validate, hash),
+      etag: response.headers.get('etag') ?? undefined,
+      changed: true,
     };
-    return { value: parsed, changed: true };
   }
 }
 
 let sharedStore: PricingStore | undefined;
-let sharedInit: Promise<ModelPricing> | undefined;
-
-/** Process-wide store. Tests can call `resetSharedPricingStore()`. */
 export function sharedPricingStore(): PricingStore {
-  sharedStore ??= new PricingStore();
-  return sharedStore;
+  return (sharedStore ??= new PricingStore());
 }
-
-export function ensurePricingStore(): Promise<ModelPricing> {
-  const store = sharedPricingStore();
-  sharedInit ??= store.init();
-  return sharedInit;
-}
-
 export function currentModelPricing(): ModelPricing {
   return sharedPricingStore().current();
 }
-
 export function resetSharedPricingStore(): void {
   sharedStore = undefined;
-  sharedInit = undefined;
 }

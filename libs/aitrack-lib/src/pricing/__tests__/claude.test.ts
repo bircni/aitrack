@@ -7,7 +7,6 @@ import {
   findClaudePricing,
 } from '../claude.js';
 import { createFallbackCollector, type FallbackCollector } from '../fallback.js';
-import { currentModelPricing } from '../store.js';
 
 function priced(model: string, usageDate?: string, fallbacks?: FallbackCollector): ClaudePricing {
   const pricing = findClaudePricing(model, usageDate, fallbacks);
@@ -149,29 +148,5 @@ describe('claude pricing', () => {
       expect(pricing.outputPerMillion).toBe(50);
     }
     expect(fallbacks.drain()).toEqual(['claude-fable-6', 'claude-mythos-6']);
-  });
-
-  it('honors date-versioned pricing overrides', () => {
-    const overrides = currentModelPricing().getSupplement().claude.overrides;
-    const previous = overrides['claude-sonnet-4-6'];
-    overrides['claude-sonnet-4-6'] = [
-      {
-        before: '2026-04-01',
-        pricing: {
-          inputPerMillion: 4,
-          outputPerMillion: 20,
-          cacheReadPerMillion: 0.4,
-          cacheCreatePerMillion: 5,
-        },
-      },
-    ];
-    try {
-      expect(priced('claude-sonnet-4-6', '2026-03-15').inputPerMillion).toBe(4);
-      expect(priced('claude-sonnet-4-6', '2026-05-15').inputPerMillion).toBe(3);
-      expect(priced('claude-sonnet-4-6').inputPerMillion).toBe(3);
-    } finally {
-      if (previous === undefined) delete overrides['claude-sonnet-4-6'];
-      else overrides['claude-sonnet-4-6'] = previous;
-    }
   });
 });
