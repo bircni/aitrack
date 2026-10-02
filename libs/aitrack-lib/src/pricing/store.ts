@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { isRecord } from '../data/guards.js';
 import { environmentValue } from '../env.js';
 import { APP_DIR } from '../paths.js';
 import type { CompactCatalog } from './codecs.js';
@@ -92,6 +93,7 @@ export class PricingStore {
   private snapshot: ModelPricing;
   private readonly localSupplement = supplementFromTables();
   private state: CacheState = { sources: {} };
+  private cachedFiles: Record<string, unknown> | undefined;
   private refreshInFlight: Promise<PricingRefreshResult> | undefined;
 
   constructor(private readonly cacheDir = PRICING_CACHE_DIR) {
@@ -102,8 +104,14 @@ export class PricingStore {
   private hydrateFromDiskSync(): void {
     this.state = readState(join(this.cacheDir, 'state.json'));
     try {
+      const packPath = join(this.cacheDir, 'pack.json');
+      if (existsSync(packPath)) {
+        const files: unknown = JSON.parse(readFileSync(packPath, 'utf8'));
+        if (!isRecord(files)) throw new Error('invalid cached pricing pack');
+        this.cachedFiles = files;
+      }
       const load = <T>(file: string, validate: (value: unknown) => value is T, hash?: string): T =>
-        parseBody(readFileSync(join(this.cacheDir, file), 'utf8'), validate, hash);
+        parseBody(this.cachedBody(file), validate, hash);
       const manifest = load('manifest.json', isPricingManifest);
       const supplement = load(
         manifest.files.supplement,
@@ -118,6 +126,14 @@ export class PricingStore {
       // An incomplete cache must recover immediately, except during failure backoff.
       for (const source of Object.values(this.state.sources)) source.fetchedAt = undefined;
     }
+  }
+
+  private cachedBody(fileName: string): string {
+    // Read legacy component files only when no aggregate cache exists.
+    if (!this.cachedFiles) return readFileSync(join(this.cacheDir, fileName), 'utf8');
+    const body = this.cachedFiles[fileName];
+    if (typeof body !== 'string') throw new Error(`missing cached ${fileName}`);
+    return body;
   }
 
   private newerSupplement(remote: PricingSupplement): PricingSupplement {
@@ -186,15 +202,19 @@ export class PricingStore {
       );
       const files = [supplement, litellm, modelsDev, manifest];
       const nextState: CacheState = { sources: {} };
-      // Commit the manifest last, after the complete pack is validated.
+      const cachedFiles = Object.fromEntries(files.map((file) => [file.fileName, file.body]));
+      // A single rename commits a whole generation, even with concurrent writers.
+      if (!this.cachedFiles || files.some((file) => file.changed)) {
+        await writeAtomic(join(this.cacheDir, 'pack.json'), JSON.stringify(cachedFiles));
+      }
       for (const file of files) {
-        if (file.changed) await writeAtomic(join(this.cacheDir, file.fileName), file.body);
         nextState.sources[file.name] = { etag: file.etag, fetchedAt: nowIso };
       }
       await writeAtomic(join(this.cacheDir, 'state.json'), JSON.stringify(nextState));
       const updated =
         next.updatedAt !== this.snapshot.updatedAt ||
         files.slice(0, 3).some((file) => file.changed);
+      this.cachedFiles = cachedFiles;
       this.state = nextState;
       this.snapshot = next;
       return this.result(
@@ -234,7 +254,7 @@ export class PricingStore {
     let response = await fetchFile(true);
     if (response.status === 304) {
       try {
-        const body = await readFile(join(this.cacheDir, fileName), 'utf8');
+        const body = this.cachedBody(fileName);
         return {
           name,
           fileName,

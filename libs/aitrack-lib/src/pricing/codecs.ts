@@ -48,7 +48,7 @@ export interface PricingCatalog {
 }
 
 function number(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 function compactFromRates(rates: ModelRates): CompactModelRates {
@@ -239,15 +239,21 @@ export function findCatalogRates(
   modelId: string,
   providers: string[] = ['anthropic', 'openai', 'cursor', 'xai', 'google'],
 ): { key: string; rates: ModelRates } | undefined {
+  const allowed = (key: string): boolean =>
+    !key.includes('/') ||
+    providers.some(
+      (provider) =>
+        key.startsWith(`${provider}/`) || key.startsWith(`vercel_ai_gateway/${provider}/`),
+    );
   const candidates = [modelId, ...providers.map((p) => `${p}/${modelId}`)];
   const hits: Array<{ key: string; rates: ModelRates }> = [];
   for (const key of candidates) {
     const rates = catalog.entries.get(key);
-    if (rates) hits.push({ key, rates });
+    if (rates && allowed(key)) hits.push({ key, rates });
   }
   if (hits.length === 0) {
     for (const [key, rates] of catalog.entries) {
-      if (key === modelId || key.endsWith(`/${modelId}`)) hits.push({ key, rates });
+      if (allowed(key) && key.endsWith(`/${modelId}`)) hits.push({ key, rates });
     }
   }
   if (hits.length === 0) return undefined;

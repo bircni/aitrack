@@ -7,6 +7,7 @@ import {
   compactFromCatalog,
   findCatalogRates,
 } from '../codecs.js';
+import { isCompactCatalog } from '../validation.js';
 
 describe('pricing codecs', () => {
   it('parses LiteLLM per-token costs into per-million rates with cache defaults', () => {
@@ -90,6 +91,83 @@ describe('pricing codecs', () => {
     expect(overlay.entries.get('openai/gpt-5.6-sol')?.inputPerMillion).toBe(5);
     expect(overlay.entries.has('freebie')).toBe(false);
     expect(overlay.entries.has('ignored')).toBe(false);
+  });
+
+  it('drops negative required prices and defaults negative optional prices in both feeds', () => {
+    const litellm = catalogFromLiteLLM({
+      'openai/negative-input': { input_cost_per_token: -1, output_cost_per_token: 2e-6 },
+      'openai/negative-output': { input_cost_per_token: 1e-6, output_cost_per_token: -1 },
+      'openai/valid': {
+        input_cost_per_token: 1e-6,
+        output_cost_per_token: 2e-6,
+        cache_creation_input_token_cost: -1,
+        cache_read_input_token_cost: -1,
+        input_cost_per_token_above_200k_tokens: -1,
+        output_cost_per_token_above_200k_tokens: -1,
+        cache_creation_input_token_cost_above_200k_tokens: -1,
+        cache_read_input_token_cost_above_200k_tokens: -1,
+        provider_specific_entry: { fast: -1 },
+      },
+      'openai/zero-input': { input_cost_per_token: 0, output_cost_per_token: 2e-6 },
+    });
+    const modelsDev = catalogFromModelsDev({
+      openai: {
+        models: {
+          'negative-input': { cost: { input: -1, output: 2 } },
+          'negative-output': { cost: { input: 1, output: -1 } },
+          valid: { cost: { input: 1, output: 2, cache_write: -1, cache_read: -1 } },
+          'zero-input': { cost: { input: 0, output: 2 } },
+        },
+      },
+    });
+    for (const catalog of [litellm, modelsDev]) {
+      expect(catalog.entries.has('openai/negative-input')).toBe(false);
+      expect(catalog.entries.has('openai/negative-output')).toBe(false);
+      expect(catalog.entries.get('openai/valid')).toMatchObject({
+        cacheWritePerMillion: 1,
+        cacheWriteIsExplicit: false,
+        cacheReadIsExplicit: false,
+        fastMultiplier: 1,
+      });
+      const compact = compactFromCatalog(catalog);
+      expect(compact.models['openai/valid']?.cr).toBeCloseTo(0.1);
+      expect(compact.models['openai/valid']).toMatchObject({
+        i: 1,
+        o: 2,
+        cw: 1,
+        cre: false,
+        cwe: false,
+      });
+      expect(catalog.entries.get('openai/zero-input')?.inputPerMillion).toBe(0);
+      expect(isCompactCatalog(compactFromCatalog(catalog))).toBe(true);
+    }
+  });
+
+  it('restricts qualified lookups to allowed providers and the supported gateway prefix', () => {
+    const rates = { i: 1, o: 2, cw: 1, cr: 0.1 };
+    for (const key of [
+      'openai/shared',
+      'other/anthropic/shared',
+      'vercel_ai_gateway/openai/shared',
+    ]) {
+      const catalog = catalogFromCompact({ retrievedAt: '2026-01-01', models: { [key]: rates } });
+      expect(findCatalogRates(catalog, 'shared', ['anthropic'])).toBeUndefined();
+      expect(findCatalogRates(catalog, key, ['anthropic'])).toBeUndefined();
+    }
+    for (const key of [
+      'shared',
+      'anthropic/shared',
+      'anthropic/nested/shared',
+      'vercel_ai_gateway/anthropic/shared',
+    ]) {
+      const catalog = catalogFromCompact({ retrievedAt: '2026-01-01', models: { [key]: rates } });
+      expect(findCatalogRates(catalog, 'shared', ['anthropic'])?.key).toBe(key);
+    }
+    const catalog = catalogFromCompact({
+      retrievedAt: '2026-01-01',
+      models: { shared: rates, 'anthropic/shared': { ...rates, i: 3 } },
+    });
+    expect(findCatalogRates(catalog, 'shared', ['anthropic'])?.rates.inputPerMillion).toBe(3);
   });
 
   it('round-trips compact catalogs', () => {

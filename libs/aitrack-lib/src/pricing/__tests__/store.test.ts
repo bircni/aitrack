@@ -162,8 +162,11 @@ describe('PricingStore', () => {
     const { dir, files, fetchMock } = await fixture();
     const store = new PricingStore(dir);
     await expect(store.refreshIfDue(true)).resolves.toMatchObject({ updated: true });
-    for (const [name, body] of Object.entries(files))
-      expect(await readFile(join(dir, name), 'utf8')).toBe(body);
+    const cached = JSON.parse(await readFile(join(dir, 'pack.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    expect(cached).toEqual(files);
     fetchMock.mockClear();
     await expect(store.refreshIfDue(true)).resolves.toMatchObject({ updated: false });
     expect(fetchMock).toHaveBeenCalledTimes(4);
@@ -227,6 +230,25 @@ describe('PricingStore', () => {
     },
   );
 
+  it.each(['manifest.json', 'supplement.json', 'litellm.json', 'models_dev.json'])(
+    'never borrows legacy files for an aggregate missing %s and recovers on HTTP 304',
+    async (name) => {
+      const { dir, files, cache, fetchMock } = await fixture();
+      await cache(new Date().toISOString());
+      const incomplete = Object.fromEntries(Object.entries(files).filter(([key]) => key !== name));
+      await writeFile(join(dir, 'pack.json'), JSON.stringify(incomplete));
+      const store = new PricingStore(dir);
+      expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(3);
+      await expect(store.refreshIfDue()).resolves.toMatchObject({ updated: true });
+      expect(fetchMock).toHaveBeenCalledTimes(5);
+      expect(
+        new PricingStore(dir).current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion,
+      ).toBe(9);
+      const cached: unknown = JSON.parse(await readFile(join(dir, 'pack.json'), 'utf8'));
+      expect(cached).toEqual(files);
+    },
+  );
+
   it('recovers a missing manifest after a conditional response', async () => {
     const { dir, cache, fetchMock } = await fixture();
     await cache();
@@ -283,13 +305,14 @@ describe('PricingStore', () => {
     updateHashes(files);
     const rejected = await new PricingStore(dir).refreshIfDue(true);
     expect(rejected.reason).toContain('invalid pricing payload');
-    await expect(readFile(join(dir, 'supplement.json'))).rejects.toThrow('ENOENT');
+    await expect(readFile(join(dir, 'pack.json'))).rejects.toThrow('ENOENT');
   });
 
   it('retains the complete previous pack when a later download has a bad hash', async () => {
-    const { dir, files, cache, fetchMock } = await fixture();
-    await cache();
-    const before = await readFile(join(dir, 'supplement.json'), 'utf8');
+    const { dir, files, fetchMock } = await fixture();
+    const store = new PricingStore(dir);
+    await store.refreshIfDue(true);
+    const before = await readFile(join(dir, 'pack.json'), 'utf8');
     fetchMock.mockImplementation((input) => {
       const name =
         (typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
@@ -299,42 +322,87 @@ describe('PricingStore', () => {
         new Response(name === 'models_dev.json' ? '{}' : files[name], { status: 200 }),
       );
     });
-    const store = new PricingStore(dir);
     const result = await store.refreshIfDue(true);
 
     expect(result.reason).toContain('hash mismatch');
-    expect(await readFile(join(dir, 'supplement.json'), 'utf8')).toBe(before);
+    expect(await readFile(join(dir, 'pack.json'), 'utf8')).toBe(before);
     expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(9);
     expect(new PricingStore(dir).current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(
       9,
     );
   });
 
-  it('falls back to local rates after an interrupted disk commit', async () => {
-    const { dir, files, cache, supplement, fetchMock } = await fixture();
-    await cache();
-    const store = new PricingStore(dir);
+  it('keeps a complete generation when independent refreshes interleave', async () => {
+    const { dir, files, fetchMock } = await fixture();
+    const other = structuredClone(files);
+    const supplement = JSON.parse(other['supplement.json'] ?? '') as PricingSupplement;
     supplement.claude.models['claude-sonnet-4-6'] = {
       inputPerMillion: 12,
       outputPerMillion: 60,
       cacheReadPerMillion: 1.2,
       cacheCreatePerMillion: 15,
     };
-    files['supplement.json'] = JSON.stringify(supplement);
-    updateHashes(files);
+    other['supplement.json'] = JSON.stringify(supplement);
+    other['litellm.json'] = JSON.stringify({
+      retrievedAt: supplement.updatedAt,
+      models: { stub: { i: 2, o: 4, cw: 2, cr: 0.2 } },
+    });
+    updateHashes(other);
+    let release!: () => void;
+    let stalled!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      stalled = resolve;
+    });
+    fetchMock.mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const first = url.includes('/first/');
+      const name = url.split('/').at(-1) ?? '';
+      if (first && name === 'models_dev.json') {
+        stalled();
+        await gate;
+      }
+      return new Response((first ? files : other)[name], { status: 200 });
+    });
+    const firstStore = new PricingStore(dir);
+    const secondStore = new PricingStore(dir);
+    vi.stubEnv('AITRACK_PRICING_URL', 'https://example.test/first');
+    const pending = firstStore.refreshIfDue(true);
+    await ready;
+    vi.stubEnv('AITRACK_PRICING_URL', 'https://example.test/second');
+    await expect(secondStore.refreshIfDue(true)).resolves.toMatchObject({ updated: true });
+    release();
+    await expect(pending).resolves.toMatchObject({ updated: true });
+    const restarted = new PricingStore(dir);
+    expect(restarted.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(9);
+    expect(restarted.current().lookupCatalogCodex('stub')?.inputPerMillion).toBe(1);
+    const cached = JSON.parse(await readFile(join(dir, 'pack.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    expect(cached).toEqual(files);
+  });
+
+  it('preserves the in-memory snapshot and removes temporary files after a failed commit', async () => {
+    const { dir, files, fetchMock } = await fixture();
+    const store = new PricingStore(dir);
+    await store.refreshIfDue(true);
+    const before = await readFile(join(dir, 'pack.json'), 'utf8');
+    await rm(join(dir, 'pack.json'));
+    await mkdir(join(dir, 'pack.json'));
     fetchMock.mockImplementation((input) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       return Promise.resolve(new Response(files[url.split('/').at(-1) ?? ''], { status: 200 }));
     });
-    await rm(join(dir, 'litellm.json'));
-    await mkdir(join(dir, 'litellm.json'));
     const result = await store.refreshIfDue(true);
     expect(result.reason).toContain('refresh failed:');
     expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(9);
-    await rm(join(dir, 'litellm.json'), { recursive: true });
-    await writeFile(join(dir, 'litellm.json'), files['litellm.json'] ?? '');
+    await rm(join(dir, 'pack.json'), { recursive: true });
+    await writeFile(join(dir, 'pack.json'), before);
     expect(new PricingStore(dir).current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(
-      3,
+      9,
     );
     const names = await readdir(dir);
     expect(names.some((file) => file.endsWith('.tmp'))).toBe(false);
