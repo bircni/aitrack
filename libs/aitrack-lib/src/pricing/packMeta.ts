@@ -56,15 +56,13 @@ export const PRICING_REPO = 'bircni/aitrack';
 /**
  * Overridable for tests / mirrors.
  *
- * Default is jsDelivr's git CDN (`@pricing`), which publishes orphan-branch
- * packs immediately. GitHub raw for a brand-new `pricing` branch can 404 for a
- * while after the first push; set `AITRACK_PRICING_URL` to
- * `https://raw.githubusercontent.com/bircni/aitrack/pricing` once that works.
+ * Default: orphan `pricing` branch on GitHub raw. Set `AITRACK_PRICING_URL` to
+ * point at a mirror (for example jsDelivr) if needed.
  */
 export function pricingPackBaseUrl(): string {
   const fromEnv = process.env.AITRACK_PRICING_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/u, '');
-  return `https://cdn.jsdelivr.net/gh/${PRICING_REPO}@${PRICING_BRANCH}`;
+  return `https://raw.githubusercontent.com/${PRICING_REPO}/${PRICING_BRANCH}`;
 }
 
 export function pricingPackUrls(baseUrl = pricingPackBaseUrl()): {

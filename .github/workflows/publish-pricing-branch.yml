@@ -61,7 +61,7 @@ jobs:
           | `litellm.json` | compact LiteLLM catalog snapshot |
           | `models_dev.json` | compact models.dev catalog snapshot |
 
-          Fetch base: `https://cdn.jsdelivr.net/gh/bircni/aitrack@pricing/`
+          Fetch base: `https://raw.githubusercontent.com/bircni/aitrack/pricing/`
           Cache dir: `~/.config/aitrack/pricing/` (24h TTL).
           EOF
 
