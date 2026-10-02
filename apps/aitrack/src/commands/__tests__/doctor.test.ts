@@ -22,6 +22,13 @@ const mocks = vi.hoisted(() => ({
   getCodexPaths: vi.fn(),
   getCursorStateDatabasePath: vi.fn(),
   readCursorAuthState: vi.fn(),
+  syncPricingPack: vi.fn(() =>
+    Promise.resolve({
+      updatedAt: '2026-09-29T00:00:00.000Z',
+      refreshed: false,
+      detail: 'cache still fresh',
+    }),
+  ),
 }));
 
 vi.mock('node:child_process', () => ({ spawnSync: mocks.spawnSync }));
@@ -47,13 +54,7 @@ vi.mock('aitrack-lib/readers/cursor/auth', () => ({
   readCursorAuthState: mocks.readCursorAuthState,
 }));
 vi.mock('aitrack-lib/pricing/syncPack', () => ({
-  syncPricingPack: vi.fn(() =>
-    Promise.resolve({
-      updatedAt: '2026-09-29T00:00:00.000Z',
-      refreshed: false,
-      detail: 'cache still fresh',
-    }),
-  ),
+  syncPricingPack: mocks.syncPricingPack,
 }));
 vi.mock('aitrack-lib/pricing/store', async () => {
   const actual = await vi.importActual<typeof import('aitrack-lib/pricing/store')>(
@@ -138,6 +139,19 @@ describe('doctorCommand', () => {
     expect(out).toContain('Codex source: 1 JSONL file(s)');
     expect(out).toContain('Cursor source: auth token found');
     expect(out).toContain('Pricing cache:');
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('warns when the pricing branch refresh fails', async () => {
+    mocks.syncPricingPack.mockResolvedValueOnce({
+      updatedAt: '2026-09-29T00:00:00.000Z',
+      refreshed: false,
+      detail: 'refresh failed: HTTP 503 for https://example.test/manifest.json',
+    });
+
+    await doctorCommand();
+
+    expect(loggedOutput()).toMatch(/WARN\s+Pricing cache:.*refresh failed/u);
     expect(process.exitCode).toBeUndefined();
   });
 

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -57,9 +58,17 @@ function isStale(state: SourceState | undefined, now: number): boolean {
   return now - fetchedAt >= REFRESH_INTERVAL_MS;
 }
 
-async function readJsonFile<T>(path: string): Promise<T | undefined> {
+function readJsonFileSync(path: string): unknown {
   try {
-    return JSON.parse(await readFile(path, 'utf8')) as T;
+    return JSON.parse(readFileSync(path, 'utf8')) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readJsonFile(path: string): Promise<unknown> {
+  try {
+    return JSON.parse(await readFile(path, 'utf8')) as unknown;
   } catch {
     return undefined;
   }
@@ -102,6 +111,36 @@ function newerSupplement(a: PricingSupplement, b: PricingSupplement): PricingSup
   return bMs > aMs ? b : a;
 }
 
+function isPricingSupplement(value: unknown): value is PricingSupplement {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.updatedAt === 'string' &&
+    record.claude !== undefined &&
+    record.codex !== undefined &&
+    record.cursor !== undefined
+  );
+}
+
+function isCompactCatalog(value: unknown): value is CompactCatalog {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record.models !== undefined &&
+    typeof record.models === 'object' &&
+    record.models !== null &&
+    !Array.isArray(record.models)
+  );
+}
+
+function isCacheState(value: unknown): value is CacheState {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record.sources !== undefined && typeof record.sources === 'object' && record.sources !== null
+  );
+}
+
 function pricingFromParts(
   supplement: PricingSupplement,
   litellm?: CompactCatalog,
@@ -118,8 +157,9 @@ function pricingFromParts(
  * Local `tables/*.json` baseline + disk cache from the orphan `pricing` branch.
  * No prebuilt pack is shipped in the npm package.
  *
- * `current()` never blocks on the network. Call `refreshIfDue()` (or let
- * sync/doctor kick it) to pull rates into `~/.config/aitrack/pricing/`.
+ * Construction (and `current()`) loads any on-disk overlay synchronously so
+ * standalone commands see cached rates without waiting for sync/doctor.
+ * Call `refreshIfDue()` (or let sync/doctor kick it) to pull newer rates.
  */
 export class PricingStore {
   private snapshot: ModelPricing;
@@ -130,32 +170,34 @@ export class PricingStore {
 
   constructor(cacheDir = PRICING_CACHE_DIR) {
     this.cacheDir = cacheDir;
-    this.state = { sources: {} };
     this.localSupplement = supplementFromTables();
+    this.state = { sources: {} };
     this.snapshot = pricingFromParts(this.localSupplement);
+    this.hydrateFromDiskSync();
   }
 
-  /** Load disk cache on top of local tables. Safe to call once at startup. */
-  async init(): Promise<ModelPricing> {
-    await mkdir(this.cacheDir, { recursive: true });
-    this.localSupplement = supplementFromTables();
-    this.state = (await readJsonFile<CacheState>(join(this.cacheDir, 'state.json'))) ?? {
-      sources: {},
-    };
-
-    const cachedSupplement = await readJsonFile<PricingSupplement>(
-      join(this.cacheDir, 'supplement.json'),
-    );
-    const cachedLitellm = await readJsonFile<CompactCatalog>(join(this.cacheDir, 'litellm.json'));
-    const cachedModelsDev = await readJsonFile<CompactCatalog>(
-      join(this.cacheDir, 'models_dev.json'),
-    );
-
+  private hydrateFromDiskSync(): void {
+    const state = readJsonFileSync(join(this.cacheDir, 'state.json'));
+    this.state = isCacheState(state) ? state : { sources: {} };
+    const cachedSupplementRaw = readJsonFileSync(join(this.cacheDir, 'supplement.json'));
+    const cachedLitellmRaw = readJsonFileSync(join(this.cacheDir, 'litellm.json'));
+    const cachedModelsDevRaw = readJsonFileSync(join(this.cacheDir, 'models_dev.json'));
+    const cachedSupplement = isPricingSupplement(cachedSupplementRaw)
+      ? cachedSupplementRaw
+      : undefined;
+    const cachedLitellm = isCompactCatalog(cachedLitellmRaw) ? cachedLitellmRaw : undefined;
+    const cachedModelsDev = isCompactCatalog(cachedModelsDevRaw) ? cachedModelsDevRaw : undefined;
     const supplement = cachedSupplement
       ? newerSupplement(this.localSupplement, cachedSupplement)
       : this.localSupplement;
-
     this.snapshot = pricingFromParts(supplement, cachedLitellm, cachedModelsDev);
+  }
+
+  /** Ensure the cache directory exists and re-read disk. Safe to call once at startup. */
+  async init(): Promise<ModelPricing> {
+    await mkdir(this.cacheDir, { recursive: true });
+    this.localSupplement = supplementFromTables();
+    this.hydrateFromDiskSync();
     return this.snapshot;
   }
 
@@ -213,7 +255,9 @@ export class PricingStore {
           fetchedAt: nowIso,
           failedAt: undefined,
         };
-        manifest = await readJsonFile<PricingManifest>(join(this.cacheDir, 'manifest.json'));
+        manifest = (await readJsonFile(join(this.cacheDir, 'manifest.json'))) as
+          | PricingManifest
+          | undefined;
       } else {
         if (!manifestFetch.body) throw new Error('empty manifest');
         manifest = JSON.parse(manifestFetch.body) as PricingManifest;
@@ -331,16 +375,38 @@ export class PricingStore {
   }): Promise<{ value?: T; changed: boolean }> {
     const nowIso = new Date().toISOString();
     const path = join(this.cacheDir, fileName);
-    const prior = await readJsonFile<T>(path);
-    const fetchResult = await fetchText(url, this.state.sources[name]?.etag);
+    let fetchResult = await fetchText(url, this.state.sources[name]?.etag);
 
     if (fetchResult.status === 304) {
+      const cachedBody = await readFile(path, 'utf8').catch(() => undefined);
+      let cachedValue: T | undefined;
+      let cacheOk = false;
+      if (cachedBody !== undefined) {
+        try {
+          const parsed: unknown = JSON.parse(cachedBody);
+          const hashOk = !expectedHash || sha256Hex(cachedBody) === expectedHash;
+          if (hashOk && validate(parsed)) {
+            cachedValue = parsed;
+            cacheOk = true;
+          }
+        } catch {
+          cacheOk = false;
+        }
+      }
+      if (cacheOk) {
+        this.state.sources[name] = {
+          ...this.state.sources[name],
+          fetchedAt: nowIso,
+          failedAt: undefined,
+        };
+        return { value: cachedValue, changed: false };
+      }
+      // Corrupt/missing cache with a lingering ETag — drop it and fetch fresh.
       this.state.sources[name] = {
         ...this.state.sources[name],
-        fetchedAt: nowIso,
-        failedAt: undefined,
+        etag: undefined,
       };
-      return { value: prior, changed: false };
+      fetchResult = await fetchText(url);
     }
 
     if (!fetchResult.body) throw new Error(`empty ${name}`);

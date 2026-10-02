@@ -113,8 +113,9 @@ async function pricingCacheCheck(): Promise<CheckResult> {
   const { currentModelPricing } = await import('aitrack-lib/pricing/store');
   const result = await syncPricingPack();
   const pricing = currentModelPricing();
+  const refreshFailed = result.detail.startsWith('refresh failed:');
   return {
-    status: 'ok',
+    status: refreshFailed ? 'warn' : 'ok',
     label: 'Pricing cache',
     detail: `${String(pricing.claudeModelCount())} Claude, ${String(pricing.codexModelCount())} Codex, ${String(pricing.cursorModelCount())} Cursor — ${result.detail} (updatedAt ${result.updatedAt})`,
   };

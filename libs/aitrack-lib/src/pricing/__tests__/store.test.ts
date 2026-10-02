@@ -109,6 +109,8 @@ describe('PricingStore', () => {
     };
     await writeFile(join(dir, 'supplement.json'), JSON.stringify(newer), 'utf8');
     const store = new PricingStore(dir);
+    // Constructor already hydrates from disk — no init() required for overlays.
+    expect(store.current().lookupCursorNative('composer-2.5')?.inputPerMillion).toBe(99);
     const pricing = await store.init();
     expect(pricing.lookupCursorNative('composer-2.5')?.inputPerMillion).toBe(99);
   });
@@ -277,6 +279,95 @@ describe('PricingStore', () => {
     const result = await store.refreshIfDue(true);
     expect(result.updated).toBe(false);
     expect(result.reason).toContain('unchanged');
+  });
+
+  it('refetches when a 304 cache file fails validation', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'aitrack-pricing-'));
+    const local = supplementFromTables();
+    const newer = structuredClone(local);
+    newer.updatedAt = '2099-01-01T00:00:00.000Z';
+    newer.claude.models['claude-sonnet-4-6'] = {
+      inputPerMillion: 11,
+      outputPerMillion: 55,
+      cacheReadPerMillion: 1.1,
+      cacheCreatePerMillion: 13.75,
+    };
+    const emptyCatalog = {
+      retrievedAt: '2099-01-01T00:00:00.000Z',
+      models: { stub: { i: 1, o: 2, cw: 1, cr: 0.1 } },
+    };
+    await writeFile(
+      join(dir, 'manifest.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        updatedAt: newer.updatedAt,
+        files: {
+          supplement: 'supplement.json',
+          litellm: 'litellm.json',
+          modelsDev: 'models_dev.json',
+        },
+      } satisfies PricingManifest),
+      'utf8',
+    );
+    await writeFile(join(dir, 'supplement.json'), '{not-json', 'utf8');
+    await writeFile(join(dir, 'litellm.json'), JSON.stringify(emptyCatalog), 'utf8');
+    await writeFile(join(dir, 'models_dev.json'), JSON.stringify(emptyCatalog), 'utf8');
+    await writeFile(
+      join(dir, 'state.json'),
+      JSON.stringify({
+        sources: {
+          manifest: { etag: '"m"', fetchedAt: '2000-01-01T00:00:00.000Z' },
+          supplement: { etag: '"s"', fetchedAt: '2000-01-01T00:00:00.000Z' },
+          litellm: { etag: '"l"', fetchedAt: '2000-01-01T00:00:00.000Z' },
+          modelsDev: { etag: '"d"', fetchedAt: '2000-01-01T00:00:00.000Z' },
+        },
+      }),
+      'utf8',
+    );
+
+    const files: Record<string, string> = {
+      'manifest.json': JSON.stringify({
+        schemaVersion: 1,
+        updatedAt: newer.updatedAt,
+        files: {
+          supplement: 'supplement.json',
+          litellm: 'litellm.json',
+          modelsDev: 'models_dev.json',
+        },
+      } satisfies PricingManifest),
+      'supplement.json': JSON.stringify(newer),
+      'litellm.json': JSON.stringify(emptyCatalog),
+      'models_dev.json': JSON.stringify(emptyCatalog),
+    };
+    let supplementFetches = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const name = url.slice(url.lastIndexOf('/') + 1);
+        if (name === 'supplement.json') {
+          supplementFetches += 1;
+          if (supplementFetches === 1) {
+            return Promise.resolve(new Response(null, { status: 304, headers: { etag: '"s"' } }));
+          }
+          const body = files[name];
+          if (!body) return Promise.resolve(new Response('missing', { status: 404 }));
+          return Promise.resolve(
+            new Response(body, { status: 200, headers: { etag: `"${name}"` } }),
+          );
+        }
+        // Manifest / catalogs are valid on disk, so 304 is fine.
+        return Promise.resolve(new Response(null, { status: 304, headers: { etag: `"${name}"` } }));
+      }),
+    );
+    process.env.AITRACK_PRICING_URL = 'https://example.test/pricing';
+    const store = new PricingStore(dir);
+    await store.init();
+    const result = await store.refreshIfDue(true);
+    expect(result.updated).toBe(true);
+    expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(11);
+    expect(supplementFetches).toBeGreaterThan(1);
   });
 
   it('shares a process-wide store via ensurePricingStore', async () => {
