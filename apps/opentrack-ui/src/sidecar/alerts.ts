@@ -28,6 +28,7 @@ export function dueAlerts(
   for (const window of snapshot.windows) {
     const { resetsAt } = window;
     if (window.format !== 'percent' || resetsAt === undefined) continue;
+    if (!(Date.parse(resetsAt) > now)) continue;
     const scope = `${snapshot.provider}:${window.id}`;
     const left = 100 - window.usedPercent;
     const name = `${label} ${window.label.toLowerCase()}`;

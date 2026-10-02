@@ -53,24 +53,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Read Rust toolchain
-        id: rust-toolchain
-        shell: bash
-        run: |
-          python - <<'PYTHON'
-          import os, tomllib
-          with open("rust-toolchain.toml", "rb") as source:
-              toolchain = tomllib.load(source)["toolchain"]
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              print(f"version={toolchain['channel']}", file=output)
-              print(f"components={','.join(toolchain['components'])}", file=output)
-          PYTHON
-
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ steps.rust-toolchain.outputs.version }}
-          components: ${{ steps.rust-toolchain.outputs.components }}
+        uses: ./.github/actions/setup-rust
 
       # opentrack's Tauri shell links against WebKitGTK and the tray libraries on Linux.
       - name: Install Tauri system dependencies
@@ -138,24 +122,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Read Rust toolchain
-        id: rust-toolchain
-        shell: bash
-        run: |
-          python - <<'PYTHON'
-          import os, tomllib
-          with open("rust-toolchain.toml", "rb") as source:
-              toolchain = tomllib.load(source)["toolchain"]
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              print(f"version={toolchain['channel']}", file=output)
-              print(f"components={','.join(toolchain['components'])}", file=output)
-          PYTHON
-
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ steps.rust-toolchain.outputs.version }}
-          components: ${{ steps.rust-toolchain.outputs.components }}
+        uses: ./.github/actions/setup-rust
 
       - name: Check Rust formatting
         run: pnpm nx run opentrack:format:check

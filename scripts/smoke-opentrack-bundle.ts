@@ -6,6 +6,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+const { version } = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as {
+  version: string;
+};
 const bundleRoot = join(repoRoot, 'target/release/bundle');
 const temporary = mkdtempSync(join(tmpdir(), 'opentrack-bundle-smoke-'));
 const cleanup: Array<() => void> = [];
@@ -21,7 +24,8 @@ function onlyMatch(pattern: string, cwd: string): string {
 
 function extractSidecar(): string {
   if (process.platform === 'darwin') {
-    const installer = onlyMatch('*.dmg', join(bundleRoot, 'dmg'));
+    const arch = process.arch === 'arm64' ? 'aarch64' : process.arch;
+    const installer = onlyMatch(`opentrack_${version}_${arch}.dmg`, join(bundleRoot, 'dmg'));
     mkdirSync(mountPoint);
     execFileSync(
       'hdiutil',
@@ -36,7 +40,7 @@ function extractSidecar(): string {
     return onlyMatch('*.app/Contents/Resources/opentrack-sidecar.exe', mountPoint);
   }
   assert.equal(process.platform, 'win32', 'Installer smoke checks require macOS or Windows');
-  const installer = onlyMatch('*.exe', join(bundleRoot, 'nsis'));
+  const installer = onlyMatch(`opentrack_${version}_x64-setup.exe`, join(bundleRoot, 'nsis'));
   const extracted = join(temporary, 'installer');
   // Unpack the installer without registering or launching an installed app.
   execFileSync('7z', ['x', installer, `-o${extracted}`, '-y'], { stdio: 'pipe' });

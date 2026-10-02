@@ -29,10 +29,8 @@ const QUOTA_FORMATS: readonly QuotaFormat[] = ['percent', 'dollars', 'count'];
 const RETRY_AFTER_FAILURE_MS: Record<QuotaErrorKind, number> = {
   network: FAILURE_BACKOFF_MS,
   rateLimited: FAILURE_BACKOFF_MS,
-  // Local checks, cheap to repeat, and they clear as soon as the user signs in.
   noCredentials: FAILURE_BACKOFF_MS,
   expired: FAILURE_BACKOFF_MS,
-  // The service rejected us; asking again within a minute will not change its answer.
   auth: QUOTA_INTERVAL_MS,
   invalidResponse: QUOTA_INTERVAL_MS,
 };
@@ -228,7 +226,6 @@ export class QuotaService {
     try {
       const { message, machine } = await this.deps.sync();
       this.syncResult = { ok: true, message };
-      // Usage cannot reload while syncing, so the refresh below is the one that takes it.
       this.syncedMachine = machine;
       this.nextPullAt = this.deps.now() + PULL_INTERVAL_MS; // The sync just pulled.
     } catch (error) {
@@ -236,9 +233,9 @@ export class QuotaService {
     } finally {
       this.syncing = false;
     }
-    this.nextUsageAt = 0;
     this.emit();
-    await this.usageRun; // One that started before the sync would make the refresh skip the reload.
+    await this.usageRun;
+    this.nextUsageAt = 0;
     await this.refresh();
   }
 

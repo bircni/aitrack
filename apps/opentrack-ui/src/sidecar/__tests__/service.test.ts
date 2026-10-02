@@ -1,6 +1,6 @@
 import type { MachineFile } from 'aitrack-lib/data/types';
 import type { QuotaResult } from 'aitrack-lib/quota/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { AppState, QuotaProviderKey } from '../../shared/types.js';
 import type { Alert } from '../alerts.js';
@@ -41,7 +41,10 @@ function ok(provider: QuotaProviderKey, usedPercent = 10, now = START): QuotaRes
   };
 }
 
-function harness(results: Partial<Record<QuotaProviderKey, () => QuotaResult>> = {}) {
+function harness(
+  results: Partial<Record<QuotaProviderKey, () => QuotaResult>> = {},
+  overrides: Partial<ServiceDeps> = {},
+) {
   let now = START;
   const calls: QuotaProviderKey[] = [];
   const pulls: boolean[] = [];
@@ -77,7 +80,7 @@ function harness(results: Partial<Record<QuotaProviderKey, () => QuotaResult>> =
         ? Promise.reject(new Error('remote: permission denied'))
         : Promise.resolve({ message: 'Done! Pushed data/host.json (3 days)', machine: MACHINE }),
   };
-  const service = new QuotaService(deps, DEFAULT_SETTINGS);
+  const service = new QuotaService({ ...deps, ...overrides }, DEFAULT_SETTINGS);
   return {
     service,
     calls,
@@ -264,6 +267,30 @@ describe('QuotaService', () => {
     expect(h.service.state().syncResult).toEqual({
       ok: false,
       message: 'remote: permission denied',
+    });
+  });
+
+  it('reloads synced usage after an earlier slow refresh finishes', async () => {
+    const summary = { providers: {}, machineCount: 2 };
+    let finishUsage: ((value: { summary: typeof summary }) => void) | undefined;
+    const pending = new Promise<{ summary: typeof summary }>((resolve) => {
+      finishUsage = resolve;
+    });
+    const loadUsage = vi
+      .fn<ServiceDeps['loadUsage']>()
+      .mockReturnValueOnce(pending)
+      .mockResolvedValue({ summary });
+    const { service } = harness({}, { loadUsage });
+    const refreshing = service.refresh();
+    const syncing = service.sync();
+    await Promise.resolve();
+    finishUsage?.({ summary });
+    await Promise.all([refreshing, syncing]);
+    expect(loadUsage).toHaveBeenCalledTimes(2);
+    expect(loadUsage).toHaveBeenLastCalledWith({
+      pull: false,
+      refreshLive: false,
+      localMachine: MACHINE,
     });
   });
 

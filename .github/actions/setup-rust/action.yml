@@ -1,0 +1,21 @@
+name: Set up Rust
+description: Install the toolchain pinned in rust-toolchain.toml
+runs:
+  using: composite
+  steps:
+    - name: Read Rust toolchain
+      id: toolchain
+      shell: bash
+      run: |
+        python - <<'PYTHON'
+        import os, tomllib
+        with open("rust-toolchain.toml", "rb") as source:
+            toolchain = tomllib.load(source)["toolchain"]
+        with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+            print(f"version={toolchain['channel']}", file=output)
+            print(f"components={','.join(toolchain['components'])}", file=output)
+        PYTHON
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ steps.toolchain.outputs.version }}
+        components: ${{ steps.toolchain.outputs.components }}
