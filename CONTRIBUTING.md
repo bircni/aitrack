@@ -133,6 +133,8 @@ CI uses `nx affected` with `nrwl/nx-set-shas` supplying the comparison commits.
 The Ubuntu job runs the full set of affected checks, including Rust, CLI smoke tests
 and publish-tarball checks. A separate `macos-latest` / `windows-latest` matrix runs
 only opentrack's Rust formatting, lint, tests and release packaging with the pinned toolchain.
+The native matrix starts only after the Ubuntu `Check` job succeeds, so failed
+Ubuntu checks do not consume macOS or Windows runner time.
 Nx builds the renderer and native sidecar dependencies needed by the Rust shell;
 JavaScript checks and tests stay in the Ubuntu job.
 The matrix uploads the Windows NSIS installer and Apple Silicon macOS DMG as
