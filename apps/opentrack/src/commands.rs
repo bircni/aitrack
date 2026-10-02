@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
 use serde_json::Value;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -5,11 +8,13 @@ use tauri_plugin_opener::OpenerExt;
 use crate::panel::{main_window, Panel};
 use crate::Shell;
 
-const DASHBOARDS: [(&str, &str); 3] = [
-    ("claude_code", "https://claude.ai/settings/usage"),
-    ("codex", "https://chatgpt.com/codex/settings/usage"),
-    ("cursor", "https://www.cursor.com/dashboard"),
-];
+/// Same JSON the TypeScript UI imports (`apps/opentrack-ui/src/shared/provider-dashboards.json`).
+static DASHBOARDS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
+    serde_json::from_str(include_str!(
+        "../../opentrack-ui/src/shared/provider-dashboards.json"
+    ))
+    .expect("provider-dashboards.json")
+});
 
 /// The last state the sidecar pushed, so the popup opens instantly even mid-refresh.
 #[tauri::command]
@@ -45,10 +50,12 @@ pub async fn save_settings(shell: State<'_, Shell>, settings: Value) -> Result<V
 
 #[tauri::command]
 pub fn open_dashboard(app: AppHandle, provider: String) -> Result<(), String> {
-    let Some((_, url)) = DASHBOARDS.iter().find(|(key, _)| *key == provider) else {
+    let Some(url) = DASHBOARDS.get(&provider) else {
         return Err(format!("No dashboard for {provider}"));
     };
-    app.opener().open_url(*url, None::<&str>).map_err(|error| error.to_string())
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

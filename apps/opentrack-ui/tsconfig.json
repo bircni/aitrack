@@ -3,13 +3,14 @@
   "compilerOptions": {
     "composite": true,
     "declaration": true,
+    "resolveJsonModule": true,
     "outDir": ".typecheck",
     "paths": {
       "aitrack-lib": ["../../libs/aitrack-lib/src/index.ts"],
       "aitrack-lib/*": ["../../libs/aitrack-lib/src/*.ts"]
     }
   },
-  "include": ["src/**/*.ts", "*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.json", "*.ts"],
   "exclude": ["node_modules", "dist", "src/renderer/main.ts"],
   "references": [
     {

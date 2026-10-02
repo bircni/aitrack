@@ -6,11 +6,17 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": [],
     "noEmit": true,
+    "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "paths": {
       "aitrack-lib/*": ["../../libs/aitrack-lib/src/*.ts"]
     }
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.svelte", "src/shared/**/*.ts"],
+  "include": [
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.svelte",
+    "src/shared/**/*.ts",
+    "src/shared/**/*.json"
+  ],
   "exclude": ["node_modules", "dist", "src/renderer/**/__tests__/**"]
 }
