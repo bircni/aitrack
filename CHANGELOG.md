@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.3.2] - 2026-09-29
+
+
+
+### Bug Fixes
+
+- **pricing:** Add Claude Sonnet 5.5 and GPT-6.1 Sol (#97)
+
 ## [v2.3.1] - 2026-09-28
 
 

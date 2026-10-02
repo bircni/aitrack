@@ -54,6 +54,13 @@ describe('claude pricing', () => {
     expect(sonnet5.inputPerMillion).toBe(2);
     expect(sonnet5.outputPerMillion).toBe(10);
     expect(priced('claude-sonnet-5', '2026-09-01').inputPerMillion).toBe(2);
+    expect(priced('claude-sonnet-5-5')).toEqual({
+      inputPerMillion: 2,
+      outputPerMillion: 10,
+      cacheReadPerMillion: 0.2,
+      cacheCreatePerMillion: 2.5,
+    });
+    expect(priced('claude-sonnet-5-5-thinking-high')).toEqual(priced('claude-sonnet-5-5'));
 
     const dated = priced('claude-haiku-4-5-20251001');
     expect(dated.inputPerMillion).toBe(1);
