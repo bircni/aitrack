@@ -299,16 +299,19 @@ describe('tray icon', () => {
 });
 
 describe('summarizeUsage', () => {
-  it('builds today, yesterday, 30 days and the daily series', () => {
+  it('builds today, yesterday, 30 days, all-time and the daily series', () => {
     const now = new Date();
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
+    const old = new Date(now);
+    old.setDate(now.getDate() - 60);
     const summary = summarizeUsage(
       {
         providerData: {
           claude_code: new Map([
             [toLocalDateString(now), day(100, 50, 1.5)],
             [toLocalDateString(yesterday), day(10, 5, 0.25)],
+            [toLocalDateString(old), day(20, 10, 0.5)],
           ]),
         },
         machineData: [],
@@ -324,6 +327,7 @@ describe('summarizeUsage', () => {
     expect(claude.yesterday.tokens).toBe(15);
     expect(claude.last7Days.tokens).toBe(165);
     expect(claude.last30Days.tokens).toBe(165);
+    expect(claude.allTime.tokens).toBe(195);
     expect(claude.daily).toHaveLength(30);
     expect(claude.daily.at(-1)).toEqual({
       date: toLocalDateString(now),

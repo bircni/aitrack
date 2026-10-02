@@ -68,6 +68,7 @@ function isProviderUsage(value: unknown): value is ProviderUsage {
     isPeriod(value.yesterday) &&
     isPeriod(value.last7Days) &&
     isPeriod(value.last30Days) &&
+    isPeriod(value.allTime) &&
     Array.isArray(value.daily) &&
     value.daily.every(
       (day) => isRecord(day) && typeof day.date === 'string' && isFiniteNumber(day.costUSD),

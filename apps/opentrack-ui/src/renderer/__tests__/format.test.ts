@@ -43,6 +43,7 @@ function usage(daily: number[], today = 1): ProviderUsage {
     yesterday: period(0),
     last7Days: period(7.5),
     last30Days: period(daily.reduce((sum, value) => sum + value, 0)),
+    allTime: period(daily.reduce((sum, value) => sum + value, 0) + 10),
     daily: daily.map((costUSD, index) => ({
       date: `2026-05-${String(index + 1).padStart(2, '0')}`,
       costUSD,
@@ -55,6 +56,7 @@ describe('spend', () => {
     const claude = usage([1, 1, 1, 1, 1, 1, 1, 1, 2, 3], 3);
     expect(periodSpend(claude, 'today').costUSD).toBe(3);
     expect(periodSpend(claude, 'month').costUSD).toBe(13);
+    expect(periodSpend(claude, 'all').costUSD).toBe(23);
     expect(periodSpend(claude, 'week')).toBe(claude.last7Days);
     expect(periodSpend(undefined, 'week')).toEqual({ costUSD: 0, tokens: 0, hasCost: false });
     expect(spendLabel({ costUSD: 0, tokens: 0, hasCost: false })).toBe('$0.00');

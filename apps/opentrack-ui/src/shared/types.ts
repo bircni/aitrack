@@ -32,6 +32,7 @@ export interface ProviderUsage {
   yesterday: PeriodUsage;
   last7Days: PeriodUsage;
   last30Days: PeriodUsage;
+  allTime: PeriodUsage;
   daily: DailyUsage[];
 }
 

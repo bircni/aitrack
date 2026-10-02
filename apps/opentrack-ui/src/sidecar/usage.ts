@@ -37,19 +37,20 @@ function trailingDates(today: Date, days: number): string[] {
 }
 
 /**
- * Today / yesterday / rolling 7 and 30 days per provider, plus a daily series
- * for the chart.
+ * Today / yesterday / rolling 7 and 30 days / all-time per provider, plus a
+ * daily series for the chart.
  *
  * The windows go through the same report builder as `aitrack usage`, so the
  * numbers here always match the CLI's.
  */
 export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date()): UsageSummary {
   if (!loaded) return { providers: {}, machineCount: 1 };
-  const [today, yesterday, week, month] = buildUsageReportsFromLoaded(loaded, [
+  const [today, yesterday, week, month, all] = buildUsageReportsFromLoaded(loaded, [
     { period: 'today' },
     { period: 'yesterday' },
     { period: 'week' },
     { period: 'month' },
+    { period: 'all' },
   ]);
   const dates = trailingDates(now, TREND_DAYS);
 
@@ -66,6 +67,7 @@ export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date())
       yesterday: periodFor(yesterday, key),
       last7Days: periodFor(week, key),
       last30Days: periodFor(month, key),
+      allTime: periodFor(all, key),
       daily,
     };
   }

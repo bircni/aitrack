@@ -100,6 +100,7 @@
       <div class="d-row"><span>Yesterday</span><span>{reading(provider.usage.yesterday)}</span></div>
       <div class="d-row"><span>7 days</span><span>{reading(provider.usage.last7Days)}</span></div>
       <div class="d-row"><span>30 days</span><span>{reading(provider.usage.last30Days)}</span></div>
+      <div class="d-row"><span>all</span><span>{reading(provider.usage.allTime)}</span></div>
       {#if provider.usage.last30Days.models.length > 0}
         <div class="d-rule"></div>
         {#each provider.usage.last30Days.models as model (model.model)}

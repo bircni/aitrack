@@ -13,12 +13,13 @@ import type {
 
 export { fmt as formatTokens, fmtUSDCost as formatCost };
 
-export type Period = 'today' | 'week' | 'month';
+export type Period = 'today' | 'week' | 'month' | 'all';
 
 export const PERIOD_LABELS: Record<Period, string> = {
   today: 'Today',
   week: '7 days',
   month: '30 days',
+  all: 'all',
 };
 
 const NO_SPEND: Spend = { costUSD: 0, tokens: 0, hasCost: false };
@@ -27,6 +28,7 @@ export function periodSpend(usage: ProviderUsage | undefined, period: Period): S
   if (!usage) return NO_SPEND;
   if (period === 'today') return usage.today;
   if (period === 'month') return usage.last30Days;
+  if (period === 'all') return usage.allTime;
   return usage.last7Days;
 }
 
