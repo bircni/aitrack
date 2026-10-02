@@ -73,10 +73,22 @@ describe('ModelPricing', () => {
           cre: false,
           cwe: false,
         },
+        'anthropic/claude-brand-new-9': {
+          i: 7,
+          o: 35,
+          cw: 8.75,
+          cr: 0.7,
+        },
+        'openai/gpt-9-catalog-only': {
+          i: 3,
+          o: 12,
+          cw: 3,
+          cr: 0.3,
+        },
       },
     };
     const pricing = pricingWithCatalog(litellm);
-    expect(pricing.catalogModelCount()).toBe(2);
+    expect(pricing.catalogModelCount()).toBe(4);
     expect(pricing.catalogCursor('catalog-only-model')).toMatchObject({
       inputPerMillion: 1.5,
       outputPerMillion: 6,
@@ -85,6 +97,9 @@ describe('ModelPricing', () => {
     });
     expect(pricing.catalogCursor('implicit-cache-model')?.cacheWritePerMillion).toBe(2);
     expect(pricing.catalogCursor('missing-model')).toBeUndefined();
+    expect(pricing.resolveRates('claude-brand-new-9')?.source).toBe('catalog');
+    expect(pricing.lookupCatalogClaude('claude-brand-new-9')?.inputPerMillion).toBe(7);
+    expect(pricing.lookupCatalogCodex('gpt-9-catalog-only')?.outputPerMillion).toBe(12);
     expect(pricing.resolveRates('totally-unknown-model')).toBeUndefined();
   });
 

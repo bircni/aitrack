@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { CODEX_PRICING_OVERRIDES, estimateCodexCostUSD, findCodexPricing } from '../codex.js';
+import { estimateCodexCostUSD, findCodexPricing } from '../codex.js';
 import { createFallbackCollector } from '../fallback.js';
+import { currentModelPricing } from '../store.js';
 
 describe('codex pricing', () => {
   it('costs 1M+1M tokens correctly for known models', () => {
@@ -61,7 +62,9 @@ describe('codex pricing', () => {
   it('honors date-versioned pricing overrides', () => {
     // Simulate Anthropic-style scenario: a model's price changes mid-life.
     // Before 2026-04-01 gpt-5.4 cost $4 / $20; after, $2.50 / $15 (current).
-    CODEX_PRICING_OVERRIDES['gpt-5.4'] = [
+    const overrides = currentModelPricing().getSupplement().codex.overrides;
+    const previous = overrides['gpt-5.4'];
+    overrides['gpt-5.4'] = [
       { before: '2026-04-01', pricing: { inputPerMillion: 4, outputPerMillion: 20 } },
     ];
     try {
@@ -72,7 +75,8 @@ describe('codex pricing', () => {
       // No date: latest pricing.
       expect(estimateCodexCostUSD('gpt-5.4', 1_000_000, 1_000_000)).toBe(17.5);
     } finally {
-      delete CODEX_PRICING_OVERRIDES['gpt-5.4'];
+      if (previous === undefined) delete overrides['gpt-5.4'];
+      else overrides['gpt-5.4'] = previous;
     }
   });
 

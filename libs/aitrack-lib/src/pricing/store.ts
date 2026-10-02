@@ -48,12 +48,13 @@ function parseIso(value: string | undefined): number | undefined {
 }
 
 function isStale(state: SourceState | undefined, now: number): boolean {
+  const failedAt = parseIso(state?.failedAt);
+  // Honor the failure backoff even when the cache is missing or past TTL —
+  // otherwise every command retries immediately after a failed first fetch.
+  if (failedAt !== undefined && now - failedAt < FAILURE_RETRY_MS) return false;
   const fetchedAt = parseIso(state?.fetchedAt);
   if (fetchedAt === undefined) return true;
-  if (now - fetchedAt >= REFRESH_INTERVAL_MS) return true;
-  const failedAt = parseIso(state?.failedAt);
-  if (failedAt !== undefined && now - failedAt < FAILURE_RETRY_MS) return false;
-  return false;
+  return now - fetchedAt >= REFRESH_INTERVAL_MS;
 }
 
 async function readJsonFile<T>(path: string): Promise<T | undefined> {

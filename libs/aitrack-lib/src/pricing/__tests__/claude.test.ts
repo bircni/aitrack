@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  CLAUDE_PRICING_OVERRIDES,
   type ClaudePricing,
   estimateClaudeCostFromStoredCounts,
   estimateClaudeCostUSD,
   findClaudePricing,
 } from '../claude.js';
 import { createFallbackCollector, type FallbackCollector } from '../fallback.js';
+import { currentModelPricing } from '../store.js';
 
 function priced(model: string, usageDate?: string, fallbacks?: FallbackCollector): ClaudePricing {
   const pricing = findClaudePricing(model, usageDate, fallbacks);
@@ -152,7 +152,9 @@ describe('claude pricing', () => {
   });
 
   it('honors date-versioned pricing overrides', () => {
-    CLAUDE_PRICING_OVERRIDES['claude-sonnet-4-6'] = [
+    const overrides = currentModelPricing().getSupplement().claude.overrides;
+    const previous = overrides['claude-sonnet-4-6'];
+    overrides['claude-sonnet-4-6'] = [
       {
         before: '2026-04-01',
         pricing: {
@@ -168,7 +170,8 @@ describe('claude pricing', () => {
       expect(priced('claude-sonnet-4-6', '2026-05-15').inputPerMillion).toBe(3);
       expect(priced('claude-sonnet-4-6').inputPerMillion).toBe(3);
     } finally {
-      delete CLAUDE_PRICING_OVERRIDES['claude-sonnet-4-6'];
+      if (previous === undefined) delete overrides['claude-sonnet-4-6'];
+      else overrides['claude-sonnet-4-6'] = previous;
     }
   });
 });

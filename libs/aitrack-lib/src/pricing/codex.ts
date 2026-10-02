@@ -24,14 +24,6 @@ function canonicalCodexModelId(model: string): string {
 
 export function lookupCodexPricing(model: string, usageDate?: string): CodexPricing | undefined {
   const id = canonicalCodexModelId(model);
-  if (usageDate) {
-    const overrides = CODEX_PRICING_OVERRIDES[id];
-    if (overrides) {
-      for (const entry of overrides) {
-        if (usageDate < entry.before) return entry.pricing;
-      }
-    }
-  }
   return currentModelPricing().lookupCodex(id, usageDate);
 }
 
@@ -43,6 +35,8 @@ export function findCodexPricing(
   const exact = lookupCodexPricing(model, usageDate);
   if (exact) return exact;
   const id = canonicalCodexModelId(model);
+  const fromCatalog = currentModelPricing().lookupCatalogCodex(id);
+  if (fromCatalog) return fromCatalog;
   for (const { match, pricing } of currentModelPricing().codexFamilyFallbacks()) {
     if (!match.test(id)) {
       continue;

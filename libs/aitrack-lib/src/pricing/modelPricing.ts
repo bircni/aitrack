@@ -14,7 +14,7 @@ export interface ResolvedModelRates {
   outputPerMillion: number;
   cacheReadPerMillion: number;
   cacheWritePerMillion: number;
-  source: 'supplement' | 'family_fallback' | 'fast_multiplier';
+  source: 'supplement' | 'catalog' | 'family_fallback' | 'fast_multiplier';
 }
 
 interface CompiledAlias {
@@ -196,6 +196,11 @@ export class ModelPricing {
       }
     }
 
+    const catalog = this.catalogCursor(modelId);
+    if (catalog) {
+      return { ...catalog, source: 'catalog' };
+    }
+
     for (const family of CLAUDE_FAMILIES) {
       if (!modelId.includes(family)) continue;
       const fallback = this.claudeFamilyFallback(family);
@@ -222,6 +227,37 @@ export class ModelPricing {
       findCatalogRates(this.secondary, modelId, ['cursor', 'xai', 'google', 'openai', 'anthropic']);
     if (!hit) return undefined;
     return cursorFromRates(hit.rates);
+  }
+
+  /** Gap-fill Claude rates from catalogs when the supplement has no row. */
+  lookupCatalogClaude(modelId: string): ClaudePricing | undefined {
+    const hit =
+      findCatalogRates(this.primary, modelId, ['anthropic']) ??
+      findCatalogRates(this.secondary, modelId, ['anthropic']);
+    if (!hit) return undefined;
+    const rates = hit.rates;
+    return {
+      inputPerMillion: rates.inputPerMillion,
+      outputPerMillion: rates.outputPerMillion,
+      cacheReadPerMillion: rates.cacheReadIsExplicit
+        ? rates.cacheReadPerMillion
+        : rates.inputPerMillion * CACHE_READ_RATE_MULTIPLIER,
+      cacheCreatePerMillion: rates.cacheWriteIsExplicit
+        ? rates.cacheWritePerMillion
+        : rates.inputPerMillion * 1.25,
+    };
+  }
+
+  /** Gap-fill Codex rates from catalogs when the supplement has no row. */
+  lookupCatalogCodex(modelId: string): CodexPricing | undefined {
+    const hit =
+      findCatalogRates(this.primary, modelId, ['openai']) ??
+      findCatalogRates(this.secondary, modelId, ['openai']);
+    if (!hit) return undefined;
+    return {
+      inputPerMillion: hit.rates.inputPerMillion,
+      outputPerMillion: hit.rates.outputPerMillion,
+    };
   }
 }
 

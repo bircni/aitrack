@@ -24,16 +24,6 @@ function canonicalClaudeModelId(model: string): string {
 
 export function lookupClaudePricing(model: string, usageDate?: string): ClaudePricing | undefined {
   const id = canonicalClaudeModelId(model);
-  // Date overrides stay on the mutable tables export so tests (and rare
-  // in-process patches) can extend them without rebuilding the pricing pack.
-  if (usageDate) {
-    const overrides = CLAUDE_PRICING_OVERRIDES[id];
-    if (overrides) {
-      for (const entry of overrides) {
-        if (usageDate < entry.before) return entry.pricing;
-      }
-    }
-  }
   return currentModelPricing().lookupClaude(id, usageDate);
 }
 
@@ -45,6 +35,8 @@ export function findClaudePricing(
   const exact = lookupClaudePricing(model, usageDate);
   if (exact) return exact;
   const id = canonicalClaudeModelId(model);
+  const fromCatalog = currentModelPricing().lookupCatalogClaude(id);
+  if (fromCatalog) return fromCatalog;
   for (const family of CLAUDE_FAMILIES) {
     if (!id.includes(family)) {
       continue;

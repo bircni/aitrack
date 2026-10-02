@@ -152,6 +152,32 @@ describe('PricingStore', () => {
     expect(result.reason).toContain('refresh failed');
   });
 
+  it('backs off retries after a recent failure even when the cache is stale', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'aitrack-pricing-'));
+    const failedAt = new Date().toISOString();
+    await writeFile(
+      join(dir, 'state.json'),
+      JSON.stringify({
+        sources: {
+          manifest: { failedAt },
+          supplement: { failedAt },
+          litellm: { failedAt },
+          modelsDev: { failedAt },
+        },
+      }),
+      'utf8',
+    );
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.AITRACK_PRICING_URL = 'https://example.test/pricing';
+    const store = new PricingStore(dir);
+    await store.init();
+    const result = await store.refreshIfDue(false);
+    expect(result.updated).toBe(false);
+    expect(result.reason).toBe('cache still fresh');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('rejects packs with a bad content hash', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'aitrack-pricing-'));
     const local = supplementFromTables();

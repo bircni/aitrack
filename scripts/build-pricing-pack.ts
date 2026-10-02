@@ -133,10 +133,16 @@ export function applyCatalogRatesToSupplement(
       findCatalogRates(primary, id, ['anthropic']) ??
       findCatalogRates(secondary, id, ['anthropic']);
     if (!hit) continue;
-    if (
+    const cacheWriteNeedsUpdate =
+      hit.rates.cacheWriteIsExplicit &&
+      !nearly(pricing.cacheCreatePerMillion, hit.rates.cacheWritePerMillion);
+    const cacheReadNeedsUpdate =
+      hit.rates.cacheReadIsExplicit &&
+      !nearly(pricing.cacheReadPerMillion, hit.rates.cacheReadPerMillion);
+    const ioMatches =
       nearly(pricing.inputPerMillion, hit.rates.inputPerMillion) &&
-      nearly(pricing.outputPerMillion, hit.rates.outputPerMillion)
-    ) {
+      nearly(pricing.outputPerMillion, hit.rates.outputPerMillion);
+    if (ioMatches && !cacheWriteNeedsUpdate && !cacheReadNeedsUpdate) {
       continue;
     }
     pricing.inputPerMillion = hit.rates.inputPerMillion;
