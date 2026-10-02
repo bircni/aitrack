@@ -47,11 +47,13 @@ vi.mock('aitrack-lib/readers/cursor/auth', () => ({
   readCursorAuthState: mocks.readCursorAuthState,
 }));
 vi.mock('aitrack-lib/pricing/syncPack', () => ({
-  syncPricingPack: vi.fn(async () => ({
-    updatedAt: '2026-09-29T00:00:00.000Z',
-    refreshed: false,
-    detail: 'cache still fresh',
-  })),
+  syncPricingPack: vi.fn(() =>
+    Promise.resolve({
+      updatedAt: '2026-09-29T00:00:00.000Z',
+      refreshed: false,
+      detail: 'cache still fresh',
+    }),
+  ),
 }));
 vi.mock('aitrack-lib/pricing/store', async () => {
   const actual = await vi.importActual<typeof import('aitrack-lib/pricing/store')>(

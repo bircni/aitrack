@@ -1,4 +1,3 @@
-import type { ClaudeFamily } from '../data/modelId.js';
 import type { PricingSupplement } from './packMeta.js';
 import claudeTable from './tables/claude.json' with { type: 'json' };
 import codexTable from './tables/codex.json' with { type: 'json' };
@@ -26,10 +25,7 @@ export function supplementFromTables(): PricingSupplement {
     claude: {
       models: structuredClone(claudeTable.models),
       overrides: structuredClone(claudeTable.overrides),
-      familyFallback: structuredClone(claudeTable.familyFallback) as Record<
-        ClaudeFamily,
-        (typeof claudeTable.familyFallback)[ClaudeFamily]
-      >,
+      familyFallback: structuredClone(claudeTable.familyFallback),
     },
     codex: {
       current: structuredClone(codexTable.current),

@@ -285,8 +285,8 @@ Every module is reachable both from the package root and at its own subpath.
 
 This repo is an [nx](https://nx.dev/) monorepo:
 
-| Package                                        | Published as  | What it is                                           |
-| ---------------------------------------------- | ------------- | ---------------------------------------------------- |
+| Package                                | Published as  | What it is                                           |
+| -------------------------------------- | ------------- | ---------------------------------------------------- |
 | [`apps/aitrack`](apps/aitrack)         | `aitrack`     | The `aitrack` command line                           |
 | [`libs/aitrack-lib`](libs/aitrack-lib) | `aitrack-lib` | Readers, pricing, the data model, storage, renderers |
 

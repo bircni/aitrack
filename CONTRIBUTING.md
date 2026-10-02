@@ -58,6 +58,7 @@ pnpm run pricing:update            # fetch catalogs → artifacts/pricing-pack/
 pnpm run pricing:update -- --write # also patch Claude/Codex IO into tables/*.json
 pnpm run pricing:check             # optional local compare of tables vs catalogs
 ```
+
 Tests are colocated per module in one `__tests__` folder each.
 
 Usage is keyed by the **local** calendar day, so anything reading `getFullYear`/`getMonth`/

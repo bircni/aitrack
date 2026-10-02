@@ -11,8 +11,7 @@
 
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
 
 import {
   catalogFromCompact,
@@ -28,7 +27,7 @@ import type {
 } from '../libs/aitrack-lib/src/pricing/packMeta.js';
 import type { ClaudePricing, CodexPricing } from '../libs/aitrack-lib/src/pricing/types.js';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = resolve(import.meta.dirname, '..');
 const TABLES = join(ROOT, 'libs/aitrack-lib/src/pricing/tables');
 /** Published by CI to the orphan `pricing` branch — not part of aitrack-lib. */
 const PACK = join(ROOT, 'artifacts/pricing-pack');
@@ -251,7 +250,7 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
   let tableWrites: { claudeChanged: string[]; codexChanged: string[] } | undefined;
   if (options.writeTablesFromFeeds) {
     tableWrites = await writeTablesFromCatalogs(litellmCompact, modelsDevCompact);
-    if (tableWrites.claudeChanged.length || tableWrites.codexChanged.length) {
+    if (tableWrites.claudeChanged.length > 0 || tableWrites.codexChanged.length > 0) {
       console.log(
         `Wrote table updates: Claude [${tableWrites.claudeChanged.join(', ') || 'none'}], Codex [${tableWrites.codexChanged.join(', ') || 'none'}]`,
       );
@@ -264,7 +263,7 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
   const applyToSupplement = options.applyCatalogRatesToSupplement !== false;
   if (applyToSupplement) {
     const applied = applyCatalogRatesToSupplement(supplement, litellmCompact, modelsDevCompact);
-    if (applied.claudeChanged.length || applied.codexChanged.length) {
+    if (applied.claudeChanged.length > 0 || applied.codexChanged.length > 0) {
       console.log(
         `Supplement catalog merge: Claude [${applied.claudeChanged.join(', ') || 'none'}], Codex [${applied.codexChanged.join(', ') || 'none'}]`,
       );
@@ -310,7 +309,7 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
   };
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename;
 
 if (isMain) {
   const write = process.argv.includes('--write');

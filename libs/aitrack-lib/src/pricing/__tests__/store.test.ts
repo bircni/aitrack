@@ -60,12 +60,13 @@ describe('PricingStore', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
+      vi.fn((input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         const name = url.slice(url.lastIndexOf('/') + 1);
         const body = files[name];
-        if (!body) return new Response('missing', { status: 404 });
-        return new Response(body, { status: 200, headers: { etag: `"${name}"` } });
+        if (!body) return Promise.resolve(new Response('missing', { status: 404 }));
+        return Promise.resolve(new Response(body, { status: 200, headers: { etag: `"${name}"` } }));
       }),
     );
 
@@ -89,7 +90,7 @@ describe('PricingStore', () => {
 
   it('prefers a newer on-disk supplement over local tables', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'aitrack-pricing-'));
-    const newer = structuredClone(supplementFromTables()) as PricingSupplement;
+    const newer: PricingSupplement = structuredClone(supplementFromTables());
     newer.updatedAt = '2099-06-01T00:00:00.000Z';
     newer.cursor.models['composer-2.5'] = {
       inputPerMillion: 99,

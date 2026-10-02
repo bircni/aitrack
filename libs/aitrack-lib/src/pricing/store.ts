@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { environmentValue } from '../env.js';
 import { APP_DIR } from '../paths.js';
 import { type CompactCatalog } from './codecs.js';
-import { ModelPricing, modelPricingFromPack } from './modelPricing.js';
+import { type ModelPricing, modelPricingFromPack } from './modelPricing.js';
 import { type PricingManifest, type PricingSupplement, pricingPackUrls } from './packMeta.js';
 import { supplementFromTables } from './supplementFromTables.js';
 
@@ -166,13 +166,13 @@ export class PricingStore {
     return this.localSupplement.updatedAt;
   }
 
-  async refreshIfDue(force = false): Promise<PricingRefreshResult> {
+  refreshIfDue(force = false): Promise<PricingRefreshResult> {
     if (environmentValue('AITRACK_NO_PRICING_REFRESH') === '1') {
-      return {
+      return Promise.resolve({
         updated: false,
         reason: 'disabled by AITRACK_NO_PRICING_REFRESH=1',
         updatedAt: this.snapshot.updatedAt,
-      };
+      });
     }
     if (this.refreshInFlight) return this.refreshInFlight;
 
@@ -185,11 +185,11 @@ export class PricingStore {
       isStale(this.state.sources.modelsDev, now);
 
     if (!due) {
-      return {
+      return Promise.resolve({
         updated: false,
         reason: 'cache still fresh',
         updatedAt: this.snapshot.updatedAt,
-      };
+      });
     }
 
     this.refreshInFlight = this.refresh().finally(() => {
@@ -234,11 +234,16 @@ export class PricingStore {
         url: urls.supplement,
         fileName: 'supplement.json',
         expectedHash: manifest.hashes?.supplement,
-        validate: (value) =>
-          typeof value.updatedAt === 'string' &&
-          value.claude !== undefined &&
-          value.codex !== undefined &&
-          value.cursor !== undefined,
+        validate: (value): value is PricingSupplement => {
+          if (!value || typeof value !== 'object') return false;
+          const record = value as Record<string, unknown>;
+          return (
+            typeof record.updatedAt === 'string' &&
+            record.claude !== undefined &&
+            record.codex !== undefined &&
+            record.cursor !== undefined
+          );
+        },
       });
 
       const litellm = await this.refreshFile<CompactCatalog>({
@@ -246,7 +251,16 @@ export class PricingStore {
         url: urls.litellm,
         fileName: 'litellm.json',
         expectedHash: manifest.hashes?.litellm,
-        validate: (value) => value.models !== undefined && Object.keys(value.models).length > 0,
+        validate: (value): value is CompactCatalog => {
+          if (!value || typeof value !== 'object') return false;
+          const record = value as Record<string, unknown>;
+          return (
+            record.models !== undefined &&
+            typeof record.models === 'object' &&
+            record.models !== null &&
+            Object.keys(record.models).length > 0
+          );
+        },
       });
 
       const modelsDev = await this.refreshFile<CompactCatalog>({
@@ -254,7 +268,16 @@ export class PricingStore {
         url: urls.modelsDev,
         fileName: 'models_dev.json',
         expectedHash: manifest.hashes?.modelsDev,
-        validate: (value) => value.models !== undefined && Object.keys(value.models).length > 0,
+        validate: (value): value is CompactCatalog => {
+          if (!value || typeof value !== 'object') return false;
+          const record = value as Record<string, unknown>;
+          return (
+            record.models !== undefined &&
+            typeof record.models === 'object' &&
+            record.models !== null &&
+            Object.keys(record.models).length > 0
+          );
+        },
       });
 
       await writeJsonAtomic(join(this.cacheDir, 'state.json'), this.state);
@@ -303,7 +326,7 @@ export class PricingStore {
     url: string;
     fileName: string;
     expectedHash?: string;
-    validate: (value: T) => boolean;
+    validate: (value: unknown) => value is T;
   }): Promise<{ value?: T; changed: boolean }> {
     const nowIso = new Date().toISOString();
     const path = join(this.cacheDir, fileName);
@@ -326,7 +349,7 @@ export class PricingStore {
         throw new Error(`${name} hash mismatch (expected ${expectedHash}, got ${digest})`);
       }
     }
-    const parsed = JSON.parse(fetchResult.body) as T;
+    const parsed: unknown = JSON.parse(fetchResult.body);
     if (!validate(parsed)) throw new Error(`invalid ${name} payload`);
     await writeJsonAtomic(path, parsed);
     this.state.sources[name] = {
@@ -347,7 +370,7 @@ export function sharedPricingStore(): PricingStore {
   return sharedStore;
 }
 
-export async function ensurePricingStore(): Promise<ModelPricing> {
+export function ensurePricingStore(): Promise<ModelPricing> {
   const store = sharedPricingStore();
   sharedInit ??= store.init();
   return sharedInit;

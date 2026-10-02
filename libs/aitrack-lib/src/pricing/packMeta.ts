@@ -39,7 +39,7 @@ export interface PricingSupplement {
 }
 
 export interface PricingManifest {
-  schemaVersion: 1;
+  schemaVersion: number;
   updatedAt: string;
   files: {
     supplement: string;

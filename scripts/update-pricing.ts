@@ -14,7 +14,6 @@
  */
 
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { errorMessage } from '../libs/aitrack-lib/src/errors.js';
 import { CLAUDE_PRICING_BY_ID } from '../libs/aitrack-lib/src/pricing/claude.js';
@@ -309,7 +308,7 @@ async function main(argv: string[]): Promise<number> {
 }
 
 const entryPoint = process.argv[1];
-if (entryPoint && import.meta.url === pathToFileURL(resolve(entryPoint)).href) {
+if (entryPoint !== undefined && resolve(entryPoint) === import.meta.filename) {
   main(process.argv.slice(2))
     .then((code) => {
       process.exit(code);

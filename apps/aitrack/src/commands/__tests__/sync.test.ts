@@ -77,11 +77,13 @@ vi.mock('aitrack-lib/git', () => ({
   },
 }));
 vi.mock('aitrack-lib/pricing/syncPack', () => ({
-  syncPricingPack: vi.fn(async () => ({
-    updatedAt: '2026-09-29T00:00:00.000Z',
-    refreshed: false,
-    detail: 'cache still fresh',
-  })),
+  syncPricingPack: vi.fn(() =>
+    Promise.resolve({
+      updatedAt: '2026-09-29T00:00:00.000Z',
+      refreshed: false,
+      detail: 'cache still fresh',
+    }),
+  ),
 }));
 
 import { loggedOutput } from '@aitrack/test-fixtures';

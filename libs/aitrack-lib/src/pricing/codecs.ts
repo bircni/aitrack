@@ -119,6 +119,11 @@ export function compactFromCatalog(catalog: PricingCatalog): CompactCatalog {
   };
 }
 
+function scalePerMillion(value: unknown): number | undefined {
+  const amount = number(value);
+  return amount === undefined ? undefined : amount * 1e6;
+}
+
 function litellmEntryToRates(entry: Record<string, unknown>): ModelRates | undefined {
   const input = number(entry.input_cost_per_token);
   const output = number(entry.output_cost_per_token);
@@ -135,18 +140,14 @@ function litellmEntryToRates(entry: Record<string, unknown>): ModelRates | undef
     outputPerMillion: output * 1e6,
     cacheWritePerMillion: (cacheWrite ?? input) * 1e6,
     cacheReadPerMillion: (cacheRead ?? input * 0.1) * 1e6,
-    inputAbove200kPerMillion: number(entry.input_cost_per_token_above_200k_tokens)
-      ? number(entry.input_cost_per_token_above_200k_tokens)! * 1e6
-      : undefined,
-    outputAbove200kPerMillion: number(entry.output_cost_per_token_above_200k_tokens)
-      ? number(entry.output_cost_per_token_above_200k_tokens)! * 1e6
-      : undefined,
-    cacheWriteAbove200kPerMillion: number(entry.cache_creation_input_token_cost_above_200k_tokens)
-      ? number(entry.cache_creation_input_token_cost_above_200k_tokens)! * 1e6
-      : undefined,
-    cacheReadAbove200kPerMillion: number(entry.cache_read_input_token_cost_above_200k_tokens)
-      ? number(entry.cache_read_input_token_cost_above_200k_tokens)! * 1e6
-      : undefined,
+    inputAbove200kPerMillion: scalePerMillion(entry.input_cost_per_token_above_200k_tokens),
+    outputAbove200kPerMillion: scalePerMillion(entry.output_cost_per_token_above_200k_tokens),
+    cacheWriteAbove200kPerMillion: scalePerMillion(
+      entry.cache_creation_input_token_cost_above_200k_tokens,
+    ),
+    cacheReadAbove200kPerMillion: scalePerMillion(
+      entry.cache_read_input_token_cost_above_200k_tokens,
+    ),
     fastMultiplier: fast ?? 1,
     cacheReadIsExplicit: cacheRead !== undefined,
     cacheWriteIsExplicit: cacheWrite !== undefined,

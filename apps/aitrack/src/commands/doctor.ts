@@ -116,7 +116,7 @@ async function pricingCacheCheck(): Promise<CheckResult> {
   return {
     status: 'ok',
     label: 'Pricing cache',
-    detail: `${pricing.claudeModelCount()} Claude, ${pricing.codexModelCount()} Codex, ${pricing.cursorModelCount()} Cursor — ${result.detail} (updatedAt ${result.updatedAt})`,
+    detail: `${String(pricing.claudeModelCount())} Claude, ${String(pricing.codexModelCount())} Codex, ${String(pricing.cursorModelCount())} Cursor — ${result.detail} (updatedAt ${result.updatedAt})`,
   };
 }
 
