@@ -5,8 +5,8 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { findClaudePricing } from '../claude.js';
-import { estimateCodexCostUSD } from '../codex.js';
+import { CLAUDE_PRICING_OVERRIDES, findClaudePricing, lookupClaudePricing } from '../claude.js';
+import { CODEX_PRICING_OVERRIDES, estimateCodexCostUSD, lookupCodexPricing } from '../codex.js';
 import { resolveCursorRates } from '../cursor.js';
 import type { PricingManifest, PricingSupplement } from '../packMeta.js';
 import { pricingPackBaseUrl } from '../packMeta.js';
@@ -157,6 +157,56 @@ describe('PricingStore', () => {
     expect(resolveCursorRates('composer')?.inputPerMillion).toBe(0.5);
     expect(resolveCursorRates('stub')).toBeUndefined();
   });
+
+  it.each(['claude', 'codex'] as const)(
+    'keeps the mutable %s override export synchronized with lookups and refreshes',
+    async (provider) => {
+      const { dir } = await fixture((supplement) => {
+        const pricing = {
+          inputPerMillion: 4,
+          outputPerMillion: 20,
+          cacheReadPerMillion: 0.4,
+          cacheCreatePerMillion: 5,
+        };
+        supplement.claude.overrides['claude-sonnet-4-6'] = [{ before: '2026-04-01', pricing }];
+        supplement.codex.overrides['gpt-5.4'] = [{ before: '2026-04-01', pricing }];
+      });
+      const store = new PricingStore(dir);
+      vi.spyOn(sharedPricingStore(), 'current').mockImplementation(() => store.current());
+      const overrides = provider === 'claude' ? CLAUDE_PRICING_OVERRIDES : CODEX_PRICING_OVERRIDES;
+      const lookup = provider === 'claude' ? lookupClaudePricing : lookupCodexPricing;
+      const model = provider === 'claude' ? 'claude-sonnet-4-6' : 'gpt-5.4';
+      const baseline = lookup(model);
+      const pricing = {
+        inputPerMillion: 7,
+        outputPerMillion: 35,
+        cacheReadPerMillion: 0.7,
+        cacheCreatePerMillion: 8.75,
+      };
+      overrides[model] = [{ before: '2026-04-01', pricing }];
+      expect(lookup(model, '2026-03-15')?.inputPerMillion).toBe(7);
+      expect(lookup(model, '2026-04-01')).toEqual(baseline);
+      expect(lookup(model)).toEqual(baseline);
+      pricing.inputPerMillion = 8;
+      expect(lookup(model, '2026-03-15')?.inputPerMillion).toBe(8);
+      expect(Object.keys(overrides)).toContain(model);
+      expect(model in overrides).toBe(true);
+      expect({ ...overrides }[model]).toEqual([{ before: '2026-04-01', pricing }]);
+      expect(Reflect.defineProperty(overrides, model, { value: [] })).toBe(false);
+      expect(Reflect.preventExtensions(overrides)).toBe(false);
+      expect(Object.keys(overrides)).toContain(model);
+      expect(lookup(model, '2026-03-15')?.inputPerMillion).toBe(8);
+      Reflect.deleteProperty(overrides, model);
+      expect(lookup(model, '2026-03-15')).toEqual(baseline);
+      await expect(store.refreshIfDue(true)).resolves.toMatchObject({ updated: true });
+      expect(overrides[model][0]?.pricing.inputPerMillion).toBe(4);
+      expect(lookup(model, '2026-03-15')?.inputPerMillion).toBe(4);
+      overrides[model].push({ before: '2026-05-01', pricing });
+      expect(lookup(model, '2026-04-15')?.inputPerMillion).toBe(8);
+      await expect(store.refreshIfDue(true)).resolves.toMatchObject({ updated: false });
+      expect(lookup(model, '2026-04-15')).toEqual(lookup(model));
+    },
+  );
 
   it('preserves downloaded bytes and reuses hashed cache files on HTTP 304', async () => {
     const { dir, files, fetchMock } = await fixture();
