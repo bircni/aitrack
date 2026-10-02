@@ -7,6 +7,8 @@
  * already per-million.
  */
 
+import { isRecord } from '../data/guards.js';
+
 export interface CompactModelRates {
   i: number;
   o: number;
@@ -131,10 +133,7 @@ function litellmEntryToRates(entry: Record<string, unknown>): ModelRates | undef
   const cacheWrite = number(entry.cache_creation_input_token_cost);
   const cacheRead = number(entry.cache_read_input_token_cost);
   const specific = entry.provider_specific_entry;
-  const fast =
-    specific && typeof specific === 'object' && !Array.isArray(specific)
-      ? number((specific as Record<string, unknown>).fast)
-      : undefined;
+  const fast = isRecord(specific) ? number(specific.fast) : undefined;
   return {
     inputPerMillion: input * 1e6,
     outputPerMillion: output * 1e6,
@@ -168,9 +167,8 @@ export function catalogFromLiteLLM(
 ): PricingCatalog {
   const entries = new Map<string, ModelRates>();
   for (const [key, value] of Object.entries(root)) {
-    if (key === 'sample_spec' || !LITELLM_KEEP.test(key)) continue;
-    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-    const rates = litellmEntryToRates(value as Record<string, unknown>);
+    if (key === 'sample_spec' || !LITELLM_KEEP.test(key) || !isRecord(value)) continue;
+    const rates = litellmEntryToRates(value);
     if (!rates) continue;
     entries.set(key, rates);
   }
@@ -187,10 +185,27 @@ const MODELS_DEV_PROVIDERS = new Set([
   'google-vertex',
 ]);
 
+function modelsDevEntryToRates(cost: Record<string, unknown>): ModelRates | undefined {
+  const input = number(cost.input);
+  const output = number(cost.output);
+  if (input === undefined || output === undefined) return undefined;
+  if (input === 0 && output === 0) return undefined;
+  const cacheWrite = number(cost.cache_write);
+  const cacheRead = number(cost.cache_read);
+  return {
+    inputPerMillion: input,
+    outputPerMillion: output,
+    cacheWritePerMillion: cacheWrite ?? input,
+    cacheReadPerMillion: cacheRead ?? input * 0.1,
+    fastMultiplier: 1,
+    cacheReadIsExplicit: cacheRead !== undefined,
+    cacheWriteIsExplicit: cacheWrite !== undefined,
+  };
+}
+
 /**
- * Parse models.dev `api.json`. Prefer the providers above; bare model ids are
- * recorded once, first preferred provider wins (not alphabetical — that pulled
- * in aggregator markups).
+ * Parse models.dev `api.json`. Keep only provider-qualified keys so lookups
+ * cannot leak rates across a restricted `providers` allowlist via bare aliases.
  */
 export function catalogFromModelsDev(
   root: Record<string, unknown>,
@@ -199,34 +214,13 @@ export function catalogFromModelsDev(
   const entries = new Map<string, ModelRates>();
   for (const providerName of MODELS_DEV_PROVIDERS) {
     const provider = root[providerName];
-    if (!provider || typeof provider !== 'object' || Array.isArray(provider)) continue;
-    const models = (provider as Record<string, unknown>).models;
-    if (!models || typeof models !== 'object' || Array.isArray(models)) continue;
+    if (!isRecord(provider) || !isRecord(provider.models)) continue;
 
-    for (const [modelId, value] of Object.entries(models as Record<string, unknown>)) {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-      const cost = (value as Record<string, unknown>).cost;
-      if (!cost || typeof cost !== 'object' || Array.isArray(cost)) continue;
-      const costObj = cost as Record<string, unknown>;
-      const input = number(costObj.input);
-      const output = number(costObj.output);
-      if (input === undefined || output === undefined) continue;
-      if (input === 0 && output === 0) continue;
-      const cacheWrite = number(costObj.cache_write);
-      const cacheRead = number(costObj.cache_read);
-      const rates: ModelRates = {
-        inputPerMillion: input,
-        outputPerMillion: output,
-        cacheWritePerMillion: cacheWrite ?? input,
-        cacheReadPerMillion: cacheRead ?? input * 0.1,
-        fastMultiplier: 1,
-        cacheReadIsExplicit: cacheRead !== undefined,
-        cacheWriteIsExplicit: cacheWrite !== undefined,
-      };
-      const providerKey = `${providerName}/${modelId}`;
-      entries.set(providerKey, rates);
-      // Bare id: first preferred-provider hit wins (providers are ordered).
-      if (!entries.has(modelId)) entries.set(modelId, rates);
+    for (const [modelId, value] of Object.entries(provider.models)) {
+      if (!isRecord(value) || !isRecord(value.cost)) continue;
+      const rates = modelsDevEntryToRates(value.cost);
+      if (!rates) continue;
+      entries.set(`${providerName}/${modelId}`, rates);
     }
   }
 
@@ -234,31 +228,58 @@ export function catalogFromModelsDev(
   return { retrievedAt, entries };
 }
 
+function keyMatchesProviders(key: string, providers: string[]): boolean {
+  return providers.some(
+    (provider) =>
+      key.startsWith(`${provider}/`) || key.startsWith(`vercel_ai_gateway/${provider}/`),
+  );
+}
+
+/** True when every qualified `…/modelId` owner in the catalog is an allowed provider. */
+function bareAliasAllowed(
+  catalog: PricingCatalog,
+  modelId: string,
+  providers: string[],
+): boolean {
+  const suffix = `/${modelId}`;
+  for (const key of catalog.entries.keys()) {
+    if (key.endsWith(suffix) && !keyMatchesProviders(key, providers)) return false;
+  }
+  return true;
+}
+
+function preferHit(
+  a: { key: string; rates: ModelRates },
+  b: { key: string; rates: ModelRates },
+): number {
+  return preferProviderKey(a.key) - preferProviderKey(b.key) || a.key.length - b.key.length;
+}
+
 export function findCatalogRates(
   catalog: PricingCatalog,
   modelId: string,
   providers: string[] = ['anthropic', 'openai', 'cursor', 'xai', 'google'],
 ): { key: string; rates: ModelRates } | undefined {
-  const allowed = (key: string): boolean =>
-    !key.includes('/') ||
-    providers.some(
-      (provider) =>
-        key.startsWith(`${provider}/`) || key.startsWith(`vercel_ai_gateway/${provider}/`),
-    );
-  const candidates = [modelId, ...providers.map((p) => `${p}/${modelId}`)];
+  function isAllowed(key: string): boolean {
+    if (!key.includes('/')) return bareAliasAllowed(catalog, modelId, providers);
+    return keyMatchesProviders(key, providers);
+  }
+
   const hits: Array<{ key: string; rates: ModelRates }> = [];
+  const candidates = [modelId, ...providers.map((provider) => `${provider}/${modelId}`)];
   for (const key of candidates) {
     const rates = catalog.entries.get(key);
-    if (rates && allowed(key)) hits.push({ key, rates });
+    if (rates && isAllowed(key)) hits.push({ key, rates });
   }
+
   if (hits.length === 0) {
+    const suffix = `/${modelId}`;
     for (const [key, rates] of catalog.entries) {
-      if (allowed(key) && key.endsWith(`/${modelId}`)) hits.push({ key, rates });
+      if (key.endsWith(suffix) && isAllowed(key)) hits.push({ key, rates });
     }
   }
+
   if (hits.length === 0) return undefined;
-  hits.sort(
-    (a, b) => preferProviderKey(a.key) - preferProviderKey(b.key) || a.key.length - b.key.length,
-  );
+  hits.sort(preferHit);
   return hits[0];
 }

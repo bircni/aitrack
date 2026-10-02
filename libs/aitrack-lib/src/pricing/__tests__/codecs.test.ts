@@ -31,11 +31,16 @@ describe('pricing codecs', () => {
     expect(catalog.entries.has('bedrock/skip-me')).toBe(false);
   });
 
-  it('prefers anthropic/openai providers in models.dev', () => {
+  it('prefers anthropic/openai providers in models.dev without bare aliases', () => {
     const catalog = catalogFromModelsDev({
       cortecs: {
         models: {
           'claude-sonnet-4-6': { cost: { input: 2.9, output: 14.5 } },
+        },
+      },
+      openai: {
+        models: {
+          shared: { cost: { input: 1, output: 2 } },
         },
       },
       anthropic: {
@@ -46,11 +51,15 @@ describe('pricing codecs', () => {
         },
       },
     });
+    expect(catalog.entries.has('claude-sonnet-4-6')).toBe(false);
+    expect(catalog.entries.has('shared')).toBe(false);
     expect(findCatalogRates(catalog, 'claude-sonnet-4-6', ['anthropic'])?.rates).toMatchObject({
       inputPerMillion: 3,
       outputPerMillion: 15,
       cacheWriteIsExplicit: true,
     });
+    expect(findCatalogRates(catalog, 'shared', ['anthropic'])).toBeUndefined();
+    expect(findCatalogRates(catalog, 'shared', ['openai'])?.key).toBe('openai/shared');
   });
 
   it('parses LiteLLM long-context and provider-specific fast multipliers', () => {
@@ -145,12 +154,15 @@ describe('pricing codecs', () => {
 
   it('restricts qualified lookups to allowed providers and the supported gateway prefix', () => {
     const rates = { i: 1, o: 2, cw: 1, cr: 0.1 };
+    const compact = (models: Record<string, typeof rates>) =>
+      catalogFromCompact({ retrievedAt: '2026-01-01', models });
+
     for (const key of [
       'openai/shared',
       'other/anthropic/shared',
       'vercel_ai_gateway/openai/shared',
     ]) {
-      const catalog = catalogFromCompact({ retrievedAt: '2026-01-01', models: { [key]: rates } });
+      const catalog = compact({ [key]: rates });
       expect(findCatalogRates(catalog, 'shared', ['anthropic'])).toBeUndefined();
       expect(findCatalogRates(catalog, key, ['anthropic'])).toBeUndefined();
     }
@@ -160,14 +172,23 @@ describe('pricing codecs', () => {
       'anthropic/nested/shared',
       'vercel_ai_gateway/anthropic/shared',
     ]) {
-      const catalog = catalogFromCompact({ retrievedAt: '2026-01-01', models: { [key]: rates } });
-      expect(findCatalogRates(catalog, 'shared', ['anthropic'])?.key).toBe(key);
+      expect(findCatalogRates(compact({ [key]: rates }), 'shared', ['anthropic'])?.key).toBe(key);
     }
+
+    const preferred = compact({ shared: rates, 'anthropic/shared': { ...rates, i: 3 } });
+    expect(findCatalogRates(preferred, 'shared', ['anthropic'])?.rates.inputPerMillion).toBe(3);
+  });
+
+  it('rejects bare aliases when a disallowed provider owns the same model id', () => {
     const catalog = catalogFromCompact({
       retrievedAt: '2026-01-01',
-      models: { shared: rates, 'anthropic/shared': { ...rates, i: 3 } },
+      models: {
+        shared: { i: 9, o: 9, cw: 9, cr: 0.9 },
+        'openai/shared': { i: 1, o: 2, cw: 1, cr: 0.1 },
+      },
     });
-    expect(findCatalogRates(catalog, 'shared', ['anthropic'])?.rates.inputPerMillion).toBe(3);
+    expect(findCatalogRates(catalog, 'shared', ['anthropic'])).toBeUndefined();
+    expect(findCatalogRates(catalog, 'shared', ['openai'])?.key).toBe('openai/shared');
   });
 
   it('round-trips compact catalogs', () => {
