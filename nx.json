@@ -64,6 +64,12 @@
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "production": ["default", "!{projectRoot}/**/__tests__/**", "!{projectRoot}/vitest.config.ts"],
     "sharedGlobals": ["{workspaceRoot}/tsconfig.base.json"],
+    "rustToolchain": [
+      "{workspaceRoot}/rust-toolchain.toml",
+      {
+        "runtime": "rustc --version --verbose"
+      }
+    ],
     "lintConfig": ["{workspaceRoot}/.oxlintrc.json"],
     "formatConfig": ["{workspaceRoot}/.oxfmtrc.json"],
     "platform": [

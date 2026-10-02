@@ -2,6 +2,17 @@
 
 ## Development setup
 
+Install Node.js 24+, pnpm (the version in `package.json`), git, and rustup. The pinned
+Rust version and components live in `rust-toolchain.toml`.
+The workspace builds both the CLI and the Tauri desktop app. On macOS, install Xcode
+Command Line Tools. On Windows, install the Visual Studio C++ build tools and WebView2.
+On Ubuntu, install the desktop app's system libraries before building:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+```
+
 ```sh
 git clone https://github.com/bircni/aitrack.git
 cd aitrack
@@ -14,6 +25,38 @@ node apps/aitrack/dist/cli.js show
 
 Use `pnpm run dev -- init` (or `sync`, `show`) to run from TypeScript without building.
 
+## Desktop development
+
+opentrack has two Nx projects. `opentrack-ui` contains the Svelte renderer and the Node
+sidecar, which reads usage through `aitrack-lib` and fetches provider limits. `opentrack`
+is the Tauri 2 Rust shell: tray icon, window, notifications, autostart and shortcuts.
+The shell and sidecar exchange JSON lines on stdin/stdout. The UI uses the system
+webview (WebView2 on Windows, WKWebView on macOS).
+
+```sh
+pnpm nx run opentrack:dev
+pnpm nx run opentrack-ui:test
+pnpm nx run opentrack:test
+pnpm nx run opentrack:package
+pnpm nx run opentrack:bundle:check
+```
+
+The package target builds the renderer and sidecar before invoking Tauri. Windows
+installers land in `target/release/bundle/nsis/`; macOS app bundles and disk images land
+in `target/release/bundle/macos/` and `target/release/bundle/dmg/`. Run packaging on the
+platform you are targeting. macOS release builds run on `macos-latest` for Apple Silicon,
+so the Rust app and sidecar share the same native architecture. The bundled Node runtime requires macOS 13.5+.
+
+`pnpm install` downloads the official Node runtime pinned in `apps/opentrack-ui/package.json`.
+The `sea` target runs that binary through `pnpm exec` to create a self-contained sidecar;
+some system Node builds, including Homebrew's, disable SEA support. The resource keeps
+the name `opentrack-sidecar.exe` on every platform, but contains a native executable for
+the build machine. On macOS the SEA build reapplies an ad hoc signature after modifying
+the Node executable, and Tauri ad hoc signs the app bundle. These builds are not notarized.
+
+The app version is read from the workspace `package.json` through Tauri's `version`
+setting; there is no separate desktop release tag or version bump.
+
 ## Project layout
 
 This is an [nx](https://nx.dev/) monorepo of pnpm workspace packages.
@@ -25,6 +68,12 @@ apps/
       cli.ts          Commander entrypoint
       cli/            Pure CLI parsing/validation helpers
       commands/       Command handlers (show, sync, usage, …)
+  opentrack/          Tauri Rust shell, native configuration and icons
+    src/             Window, tray, commands and sidecar supervision
+  opentrack-ui/       Desktop frontend and bundled Node runtime
+    src/
+      renderer/      Svelte dashboard and settings
+      sidecar/       Provider limits, usage, polling and tray state
 libs/
   aitrack-lib/        The library: everything that is not the command line
     src/
@@ -65,7 +114,9 @@ Builds run `tsc --build` and build dependencies first. Typechecking follows Type
 project references. CLI tests and development use the source paths in its `tsconfig.json`;
 compiled CLI imports resolve through the library's exports to `dist/`.
 
-The three package projects are `aitrack`, `aitrack-lib`, and `@aitrack/test-fixtures`.
+The package projects are `aitrack`, `aitrack-lib`, `opentrack-ui`, and `@aitrack/test-fixtures`;
+`opentrack` is the Rust application. Vite infers renderer builds and `@monodon/rust`
+supplies the Rust build, lint and test executors.
 The `repo-tools` project in `scripts/` owns release tooling, pricing checks, script tests,
 and checks for root configuration files. Package lint, format and unused-code checks
 run per project. Lint uses `nx-oxlint:lint` with type-aware checking.
@@ -79,6 +130,18 @@ If `nx` hangs without starting tasks (typically when Nx Cloud is unreachable),
 rerun with `NX_NO_CLOUD=true NX_DAEMON=false`.
 
 CI uses `nx affected` with `nrwl/nx-set-shas` supplying the comparison commits.
+The Ubuntu job runs the full set of affected checks, including Rust, CLI smoke tests
+and publish-tarball checks. A separate `macos-latest` / `windows-latest` matrix runs
+only opentrack's Rust formatting, lint, tests and release packaging with the pinned toolchain.
+Nx builds the renderer and native sidecar dependencies needed by the Rust shell;
+JavaScript checks and tests stay in the Ubuntu job.
+The matrix uploads the Windows NSIS installer and Apple Silicon macOS DMG as
+workflow artifacts so PR builds can be downloaded and tried. Missing installers
+fail the job. Packaging also checks the release build and bundle configuration.
+`bundle:check` mounts the macOS DMG or extracts the Windows NSIS installer with
+7-Zip, then starts its bundled sidecar and checks the settings/state protocol.
+It uses temporary app data and a smoke mode that makes no provider or git requests.
+The Windows check needs `7z` on `PATH`; GitHub's Windows runners include it.
 Lint and formatter configuration are inputs to their respective targets. Shared tool
 versions live in the catalog in `pnpm-workspace.yaml`; published packages have catalog
 and workspace references replaced with concrete versions by pnpm.
@@ -125,7 +188,7 @@ pnpm run release
 
 Patch bump by default. Pass a bump type if needed: `pnpm run release -- minor`.
 
-This runs `validate` and `build`, sets the same version in the workspace root and both published packages, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes the current branch plus that exact tag to the configured remote. npm publish and GitHub Release creation happen in CI — not locally.
+This runs `validate` and `build`, sets the same version in the workspace root and both published packages, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes the current branch plus that exact tag to the configured remote. Opentrack's app and installer version comes from that workspace version. npm publish, desktop packaging and GitHub Release creation happen in CI.
 
 Preview without changing anything:
 
@@ -137,4 +200,22 @@ The dry run calculates and prints the next version, changelog command, commit, a
 
 ### After the tag is pushed
 
-The [Publish workflow](.github/workflows/publish.yml) triggers when the release script pushes its exact `v*` tag. It re-runs `validate`, builds, extracts that tag's section from `CHANGELOG.md`, creates or updates the matching GitHub Release, and runs `pnpm publish -r --no-git-checks`, which publishes `aitrack-lib` before `aitrack` and rewrites the `workspace:*` range to the version it just published. Prerelease tags produce GitHub prereleases. Public npm access comes from `publishConfig` in each package's `package.json`; authentication comes from npm trusted publishing through the workflow's `id-token: write` permission.
+The [Publish workflow](.github/workflows/publish.yml) triggers on that same `v*` tag:
+
+- After both desktop packages succeed, the npm job re-runs `validate`, builds,
+  and publishes `aitrack-lib` before `aitrack`
+  with provenance. pnpm rewrites `workspace:*` to the published library version.
+- Desktop jobs package a Windows NSIS installer and a macOS DMG for Apple Silicon,
+  then upload them as workflow artifacts. Missing installers fail the build.
+- After npm publishing and all desktop jobs succeed, the release job extracts that
+  tag's section from `CHANGELOG.md`, creates or updates the GitHub release, downloads
+  the installer artifacts and uploads them to that release. Reruns replace existing
+  assets with the same names. Prerelease tags produce GitHub prereleases.
+
+Every job that invokes Nx or Rust installs the toolchain from `rust-toolchain.toml`
+with `dtolnay/rust-toolchain@stable`, passing the version and components read from
+that file. This includes the pricing job (Nx reads Cargo metadata).
+
+Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
+Public npm access comes from `publishConfig` in each package's `package.json`;
+authentication comes from npm trusted publishing through `id-token: write`.

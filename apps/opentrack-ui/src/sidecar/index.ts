@@ -120,6 +120,14 @@ async function main(): Promise<void> {
     },
   };
 
+  // Exercise the real startup and protocol from an installer without accessing
+  // provider credentials, usage logs or the configured sync repository.
+  if (process.argv.includes('--smoke-test')) {
+    send(await handleRequest({ id: 1, method: 'getSettings' }, context));
+    send(await handleRequest({ id: 2, method: 'getState' }, context));
+    return;
+  }
+
   const lines = createInterface({ input: process.stdin });
   lines.on('line', (line) => {
     const request = parseRequest(line);

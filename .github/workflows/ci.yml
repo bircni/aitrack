@@ -53,6 +53,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Read Rust toolchain
+        id: rust-toolchain
+        shell: bash
+        run: |
+          python - <<'PYTHON'
+          import os, tomllib
+          with open("rust-toolchain.toml", "rb") as source:
+              toolchain = tomllib.load(source)["toolchain"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print(f"version={toolchain['channel']}", file=output)
+              print(f"components={','.join(toolchain['components'])}", file=output)
+          PYTHON
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ steps.rust-toolchain.outputs.version }}
+          components: ${{ steps.rust-toolchain.outputs.components }}
+
       # opentrack's Tauri shell links against WebKitGTK and the tray libraries on Linux.
       - name: Install Tauri system dependencies
         run: >-
@@ -87,8 +106,8 @@ jobs:
       - name: Verify publish tarballs
         run: pnpm nx affected -t package:check
 
-  cross-platform:
-    name: Smoke (${{ matrix.os }}, Node ${{ matrix.node }})
+  rust:
+    name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     env:
       NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
@@ -97,30 +116,63 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
-        node: [24, 26]
+        include:
+          - os: macos-latest
+            platform: macos-arm64
+            installer: target/release/bundle/dmg/*.dmg
+          - os: windows-latest
+            platform: windows-x64
+            installer: target/release/bundle/nsis/*.exe
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: ${{ matrix.node }}
+          node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
+      - name: Read Rust toolchain
+        id: rust-toolchain
+        shell: bash
+        run: |
+          python - <<'PYTHON'
+          import os, tomllib
+          with open("rust-toolchain.toml", "rb") as source:
+              toolchain = tomllib.load(source)["toolchain"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print(f"version={toolchain['channel']}", file=output)
+              print(f"components={','.join(toolchain['components'])}", file=output)
+          PYTHON
 
-      - name: CLI smoke tests
-        run: pnpm nx affected -t test:smoke
-        env:
-          SMOKE_CLI: dist/cli.js
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ steps.rust-toolchain.outputs.version }}
+          components: ${{ steps.rust-toolchain.outputs.components }}
 
-      - name: Verify publish tarballs
-        run: pnpm nx affected -t package:check
+      - name: Check Rust formatting
+        run: pnpm nx run opentrack:format:check
+
+      # The Rust shell embeds the renderer and bundles the native Node sidecar;
+      # Nx builds those dependencies without running their JS checks or tests.
+      - name: Lint Rust
+        run: pnpm nx run opentrack:lint
+
+      - name: Test Rust
+        run: pnpm nx run opentrack:test
+
+      - name: Package and check Opentrack
+        run: pnpm nx run opentrack:bundle:check
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: opentrack-${{ matrix.platform }}
+          path: ${{ matrix.installer }}
+          if-no-files-found: error

@@ -3,6 +3,7 @@
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
+      "ignoreBinaries": ["hdiutil", "7z"],
       "entry": ["scripts/*.ts", "scripts/__tests__/**/*.test.ts"],
       "project": ["scripts/**/*.ts", "*.config.ts"],
       "ignoreDependencies": [

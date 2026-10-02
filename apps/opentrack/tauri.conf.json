@@ -1,6 +1,7 @@
 {
   "$schema": "../../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "opentrack",
+  "version": "../../package.json",
   "mainBinaryName": "opentrack",
   "identifier": "dev.bircni.opentrack",
   "build": {
