@@ -43,6 +43,10 @@ Quota and usage update times advance only after successful updates and survive a
 restarts. Failed refreshes display the age of retained data. Mixed priced/unpriced
 usage displays a partial estimate rather than implying a complete dollar total.
 
+Refresh and sync command-delivery failures show retry controls separately from operation
+failures. Failed settings saves keep the newest queued changes and provide a retry;
+pushed settings cannot overwrite those pending edits.
+
 Settings and the last snapshot live in the app's data folder (`%APPDATA%\dev.bircni.opentrack` on
 Windows): `settings.json`, `cache.json`, and `sidecar.log`. There is no account, telemetry or
 backend.

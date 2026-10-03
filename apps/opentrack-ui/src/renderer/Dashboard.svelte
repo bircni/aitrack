@@ -11,9 +11,11 @@
     period: Period;
     onPeriod: (period: Period) => void;
     onPatch: (patch: Partial<Settings>) => void;
+    onRefresh?: () => void;
+    onSync?: () => void;
   }
 
-  let { appState, settings, now, period, onPeriod, onPatch }: Props = $props();
+  let { appState, settings, now, period, onPeriod, onPatch, onRefresh, onSync }: Props = $props();
 </script>
 
 <Summary
@@ -24,16 +26,25 @@
 />
 
 {#if appState.pullError}
-  <p class="banner">{appState.pullError}</p>
+  <p class="banner">
+    {appState.pullError}
+    {#if onRefresh}<button class="link" type="button" aria-label="Retry pull" onclick={onRefresh}>Retry</button>{/if}
+  </p>
 {/if}
 {#if appState.usageError && appState.usageUpdatedAt}
   <p class="banner">Cached usage: {formatUpdated(appState.usageUpdatedAt, now)}</p>
 {/if}
 {#if appState.usageError}
-  <p class="banner">{appState.usageError}</p>
+  <p class="banner">
+    {appState.usageError}
+    {#if onRefresh}<button class="link" type="button" aria-label="Retry usage" onclick={onRefresh}>Retry</button>{/if}
+  </p>
 {/if}
 {#if appState.syncResult && !appState.syncResult.ok}
-  <p class="banner">Sync failed: {appState.syncResult.message}</p>
+  <p class="banner">
+    Sync failed: {appState.syncResult.message}
+    {#if onSync}<button class="link" type="button" aria-label="Retry sync" onclick={onSync}>Retry</button>{/if}
+  </p>
 {/if}
 
 {#each appState.providers as provider (provider.key)}

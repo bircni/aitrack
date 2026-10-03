@@ -18,31 +18,25 @@ function subscribe<K extends keyof Events>(
     listener(payload);
   });
   return () => {
-    void unlisten.then((stop) => {
-      stop();
-    });
+    void unlisten
+      .then((stop) => {
+        stop();
+      })
+      .catch(() => undefined);
   };
 }
 
 /** Commands are implemented in the Tauri shell (`apps/opentrack/src/commands.rs`). */
 export const api: OpentrackApi = {
   getState: () => invoke('get_state'),
-  refresh: () =>
-    invoke('refresh').then(
-      () => undefined,
-      () => undefined,
-    ),
-  sync: () =>
-    invoke('sync').then(
-      () => undefined,
-      () => undefined,
-    ),
+  refresh: () => invoke('refresh'),
+  sync: () => invoke('sync'),
   getSettings: () => invoke('get_settings'),
   saveSettings: (settings) => invoke('save_settings', { settings }),
   openDashboard: (provider) => invoke('open_dashboard', { provider }),
   quit: () => invoke('quit'),
   fitHeight: (height) => {
-    void invoke('fit_height', { height });
+    void invoke('fit_height', { height }).catch(() => undefined);
   },
   onState: (listener) => subscribe('state', listener),
   onSettings: (listener) => subscribe('settings', listener),
