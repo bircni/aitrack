@@ -97,3 +97,18 @@ describe('ModelPricing', () => {
     );
   });
 });
+
+it('fingerprints effective rates independently of retrieval timestamps and catalog insertion order', () => {
+  const models = { a: { i: 1, o: 2, cw: 1, cr: 0.1 }, b: { i: 3, o: 4, cw: 3, cr: 0.3 } };
+  const first = pricingWithCatalog({ retrievedAt: '2026-01-01', models });
+  expect(
+    pricingWithCatalog({ retrievedAt: '2026-02-01', models: { b: models.b, a: models.a } })
+      .fingerprint,
+  ).toBe(first.fingerprint);
+  expect(
+    pricingWithCatalog({
+      retrievedAt: '2026-01-01',
+      models: { ...models, a: { i: 2, o: 2, cw: 1, cr: 0.1 } },
+    }).fingerprint,
+  ).not.toBe(first.fingerprint);
+});

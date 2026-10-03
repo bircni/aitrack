@@ -30,6 +30,9 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
+const pricing = vi.hoisted(() => ({ fingerprint: 'initial' }));
+vi.mock('../../pricing/store.js', () => ({ currentModelPricing: () => pricing }));
+
 import type { DayMap } from '../../data/types.js';
 import { openParseCache } from '../cache.js';
 
@@ -230,4 +233,15 @@ describe('openParseCache', () => {
     delete process.env.AITRACK_NO_CACHE;
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });
+});
+
+it('invalidates memory and disk cache entries after effective pricing changes', async () => {
+  mkdirSync(TEST_HOME, { recursive: true });
+  writeFileSync(SOURCE, 'line\n');
+  await seedCache();
+  expect(await openParseCache('claude').lookup(SOURCE)).not.toBeNull();
+  pricing.fingerprint = 'new-rate';
+  expect(await openParseCache('claude').lookup(SOURCE)).toBeNull();
+  pricing.fingerprint = 'initial';
+  rmSync(TEST_HOME, { recursive: true, force: true });
 });
