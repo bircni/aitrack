@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 
 import { isFiniteNumber, isRecord } from '../../data/guards.js';
 
@@ -25,4 +26,11 @@ export function decodeJwtPayload(token: string): Record<string, unknown> | null 
 export function jwtExpiryMs(token: string): number | undefined {
   const exp = decodeJwtPayload(token)?.exp;
   return isFiniteNumber(exp) ? exp * 1000 : undefined;
+}
+
+export function cursorAccountId(token: string): string {
+  const sub = decodeJwtPayload(token)?.sub;
+  const identity =
+    typeof sub === 'string' && sub.trim() !== '' ? `subject:${sub.trim()}` : `token:${token}`;
+  return createHash('sha256').update(identity).digest('hex');
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchCursorUsageCsv } from '../http.js';
+import { cursorAccountId } from '../jwt.js';
 
 function jwt(sub: string, nonce = ''): string {
   return `header.${Buffer.from(JSON.stringify({ sub, nonce })).toString('base64url')}.signature`;
@@ -29,4 +30,11 @@ describe('Cursor credential attempts', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+
+  it('hashes identity without persisting credentials and tolerates token rotation', () => {
+    expect(cursorAccountId(jwt('a', '1'))).toBe(cursorAccountId(jwt('a', '2')));
+    expect(cursorAccountId(jwt('a'))).not.toBe(cursorAccountId(jwt('b')));
+    expect(cursorAccountId('token')).toMatch(/^[a-f0-9]{64}$/u);
+    expect(cursorAccountId('other')).not.toBe(cursorAccountId('token'));
+  });
 });
