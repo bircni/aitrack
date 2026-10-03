@@ -51,6 +51,7 @@ export interface UsageWindow {
 export interface UsageWindowInput {
   /** Today as a local calendar date, read once per call. */
   today: string;
+  now?: Date;
   from?: string;
   to?: string;
   n?: number;
@@ -146,9 +147,7 @@ export const USAGE_PERIOD_DEFINITIONS = [
     argShape: 'none',
     parseArgs: parseNoArgs('today'),
     previous: previousEqualSpan,
-    window: ({ today }) => {
-      // The only place a wall-clock time is shown rather than a calendar date.
-      const now = new Date();
+    window: ({ today, now = new Date() }) => {
       return {
         start: today,
         end: today,
@@ -368,9 +367,11 @@ export function computePreviousUsageWindow(
 export function computeUsageWindow(
   options: UsageWindowOptions,
   today = todayString(),
+  now = new Date(),
 ): UsageWindow {
   return usagePeriodDefinition(options.period).window({
     today,
+    now,
     from: options.from,
     to: options.to,
     n: options.n,

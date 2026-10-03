@@ -1,4 +1,4 @@
-import { makeDay, useTimeZone } from '@aitrack/test-fixtures';
+import { EXTREME_TIME_ZONES, makeDay, useTimeZone } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -259,3 +259,24 @@ describe('buildUsageReport', () => {
     });
   });
 });
+
+for (const zone of EXTREME_TIME_ZONES) {
+  describe(`explicit report clock in ${zone}`, () => {
+    useTimeZone(zone);
+    it('uses one supplied instant for all calendar windows even when the wall clock differs', () => {
+      const instant = new Date('2026-01-01T00:15:00Z');
+      const date = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(instant);
+      const loaded: LoadedUsageData = {
+        machineData: [],
+        providerData: { claude_code: new Map([[date, makeDay(10, 2, 1)]]) },
+      };
+      const reports = buildUsageReportsFromLoaded(
+        loaded,
+        [{ period: 'today' }, { period: 'thismonth' }],
+        instant,
+      );
+      expect(reports.map((report) => report.totals.tokens)).toEqual([12, 12]);
+      expect(reports[0]).toEqual(buildUsageReportFromLoaded(loaded, { period: 'today' }, instant));
+    });
+  });
+}
