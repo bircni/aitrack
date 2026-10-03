@@ -144,6 +144,7 @@ Oxlint does not currently provide complete type-aware checking for `.svelte` fil
 `svelte-check --fail-on-warnings` remains required. Repository tests probe supported
 Svelte rules so configuration changes cannot silently stop enforcing them.
 Rust lint runs Clippy on application and test targets with `-D warnings`.
+Root `.oxlintrc.json` and `.oxfmtrc.json` are included in formatting checks and Nx inputs.
 
 Tests run `vitest run`; the `ci` configuration adds coverage. Run
 `pnpm exec nx run aitrack-lib:test:ci` for one package or `pnpm run test:ci` for all suites.

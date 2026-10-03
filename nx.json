@@ -86,7 +86,9 @@
       "{workspaceRoot}/package.json",
       "{workspaceRoot}/pnpm-workspace.yaml",
       "{workspaceRoot}/tsconfig.base.json",
-      "{workspaceRoot}/tsconfig.json"
+      "{workspaceRoot}/tsconfig.json",
+      "{workspaceRoot}/.oxlintrc.json",
+      "{workspaceRoot}/.oxfmtrc.json"
     ]
   },
   "targetDefaults": {
