@@ -152,3 +152,41 @@ describe('computeUsageWindow', () => {
     });
   });
 });
+
+import { USAGE_PERIOD_DEFINITIONS, usagePeriodDefinition } from '../usagePeriods.js';
+
+it('validates registry arguments and compares fixed and rolling calendar windows', () => {
+  const now = new Date('2026-06-17T10:00:00');
+  for (const period of USAGE_PERIOD_DEFINITIONS) {
+    const options = { period: period.period, from: '2026-06-10', to: '2026-06-12', n: 3 };
+    const current = computeUsageWindow(options, '2026-06-17', now);
+    expect(current.start <= current.end).toBe(true);
+    const previous =
+      period.period === 'all'
+        ? current
+        : computePreviousUsageWindow(options, current, '2026-06-17');
+    expect(previous.start <= current.start).toBe(true);
+    const args =
+      period.argShape === 'date'
+        ? ['2026-06-10']
+        : period.argShape === 'range'
+          ? ['2026-06-10', '2026-06-12']
+          : period.argShape === 'last'
+            ? ['3']
+            : [];
+    expect(() => period.parseArgs(args)).not.toThrow(/./u);
+    expect(() => period.parseArgs(['invalid', 'extra', 'arguments'])).toThrow(/./u);
+  }
+  for (const [period, args] of [
+    ['date', []],
+    ['date', ['bad']],
+    ['range', []],
+    ['range', ['bad', 'bad']],
+    ['range', ['2026-06-12', '2026-06-10']],
+    ['last', []],
+    ['last', ['0']],
+    ['last', ['1.5']],
+  ] as const) {
+    expect(() => usagePeriodDefinition(period).parseArgs([...args])).toThrow(/./u);
+  }
+});

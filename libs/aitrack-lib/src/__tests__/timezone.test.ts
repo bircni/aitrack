@@ -15,3 +15,35 @@ describe('calendarDateInTimeZone', () => {
     expect(calendarDateInTimeZone('Not/AZone', instant)).toBeNull();
   });
 });
+
+import { vi } from 'vitest';
+
+import { machineTimezone } from '../timezone.js';
+it('falls back to UTC when Intl cannot report a zone', () => {
+  const spy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementationOnce(() => {
+    throw new Error('unsupported');
+  });
+  expect(machineTimezone()).toBe('UTC');
+  spy.mockRestore();
+  expect(calendarDateInTimeZone('', new Date())).toBeNull();
+});
+
+it('rejects an Intl result that is not a calendar date', () => {
+  const original = Object.getOwnPropertyDescriptor(Intl.DateTimeFormat.prototype, 'format');
+  if (!original) throw new Error('missing Intl formatter');
+  Object.defineProperty(Intl.DateTimeFormat.prototype, 'format', {
+    configurable: true,
+    value: () => 'invalid',
+  });
+  try {
+    expect(calendarDateInTimeZone('UTC')).toBeNull();
+  } finally {
+    Object.defineProperty(Intl.DateTimeFormat.prototype, 'format', original);
+  }
+  const options = new Intl.DateTimeFormat().resolvedOptions();
+  const resolved = vi
+    .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+    .mockReturnValue({ ...options, timeZone: '' });
+  expect(machineTimezone()).toBe('UTC');
+  resolved.mockRestore();
+});
