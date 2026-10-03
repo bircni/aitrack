@@ -415,3 +415,45 @@ describe('QuotaService', () => {
     });
   });
 });
+
+it('keeps pull failures through local reads, retries after one minute and restores the normal schedule', async () => {
+  const pull = vi
+    .fn()
+    .mockResolvedValueOnce({ summary: { providers: {}, machineCount: 2 }, warning: 'pull failed' })
+    .mockResolvedValue({ summary: { providers: {}, machineCount: 2 } });
+  const h = harness({}, { loadUsage: pull });
+  await h.service.refresh();
+  expect(h.service.state().pullError).toBe('pull failed');
+  h.failSync();
+  await h.service.sync();
+  expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({ pull: false }));
+  expect(h.service.state().pullError).toBe('pull failed');
+  h.advance(FAILURE_BACKOFF_MS);
+  await h.service.refresh();
+  expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({ pull: true }));
+  expect(h.service.state().pullError).toBeUndefined();
+  h.advance(FAILURE_BACKOFF_MS);
+  await h.service.refresh();
+  expect(pull).toHaveBeenCalledTimes(3);
+  h.advance(PULL_INTERVAL_MS);
+  await h.service.refresh();
+  expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({ pull: true }));
+});
+
+it('retains both warnings when a pull and the following local read fail', async () => {
+  const loadUsage = vi
+    .fn<ServiceDeps['loadUsage']>()
+    .mockResolvedValueOnce({ error: 'local read failed', warning: 'pull failed' })
+    .mockResolvedValue({ summary: { providers: {}, machineCount: 1 } });
+  const h = harness({}, { loadUsage });
+  await h.service.refresh();
+  expect(h.service.state()).toMatchObject({
+    usageError: 'local read failed',
+    pullError: 'pull failed',
+  });
+  h.advance(FAILURE_BACKOFF_MS);
+  await h.service.refresh();
+  expect(loadUsage).toHaveBeenLastCalledWith(expect.objectContaining({ pull: true }));
+  expect(h.service.state().pullError).toBeUndefined();
+  expect(h.service.state().usageError).toBeUndefined();
+});

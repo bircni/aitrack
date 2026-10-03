@@ -23,6 +23,9 @@
   {onPeriod}
 />
 
+{#if appState.pullError}
+  <p class="banner">{appState.pullError}</p>
+{/if}
 {#if appState.usageError}
   <p class="banner">{appState.usageError}</p>
 {/if}

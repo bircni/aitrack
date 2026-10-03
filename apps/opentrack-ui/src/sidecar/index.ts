@@ -53,11 +53,15 @@ async function loadUsage(options: {
       warning = `Could not pull synced data: ${errorMessage(error)}`;
     }
   }
-  const loaded = await loadMergedProviderData({
-    refreshLive: options.refreshLive,
-    localMachine: options.localMachine,
-  });
-  return { summary: summarizeUsage(loaded), warning };
+  try {
+    const loaded = await loadMergedProviderData({
+      refreshLive: options.refreshLive,
+      localMachine: options.localMachine,
+    });
+    return { summary: summarizeUsage(loaded), warning };
+  } catch (error) {
+    return { error: errorMessage(error), warning };
+  }
 }
 
 async function main(): Promise<void> {
