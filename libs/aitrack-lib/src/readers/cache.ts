@@ -17,6 +17,13 @@ import { packageVersion } from '../version.js';
  */
 const CACHE_FORMAT = 3;
 
+export interface CachedMessage {
+  key?: string;
+  date: string;
+  model: string;
+  counts: TokenCounts;
+}
+
 /** One transcript file's contribution, as cached. */
 export interface CachedParse {
   days: DayMap;
@@ -26,6 +33,7 @@ export interface CachedParse {
    * another transcript's messages into itself.
    */
   keys: string[];
+  messages?: CachedMessage[];
 }
 
 interface CacheEntry {
@@ -33,6 +41,7 @@ interface CacheEntry {
   size: number;
   days: Record<string, DayEntry>;
   keys: string[];
+  messages?: CachedMessage[];
 }
 
 function isTokenCounts(value: unknown): value is TokenCounts {
@@ -62,6 +71,19 @@ function isCacheEntry(value: unknown): value is CacheEntry {
   if (!Array.isArray(value.keys) || !value.keys.every((key) => typeof key === 'string')) {
     return false;
   }
+  if (
+    value.messages !== undefined &&
+    (!Array.isArray(value.messages) ||
+      !value.messages.every(
+        (message) =>
+          isRecord(message) &&
+          (message.key === undefined || typeof message.key === 'string') &&
+          typeof message.date === 'string' &&
+          typeof message.model === 'string' &&
+          isTokenCounts(message.counts),
+      ))
+  )
+    return false;
   return isRecord(value.days) && Object.values(value.days).every((day) => isDayEntry(day));
 }
 
@@ -191,7 +213,11 @@ export function openParseCache(name: string): ParseCache {
         return null;
       }
       next[filePath] = entry;
-      return { days: new Map(Object.entries(entry.days)), keys: entry.keys };
+      return {
+        days: new Map(Object.entries(entry.days)),
+        keys: entry.keys,
+        ...(entry.messages && { messages: entry.messages }),
+      };
     },
 
     async record(filePath, parse) {
@@ -208,6 +234,7 @@ export function openParseCache(name: string): ParseCache {
         size: stats.size,
         days: Object.fromEntries(parse.days),
         keys: parse.keys,
+        ...(parse.messages && { messages: parse.messages }),
       };
     },
 
