@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v3.0.0] - 2026-10-03
+
+
+
+### Features
+
+- **pricing:** Refresh pricing data from external sources at runtime (#100)
+- **opentrack:** Add new opentrack app (#98)
+
 ## [v2.3.2] - 2026-09-29
 
 
