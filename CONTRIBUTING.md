@@ -35,12 +35,31 @@ libs/
       display/        TUI, PNG heatmap, PDF/CSV receipts
         heatmap/      Shared heatmap stats, themes, view models
       readers/        Provider-specific ingestion (Claude, Codex, Cursor)
-      pricing/        Cost resolution; rates and aliases in pricing/tables/*.json
+      pricing/        Cost resolution; editable rates in pricing/tables/*.json
+                      (live pack published on orphan branch `pricing`, not bundled)
       providers/      Provider registry and descriptors
       store/          Machine files on disk and their schema migrations
   test-fixtures/      Fixtures shared by both test suites. Never published.
-scripts/              Repo tooling: release, release notes, pricing drift
+scripts/              Repo tooling: release, release notes, pricing pack build/check
 ```
+
+### Pricing updates
+
+Editable sources of truth for first-party rates (also the offline CLI baseline):
+
+- `libs/aitrack-lib/src/pricing/tables/claude.json`
+- `libs/aitrack-lib/src/pricing/tables/codex.json`
+- `libs/aitrack-lib/src/pricing/tables/cursor.json`
+
+No pricing pack is shipped in the npm package. CI builds `artifacts/pricing-pack/` and publishes it to the orphan `pricing` branch daily; installs refresh into `~/.config/aitrack/pricing/`.
+
+```bash
+pnpm run pricing:update            # fetch catalogs → artifacts/pricing-pack/
+pnpm run pricing:update -- --write # also patch Claude/Codex IO into tables/*.json
+pnpm run pricing:check             # optional local compare of tables vs catalogs
+```
+
+Shared pricing calculations, catalog access, table conversion, and stored-day repricing belong in `aitrack-lib`. Apps and scripts handle command arguments, presentation, and file publishing.
 
 Tests are colocated per module in one `__tests__` folder each.
 

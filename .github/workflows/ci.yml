@@ -83,11 +83,12 @@ jobs:
 
   cross-platform:
     name: Smoke (${{ matrix.os }}, Node ${{ matrix.node }})
+    needs: [test]
     runs-on: ${{ matrix.os }}
     env:
       NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
         node: [26]

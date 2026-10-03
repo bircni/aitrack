@@ -76,6 +76,15 @@ vi.mock('aitrack-lib/git', () => ({
     mocks.writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
   },
 }));
+vi.mock('aitrack-lib/pricing/syncPack', () => ({
+  syncPricingPack: vi.fn(() =>
+    Promise.resolve({
+      updatedAt: '2026-09-29T00:00:00.000Z',
+      refreshed: false,
+      detail: 'cache still fresh',
+    }),
+  ),
+}));
 
 import { loggedOutput } from '@aitrack/test-fixtures';
 import type { DayMap } from 'aitrack-lib/data/types';

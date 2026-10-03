@@ -1,65 +1,66 @@
 import type { ClaudeFamily } from '../data/modelId.js';
-import claudeTable from './tables/claude.json' with { type: 'json' };
-import codexTable from './tables/codex.json' with { type: 'json' };
-import cursorTable from './tables/cursor.json' with { type: 'json' };
-import type { ClaudePricing, CodexPricing, CursorPricing } from './types.js';
+import { currentModelPricing } from './store.js';
+import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
 
-export interface PricingOverride<P> {
-  before: string;
-  pricing: P;
+export type { PricingOverride };
+
+/** Keep mutable exports attached to the active snapshot, including merged table views. */
+function liveTables<T extends object>(getTables: () => [T, ...T[]], target = {} as T): T {
+  const tableFor = (key: PropertyKey): T => {
+    const tables = getTables();
+    return tables.find((table) => Object.hasOwn(table, key)) ?? tables[0];
+  };
+  return new Proxy<T>(target, {
+    get: (_, key): unknown => Reflect.get(tableFor(key), key),
+    set: (_, key, value: unknown) => Reflect.set(tableFor(key), key, value),
+    deleteProperty: (_, key) => getTables().every((table) => Reflect.deleteProperty(table, key)),
+    has: (_, key) => getTables().some((table) => Reflect.has(table, key)),
+    ownKeys: () => [...new Set(getTables().flatMap((table) => Reflect.ownKeys(table)))],
+    getOwnPropertyDescriptor: (_, key) => Reflect.getOwnPropertyDescriptor(tableFor(key), key),
+    // Fixed descriptors cannot follow replacement snapshots.
+    defineProperty: () => false,
+    preventExtensions: () => false,
+  });
 }
 
-interface CursorAliasRule {
-  pattern: string;
-  canonical: string;
-}
-
-interface CompiledAlias {
-  pattern: RegExp;
-  canonical: string;
-}
-
-function compilePattern(pattern: string): RegExp {
-  // Swift-style (?i) prefix — JS needs the i flag instead.
-  return pattern.startsWith('(?i)') ? new RegExp(pattern.slice(4), 'iu') : new RegExp(pattern, 'u');
-}
-
-export const CLAUDE_MODELS: Record<string, ClaudePricing> = claudeTable.models;
-export const CLAUDE_FAMILY_FALLBACK: Record<ClaudeFamily, ClaudePricing> =
-  claudeTable.familyFallback;
+export const CLAUDE_MODELS: Record<string, ClaudePricing> = liveTables(() => [
+  currentModelPricing().pricingTable('claude').models,
+]);
+export const CLAUDE_FAMILY_FALLBACK: Record<ClaudeFamily, ClaudePricing> = liveTables(() => [
+  currentModelPricing().pricingTable('claude').familyFallback,
+]);
 export const CLAUDE_PRICING_OVERRIDES: Record<
   string,
   Array<PricingOverride<ClaudePricing>>
-> = structuredClone(claudeTable.overrides);
+> = liveTables(() => [currentModelPricing().pricingOverrides('claude')]);
 
-export const CODEX_PRICING_CURRENT: Record<string, CodexPricing> = codexTable.current;
-export const CODEX_PRICING_HISTORICAL: Record<string, CodexPricing> = codexTable.historical;
-export const CODEX_PRICING_BY_ID: Record<string, CodexPricing> = {
-  ...codexTable.current,
-  ...codexTable.historical,
-};
+export const CODEX_PRICING_CURRENT: Record<string, CodexPricing> = liveTables(() => [
+  currentModelPricing().pricingTable('codex').current,
+]);
+export const CODEX_PRICING_HISTORICAL: Record<string, CodexPricing> = liveTables(() => [
+  currentModelPricing().pricingTable('codex').historical,
+]);
+export const CODEX_PRICING_BY_ID: Record<string, CodexPricing> = liveTables(() => {
+  const { current, historical } = currentModelPricing().pricingTable('codex');
+  return [current, historical];
+});
 export const CODEX_PRICING_OVERRIDES: Record<
   string,
   Array<PricingOverride<CodexPricing>>
-> = structuredClone(codexTable.overrides);
-export const CODEX_FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> =
-  codexTable.familyFallback.map((entry) => ({
-    match: new RegExp(entry.match, 'u'),
-    pricing: { inputPerMillion: entry.inputPerMillion, outputPerMillion: entry.outputPerMillion },
-  }));
+> = liveTables(() => [currentModelPricing().pricingOverrides('codex')]);
+export const CODEX_FAMILY_FALLBACK: Array<{ match: RegExp; pricing: CodexPricing }> = liveTables(
+  () => [currentModelPricing().codexFamilyFallbacks()],
+  [],
+);
 
-export const CURSOR_MODELS: Record<string, CursorPricing> = cursorTable.models;
-export const CURSOR_FAST_MULTIPLIERS: Record<string, number> = cursorTable.fastMultipliers;
+export const CURSOR_MODELS: Record<string, CursorPricing> = liveTables(() => [
+  currentModelPricing().pricingTable('cursor').models,
+]);
+export const CURSOR_FAST_MULTIPLIERS: Record<string, number> = liveTables(() => [
+  currentModelPricing().pricingTable('cursor').fastMultipliers,
+]);
 
-const CURSOR_ALIASES: CompiledAlias[] = cursorTable.aliases.map((rule: CursorAliasRule) => ({
-  pattern: compilePattern(rule.pattern),
-  canonical: rule.canonical,
-}));
-
-/** First matching alias, or the original slug. */
+/** First matching alias, or the original slug. Uses the live pricing pack. */
 export function applyCursorAlias(model: string): string {
-  for (const rule of CURSOR_ALIASES) {
-    if (rule.pattern.test(model)) return rule.canonical;
-  }
-  return model;
+  return currentModelPricing().applyCursorAlias(model);
 }

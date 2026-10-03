@@ -41,6 +41,16 @@ export { type ReadCursorDataOptions, readCursorData } from './readers/cursor/ind
 
 // Pricing
 export * from './pricing/resolve.js';
+export * from './pricing/reprice.js';
+export * from './pricing/catalogs.js';
+export * from './pricing/supplementFromTables.js';
+export {
+  currentModelPricing,
+  resetSharedPricingStore,
+  sharedPricingStore,
+} from './pricing/store.js';
+export { syncPricingPack } from './pricing/syncPack.js';
+export { pricingPackBaseUrl, pricingPackUrls } from './pricing/packMeta.js';
 
 // The data repo: cloning it, reading machine files, writing ours back
 export {

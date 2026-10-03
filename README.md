@@ -143,7 +143,7 @@ the same weekdays last week. Comparison data is also included with `--json`.
 
 **`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), `--year <year>`, and `--since <YYYY-MM-DD>` / `--until <YYYY-MM-DD>` for an explicit inclusive date range.
 
-**`doctor` flags:** `--pricing-check` runs the pricing drift script when you are in a source checkout.
+**`doctor` flags:** `--pricing-check` runs an optional local tables-vs-catalogs compare when you are in a source checkout (release hygiene; live installs refresh from the `pricing` branch instead).
 
 ---
 
@@ -174,7 +174,7 @@ the same weekdays last week. Comparison data is also included with `--json`.
 
 ### Cost handling
 
-Claude Code, Codex, and Cursor costs are API-equivalent estimates from per-model list pricing, not subscription charges. Rates live in `libs/aitrack-lib/src/pricing/tables/*.json` so a price change is a JSON edit. Claude estimates account for regular input, cache reads, cache creation, and output. Cache creation uses the 5-minute write rate (1.25× input) unless the transcript splits out 1-hour writes, which are 2× input. Claude 4.6 and later list prices cover the full context window at those base rates, so there is no separate long-context surcharge to apply. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Cursor estimates use the same CSV token buckets (uncached input, cache write, cache read, output) and ignore the export's Cost column, which is plan-included rather than a list price. Cursor CSV rows are aggregates, so long-context rate tiers are not applied. Unknown Claude or Codex model IDs that name a known family use that family's rates and emit a warning from `sync`, `show`, `usage`, `top`, and `export`. An id that matches no family stays unpriced, as do unknown Cursor models. If stored Claude or Codex estimates are missing or pricing changed, run `aitrack recompute-costs`.
+Claude Code, Codex, and Cursor costs are API-equivalent estimates from per-model list pricing, not subscription charges. First-party rates (Cursor natives, date overrides, Claude cache multipliers) live in `libs/aitrack-lib/src/pricing/tables/*.json` as the offline baseline — no separate pricing pack is bundled in the npm package. Installed CLIs refresh a live pack daily from the orphan [`pricing`](https://github.com/bircni/aitrack/tree/pricing) branch into `~/.config/aitrack/pricing/` (override the base URL with `AITRACK_PRICING_URL`, or set `AITRACK_NO_PRICING_REFRESH=1` to disable network refresh). After a rate change, run `aitrack recompute-costs` so synced Claude/Codex estimates pick it up. Claude estimates account for regular input, cache reads, cache creation, and output. Cache creation uses the 5-minute write rate (1.25× input) unless the transcript splits out 1-hour writes, which are 2× input. Claude 4.6 and later list prices cover the full context window at those base rates, so there is no separate long-context surcharge to apply. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Cursor estimates use the same CSV token buckets (uncached input, cache write, cache read, output) and ignore the export's Cost column, which is plan-included rather than a list price. Cursor CSV rows are aggregates, so long-context rate tiers are not applied. Unknown Claude or Codex model IDs that name a known family use that family's rates and emit a warning from `sync`, `show`, `usage`, `top`, and `export`. An id that matches no family stays unpriced, as do unknown Cursor models.
 
 ---
 
@@ -285,8 +285,8 @@ Every module is reachable both from the package root and at its own subpath.
 
 This repo is an [nx](https://nx.dev/) monorepo:
 
-| Package                                        | Published as  | What it is                                           |
-| ---------------------------------------------- | ------------- | ---------------------------------------------------- |
+| Package                                | Published as  | What it is                                           |
+| -------------------------------------- | ------------- | ---------------------------------------------------- |
 | [`apps/aitrack`](apps/aitrack)         | `aitrack`     | The `aitrack` command line                           |
 | [`libs/aitrack-lib`](libs/aitrack-lib) | `aitrack-lib` | Readers, pricing, the data model, storage, renderers |
 

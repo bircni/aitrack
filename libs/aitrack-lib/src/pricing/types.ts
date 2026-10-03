@@ -17,3 +17,9 @@ export interface CursorPricing {
   cacheReadPerMillion: number;
   cacheWritePerMillion: number;
 }
+
+/** Apply `pricing` for usage dates strictly before `before` (YYYY-MM-DD). */
+export interface PricingOverride<P> {
+  before: string;
+  pricing: P;
+}
