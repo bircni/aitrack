@@ -34,7 +34,7 @@
 
   function reading(value: Spend): string {
     const tokens = `${formatTokens(value.tokens)} tokens`;
-    return value.hasCost ? `${formatCost(value.costUSD)} · ${tokens}` : tokens;
+    return value.hasCost ? `${spendLabel(value)} · ${tokens}` : tokens;
   }
 </script>
 

@@ -19,6 +19,7 @@ export interface TokenCounts {
   /** Claude 1-hour cache writes, billed at twice the base input rate. */
   cacheCreation1hInputTokens?: number;
   costUSD?: number;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface DayEntry extends TokenCounts {

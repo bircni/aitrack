@@ -35,8 +35,15 @@ export function mergeProviderDay(
   let isAnyModelHadCost = false;
   for (const [model, counts] of Object.entries(pData.byModel)) {
     const m = (rec.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-    addTokenCounts(m, { ...counts, costUSD: undefined });
     const cost = resolveModelCost(providerKey, model, counts, date);
+    addTokenCounts(m, {
+      ...counts,
+      costUSD: undefined,
+      hasUnpricedTokens:
+        counts.hasUnpricedTokens === true ||
+        (counts.inputTokens + counts.outputTokens > 0 && cost === undefined),
+    });
+    if (m.hasUnpricedTokens) rec.hasUnpricedTokens = true;
     if (cost !== undefined) {
       m.costUSD = (m.costUSD ?? 0) + cost;
       summedModelCost += cost;

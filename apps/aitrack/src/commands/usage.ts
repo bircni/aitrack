@@ -50,7 +50,9 @@ function renderUsageReport(report: UsageReport): void {
         tokens: fmt(row.tokens),
         cached: row.hasCached ? fmt(row.cachedInputTokens) : '—',
         model: displayModelName(row.model, { effort: true }),
-        price: row.hasCost ? fmtUSD(row.costUSD) : '—',
+        price: row.hasCost
+          ? `${fmtUSD(row.costUSD)}${row.hasUnpricedTokens ? ' (partial)' : ''}`
+          : '—',
       });
     }
   }
@@ -60,7 +62,9 @@ function renderUsageReport(report: UsageReport): void {
     tokens: fmt(report.totals.tokens),
     cached: report.totals.hasCached ? fmt(report.totals.cachedInputTokens) : '—',
     model: '',
-    price: report.totals.hasCost ? fmtUSD(report.totals.costUSD) : '—',
+    price: report.totals.hasCost
+      ? `${fmtUSD(report.totals.costUSD)}${report.totals.hasUnpricedTokens ? ' (partial)' : ''}`
+      : '—',
     isTotal: true,
   };
 
@@ -107,6 +111,9 @@ function renderComparison(report: UsageComparisonReport): void {
 
   log.info('');
   log.info(chalk.bold(`Compared with ${comparison.previousWindowLabel}`));
+  if (comparison.totals.hasUnpricedTokens && comparison.totals.hasCost) {
+    log.info('Cost comparison is a partial estimate: some usage is unpriced.');
+  }
   log.info(
     renderTerminalTable(
       summaryRows,
@@ -214,7 +221,10 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   renderUsageReport(report);
   if (report.timezoneNote) log.info(chalk.dim(report.timezoneNote));
 
-  if (budget) renderBudgetLine(budget);
+  if (budget) {
+    renderBudgetLine(budget);
+    if (report.totals.hasUnpricedTokens) log.info('Budget spend is a partial estimate.');
+  }
 
   if (comparisonReport) renderComparison(comparisonReport);
 }

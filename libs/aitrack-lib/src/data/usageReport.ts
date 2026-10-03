@@ -40,6 +40,7 @@ export interface UsageReportRow {
   hasCached: boolean;
   costUSD: number;
   hasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface UsageReportProvider {
@@ -49,6 +50,7 @@ export interface UsageReportProvider {
   subtotalTokens: number;
   subtotalCostUSD: number;
   subtotalHasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface UsageReportTotals {
@@ -59,6 +61,7 @@ export interface UsageReportTotals {
   hasCached: boolean;
   costUSD: number;
   hasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface UsageReport {
@@ -84,6 +87,7 @@ export interface UsageModelComparison {
   tokens: UsageComparisonMetric;
   costUSD: UsageComparisonMetric;
   hasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface UsageComparison {
@@ -92,6 +96,7 @@ export interface UsageComparison {
     tokens: UsageComparisonMetric;
     costUSD: UsageComparisonMetric;
     hasCost: boolean;
+    hasUnpricedTokens?: boolean;
   };
   models: UsageModelComparison[];
 }
@@ -180,6 +185,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
     let subtotalTokens = 0;
     let subtotalCostUSD = 0;
     let isSubtotalHasCost = false;
+    let hasUnpricedTokens = false;
 
     for (const [model, agg] of byModel) {
       const tokens = agg.inputTokens + agg.outputTokens;
@@ -193,7 +199,9 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
         hasCached: agg.hasCached,
         costUSD: agg.hasCost ? agg.costUSD : 0,
         hasCost: agg.hasCost,
+        ...(agg.hasUnpricedTokens && { hasUnpricedTokens: true }),
       });
+      hasUnpricedTokens ||= agg.hasUnpricedTokens === true;
       subtotalTokens += tokens;
       totals.inputTokens += agg.inputTokens;
       totals.outputTokens += agg.outputTokens;
@@ -209,6 +217,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
       }
     }
 
+    if (hasUnpricedTokens) totals.hasUnpricedTokens = true;
     if (rows.length === 0) continue;
     rows.sort((a, b) => compareByCostThenTokens(a, b));
     rowCount += rows.length;
@@ -219,6 +228,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
       subtotalTokens,
       subtotalCostUSD,
       subtotalHasCost: isSubtotalHasCost,
+      ...(hasUnpricedTokens && { hasUnpricedTokens: true }),
     });
   }
 
@@ -264,6 +274,9 @@ function compareUsageReports(current: UsageReport, previous: UsageReport): Usage
       tokens: comparisonMetric(currentRow?.tokens ?? 0, previousRow?.tokens ?? 0),
       costUSD: comparisonMetric(currentRow?.costUSD ?? 0, previousRow?.costUSD ?? 0),
       hasCost: (currentRow?.hasCost ?? false) || (previousRow?.hasCost ?? false),
+      ...((currentRow?.hasUnpricedTokens === true || previousRow?.hasUnpricedTokens === true) && {
+        hasUnpricedTokens: true,
+      }),
     });
   }
 
@@ -281,6 +294,8 @@ function compareUsageReports(current: UsageReport, previous: UsageReport): Usage
       tokens: comparisonMetric(current.totals.tokens, previous.totals.tokens),
       costUSD: comparisonMetric(current.totals.costUSD, previous.totals.costUSD),
       hasCost: current.totals.hasCost || previous.totals.hasCost,
+      ...((current.totals.hasUnpricedTokens === true ||
+        previous.totals.hasUnpricedTokens === true) && { hasUnpricedTokens: true }),
     },
     models,
   };

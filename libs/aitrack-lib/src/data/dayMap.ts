@@ -53,6 +53,7 @@ export function addTokenCounts(dest: TokenCounts, source: TokenCounts): void {
   dest.inputTokens += source.inputTokens;
   dest.outputTokens += source.outputTokens;
   mergeTokenBreakdown(dest, source);
+  if (source.hasUnpricedTokens) dest.hasUnpricedTokens = true;
   if (source.costUSD !== undefined) {
     dest.costUSD = (dest.costUSD ?? 0) + source.costUSD;
   }
@@ -67,8 +68,12 @@ export function addTokenCounts(dest: TokenCounts, source: TokenCounts): void {
  */
 export function addModelUsage(day: DayEntry, model: string, counts: TokenCounts): void {
   const rec = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-  addTokenCounts(rec, counts);
-  addTokenCounts(day, counts);
+  const pricedCounts =
+    counts.costUSD === undefined && counts.inputTokens + counts.outputTokens > 0
+      ? { ...counts, hasUnpricedTokens: true }
+      : counts;
+  addTokenCounts(rec, pricedCounts);
+  addTokenCounts(day, pricedCounts);
 }
 
 /** Merge one DayMap into another, summing day totals, breakdowns and models. */

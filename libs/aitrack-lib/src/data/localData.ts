@@ -19,6 +19,7 @@ function tokenCountFields(counts: TokenCounts): TokenCounts {
       cacheCreation1hInputTokens: counts.cacheCreation1hInputTokens,
     }),
     ...(counts.costUSD !== undefined && { costUSD: counts.costUSD }),
+    ...(counts.hasUnpricedTokens && { hasUnpricedTokens: true }),
   };
 }
 

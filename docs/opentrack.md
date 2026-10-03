@@ -37,6 +37,8 @@ machines in your aitrack data repo when one is configured (`aitrack init`). open
 that repo every 30 minutes (can be turned off). It commits and pushes only when you press the sync
 button in the popup, which does exactly what `aitrack sync` does.
 
+Mixed priced/unpriced usage displays a partial estimate rather than implying a complete dollar total.
+
 Settings and the last snapshot live in the app's data folder (`%APPDATA%\dev.bircni.opentrack` on
 Windows): `settings.json`, `cache.json`, and `sidecar.log`. There is no account, telemetry or
 backend.
