@@ -41,7 +41,7 @@
   },
   "overrides": [
     {
-      "files": ["**/*.ts", "**/*.tsx"],
+      "files": ["**/*.ts", "**/*.tsx", "**/*.svelte"],
       "rules": {
         "typescript/adjacent-overload-signatures": "error",
         "typescript/array-type": [
