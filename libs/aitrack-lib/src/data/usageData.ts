@@ -247,7 +247,7 @@ export async function loadMergedProviderData(
   const livePending = startLiveFetches(providerFilter, options.refreshLive);
   const localMachine =
     options.localMachine === undefined
-      ? await buildLocalMachineFile(machineId)
+      ? await buildLocalMachineFile(machineId, undefined, options.providers)
       : options.localMachine;
 
   const isWarnedNotConfigured = !config || !isCloned();

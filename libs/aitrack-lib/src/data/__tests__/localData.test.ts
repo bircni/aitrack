@@ -157,6 +157,19 @@ describe('localData', () => {
   });
 });
 
+it('skips unselected provider readers while keeping default local-machine reads complete', async () => {
+  vi.clearAllMocks();
+  mocks.readClaudeData.mockResolvedValue(dayMap(10, 2));
+  mocks.readCodexData.mockResolvedValue(dayMap(20, 3));
+  expect(Object.keys(await readLocalProviderMaps(undefined, ['claude_code']))).toEqual([
+    'claude_code',
+  ]);
+  expect(mocks.readClaudeData).toHaveBeenCalledTimes(1);
+  expect(mocks.readCodexData).not.toHaveBeenCalled();
+  await buildLocalMachineFile('host');
+  expect(mocks.readCodexData).toHaveBeenCalledTimes(1);
+});
+
 it('preserves token breakdowns and partial pricing when writing machine data', () => {
   const counts = {
     inputTokens: 10,
