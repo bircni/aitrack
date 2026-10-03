@@ -44,13 +44,17 @@ function trailingDates(today: Date, days: number): string[] {
  */
 export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date()): UsageSummary {
   if (!loaded) return { providers: {}, machineCount: 1 };
-  const [today, yesterday, week, month, all] = buildUsageReportsFromLoaded(loaded, [
-    { period: 'today' },
-    { period: 'yesterday' },
-    { period: 'week' },
-    { period: 'month' },
-    { period: 'all' },
-  ]);
+  const [today, yesterday, week, month, all] = buildUsageReportsFromLoaded(
+    loaded,
+    [
+      { period: 'today' },
+      { period: 'yesterday' },
+      { period: 'week' },
+      { period: 'month' },
+      { period: 'all' },
+    ],
+    now,
+  );
   const dates = trailingDates(now, TREND_DAYS);
 
   const providers: UsageSummary['providers'] = {};
