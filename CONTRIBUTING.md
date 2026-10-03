@@ -142,8 +142,14 @@ run per project. Lint uses `nx-oxlint:lint` with type-aware checking.
 
 Tests run `vitest run`; the `ci` configuration adds coverage. Run
 `pnpm exec nx run aitrack-lib:test:ci` for one package or `pnpm run test:ci` for all suites.
-The CLI and library depend on the shared test-fixtures package, so fixture changes
-invalidate their cached checks.
+The desktop suite uses the Svelte Vite plugin and jsdom, measures components and the
+API bridge, and exercises command failures, settings queues, provider controls and
+partial/stale presentation. Only the renderer entrypoint, sidecar process entrypoint
+and shared type declarations are excluded; builds, CLI smoke and native app checks
+validate the process/bootstrap glue.
+The CLI, library and desktop depend on the shared test-fixtures package, so fixture
+changes invalidate their cached checks. Calendar tests use `useTimeZone` and
+`EXTREME_TIME_ZONES` rather than changing `TZ`.
 
 Run `pnpm exec tsx scripts/benchmark-readers.ts` for an isolated synthetic reader
 benchmark. It verifies cold/warm totals and ordering, reports median timings over
