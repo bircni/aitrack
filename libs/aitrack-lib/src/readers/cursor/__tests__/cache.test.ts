@@ -225,3 +225,44 @@ describe('cursor CSV cache', () => {
     });
   });
 });
+
+it('rejects cached exports after an account switch and honors Retry-After during forced refreshes', async () => {
+  mkdirSync(TEST_HOME, { recursive: true });
+  const stateDb = join(TEST_HOME, 'account.vscdb');
+  const database = new DatabaseSync(stateDb);
+  database.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
+  database
+    .prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)')
+    .run('cursorAuth/accessToken', 'account-b');
+  database.close();
+  process.env.CURSOR_STATE_DB_PATH = stateDb;
+  writeCursorCache({
+    accountId: cursorAccountId('account-a'),
+    fetchedAt: new Date().toISOString(),
+    csv: CSV,
+  });
+  const previousFetch = globalThis.fetch;
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('', { status: 429, headers: { 'retry-after': '120' } }));
+  globalThis.fetch = fetcher;
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  vi.useFakeTimers();
+  try {
+    const switched = await readCursorData({ maxAgeSeconds: 3600 });
+    expect(switched.size).toBe(0);
+    await readCursorData({ maxAgeSeconds: 0 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(120_000);
+    fetcher.mockResolvedValue(new Response(CSV, { status: 200 }));
+    await readCursorData({ maxAgeSeconds: 0 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(readCursorCache()?.accountId).toBe(cursorAccountId('account-b'));
+  } finally {
+    vi.useRealTimers();
+    globalThis.fetch = previousFetch;
+    delete process.env.CURSOR_STATE_DB_PATH;
+    vi.restoreAllMocks();
+    rmSync(TEST_HOME, { recursive: true, force: true });
+  }
+});

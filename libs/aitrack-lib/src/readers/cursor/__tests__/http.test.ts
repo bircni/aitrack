@@ -30,6 +30,14 @@ describe('Cursor credential attempts', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it.each([429, 503])('stops after HTTP %s and passes Retry-After to backoff', async (status) => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(new Response('', { status, headers: { 'retry-after': '120' } }));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(fetchCursorUsageCsv('token')).rejects.toMatchObject({ retryAfterSeconds: 120 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
 
   it('hashes identity without persisting credentials and tolerates token rotation', () => {
     expect(cursorAccountId(jwt('a', '1'))).toBe(cursorAccountId(jwt('a', '2')));

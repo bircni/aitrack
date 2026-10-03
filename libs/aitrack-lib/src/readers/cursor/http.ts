@@ -1,4 +1,5 @@
 import { environmentValue } from '../../env.js';
+import { parseRetryAfter, QuotaFailure } from '../../quota/http.js';
 import { decodeJwtPayload } from './jwt.js';
 
 /**
@@ -106,6 +107,14 @@ export async function fetchCursorUsageCsv(
       signal: AbortSignal.timeout(CURSOR_FETCH_TIMEOUT_MS),
     });
     if (response.ok) return { response, shape: attempt.label };
+    if (response.status !== 401 && response.status !== 403) {
+      await response.body?.cancel();
+      throw new QuotaFailure(
+        response.status === 429 ? 'rateLimited' : 'network',
+        `Cursor export returned HTTP ${String(response.status)}`,
+        parseRetryAfter(response.headers.get('retry-after')),
+      );
+    }
     const responseBody = await response.text();
     failures.push({
       label: attempt.label,

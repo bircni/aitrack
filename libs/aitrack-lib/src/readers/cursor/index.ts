@@ -1,10 +1,13 @@
 import type { DayMap } from '../../data/types.js';
 import { errorMessage } from '../../errors.js';
 import { log } from '../../output.js';
+import { QuotaFailure } from '../../quota/http.js';
 import { fetchCursorUsageCsv, getCursorStateDatabasePath, readCursorAuthState } from './auth.js';
 import { cursorCacheAgeSeconds, readCursorCache, writeCursorCache } from './cache.js';
 import { aggregateCursorCsvToDayMap } from './csv.js';
 import { cursorAccountId } from './jwt.js';
+
+let retry: { key: string; until: number } | undefined;
 
 export { getCursorStateDatabasePath } from './auth.js';
 export { aggregateCursorCsvToDayMap, parseCursorDateString } from './csv.js';
@@ -48,6 +51,8 @@ export async function readCursorData(options: ReadCursorDataOptions = {}): Promi
   const stored = readCursorCache();
   const cached = stored?.accountId === accountId ? stored : null;
   const fromCache = () => (cached ? aggregateCursorCsvToDayMap(cached.csv) : new Map());
+  const retryKey = `${databasePath}:${accountId}`;
+  if (retry?.key === retryKey && Date.now() < retry.until) return fromCache();
   if (
     cached &&
     maxAgeSeconds !== undefined &&
@@ -65,7 +70,14 @@ export async function readCursorData(options: ReadCursorDataOptions = {}): Promi
     const result = await fetchCursorUsageCsv(authState.accessToken, cached?.workingAuthShape);
     text = await result.response.text();
     shape = result.shape;
+    retry = undefined;
   } catch (error) {
+    retry = {
+      key: retryKey,
+      until:
+        Date.now() +
+        Math.max(60_000, error instanceof QuotaFailure ? (error.retryAfterSeconds ?? 0) * 1000 : 0),
+    };
     if (cached) {
       log.warn(
         `aitrack: Cursor — using cached export from ${cached.fetchedAt} (refresh failed: ${errorMessage(error)}).`,
