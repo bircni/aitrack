@@ -75,6 +75,15 @@ vi.mock('../git.js', () => ({
     mocks.writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
   },
 }));
+vi.mock('../pricing/syncPack.js', () => ({
+  syncPricingPack: vi.fn(() =>
+    Promise.resolve({
+      updatedAt: '2026-09-29T00:00:00.000Z',
+      refreshed: false,
+      detail: 'cache still fresh',
+    }),
+  ),
+}));
 
 import { loggedOutput } from '@aitrack/test-fixtures';
 

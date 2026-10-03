@@ -30,6 +30,7 @@
     "validate:affected": "nx affected -t format:check,lint,typecheck,check:unused,test,build --configuration ci",
     "graph": "nx graph",
     "pricing:check": "nx run repo-tools:pricing:check",
+    "pricing:update": "nx run repo-tools:pricing:update",
     "changelog": "nx run repo-tools:changelog",
     "release": "nx run repo-tools:release",
     "release:dry-run": "nx run repo-tools:release -- patch --dry-run",

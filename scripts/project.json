@@ -43,6 +43,13 @@
         "command": "tsx scripts/update-pricing.ts"
       }
     },
+    "pricing:update": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "tsx scripts/build-pricing-pack.ts"
+      }
+    },
     "changelog": {
       "executor": "nx:run-commands",
       "cache": false,

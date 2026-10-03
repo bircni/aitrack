@@ -32,6 +32,7 @@ import {
   reportFallbackPricing,
 } from './pricing/fallback.js';
 import { recordPricingFallbacks } from './pricing/scan.js';
+import { syncPricingPack } from './pricing/syncPack.js';
 import { syncedProviders } from './providers/index.js';
 
 export interface SyncDataOptions extends GitOptions {
@@ -77,6 +78,7 @@ export async function syncData(options: SyncDataOptions = {}): Promise<SyncResul
   // models into the next.
   const fallbacks = createFallbackCollector();
   try {
+    await syncPricingPack();
     return await withRepoLock(() => pushLocalUsage(options, fallbacks));
   } finally {
     // Fallback hits accumulate while the logs are read, so they exist however

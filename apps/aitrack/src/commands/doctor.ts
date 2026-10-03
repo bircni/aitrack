@@ -108,6 +108,19 @@ function isAitrackCheckout(directory: string): boolean {
   }
 }
 
+async function pricingCacheCheck(): Promise<CheckResult> {
+  const { syncPricingPack } = await import('aitrack-lib/pricing/syncPack');
+  const { currentModelPricing } = await import('aitrack-lib/pricing/store');
+  const result = await syncPricingPack();
+  const pricing = currentModelPricing();
+  const refreshFailed = result.detail.startsWith('refresh failed:');
+  return {
+    status: refreshFailed ? 'warn' : 'ok',
+    label: 'Pricing cache',
+    detail: `${String(pricing.claudeModelCount())} Claude, ${String(pricing.codexModelCount())} Codex, ${String(pricing.cursorModelCount())} Cursor — ${result.detail} (updatedAt ${result.updatedAt})`,
+  };
+}
+
 function pricingCheck(options: DoctorOptions): CheckResult {
   if (!options.pricingCheck) {
     const claudeCount = getProvider('claude_code')?.pricing.modelCount ?? 0;
@@ -252,6 +265,7 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
   checks.push(
     ...(await Promise.all(PROVIDERS.map((provider) => Promise.resolve(provider.doctorCheck())))),
   );
+  checks.push(await pricingCacheCheck());
   checks.push(pricingCheck(options));
 
   return checks;

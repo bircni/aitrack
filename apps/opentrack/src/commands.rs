@@ -10,10 +10,8 @@ use crate::Shell;
 
 /// Same JSON the TypeScript UI imports (`apps/opentrack-ui/src/shared/provider-dashboards.json`).
 static DASHBOARDS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../opentrack-ui/src/shared/provider-dashboards.json"
-    ))
-    .expect("provider-dashboards.json")
+    serde_json::from_str(include_str!("../../opentrack-ui/src/shared/provider-dashboards.json"))
+        .expect("provider-dashboards.json")
 });
 
 /// The last state the sidecar pushed, so the popup opens instantly even mid-refresh.
@@ -53,9 +51,7 @@ pub fn open_dashboard(app: AppHandle, provider: String) -> Result<(), String> {
     let Some(url) = DASHBOARDS.get(&provider) else {
         return Err(format!("No dashboard for {provider}"));
     };
-    app.opener()
-        .open_url(url, None::<&str>)
-        .map_err(|error| error.to_string())
+    app.opener().open_url(url, None::<&str>).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

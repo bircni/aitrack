@@ -2,7 +2,8 @@ import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
 import { lookupClaudePricing } from './claude.js';
 import { lookupCodexPricing } from './codex.js';
 import { costFromRates, type FullModelRates, scaleRates } from './rates.js';
-import { applyCursorAlias, CURSOR_FAST_MULTIPLIERS, CURSOR_MODELS } from './tables.js';
+import { currentModelPricing } from './store.js';
+import { CURSOR_FAST_MULTIPLIERS, CURSOR_MODELS } from './tables.js';
 import type { CursorPricing } from './types.js';
 
 export { CURSOR_MODELS };
@@ -35,17 +36,21 @@ function codexToCursorRates(pricing: {
 }
 
 function lookupExactCursorRates(model: string, usageDate?: string): FullModelRates | undefined {
-  const cursor = CURSOR_MODELS[model];
+  const pricing = currentModelPricing();
+  const cursor = pricing.lookupCursorNative(model);
   if (cursor) return cursor;
   const claude = lookupClaudePricing(model, usageDate);
   if (claude) return claudeToCursorRates(claude);
   const codex = lookupCodexPricing(model, usageDate);
   if (codex) return codexToCursorRates(codex);
+  // Do not fall through to public catalogs here: Cursor CSV slugs that aren't
+  // in the supplement (or Claude/Codex tables) stay unpriced on purpose.
   return undefined;
 }
 
 export function resolveCursorRates(model: string, usageDate?: string): FullModelRates | undefined {
-  const aliased = applyCursorAlias(model);
+  const pricing = currentModelPricing();
+  const aliased = pricing.applyCursorAlias(model);
   const exact = lookupExactCursorRates(aliased, usageDate);
   if (exact) return exact;
 
@@ -53,7 +58,7 @@ export function resolveCursorRates(model: string, usageDate?: string): FullModel
   const base = aliased.slice(0, -'-fast'.length);
   if (base === '') return undefined;
   const baseRates = lookupExactCursorRates(base, usageDate);
-  const multiplier = CURSOR_FAST_MULTIPLIERS[base];
+  const multiplier = pricing.cursorFastMultiplier(base);
   if (!baseRates || multiplier === undefined) return undefined;
   return scaleRates(baseRates, multiplier);
 }
@@ -76,3 +81,10 @@ export function estimateCursorCostUSD(
   const raw = counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheWrite);
   return costFromRates(rates, { raw, output: counts.outputTokens, cacheRead, cacheWrite });
 }
+
+// Re-export for callers that imported applyCursorAlias from tables via cursor.
+export function applyCursorAlias(model: string): string {
+  return currentModelPricing().applyCursorAlias(model);
+}
+
+export { CURSOR_FAST_MULTIPLIERS };

@@ -1,147 +1,184 @@
-import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  claudeHeading,
-  claudePricingLookup,
-  discoverClaudeModelsOnPage,
-  discoverCodexModelsOnPage,
-  compareProviderPricing,
-  tallyFindings,
-} from '../update-pricing.js';
+  catalogFromCompact,
+  type CompactCatalog,
+} from '../../libs/aitrack-lib/src/pricing/codecs.js';
+import { supplementFromTables } from '../../libs/aitrack-lib/src/pricing/supplementFromTables.js';
 
-describe('pricing checker discovery', () => {
-  it('converts every tracked Claude family slug to its docs heading', () => {
-    expect(claudeHeading('claude-fable-5')).toBe('Claude Fable 5');
-    expect(claudeHeading('claude-mythos-5')).toBe('Claude Mythos 5');
-  });
+const mocks = vi.hoisted(() => ({ appDir: '', fetchPricingCatalogs: vi.fn() }));
+vi.mock('../../libs/aitrack-lib/src/pricing/catalogs.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../libs/aitrack-lib/src/pricing/catalogs.js')>()),
+  fetchPricingCatalogs: mocks.fetchPricingCatalogs,
+}));
 
-  it('discovers priced Fable and Mythos models from Claude docs text', () => {
-    const html =
-      '<table><tr><td>Claude Fable 5</td><td>$10</td><td>$50</td></tr><tr><td>Claude Mythos 5</td><td>$10</td><td>$50</td></tr></table>';
-    expect(discoverClaudeModelsOnPage(html)).toEqual(['claude-fable-5', 'claude-mythos-5']);
-  });
-
-  it('reads output prices beyond the old 800-character window', () => {
-    const html = `<table><tr><td><span>Claude Mythos 5.1</span><button aria-label="Claude Mythos 5.1 (Invite only)" class="${'status '.repeat(150)}">Invite only</button></td><td>$10<!-- --> <span>/ MTok</span></td><td>$50<!-- --> <span>/ MTok</span></td><td>$12.50</td></tr></table>`;
-    expect(claudePricingLookup(html)('claude-mythos-5-1').prices).toEqual([10, 50]);
-    expect(discoverClaudeModelsOnPage(html)).toEqual(['claude-mythos-5-1']);
-  });
-
-  it('does not borrow prices from another row or a longer model version', () => {
-    const html =
-      '<table><tr><td>Claude Opus 4</td><td>$15</td><td>-</td></tr><tr><td>Claude Opus 4.1</td><td>$15</td><td>$75</td></tr></table>';
-    expect(claudePricingLookup(html)('claude-opus-4').prices).toEqual([15]);
-    expect(discoverClaudeModelsOnPage(html)).toEqual(['claude-opus-4-1']);
-  });
-
-  it('ignores navigation, prose, and cache prices when comparing base rates', () => {
-    const html =
-      '<nav>Claude Fable 5 $10 $50</nav><table><tr><td>Claude Fable 5</td><td>$10</td><td>$60</td><td>$50</td></tr></table><p>Claude Mythos 5 costs $10/$50</p>';
-    const [finding] = compareProviderPricing(
-      {
-        label: 'Claude',
-        url: 'https://example.test/pricing',
-        table: { 'claude-fable-5': { inputPerMillion: 10, outputPerMillion: 50 } },
-        knownIds: ['claude-fable-5'],
-        sourceFile: 'claude.json',
-        lookup: claudePricingLookup,
-        discover: discoverClaudeModelsOnPage,
-      },
-      html,
-    );
-    expect(finding).toMatchObject({ kind: 'drift', isInOk: true, isOutOk: false });
-    expect(discoverClaudeModelsOnPage(html)).toEqual(['claude-fable-5']);
-  });
-
-  it('discovers priced Codex model ids that are not already in the local table', () => {
-    const html = [
-      '<div data-content-switcher-pane="true" data-value="standard">',
-      '[1,[[0,&quot;gpt-5.6-sol&quot;],[0,5],[0,0.5],[0,6.25],[0,30]]],',
-      '[1,[[0,&quot;gpt-5.5-pro (&lt;272K context length)&quot;],[0,30],[0,&quot;-&quot;],[0,180]]],',
-      '</div><div data-content-switcher-pane="true" data-value="batch">',
-      '[1,[[0,&quot;gpt-5.7-batch&quot;],[0,1],[0,2]]]',
-      '</div>',
-      '[1,[[0,&quot;gpt-5-chat-latest&quot;],[0,1.25],[0,10]]]',
-      '[1,[[0,&quot;gpt-6.0-codex&quot;],[0,7],[0,42]]]',
-    ].join('');
-    expect(discoverCodexModelsOnPage(html)).toEqual([
-      'gpt-5.5-pro',
-      'gpt-5.6-sol',
-      'gpt-6.0-codex',
-    ]);
-  });
-
-  it('does not borrow prices from the next Codex table row', () => {
-    const html = [
-      '<div data-content-switcher-pane="true" data-value="standard">',
-      '[1,[[0,&quot;gpt-5.6-unpriced&quot;],[0,&quot;-&quot;],[0,&quot;-&quot;]]],',
-      '[1,[[0,&quot;gpt-5.6-priced&quot;],[0,2],[0,12]]]',
-      '</div>',
-    ].join('');
-    expect(discoverCodexModelsOnPage(html)).toEqual(['gpt-5.6-priced']);
-  });
+beforeEach(async () => {
+  vi.resetModules();
+  vi.clearAllMocks();
+  mocks.appDir = await mkdtemp(join(tmpdir(), 'aitrack-pricing-check-'));
+  vi.doMock('../../libs/aitrack-lib/src/paths.js', () => ({ APP_DIR: mocks.appDir }));
+  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+});
+afterEach(async () => {
+  vi.restoreAllMocks();
+  vi.doUnmock('../../libs/aitrack-lib/src/paths.js');
+  await rm(mocks.appDir, { recursive: true, force: true });
 });
 
-describe('compareProviderPricing', () => {
-  const check = {
-    label: 'Test',
-    url: 'https://example.test/pricing',
-    table: {
-      'model-ok': { inputPerMillion: 3, outputPerMillion: 15 },
-      'model-drift': { inputPerMillion: 1, outputPerMillion: 2 },
-      'model-absent': { inputPerMillion: 9, outputPerMillion: 9 },
+describe('checkPricing', () => {
+  it('reports catalog fetch failures with a failing status', async () => {
+    mocks.fetchPricingCatalogs.mockRejectedValueOnce(new Error('offline'));
+    const { checkPricing } = await import('../update-pricing.js');
+    expect(await checkPricing()).toBe(1);
+    expect(console.error).toHaveBeenCalledWith('Catalog fetch failed:', 'offline');
+  });
+
+  it.each(['matching', 'cursor drift'] as const)(
+    'accepts verified source rates with %s',
+    async (mode) => {
+      const source = supplementFromTables();
+      const compact: CompactCatalog = {
+        retrievedAt: source.updatedAt,
+        models: Object.fromEntries(
+          (
+            [
+              ['anthropic', source.claude.models],
+              ['openai', source.codex.current],
+              ['cursor', source.cursor.models],
+            ] as const
+          ).flatMap(([provider, models]) =>
+            Object.entries(models).map(
+              ([id, rates]) =>
+                [
+                  `${provider}/${id}`,
+                  { i: rates.inputPerMillion, o: rates.outputPerMillion, cr: 0, cw: 0 },
+                ] as const,
+            ),
+          ),
+        ),
+      };
+      if (mode === 'cursor drift') compact.models['cursor/auto'] = { i: 99, o: 99, cr: 0, cw: 0 };
+      mocks.fetchPricingCatalogs.mockResolvedValue({
+        primary: catalogFromCompact(compact),
+        secondary: catalogFromCompact(compact),
+      });
+      const { checkPricing } = await import('../update-pricing.js');
+      expect(await checkPricing()).toBe(0);
+      expect(console.log).toHaveBeenCalledWith(
+        'All verified pricing matches LiteLLM / models.dev catalogs.',
+      );
+      const report = vi
+        .mocked(console.log)
+        .mock.calls.map((args) => args.join(' '))
+        .join('\n');
+      expect(report).toContain(
+        mode === 'cursor drift' ? '1 intentional overrides' : '0 intentional overrides',
+      );
     },
-    knownIds: ['model-ok', 'model-drift', 'model-absent'],
-    sourceFile: 'src/pricing/test.ts',
-    lookup: () => (modelId: string) => {
-      if (modelId === 'model-ok') return { prices: [3, 15], where: 'Test' };
-      if (modelId === 'model-drift') return { prices: [4, 20, 99], where: 'Test' };
-      return { prices: [], where: 'Model Absent' };
+  );
+
+  it.each(['success', 'fetch failure', 'report failure'] as const)(
+    'sets the script exit status for %s',
+    async (mode) => {
+      const catalog = catalogFromCompact({ retrievedAt: '2026-01-01', models: {} });
+      mocks.fetchPricingCatalogs.mockResolvedValue({ primary: catalog, secondary: catalog });
+      if (mode === 'fetch failure')
+        mocks.fetchPricingCatalogs.mockRejectedValueOnce(new Error('offline'));
+      if (mode === 'report failure')
+        vi.mocked(console.log).mockImplementationOnce(() => {
+          throw new Error('output unavailable');
+        });
+      const exit = vi.spyOn(process, 'exit').mockReturnValue(undefined as never);
+      const previous = process.argv;
+      process.argv = [
+        process.execPath,
+        fileURLToPath(new URL('../update-pricing.ts', import.meta.url)),
+      ];
+      try {
+        await import('../update-pricing.js');
+        await vi.waitFor(() => {
+          expect(exit).toHaveBeenCalledWith(mode === 'success' ? 0 : 1);
+        });
+      } finally {
+        process.argv = previous;
+      }
     },
-    discover: () => ['model-ok', 'brand-new-model'],
-  };
+  );
 
-  it('classifies matching, drifted, and unfindable models', () => {
-    const findings = compareProviderPricing(check, '<html></html>');
-    const byId = new Map(findings.map((f) => [f.modelId, f]));
-
-    expect(byId.get('model-ok')?.kind).toBe('ok');
-    expect(byId.get('model-drift')?.kind).toBe('drift');
-    // Not on the page at all is different from wrong on the page: one needs a
-    // scraper fix, the other needs a price update.
-    expect(byId.get('model-absent')?.kind).toBe('unverified');
-  });
-
-  it('reports which side drifted and what it saw', () => {
-    const drift = compareProviderPricing(check, '').find((f) => f.kind === 'drift');
-    expect(drift).toMatchObject({ isInOk: false, isOutOk: false, saw: [4, 20, 99] });
-  });
-
-  it('flags a model on the page that the pricing table does not know', () => {
-    const findings = compareProviderPricing(check, '');
-    expect(findings.filter((f) => f.kind === 'missing').map((f) => f.modelId)).toEqual([
-      'brand-new-model',
-    ]);
-  });
-
-  it('counts each category for the exit status', () => {
-    // main() exits non-zero on drift or missing, but not on unverified alone.
-    expect(tallyFindings(compareProviderPricing(check, ''))).toEqual({
-      drift: 1,
-      unverified: 1,
-      missing: 1,
-    });
-  });
-
-  it('treats a half-correct price as drift', () => {
-    const halfRight = {
-      ...check,
-      table: { 'model-half': { inputPerMillion: 3, outputPerMillion: 999 } },
-      knownIds: ['model-half'],
-      lookup: () => () => ({ prices: [3, 15], where: 'Test' }),
-      discover: () => [],
-    };
-    const [finding] = compareProviderPricing(halfRight, '');
-    expect(finding).toMatchObject({ kind: 'drift', isInOk: true, isOutOk: false });
-  });
+  it.each([
+    ['cached rates match catalogs', 9, 45, 8, 40, 1],
+    ['source rates match catalogs', 3, 15, 2.5, 15, 0],
+  ] as const)(
+    'checks source tables when %s',
+    async (_, input, output, codexInput, codexOutput, expected) => {
+      const supplement = supplementFromTables();
+      supplement.updatedAt = '2099-01-01T00:00:00.000Z';
+      Object.assign(supplement.claude.models['claude-sonnet-4-6'] ?? {}, {
+        inputPerMillion: 9,
+        outputPerMillion: 45,
+      });
+      supplement.codex.current['gpt-5.4'] = { inputPerMillion: 8, outputPerMillion: 40 };
+      Object.assign(supplement.cursor.models['composer-2.5'] ?? {}, {
+        inputPerMillion: 10,
+        outputPerMillion: 50,
+      });
+      supplement.codex.current['cache-only-model'] = { inputPerMillion: 8, outputPerMillion: 40 };
+      const catalog = {
+        retrievedAt: supplement.updatedAt,
+        models: {
+          'anthropic/claude-sonnet-4-6': { i: input, o: output, cr: 0.3, cw: 3.75 },
+          'openai/gpt-5.4': { i: codexInput, o: codexOutput, cr: 0.25, cw: 2.5 },
+          'cursor/composer-2.5': { i: 0.5, o: 2.5, cr: 0.2, cw: 0.5 },
+        },
+      };
+      const files = {
+        'supplement.json': JSON.stringify(supplement),
+        'litellm.json': JSON.stringify(catalog),
+        'models_dev.json': JSON.stringify(catalog),
+      };
+      const manifest = {
+        schemaVersion: 1,
+        updatedAt: supplement.updatedAt,
+        files: {
+          supplement: 'supplement.json',
+          litellm: 'litellm.json',
+          modelsDev: 'models_dev.json',
+        },
+        hashes: {
+          supplement: createHash('sha256').update(files['supplement.json']).digest('hex'),
+          litellm: createHash('sha256').update(files['litellm.json']).digest('hex'),
+          modelsDev: createHash('sha256').update(files['models_dev.json']).digest('hex'),
+        },
+      };
+      const cacheDir = join(mocks.appDir, 'pricing');
+      await mkdir(cacheDir);
+      const cacheBody = JSON.stringify({ ...files, 'manifest.json': JSON.stringify(manifest) });
+      await writeFile(join(cacheDir, 'pack.json'), cacheBody);
+      const { currentModelPricing } = await import('../../libs/aitrack-lib/src/pricing/store.js');
+      expect(currentModelPricing().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(9);
+      expect(currentModelPricing().lookupCodex('cache-only-model')?.inputPerMillion).toBe(8);
+      mocks.fetchPricingCatalogs.mockResolvedValue({
+        primary: catalogFromCompact(catalog),
+        secondary: catalogFromCompact(catalog),
+      });
+      const { checkPricing } = await import('../update-pricing.js');
+      expect(await checkPricing()).toBe(expected);
+      const report = vi
+        .mocked(console.log)
+        .mock.calls.map((args) => args.join(' '))
+        .join('\n');
+      expect(report).toMatch(/claude-sonnet-4-6\s+\$3\/\$15/u);
+      expect(report).toMatch(/gpt-5\.4\s+\$2\.5\/\$15/u);
+      expect(report).toMatch(/composer-2\.5\s+\$0\.5\/\$2\.5/u);
+      expect(report).not.toContain('cache-only-model');
+      expect(await readFile(join(cacheDir, 'pack.json'), 'utf8')).toBe(cacheBody);
+    },
+  );
 });
