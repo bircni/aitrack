@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the popup's webview may call.",
+  "windows": ["main"],
+  "permissions": ["core:event:default", "core:window:allow-start-dragging"]
+}

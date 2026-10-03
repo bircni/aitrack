@@ -8,6 +8,8 @@
   "ignorePatterns": [
     "coverage",
     "dist",
+    "dist-sidecar",
+    "apps/opentrack",
     "node_modules",
     "aitrack*.png",
     "CHANGELOG.md",

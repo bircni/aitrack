@@ -135,7 +135,7 @@ describe('integration', { timeout: 60_000 }, () => {
     expect(commitsAfterSecond).toBe(commitsAfterFirst);
   });
 
-  it('rebases and preserves both machines when concurrent pushes race', () => {
+  it('rebases and preserves both machines when concurrent pushes race', async () => {
     const originDir = join(TEST_HOME, 'origin.git');
     const dataDir = join(LOCAL_REPO, 'data');
     mkdirSync(dataDir, { recursive: true });
@@ -143,7 +143,7 @@ describe('integration', { timeout: 60_000 }, () => {
       join(dataDir, 'machine-a.json'),
       JSON.stringify({ hostname: 'machine-a', lastUpdated: 'first', days: {} }),
     );
-    expect(commitAndPush('machine-a')).toBe(true);
+    expect(await commitAndPush('machine-a')).toBe(true);
 
     const secondClone = join(TEST_HOME, 'machine-b-repo');
     execSync(`git clone "${originDir}" "${secondClone}"`, { stdio: 'pipe' });
@@ -172,7 +172,7 @@ describe('integration', { timeout: 60_000 }, () => {
     );
     execSync('git push', { cwd: secondClone, stdio: 'pipe' });
 
-    expect(commitAndPush('machine-a')).toBe(true);
+    expect(await commitAndPush('machine-a')).toBe(true);
 
     const machineA = JSON.parse(
       execSync('git show HEAD:data/machine-a.json', { cwd: LOCAL_REPO }).toString(),

@@ -1,0 +1,42 @@
+{
+  "name": "opentrack-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tray dashboard for Claude Code, Codex & Cursor: live limits, reset times, token usage and estimated cost.",
+  "homepage": "https://github.com/bircni/aitrack/tree/main/apps/opentrack-ui#readme",
+  "bugs": {
+    "url": "https://github.com/bircni/aitrack/issues"
+  },
+  "license": "MIT",
+  "author": "Nicolas <bircni@icloud.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bircni/aitrack.git",
+    "directory": "apps/opentrack-ui"
+  },
+  "type": "module",
+  "dependencies": {
+    "@tauri-apps/api": "2.12.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "aitrack-lib": "workspace:*",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "typescript": "catalog:",
+    "vite": "^8.3.0",
+    "vitest": "catalog:"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "26.8.2",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

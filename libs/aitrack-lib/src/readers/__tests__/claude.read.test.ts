@@ -34,11 +34,13 @@ describe('readClaudeData', () => {
     rmSync(TEST_HOME, { recursive: true, force: true });
     mkdirSync(TEST_HOME, { recursive: true });
     delete process.env.XDG_CONFIG_HOME;
+    delete process.env.CLAUDE_CONFIG_DIR;
     delete process.env.AITRACK_CLAUDE_PROJECTS_DIRS;
   });
 
   afterEach(() => {
     delete process.env.XDG_CONFIG_HOME;
+    delete process.env.CLAUDE_CONFIG_DIR;
     delete process.env.AITRACK_CLAUDE_PROJECTS_DIRS;
     rmSync(TEST_HOME, { recursive: true, force: true });
   });

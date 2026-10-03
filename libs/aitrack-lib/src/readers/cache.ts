@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -62,6 +62,47 @@ function isCacheEntry(value: unknown): value is CacheEntry {
   return isRecord(value.days) && Object.values(value.days).every((day) => isDayEntry(day));
 }
 
+interface MemoizedCache {
+  mtimeMs: number;
+  size: number;
+  timezone: string;
+  entries: Record<string, CacheEntry>;
+}
+
+/** Last validated contents per cache file, so a long-lived process skips re-reading an unchanged one. */
+const memoized = new Map<string, MemoizedCache>();
+
+function fileStamp(filePath: string): { mtimeMs: number; size: number } | null {
+  try {
+    const stats = statSync(filePath);
+    return { mtimeMs: stats.mtimeMs, size: stats.size };
+  } catch {
+    return null;
+  }
+}
+
+function remember(filePath: string, entries: Record<string, CacheEntry>): void {
+  const stamp = fileStamp(filePath);
+  if (stamp) memoized.set(filePath, { ...stamp, timezone: machineTimezone(), entries });
+  else memoized.delete(filePath);
+}
+
+function loadCacheFile(filePath: string): Record<string, CacheEntry> {
+  const stamp = fileStamp(filePath);
+  const memo = memoized.get(filePath);
+  if (
+    stamp &&
+    memo?.mtimeMs === stamp.mtimeMs &&
+    memo.size === stamp.size &&
+    memo.timezone === machineTimezone()
+  ) {
+    return memo.entries;
+  }
+  const entries = readCacheFile(filePath);
+  remember(filePath, entries);
+  return entries;
+}
+
 function readCacheFile(filePath: string): Record<string, CacheEntry> {
   let parsed: unknown;
   try {
@@ -123,8 +164,9 @@ export function openParseCache(name: string): ParseCache {
   if (environmentValue('AITRACK_NO_CACHE')) return disabledCache();
 
   const cachePath = join(CACHE_DIR, `${name}.json`);
-  const previous = readCacheFile(cachePath);
+  const previous = loadCacheFile(cachePath);
   const next: Record<string, CacheEntry> = {};
+  let isRecorded = false;
 
   return {
     async lookup(filePath) {
@@ -148,6 +190,7 @@ export function openParseCache(name: string): ParseCache {
         // The file vanished mid-run; nothing to key the entry on.
         return;
       }
+      isRecorded = true;
       next[filePath] = {
         mtimeMs: stats.mtimeMs,
         size: stats.size,
@@ -157,6 +200,8 @@ export function openParseCache(name: string): ParseCache {
     },
 
     save() {
+      const isEvicted = Object.keys(previous).some((filePath) => !(filePath in next));
+      if (!isRecorded && !isEvicted) return;
       const payload = JSON.stringify({
         format: CACHE_FORMAT,
         appVersion: packageVersion(),
@@ -170,6 +215,7 @@ export function openParseCache(name: string): ParseCache {
         mkdirSync(CACHE_DIR, { recursive: true });
         writeFileSync(temporaryPath, payload, 'utf8');
         renameSync(temporaryPath, cachePath);
+        remember(cachePath, next);
       } catch {
         rmSync(temporaryPath, { force: true });
         // A cache that cannot be written (read-only home, full disk) must not

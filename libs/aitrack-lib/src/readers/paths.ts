@@ -1,7 +1,9 @@
 import { existsSync } from 'node:fs';
 import { readdir, realpath } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { environmentValue } from '../env.js';
 import type { CheckResult } from '../providers/checkResult.js';
 import { mapWithConcurrency } from './concurrency.js';
 
@@ -106,6 +108,38 @@ export async function sourceCheck(label: string, roots: string[]): Promise<Check
     label,
     detail: `no source paths found; checked ${roots.join(', ')}`,
   };
+}
+
+interface HomeDirOptions {
+  /**
+   * With the tool's env override set, return only that folder: the tool itself
+   * reads nothing else, so a login found elsewhere belongs to another account.
+   */
+  overrideOnly?: boolean;
+}
+
+/** Claude Code config directories, highest priority first. */
+export function claudeHomeDirs(options: HomeDirOptions = {}): string[] {
+  const configDir = environmentValue('CLAUDE_CONFIG_DIR');
+  if (configDir && options.overrideOnly) return [configDir];
+  const xdg = environmentValue('XDG_CONFIG_HOME');
+  return [
+    ...(configDir ? [configDir] : []),
+    ...(xdg ? [join(xdg, 'claude')] : []),
+    join(homedir(), '.config', 'claude'),
+    join(homedir(), '.claude'),
+  ];
+}
+
+/** Codex home directories, highest priority first. */
+export function codexHomeDirs(options: HomeDirOptions = {}): string[] {
+  const codexHome = environmentValue('CODEX_HOME');
+  if (codexHome && options.overrideOnly) return [codexHome];
+  return [
+    ...(codexHome ? [codexHome] : []),
+    join(homedir(), '.codex'),
+    join(homedir(), '.config', 'codex'),
+  ];
 }
 
 export function resolveSourceRoots(options: {

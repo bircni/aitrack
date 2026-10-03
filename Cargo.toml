@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["apps/opentrack"]
+
+# Size over speed: the shell only routes messages, the work happens in the sidecar.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

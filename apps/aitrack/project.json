@@ -37,6 +37,13 @@
         "cwd": "{projectRoot}",
         "command": "tsx src/cli.ts"
       }
+    },
+    "test": {
+      "configurations": {
+        "ci": {
+          "coverage": true
+        }
+      }
     }
   }
 }

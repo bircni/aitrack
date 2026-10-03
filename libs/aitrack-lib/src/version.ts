@@ -30,6 +30,9 @@ export function readPackageVersion(directory: string): string {
   return '0.0.0';
 }
 
+/** Set by bundles that ship without a package.json beside them (opentrack's sidecar). */
+declare const __AITRACK_LIB_VERSION__: string | undefined;
+
 let resolved: string | undefined;
 
 /**
@@ -39,6 +42,9 @@ let resolved: string | undefined;
  * library is discarded rather than trusted.
  */
 export function packageVersion(): string {
-  resolved ??= readPackageVersion(import.meta.dirname);
+  resolved ??=
+    typeof __AITRACK_LIB_VERSION__ === 'string'
+      ? __AITRACK_LIB_VERSION__
+      : readPackageVersion(import.meta.dirname);
   return resolved;
 }

@@ -3,6 +3,7 @@
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
+      "ignoreBinaries": ["hdiutil", "7z"],
       "entry": ["scripts/*.ts", "scripts/__tests__/**/*.test.ts"],
       "project": ["scripts/**/*.ts", "*.config.ts"],
       "ignoreDependencies": [
@@ -21,6 +22,10 @@
     "apps/aitrack": {
       "entry": ["src/**/__tests__/**/*.test.ts"],
       "project": ["src/**/*.ts"]
+    },
+    "apps/opentrack-ui": {
+      "entry": ["src/sidecar/index.ts", "src/**/__tests__/**/*.test.ts"],
+      "project": ["src/**/*.{ts,svelte}"]
     },
     "libs/test-fixtures": {
       "project": ["src/**/*.ts"]

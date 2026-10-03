@@ -1,10 +1,12 @@
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  claudeHomeDirs,
+  codexHomeDirs,
   jsonlSourceSummary,
   listJsonlFiles,
   listUniqueSourceFiles,
@@ -114,5 +116,28 @@ describe('resolveSourceRoots', () => {
 
   it('falls back to the defaults when nothing is configured', () => {
     expect(resolveSourceRoots({ defaults: ['/only'] })).toEqual([resolve('/only')]);
+  });
+});
+
+describe('home dirs', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('puts the env overrides first and keeps every default behind them', () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/claude');
+    vi.stubEnv('XDG_CONFIG_HOME', '/xdg');
+    vi.stubEnv('CODEX_HOME', '/codex');
+    expect(claudeHomeDirs()).toEqual([
+      '/claude',
+      join('/xdg', 'claude'),
+      join(homedir(), '.config', 'claude'),
+      join(homedir(), '.claude'),
+    ]);
+    expect(codexHomeDirs()).toEqual([
+      '/codex',
+      join(homedir(), '.codex'),
+      join(homedir(), '.config', 'codex'),
+    ]);
   });
 });

@@ -52,6 +52,9 @@ export {
 export { syncPricingPack } from './pricing/syncPack.js';
 export { pricingPackBaseUrl, pricingPackUrls } from './pricing/packMeta.js';
 
+// Live quota limits (session/weekly windows, reset times)
+export * from './quota/index.js';
+
 // The data repo: cloning it, reading machine files, writing ours back
 export {
   adoptPendingDataFiles,

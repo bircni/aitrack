@@ -41,7 +41,8 @@ interface FetchAttempt {
 function getCursorFetchAttempts(accessToken: string, preferShape?: string): FetchAttempt[] {
   const attempts: FetchAttempt[] = [];
   const seen = new Set<string>();
-  const subject = decodeJwtPayload(accessToken)?.sub?.trim();
+  const sub = decodeJwtPayload(accessToken)?.sub;
+  const subject = typeof sub === 'string' ? sub.trim() : undefined;
   const cookieValues = [accessToken];
   if (subject) cookieValues.push(`${subject}::${accessToken}`);
 

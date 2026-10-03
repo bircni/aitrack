@@ -8,7 +8,12 @@
       "inputs": ["repoTools", "^production"]
     },
     "test": {
-      "inputs": ["repoTools", "^production"]
+      "inputs": ["repoTools", "^production"],
+      "configurations": {
+        "ci": {
+          "coverage": true
+        }
+      }
     },
     "lint": {
       "inputs": ["repoTools", "^production", "lintConfig"],

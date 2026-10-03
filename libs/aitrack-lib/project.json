@@ -21,6 +21,13 @@
         "cwd": "{projectRoot}",
         "command": "npm pack --dry-run"
       }
+    },
+    "test": {
+      "configurations": {
+        "ci": {
+          "coverage": true
+        }
+      }
     }
   }
 }

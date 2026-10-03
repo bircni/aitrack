@@ -1,4 +1,3 @@
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { tryLoadConfig } from '../config.js';
@@ -10,19 +9,14 @@ import { claudeCacheWriteTokens, estimateClaudeCostUSD } from '../pricing/claude
 import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedParse } from './cache.js';
 import { streamJsonlObjects } from './jsonl.js';
-import { resolveSourceRoots } from './paths.js';
+import { claudeHomeDirs, resolveSourceRoots } from './paths.js';
 import { parseProviderSources } from './pipeline.js';
 
 export function getClaudePaths(): string[] {
-  const xdg = environmentValue('XDG_CONFIG_HOME');
   return resolveSourceRoots({
     envValue: environmentValue('AITRACK_CLAUDE_PROJECTS_DIRS'),
     configValue: tryLoadConfig()?.claudeProjectsDir,
-    defaults: [
-      ...(xdg ? [join(xdg, 'claude', 'projects')] : []),
-      join(homedir(), '.config', 'claude', 'projects'),
-      join(homedir(), '.claude', 'projects'),
-    ],
+    defaults: claudeHomeDirs().map((dir) => join(dir, 'projects')),
   });
 }
 
