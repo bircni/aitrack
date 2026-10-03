@@ -60,13 +60,13 @@ vi.mock('aitrack-lib/pricing/store', async () => {
   const actual = await vi.importActual<typeof import('aitrack-lib/pricing/store')>(
     'aitrack-lib/pricing/store',
   );
+  const pricing = actual.currentModelPricing();
+  vi.spyOn(pricing, 'claudeModelCount').mockReturnValue(26);
+  vi.spyOn(pricing, 'codexModelCount').mockReturnValue(21);
+  vi.spyOn(pricing, 'cursorModelCount').mockReturnValue(26);
   return {
     ...actual,
-    currentModelPricing: () => ({
-      claudeModelCount: () => 26,
-      codexModelCount: () => 21,
-      cursorModelCount: () => 26,
-    }),
+    currentModelPricing: () => pricing,
   };
 });
 
