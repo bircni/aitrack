@@ -292,3 +292,24 @@ describe('doctorCommand', () => {
     });
   });
 });
+
+it('reports repository and drift failures that provide no output and malformed checkout metadata', async () => {
+  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  mocks.readConfig.mockReturnValue({ status: 'missing' });
+  mocks.isCloned.mockReturnValue(true);
+  mocks.spawnSync.mockReturnValue({ status: 1 });
+  mocks.getClaudePaths.mockReturnValue([]);
+  mocks.getCodexPaths.mockReturnValue([]);
+  mocks.getCursorStateDatabasePath.mockReturnValue(null);
+  mocks.readFileSync.mockReturnValue('{');
+  await doctorCommand({ pricingCheck: true });
+  expect(loggedOutput()).toContain('git status failed in local repo');
+  expect(loggedOutput()).toContain('check remote access');
+  expect(loggedOutput()).toContain('not an aitrack source checkout');
+  mocks.readFileSync.mockReturnValue(
+    JSON.stringify({ scripts: { 'pricing:check': 'check' }, workspaces: [] }),
+  );
+  await doctorCommand({ pricingCheck: true });
+  expect(loggedOutput()).toContain('Pricing');
+  process.exitCode = undefined;
+});

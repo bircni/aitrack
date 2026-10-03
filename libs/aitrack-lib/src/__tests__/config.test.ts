@@ -153,3 +153,25 @@ describe('config', () => {
     });
   });
 });
+
+it('rejects malformed budgets and preserves a valid monthly ceiling', () => {
+  for (const budget of [
+    null,
+    [],
+    'bad',
+    { monthlyUSD: '5' },
+    { monthlyUSD: -1 },
+    { monthlyUSD: 0 },
+  ]) {
+    writeRawConfig(JSON.stringify({ repoUrl: 'repo', budget }));
+    expect(tryLoadConfig()).toBeNull();
+  }
+  writeRawConfig(JSON.stringify({ repoUrl: 'repo', budget: { monthlyUSD: 5 } }));
+  expect(loadConfig().budget).toEqual({ monthlyUSD: 5 });
+  writeRawConfig('{');
+  expect(() => loadConfig()).toThrow('not valid JSON');
+  writeRawConfig(JSON.stringify({ repoUrl: 'repo', machineId: '  ' }));
+  expect(tryLoadConfig()).toBeNull();
+  osMock.hostname = '';
+  expect(localMachineId()).toBe('');
+});

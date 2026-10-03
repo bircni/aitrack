@@ -142,6 +142,8 @@ run per project. Lint uses `nx-oxlint:lint` with type-aware checking.
 
 Tests run `vitest run`; the `ci` configuration adds coverage. Run
 `pnpm exec nx run aitrack-lib:test:ci` for one package or `pnpm run test:ci` for all suites.
+Library, CLI and desktop coverage retains aggregate 90% lines/statements/functions
+and 80% branches, with an additional 80% minimum for every measured file and metric.
 The desktop suite uses the Svelte Vite plugin and jsdom, measures components and the
 API bridge, and exercises command failures, settings queues, provider controls and
 partial/stale presentation. Only the renderer entrypoint, sidecar process entrypoint
