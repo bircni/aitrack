@@ -29,7 +29,7 @@
       "executor": "@monodon/rust:lint",
       "inputs": ["default", "^production", "rustToolchain", "{workspaceRoot}/package.json"],
       "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
-      "options": {}
+      "options": { "all-targets": true, "args": ["-D", "warnings"] }
     },
     "dev": {
       "executor": "@monodon/rust:run",

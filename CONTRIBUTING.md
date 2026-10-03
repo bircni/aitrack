@@ -143,6 +143,7 @@ Svelte script blocks receive the supported Oxlint rules from the same overrides;
 Oxlint does not currently provide complete type-aware checking for `.svelte` files.
 `svelte-check --fail-on-warnings` remains required. Repository tests probe supported
 Svelte rules so configuration changes cannot silently stop enforcing them.
+Rust lint runs Clippy on application and test targets with `-D warnings`.
 
 Tests run `vitest run`; the `ci` configuration adds coverage. Run
 `pnpm exec nx run aitrack-lib:test:ci` for one package or `pnpm run test:ci` for all suites.
