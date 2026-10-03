@@ -138,7 +138,11 @@ The package projects are `aitrack`, `aitrack-lib`, `opentrack-ui`, and `@aitrack
 supplies the Rust build, lint and test executors.
 The `repo-tools` project in `scripts/` owns release tooling, pricing checks, script tests,
 and checks for root configuration files. Package lint, format and unused-code checks
-run per project. Lint uses `nx-oxlint:lint` with type-aware checking.
+run per project. Lint uses `nx-oxlint:lint` with type-aware checking for TypeScript.
+Svelte script blocks receive the supported Oxlint rules from the same overrides;
+Oxlint does not currently provide complete type-aware checking for `.svelte` files.
+`svelte-check --fail-on-warnings` remains required. Repository tests probe supported
+Svelte rules so configuration changes cannot silently stop enforcing them.
 
 Tests run `vitest run`; the `ci` configuration adds coverage. Run
 `pnpm exec nx run aitrack-lib:test:ci` for one package or `pnpm run test:ci` for all suites.
