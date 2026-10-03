@@ -6,6 +6,7 @@
   import {
     formatCost,
     formatTokens,
+    formatUpdated,
     PERIOD_LABELS,
     type Period,
     periodSpend,
@@ -58,6 +59,9 @@
     {/if}
   </button>
 
+  {#if provider.quotaError && provider.quota}
+    <div class="state">Cached limits: {formatUpdated(provider.quota.fetchedAt, now)}</div>
+  {/if}
   {#if problem && provider.quotaError}
     <div class="state">
       <span title={provider.quotaError.message}>{problem.text}</span>
