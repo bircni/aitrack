@@ -322,3 +322,34 @@ describe('parseJsonlFile', () => {
     expect(result.get('2024-01-16')?.inputTokens).toBe(200);
   });
 });
+
+import { mergeClaudeParsed, parseClaudeFile } from '../claude.js';
+it('keeps richer within-file records, first-file precedence and all unkeyed contributions', async () => {
+  const file = join(tmpDir, 'richer.jsonl');
+  const base = {
+    type: 'assistant',
+    timestamp: localTimestamp('2024-01-15'),
+    requestId: 'r',
+    message: { id: 'm', model: 'unknown', usage: { input_tokens: 10, output_tokens: 2 } },
+  };
+  writeJsonl(file, [
+    base,
+    { ...base, message: { ...base.message, usage: { input_tokens: 20, output_tokens: 2 } } },
+    base,
+    { ...base, requestId: undefined, message: { usage: { output_tokens: 3 } } },
+    { ...base, requestId: undefined, message: { usage: { input_tokens: 4 } } },
+    { type: 'assistant', message: { usage: {} } },
+    { ...base, timestamp: 'invalid' },
+    { ...base, message: { usage: {} } },
+  ]);
+  const parsed = await parseClaudeFile(file);
+  const result = await mergeClaudeParsed([parsed, parsed], [file, file]);
+  expect(result.get('2024-01-15')).toMatchObject({
+    inputTokens: 28,
+    outputTokens: 8,
+    hasUnpricedTokens: true,
+  });
+  const legacy = { days: parsed.days, keys: parsed.keys };
+  expect(await mergeClaudeParsed([legacy, legacy], [file, file])).toEqual(result);
+  expect(await mergeClaudeParsed([legacy], [])).toEqual(parsed.days);
+});
