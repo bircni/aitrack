@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -45,9 +46,72 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('buildPricingPack', () => {
+  it('fetches catalogs and writes Codex updates without changing history', async () => {
+    const original = JSON.parse(files.get('codex.json') ?? '') as Record<string, unknown>;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              'openai/gpt-5.4': { input_cost_per_token: 0.000008, output_cost_per_token: 0.00004 },
+              openai: { models: { 'gpt-5.4': { cost: { input: 8, output: 40 } } } },
+            }),
+          ),
+        ),
+      ),
+    );
+    const result = await buildPricingPack({ writeTablesFromFeeds: true });
+    expect(result.tableWrites?.codexChanged).toEqual(['gpt-5.4']);
+    const updated = JSON.parse(files.get('codex.json') ?? '') as Record<string, unknown>;
+    expect(updated.historical).toEqual(original.historical);
+    expect(updated.overrides).toEqual(original.overrides);
+    expect(result.litellmCount).toBe(1);
+  });
+
+  it('leaves matching source tables untouched on write', async () => {
+    const catalog = JSON.stringify({
+      retrievedAt: '2026-10-02T00:00:00.000Z',
+      models: { 'anthropic/claude-sonnet-4-6': { i: 3, o: 15, cr: 0.3, cw: 3.75 } },
+    });
+    files.set('litellm.json', catalog);
+    files.set('models_dev.json', catalog);
+    const before = files.get('claude.json');
+    const result = await buildPricingPack({ offline: true, writeTablesFromFeeds: true });
+    expect(result.tableWrites).toEqual({ claudeChanged: [], codexChanged: [] });
+    expect(files.get('claude.json')).toBe(before);
+    expect(mocks.writeFile.mock.calls.map(([path]) => basename(path))).not.toContain('claude.json');
+  });
+
+  it.each(['success', 'failure'] as const)(
+    'sets the pack-builder script exit status on %s',
+    async (mode) => {
+      vi.resetModules();
+      if (mode === 'failure') mocks.readFile.mockRejectedValueOnce(new Error('catalog missing'));
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const exit = vi.spyOn(process, 'exit').mockReturnValue(undefined as never);
+      const previous = process.argv;
+      process.argv = [
+        process.execPath,
+        fileURLToPath(new URL('../build-pricing-pack.ts', import.meta.url)),
+        '--offline',
+        '--write',
+      ];
+      try {
+        await import('../build-pricing-pack.js');
+        await vi.waitFor(() => {
+          expect(exit).toHaveBeenCalledWith(mode === 'success' ? 0 : 1);
+        });
+      } finally {
+        process.argv = previous;
+      }
+    },
+  );
+
   it('publishes newly written table rates even when a separate catalog overlay is disabled', async () => {
     const codexBefore = files.get('codex.json');
     const cursorBefore = files.get('cursor.json');

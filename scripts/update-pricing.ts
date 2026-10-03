@@ -12,9 +12,8 @@ import {
   type PricingComparison,
   type PricingFinding,
 } from '../libs/aitrack-lib/src/pricing/catalogs.js';
-import { CLAUDE_PRICING_BY_ID } from '../libs/aitrack-lib/src/pricing/claude.js';
-import { CODEX_PRICING_CURRENT } from '../libs/aitrack-lib/src/pricing/codex.js';
-import { CURSOR_MODELS } from '../libs/aitrack-lib/src/pricing/cursor.js';
+import type { PricingSupplement } from '../libs/aitrack-lib/src/pricing/packMeta.js';
+import { supplementFromTables } from '../libs/aitrack-lib/src/pricing/supplementFromTables.js';
 
 function reportFinding(finding: PricingFinding): void {
   const id = finding.modelId.padEnd(28);
@@ -36,10 +35,10 @@ function reportFinding(finding: PricingFinding): void {
   }
 }
 
-function checkClaude(catalogs: PricingCatalogs): PricingComparison {
+function checkClaude(catalogs: PricingCatalogs, supplement: PricingSupplement): PricingComparison {
   console.log('\n── Claude (LiteLLM anthropic/* + models.dev) ──');
   const findings = comparePricingTable({
-    table: CLAUDE_PRICING_BY_ID,
+    table: supplement.claude.models,
     providers: ['anthropic'],
     primary: catalogs.primary,
     secondary: catalogs.secondary,
@@ -48,10 +47,10 @@ function checkClaude(catalogs: PricingCatalogs): PricingComparison {
   return tallyPricingFindings(findings);
 }
 
-function checkCodex(catalogs: PricingCatalogs): PricingComparison {
+function checkCodex(catalogs: PricingCatalogs, supplement: PricingSupplement): PricingComparison {
   console.log('\n── Codex current (LiteLLM openai/* + models.dev) ──');
   const findings = comparePricingTable({
-    table: CODEX_PRICING_CURRENT,
+    table: supplement.codex.current,
     providers: ['openai'],
     primary: catalogs.primary,
     secondary: catalogs.secondary,
@@ -60,10 +59,10 @@ function checkCodex(catalogs: PricingCatalogs): PricingComparison {
   return tallyPricingFindings(findings);
 }
 
-function checkCursor(catalogs: PricingCatalogs): PricingComparison {
+function checkCursor(catalogs: PricingCatalogs, supplement: PricingSupplement): PricingComparison {
   console.log('\n── Cursor natives (supplement is authoritative; catalogs are informational) ──');
   const findings = comparePricingTable({
-    table: CURSOR_MODELS,
+    table: supplement.cursor.models,
     providers: ['cursor', 'xai', 'google', 'openai', 'anthropic'],
     primary: catalogs.primary,
     secondary: catalogs.secondary,
@@ -90,7 +89,8 @@ function checkCursor(catalogs: PricingCatalogs): PricingComparison {
   return { drift: 0, unverified: 0 };
 }
 
-async function main(): Promise<number> {
+export async function checkPricing(): Promise<number> {
+  const supplement = supplementFromTables();
   let catalogs: PricingCatalogs;
   try {
     console.log('Fetching LiteLLM + models.dev for compare…');
@@ -100,9 +100,9 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  const claude = checkClaude(catalogs);
-  const codex = checkCodex(catalogs);
-  const cursor = checkCursor(catalogs);
+  const claude = checkClaude(catalogs, supplement);
+  const codex = checkCodex(catalogs, supplement);
+  const cursor = checkCursor(catalogs, supplement);
 
   const totalDrift = claude.drift + codex.drift + cursor.drift;
   const totalUnverified = claude.unverified + codex.unverified;
@@ -125,7 +125,7 @@ async function main(): Promise<number> {
 
 const entryPoint = process.argv[1];
 if (entryPoint !== undefined && resolve(entryPoint) === import.meta.filename) {
-  main()
+  checkPricing()
     .then((code) => {
       process.exit(code);
     })
