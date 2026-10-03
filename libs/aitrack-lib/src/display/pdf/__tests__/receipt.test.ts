@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import PDFDocument from 'pdfkit';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { UsageReport } from '../../../data/usageReport.js';
 import { localTimestamp, renderReceiptPdf } from '../receipt.js';
@@ -93,4 +94,19 @@ describe('localTimestamp', () => {
     const at = new Date(2026, 5, 15, 9, 8, 7);
     expect(localTimestamp(at)).toBe('2026-06-15 09:08:07');
   });
+});
+
+it('labels partially priced receipts without dropping the known-cost amount', async () => {
+  const text = vi.spyOn(PDFDocument.prototype, 'text');
+  try {
+    const report = sampleReport();
+    report.totals.hasUnpricedTokens = true;
+    const buffer = await renderReceiptPdf(report);
+    expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(
+      text.mock.calls.some(([value]) => value === 'Partial estimate: some usage is unpriced.'),
+    ).toBe(true);
+  } finally {
+    text.mockRestore();
+  }
 });

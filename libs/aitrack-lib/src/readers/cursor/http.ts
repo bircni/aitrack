@@ -1,11 +1,12 @@
 import { environmentValue } from '../../env.js';
+import { parseRetryAfter, QuotaFailure } from '../../quota/http.js';
 import { decodeJwtPayload } from './jwt.js';
 
 /**
  * Talking to Cursor's usage-export endpoint.
  *
  * Cursor accepts several credential shapes and which one works has changed
- * over time, so each is tried in turn and every failure is reported together.
+ * over time, so authentication failures try the next distinct variant.
  */
 const CURSOR_WEB_BASE_URL_ENV = 'CURSOR_WEB_BASE_URL';
 const CURSOR_SESSION_COOKIE_NAME = 'WorkosCursorSessionToken';
@@ -48,7 +49,6 @@ function getCursorFetchAttempts(accessToken: string, preferShape?: string): Fetc
 
   const pushAttempt = (label: string, headers: Record<string, string>) => {
     const signature = JSON.stringify({
-      label,
       headers: Object.entries(headers).toSorted(([a], [b]) => a.localeCompare(b)),
     });
     if (seen.has(signature)) return;
@@ -57,16 +57,17 @@ function getCursorFetchAttempts(accessToken: string, preferShape?: string): Fetc
   };
 
   pushAttempt('bearer', { Authorization: `Bearer ${accessToken}` });
-  for (const cookieValue of cookieValues) {
-    pushAttempt('cookie', { Cookie: buildCookieHeaderValue(cookieValue) });
-    pushAttempt('cookie-encoded', {
+  for (const [index, cookieValue] of cookieValues.entries()) {
+    const scope = index === 0 ? 'token' : 'subject';
+    pushAttempt(`cookie:${scope}`, { Cookie: buildCookieHeaderValue(cookieValue) });
+    pushAttempt(`cookie-encoded:${scope}`, {
       Cookie: buildCookieHeaderValue(encodeURIComponent(cookieValue)),
     });
-    pushAttempt('bearer+cookie', {
+    pushAttempt(`bearer+cookie:${scope}`, {
       Authorization: `Bearer ${accessToken}`,
       Cookie: buildCookieHeaderValue(cookieValue),
     });
-    pushAttempt('bearer+cookie-encoded', {
+    pushAttempt(`bearer+cookie-encoded:${scope}`, {
       Authorization: `Bearer ${accessToken}`,
       Cookie: buildCookieHeaderValue(encodeURIComponent(cookieValue)),
     });
@@ -106,6 +107,14 @@ export async function fetchCursorUsageCsv(
       signal: AbortSignal.timeout(CURSOR_FETCH_TIMEOUT_MS),
     });
     if (response.ok) return { response, shape: attempt.label };
+    if (response.status !== 401 && response.status !== 403) {
+      await response.body?.cancel();
+      throw new QuotaFailure(
+        response.status === 429 ? 'rateLimited' : 'network',
+        `Cursor export returned HTTP ${String(response.status)}`,
+        parseRetryAfter(response.headers.get('retry-after')),
+      );
+    }
     const responseBody = await response.text();
     failures.push({
       label: attempt.label,

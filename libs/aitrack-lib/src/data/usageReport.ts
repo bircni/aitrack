@@ -40,6 +40,7 @@ export interface UsageReportRow {
   hasCached: boolean;
   costUSD: number;
   hasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface UsageReportProvider {
@@ -49,6 +50,7 @@ export interface UsageReportProvider {
   subtotalTokens: number;
   subtotalCostUSD: number;
   subtotalHasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface UsageReportTotals {
@@ -59,6 +61,7 @@ export interface UsageReportTotals {
   hasCached: boolean;
   costUSD: number;
   hasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface UsageReport {
@@ -84,6 +87,7 @@ export interface UsageModelComparison {
   tokens: UsageComparisonMetric;
   costUSD: UsageComparisonMetric;
   hasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface UsageComparison {
@@ -92,6 +96,7 @@ export interface UsageComparison {
     tokens: UsageComparisonMetric;
     costUSD: UsageComparisonMetric;
     hasCost: boolean;
+    hasUnpricedTokens?: boolean;
   };
   models: UsageModelComparison[];
 }
@@ -102,12 +107,12 @@ export interface UsageComparisonReport {
   comparison: UsageComparison;
 }
 
-function viewerToday(): string {
-  return calendarDateInTimeZone(machineTimezone()) ?? toLocalDateString(new Date());
+function viewerToday(now: Date): string {
+  return calendarDateInTimeZone(machineTimezone(), now) ?? toLocalDateString(now);
 }
 
-function todayForZone(timezone: string): string {
-  return calendarDateInTimeZone(timezone) ?? viewerToday();
+function todayForZone(timezone: string, now: Date): string {
+  return calendarDateInTimeZone(timezone, now) ?? viewerToday(now);
 }
 
 /** Other machines' zones, when a relative window has to follow more than one. */
@@ -136,17 +141,22 @@ function windowedProviderData(
   loaded: NonNullable<Awaited<ReturnType<typeof loadMergedProviderData>>>,
   options: UsageReportOptions,
   kind: 'current' | 'previous',
+  now: Date,
 ): { providerData: ProviderData; window: UsageWindow } {
-  const labelToday = viewerToday();
+  const labelToday = viewerToday(now);
   const labelWindow =
     kind === 'current'
-      ? computeUsageWindow(options, labelToday)
-      : computePreviousUsageWindow(options, computeUsageWindow(options, labelToday), labelToday);
+      ? computeUsageWindow(options, labelToday, now)
+      : computePreviousUsageWindow(
+          options,
+          computeUsageWindow(options, labelToday, now),
+          labelToday,
+        );
   if (!loaded.zonedSources) return { providerData: loaded.providerData, window: labelWindow };
 
   const providerData = providerDataForWindows(loaded, (timezone) => {
-    const today = todayForZone(timezone);
-    const current = computeUsageWindow(options, today);
+    const today = todayForZone(timezone, now);
+    const current = computeUsageWindow(options, today, now);
     return kind === 'current' ? current : computePreviousUsageWindow(options, current, today);
   });
   return { providerData, window: presentWindow(labelWindow, true) };
@@ -175,6 +185,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
     let subtotalTokens = 0;
     let subtotalCostUSD = 0;
     let isSubtotalHasCost = false;
+    let hasUnpricedTokens = false;
 
     for (const [model, agg] of byModel) {
       const tokens = agg.inputTokens + agg.outputTokens;
@@ -188,7 +199,9 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
         hasCached: agg.hasCached,
         costUSD: agg.hasCost ? agg.costUSD : 0,
         hasCost: agg.hasCost,
+        ...(agg.hasUnpricedTokens && { hasUnpricedTokens: true }),
       });
+      hasUnpricedTokens ||= agg.hasUnpricedTokens === true;
       subtotalTokens += tokens;
       totals.inputTokens += agg.inputTokens;
       totals.outputTokens += agg.outputTokens;
@@ -204,6 +217,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
       }
     }
 
+    if (hasUnpricedTokens) totals.hasUnpricedTokens = true;
     if (rows.length === 0) continue;
     rows.sort((a, b) => compareByCostThenTokens(a, b));
     rowCount += rows.length;
@@ -214,6 +228,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
       subtotalTokens,
       subtotalCostUSD,
       subtotalHasCost: isSubtotalHasCost,
+      ...(hasUnpricedTokens && { hasUnpricedTokens: true }),
     });
   }
 
@@ -259,6 +274,9 @@ function compareUsageReports(current: UsageReport, previous: UsageReport): Usage
       tokens: comparisonMetric(currentRow?.tokens ?? 0, previousRow?.tokens ?? 0),
       costUSD: comparisonMetric(currentRow?.costUSD ?? 0, previousRow?.costUSD ?? 0),
       hasCost: (currentRow?.hasCost ?? false) || (previousRow?.hasCost ?? false),
+      ...((currentRow?.hasUnpricedTokens === true || previousRow?.hasUnpricedTokens === true) && {
+        hasUnpricedTokens: true,
+      }),
     });
   }
 
@@ -276,6 +294,8 @@ function compareUsageReports(current: UsageReport, previous: UsageReport): Usage
       tokens: comparisonMetric(current.totals.tokens, previous.totals.tokens),
       costUSD: comparisonMetric(current.totals.costUSD, previous.totals.costUSD),
       hasCost: current.totals.hasCost || previous.totals.hasCost,
+      ...((current.totals.hasUnpricedTokens === true ||
+        previous.totals.hasUnpricedTokens === true) && { hasUnpricedTokens: true }),
     },
     models,
   };
@@ -290,7 +310,10 @@ function compareUsageReports(current: UsageReport, previous: UsageReport): Usage
  * Shared by the `usage` (terminal table) and `export` (PDF receipt) commands so
  * both render from a single source of truth.
  */
-export async function buildUsageReport(options: UsageReportOptions): Promise<UsageReport | null> {
+export async function buildUsageReport(
+  options: UsageReportOptions,
+  now = new Date(),
+): Promise<UsageReport | null> {
   const loaded = await loadMergedProviderData({
     providers: options.providers,
     refreshLive: options.refreshLive,
@@ -298,15 +321,16 @@ export async function buildUsageReport(options: UsageReportOptions): Promise<Usa
   if (!loaded) return null;
 
   warnAboutPricingFallbacks(loaded.providerData);
-  return buildUsageReportFromLoaded(loaded, options);
+  return buildUsageReportFromLoaded(loaded, options, now);
 }
 
 /** One window's report from data already loaded, so several windows share one read. */
 export function buildUsageReportFromLoaded(
   loaded: LoadedUsageData,
   options: UsageReportOptions,
+  now = new Date(),
 ): UsageReport {
-  const { providerData, window } = windowedProviderData(loaded, options, 'current');
+  const { providerData, window } = windowedProviderData(loaded, options, 'current', now);
   const timezoneNote = timezoneWindowNote(loaded.zonedSources, options.period);
   return {
     ...buildUsageReportFromData(providerData, window),
@@ -322,23 +346,24 @@ export function buildUsageReportFromLoaded(
 export function buildUsageReportsFromLoaded(
   loaded: LoadedUsageData,
   optionsList: UsageReportOptions[],
+  now = new Date(),
 ): UsageReport[] {
   const { zonedSources } = loaded;
-  const labelToday = viewerToday();
+  const labelToday = viewerToday(now);
   const zones = new Set([
     machineTimezone(),
     ...(zonedSources ?? []).map((source) => source.timezone),
   ]);
   if (
     optionsList.length === 0 ||
-    (zonedSources && [...zones].some((timezone) => todayForZone(timezone) !== labelToday))
+    (zonedSources && [...zones].some((timezone) => todayForZone(timezone, now) !== labelToday))
   ) {
-    return optionsList.map((options) => buildUsageReportFromLoaded(loaded, options));
+    return optionsList.map((options) => buildUsageReportFromLoaded(loaded, options, now));
   }
 
   const windowed = optionsList.map((options) => ({
     options,
-    window: computeUsageWindow(options, labelToday),
+    window: computeUsageWindow(options, labelToday, now),
   }));
   const span = {
     start: windowed.reduce(
@@ -359,6 +384,7 @@ export function buildUsageReportsFromLoaded(
 
 export async function buildUsageComparison(
   options: UsageReportOptions,
+  now = new Date(),
 ): Promise<UsageComparisonReport | null> {
   const loaded = await loadMergedProviderData({
     providers: options.providers,
@@ -367,8 +393,8 @@ export async function buildUsageComparison(
   if (!loaded) return null;
 
   warnAboutPricingFallbacks(loaded.providerData);
-  const currentWindow = windowedProviderData(loaded, options, 'current');
-  const previousWindow = windowedProviderData(loaded, options, 'previous');
+  const currentWindow = windowedProviderData(loaded, options, 'current', now);
+  const previousWindow = windowedProviderData(loaded, options, 'previous', now);
   const note = timezoneWindowNote(loaded.zonedSources, options.period);
   const current = {
     ...buildUsageReportFromData(currentWindow.providerData, currentWindow.window),

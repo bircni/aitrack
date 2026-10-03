@@ -50,16 +50,14 @@ export async function listUniqueSourceFiles(roots: string[]): Promise<string[]> 
   const perRoot = await Promise.all(roots.map((root) => listJsonlFiles(root)));
   const seen = new Set<string>();
   const files: string[] = [];
-  for (const file of perRoot.flat()) {
-    // String equality misses the same transcript reached through a symlink,
-    // which would double-count Codex (Claude message ids survive that).
-    let identity = file;
+  const identities = await mapWithConcurrency(perRoot.flat(), async (file) => {
     try {
-      identity = await realpath(file);
+      return { file, identity: await realpath(file) };
     } catch {
-      // The file vanished between the listing and here. Keep the path we have
-      // so a later read can fail on its own instead of dropping it silently.
+      return { file, identity: file };
     }
+  });
+  for (const { file, identity } of identities) {
     if (seen.has(identity)) continue;
     seen.add(identity);
     // Keep the path we listed. realpath is only the identity: on macOS it

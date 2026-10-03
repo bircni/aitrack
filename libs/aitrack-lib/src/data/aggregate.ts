@@ -35,6 +35,7 @@ export interface ModelAgg {
   hasCached: boolean;
   costUSD: number;
   hasCost: boolean;
+  hasUnpricedTokens?: boolean;
   days: number;
 }
 
@@ -81,6 +82,8 @@ export function aggregateModelsByDayMap(
         agg.hasCached = true;
       }
       agg.days++;
+      if (counts.hasUnpricedTokens || (tokens > 0 && counts.costUSD === undefined))
+        agg.hasUnpricedTokens = true;
       if (counts.costUSD !== undefined) {
         agg.costUSD += counts.costUSD;
         agg.hasCost = true;

@@ -1,4 +1,4 @@
-import { makeDay, useTimeZone } from '@aitrack/test-fixtures';
+import { EXTREME_TIME_ZONES, makeDay, useTimeZone } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -258,4 +258,96 @@ describe('buildUsageReport', () => {
       }
     });
   });
+});
+
+for (const zone of EXTREME_TIME_ZONES) {
+  describe(`explicit report clock in ${zone}`, () => {
+    useTimeZone(zone);
+    it('uses one supplied instant for all calendar windows even when the wall clock differs', () => {
+      const instant = new Date('2026-01-01T00:15:00Z');
+      const date = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(instant);
+      const loaded: LoadedUsageData = {
+        machineData: [],
+        providerData: { claude_code: new Map([[date, makeDay(10, 2, 1)]]) },
+      };
+      const reports = buildUsageReportsFromLoaded(
+        loaded,
+        [{ period: 'today' }, { period: 'thismonth' }],
+        instant,
+      );
+      expect(reports.map((report) => report.totals.tokens)).toEqual([12, 12]);
+      expect(reports[0]).toEqual(buildUsageReportFromLoaded(loaded, { period: 'today' }, instant));
+    });
+  });
+}
+
+it('retains partially priced usage within one model and across models', () => {
+  const loaded: LoadedUsageData = {
+    machineData: [],
+    providerData: {
+      claude_code: new Map([
+        [
+          '2026-06-15',
+          {
+            inputTokens: 30,
+            outputTokens: 0,
+            costUSD: 2,
+            byModel: {
+              mixed: { inputTokens: 20, outputTokens: 0, costUSD: 2, hasUnpricedTokens: true },
+              unknown: { inputTokens: 10, outputTokens: 0 },
+            },
+          },
+        ],
+      ]),
+    },
+  };
+  const report = buildUsageReportFromLoaded(loaded, { period: 'all' });
+  expect(report.totals).toMatchObject({
+    tokens: 30,
+    costUSD: 2,
+    hasCost: true,
+    hasUnpricedTokens: true,
+  });
+  expect(report.providers[0]?.hasUnpricedTokens).toBe(true);
+  expect(report.providers[0]?.rows.every((row) => row.hasUnpricedTokens)).toBe(true);
+});
+
+import { emptyReportMessage } from '../usageReport.js';
+it('compares partial and fully unpriced models without claiming complete cost changes', async () => {
+  mocks.loadMergedProviderData.mockResolvedValue({
+    machineData: [],
+    providerData: {
+      claude_code: new Map([
+        [
+          '2026-06-15',
+          {
+            inputTokens: 10,
+            outputTokens: 0,
+            byModel: { unknown: { inputTokens: 10, outputTokens: 0 } },
+          },
+        ],
+        [
+          '2026-06-14',
+          {
+            inputTokens: 20,
+            outputTokens: 0,
+            costUSD: 1,
+            byModel: {
+              mixed: { inputTokens: 20, outputTokens: 0, costUSD: 1, hasUnpricedTokens: true },
+            },
+          },
+        ],
+      ]),
+    },
+  });
+  const result = await buildUsageComparison({ period: 'today' }, new Date('2026-06-15T12:00:00'));
+  expect(result?.comparison.totals.hasUnpricedTokens).toBe(true);
+  expect(result?.comparison.models.every((model) => model.hasUnpricedTokens)).toBe(true);
+  expect(emptyReportMessage(result?.current ?? null)).toBeNull();
+  const empty = buildUsageReportFromLoaded(
+    { machineData: [], providerData: {} },
+    { period: 'all' },
+  );
+  expect(emptyReportMessage(empty)).toContain('No usage recorded');
+  expect(emptyReportMessage(null)).toContain('No');
 });

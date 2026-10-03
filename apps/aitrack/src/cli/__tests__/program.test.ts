@@ -236,3 +236,10 @@ describe('buildProgram', () => {
     });
   });
 });
+
+it('passes an explicit refresh flag to usage reports', async () => {
+  await run('usage', 'today', '--refresh');
+  expect(mocks.usageCommand).toHaveBeenLastCalledWith(
+    expect.objectContaining({ refreshLive: true }),
+  );
+});

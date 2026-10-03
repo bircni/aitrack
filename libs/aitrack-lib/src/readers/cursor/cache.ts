@@ -16,7 +16,7 @@ import { packageVersion } from '../../version.js';
  * The raw CSV is stored rather than the aggregated DayMap so `csv.ts` stays the
  * one parser and a parser change re-aggregates from cache without the network.
  */
-const CACHE_FORMAT = 1;
+const CACHE_FORMAT = 2;
 const CACHE_FILE = 'cursor.json';
 
 /** Default max age for a served cache entry, in seconds (6 hours). */
@@ -25,6 +25,7 @@ export const DEFAULT_CURSOR_CACHE_TTL_SECONDS = 21_600;
 export interface CursorCacheEntry {
   fetchedAt: string;
   csv: string;
+  accountId: string;
   /** Label of the credential shape that produced this CSV, for the next fetch. */
   workingAuthShape?: string;
 }
@@ -62,13 +63,15 @@ export function readCursorCache(): CursorCacheEntry | null {
     parsed.appVersion !== packageVersion() ||
     parsed.timezone !== machineTimezone() ||
     typeof parsed.csv !== 'string' ||
-    typeof parsed.fetchedAt !== 'string'
+    typeof parsed.fetchedAt !== 'string' ||
+    typeof parsed.accountId !== 'string'
   ) {
     return null;
   }
 
   return {
     fetchedAt: parsed.fetchedAt,
+    accountId: parsed.accountId,
     csv: parsed.csv,
     workingAuthShape:
       typeof parsed.workingAuthShape === 'string' ? parsed.workingAuthShape : undefined,
@@ -76,7 +79,10 @@ export function readCursorCache(): CursorCacheEntry | null {
 }
 
 /** Age of a cache entry in seconds, or Infinity when its timestamp is unparseable. */
-export function cursorCacheAgeSeconds(entry: CursorCacheEntry, now = Date.now()): number {
+export function cursorCacheAgeSeconds(
+  entry: Pick<CursorCacheEntry, 'fetchedAt' | 'csv'>,
+  now = Date.now(),
+): number {
   const fetchedAtMs = Date.parse(entry.fetchedAt);
   if (!isFiniteNumber(fetchedAtMs)) return Infinity;
   return (now - fetchedAtMs) / 1000;
@@ -92,6 +98,7 @@ export function writeCursorCache(entry: CursorCacheEntry): void {
     appVersion: packageVersion(),
     timezone: machineTimezone(),
     fetchedAt: entry.fetchedAt,
+    accountId: entry.accountId,
     csv: entry.csv,
     ...(entry.workingAuthShape !== undefined && { workingAuthShape: entry.workingAuthShape }),
   });

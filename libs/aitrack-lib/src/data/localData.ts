@@ -19,6 +19,7 @@ function tokenCountFields(counts: TokenCounts): TokenCounts {
       cacheCreation1hInputTokens: counts.cacheCreation1hInputTokens,
     }),
     ...(counts.costUSD !== undefined && { costUSD: counts.costUSD }),
+    ...(counts.hasUnpricedTokens && { hasUnpricedTokens: true }),
   };
 }
 
@@ -125,12 +126,15 @@ export function mergePersistedDays(
  */
 export async function readLocalProviderMaps(
   fallbacks?: FallbackCollector,
+  providers?: readonly string[],
 ): Promise<Record<string, DayMap>> {
   const entries = await Promise.all(
-    syncedProviders().map(
-      async (provider) =>
-        [provider.descriptor.key, await provider.reader.readData(fallbacks)] as const,
-    ),
+    syncedProviders()
+      .filter((provider) => !providers || providers.includes(provider.descriptor.key))
+      .map(
+        async (provider) =>
+          [provider.descriptor.key, await provider.reader.readData(fallbacks)] as const,
+      ),
   );
   return Object.fromEntries(entries);
 }
@@ -138,7 +142,8 @@ export async function readLocalProviderMaps(
 export async function buildLocalMachineFile(
   machineId: string,
   fallbacks?: FallbackCollector,
+  providers?: readonly string[],
 ): Promise<MachineFile> {
-  const maps = await readLocalProviderMaps(fallbacks);
+  const maps = await readLocalProviderMaps(fallbacks, providers);
   return buildMachineData(machineId, maps);
 }

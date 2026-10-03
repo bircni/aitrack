@@ -21,7 +21,7 @@ const TICK_MS = 60_000;
 const TRAY_ICON_SIZE = 32;
 const GIT_TIMEOUT_MS = 60_000;
 /** Bump only for incompatible cache shapes; additive fields are filled with defaults. */
-const CACHE_FORMAT = 1;
+const CACHE_FORMAT = 2;
 
 // stdout is the protocol channel; anything the library prints goes to stderr.
 console.log = console.error;
@@ -53,11 +53,15 @@ async function loadUsage(options: {
       warning = `Could not pull synced data: ${errorMessage(error)}`;
     }
   }
-  const loaded = await loadMergedProviderData({
-    refreshLive: options.refreshLive,
-    localMachine: options.localMachine,
-  });
-  return { summary: summarizeUsage(loaded), warning };
+  try {
+    const loaded = await loadMergedProviderData({
+      refreshLive: options.refreshLive,
+      localMachine: options.localMachine,
+    });
+    return { summary: summarizeUsage(loaded), warning };
+  } catch (error) {
+    return { error: errorMessage(error), warning };
+  }
 }
 
 async function main(): Promise<void> {

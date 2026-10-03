@@ -56,3 +56,23 @@ describe('recordPricingFallbacks', () => {
     warn.mockRestore();
   });
 });
+
+it('ignores live and unknown providers during family fallback scans', () => {
+  const fallbacks = createFallbackCollector();
+  recordPricingFallbacks(
+    {
+      cursor: new Map([
+        [
+          '2026-01-01',
+          {
+            inputTokens: 1,
+            outputTokens: 0,
+            byModel: { auto: { inputTokens: 1, outputTokens: 0 } },
+          },
+        ],
+      ]),
+    },
+    fallbacks,
+  );
+  expect(fallbacks.drain()).toEqual([]);
+});

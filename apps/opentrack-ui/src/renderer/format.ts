@@ -38,7 +38,9 @@ export function isPriced(spend: Spend): boolean {
 }
 
 export function spendLabel(spend: Spend): string {
-  return isPriced(spend) ? fmtUSDCost(spend.costUSD) : '—';
+  return isPriced(spend)
+    ? `${fmtUSDCost(spend.costUSD)}${spend.hasCost && spend.hasUnpricedTokens ? ' (partial)' : ''}`
+    : '—';
 }
 
 export function totalSpend(usages: Array<ProviderUsage | undefined>, period: Period): Spend {
@@ -48,6 +50,9 @@ export function totalSpend(usages: Array<ProviderUsage | undefined>, period: Per
       costUSD: total.costUSD + spend.costUSD,
       tokens: total.tokens + spend.tokens,
       hasCost: total.hasCost || spend.hasCost,
+      ...(total.hasUnpricedTokens || spend.hasUnpricedTokens || (spend.tokens > 0 && !spend.hasCost)
+        ? { hasUnpricedTokens: true }
+        : {}),
     };
   }, EMPTY_PERIOD);
 }

@@ -30,6 +30,9 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
+const pricing = vi.hoisted(() => ({ fingerprint: 'initial' }));
+vi.mock('../../pricing/store.js', () => ({ currentModelPricing: () => pricing }));
+
 import type { DayMap } from '../../data/types.js';
 import { openParseCache } from '../cache.js';
 
@@ -230,4 +233,65 @@ describe('openParseCache', () => {
     delete process.env.AITRACK_NO_CACHE;
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });
+});
+
+it('invalidates memory and disk cache entries after effective pricing changes', async () => {
+  mkdirSync(TEST_HOME, { recursive: true });
+  writeFileSync(SOURCE, 'line\n');
+  await seedCache();
+  expect(await openParseCache('claude').lookup(SOURCE)).not.toBeNull();
+  pricing.fingerprint = 'new-rate';
+  expect(await openParseCache('claude').lookup(SOURCE)).toBeNull();
+  pricing.fingerprint = 'initial';
+  rmSync(TEST_HOME, { recursive: true, force: true });
+});
+
+it('rejects corrupted message contributions and rebuilds only the affected entry', async () => {
+  mkdirSync(TEST_HOME, { recursive: true });
+  writeFileSync(SOURCE, 'line\n');
+  const cache = openParseCache('claude');
+  const message = {
+    key: 'k',
+    date: '2024-01-15',
+    model: 'm',
+    counts: { inputTokens: 10, outputTokens: 1, costUSD: 2 },
+  };
+  await cache.record(SOURCE, { days: days(10), keys: ['k'], messages: [message] });
+  cache.save();
+  const raw: unknown = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
+  const stored = raw as { entries: Record<string, unknown> };
+  for (const bad of [
+    null,
+    { mtimeMs: null },
+    { mtimeMs: 1, size: 1, keys: 'bad' },
+    { mtimeMs: 1, size: 1, keys: [], days: null },
+    { mtimeMs: 1, size: 1, keys: [], days: { date: null } },
+    {
+      mtimeMs: 1,
+      size: 1,
+      keys: [],
+      days: { date: { inputTokens: 1, outputTokens: 2, byModel: { m: null } } },
+    },
+  ]) {
+    writeFileSync(CACHE_FILE, JSON.stringify({ ...stored, entries: { [SOURCE]: bad } }));
+    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
+  }
+  for (const bad of [
+    null,
+    { ...message, key: 1 },
+    { ...message, date: null },
+    { ...message, model: null },
+    { ...message, counts: { inputTokens: 1, outputTokens: 2, hasUnpricedTokens: 'bad' } },
+    { ...message, counts: { inputTokens: 1, outputTokens: 2, costUSD: null } },
+  ]) {
+    writeFileSync(
+      CACHE_FILE,
+      JSON.stringify({
+        ...stored,
+        entries: { [SOURCE]: { mtimeMs: 1, size: 1, keys: [], days: {}, messages: [bad] } },
+      }),
+    );
+    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
+  }
+  rmSync(TEST_HOME, { recursive: true, force: true });
 });

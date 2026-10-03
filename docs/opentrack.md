@@ -37,6 +37,16 @@ machines in your aitrack data repo when one is configured (`aitrack init`). open
 that repo every 30 minutes (can be turned off). It commits and pushes only when you press the sync
 button in the popup, which does exactly what `aitrack sync` does.
 
+A failed pull remains visible until recovery and retries after one minute; a successful
+pull restores the 30-minute schedule. Failed local reads retain their own warning.
+Quota and usage update times advance only after successful updates and survive app
+restarts. Failed refreshes display the age of retained data. Mixed priced/unpriced
+usage displays a partial estimate rather than implying a complete dollar total.
+
+Refresh and sync command-delivery failures show retry controls separately from operation
+failures. Failed settings saves keep the newest queued changes and provide a retry;
+pushed settings cannot overwrite those pending edits.
+
 Settings and the last snapshot live in the app's data folder (`%APPDATA%\dev.bircni.opentrack` on
 Windows): `settings.json`, `cache.json`, and `sidecar.log`. There is no account, telemetry or
 backend.
