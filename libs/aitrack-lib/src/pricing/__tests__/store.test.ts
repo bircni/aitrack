@@ -36,6 +36,7 @@ import {
   sharedPricingStore,
 } from '../store.js';
 import { supplementFromTables } from '../supplementFromTables.js';
+import * as pricingTables from '../supplementFromTables.js';
 import { syncPricingPack } from '../syncPack.js';
 import { CLAUDE_FAMILY_FALLBACK, CODEX_FAMILY_FALLBACK } from '../tables.js';
 
@@ -392,6 +393,81 @@ describe('PricingStore', () => {
     },
   );
 
+  it.each(['disk', 'refresh'] as const)(
+    'preserves local date windows and ordered exceptions on %s',
+    async (source) => {
+      const local = supplementFromTables();
+      const oldClaude = {
+        inputPerMillion: 5,
+        outputPerMillion: 25,
+        cacheReadPerMillion: 0.5,
+        cacheCreatePerMillion: 6.25,
+      };
+      local.claude.overrides['claude-sonnet-4-6'] = [{ before: '2026-08-21', pricing: oldClaude }];
+      local.cursor.aliases.unshift(
+        { pattern: '^local-alias$', canonical: 'composer-2.5' },
+        { pattern: '^local-.*$', canonical: 'auto' },
+      );
+      const { dir, cache } = await fixture((remote) => {
+        remote.claude.overrides['claude-sonnet-4-6'] = [
+          { before: '2026-01-01', pricing: { ...oldClaude, inputPerMillion: 8 } },
+        ];
+        remote.codex.overrides['gpt-5.6-sol'] = [
+          { before: '2026-10-01', pricing: { inputPerMillion: 6, outputPerMillion: 30 } },
+          { before: '2026-01-01', pricing: { inputPerMillion: 8, outputPerMillion: 40 } },
+        ];
+        remote.codex.overrides['gpt-5.6-terra'] = [
+          { before: '2026-07-30', pricing: { inputPerMillion: 9, outputPerMillion: 45 } },
+        ];
+        remote.codex.familyFallback = remote.codex.familyFallback.filter(
+          (rule) => rule.match !== '-nano$',
+        );
+        remote.codex.familyFallback.unshift({
+          match: '^remote-fallback$',
+          inputPerMillion: 8,
+          outputPerMillion: 40,
+        });
+        remote.cursor.aliases.unshift(
+          { pattern: '^remote-alias$', canonical: 'composer-2' },
+          { pattern: '^local-.*$', canonical: 'auto' },
+        );
+      });
+      vi.spyOn(pricingTables, 'supplementFromTables').mockImplementation(() =>
+        structuredClone(local),
+      );
+      if (source === 'disk') await cache();
+      const store = new PricingStore(dir);
+      vi.spyOn(sharedPricingStore(), 'current').mockImplementation(() => store.current());
+      if (source === 'refresh') await store.refreshIfDue(true);
+      const check = () => {
+        expect(lookupClaudePricing('claude-sonnet-4-6', '2025-12-01')?.inputPerMillion).toBe(8);
+        expect(lookupClaudePricing('claude-sonnet-4-6', '2026-07-01')?.inputPerMillion).toBe(5);
+        expect(lookupClaudePricing('claude-sonnet-4-6', '2026-08-21')?.inputPerMillion).toBe(9);
+        expect(lookupCodexPricing('gpt-5.6-sol', '2025-12-01')?.inputPerMillion).toBe(8);
+        expect(lookupCodexPricing('gpt-5.6-sol', '2026-07-01')?.inputPerMillion).toBe(5);
+        expect(lookupCodexPricing('gpt-5.6-sol', '2026-08-21')?.inputPerMillion).toBe(6);
+        expect(lookupCodexPricing('gpt-5.6-sol', '2026-10-01')?.inputPerMillion).toBe(4);
+        expect(lookupCodexPricing('gpt-5.6-terra', '2026-07-01')?.inputPerMillion).toBe(9);
+        expect(CODEX_PRICING_OVERRIDES['gpt-5.6-sol']?.map((entry) => entry.before)).toEqual([
+          '2026-01-01',
+          '2026-08-21',
+          '2026-10-01',
+        ]);
+        expect(findCodexPricing('gpt-5-new-nano')?.inputPerMillion).toBe(0.2);
+        expect(findCodexPricing('remote-fallback')?.inputPerMillion).toBe(8);
+        expect(store.current().applyCursorAlias('local-alias')).toBe('composer-2.5');
+        expect(store.current().applyCursorAlias('local-other')).toBe('auto');
+        expect(store.current().applyCursorAlias('remote-alias')).toBe('composer-2');
+      };
+      check();
+      await store.refreshIfDue(true);
+      check();
+      expect(
+        new PricingStore(dir).current().lookupCodex('gpt-5.6-sol', '2026-07-01')?.inputPerMillion,
+      ).toBe(5);
+    },
+  );
+
   it.each(['claude', 'codex'] as const)(
     'keeps the mutable %s override export synchronized with lookups and refreshes',
     async (provider) => {
@@ -456,6 +532,40 @@ describe('PricingStore', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(9);
     expect(new PricingStore(dir).current().updatedAt).toBe(store.current().updatedAt);
+  });
+
+  it('replaces existing pack and state files on successive changed refreshes', async () => {
+    const { dir, files, fetchMock, supplement } = await fixture();
+    const store = new PricingStore(dir);
+    await expect(store.refreshIfDue(true)).resolves.toMatchObject({ updated: true });
+    const before = await readFile(join(dir, 'pack.json'), 'utf8');
+    Object.assign(supplement.claude.models['claude-sonnet-4-6'] ?? {}, { inputPerMillion: 12 });
+    files['supplement.json'] = JSON.stringify(supplement);
+    updateHashes(files);
+    fetchMock.mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      return Promise.resolve(
+        new Response(files[url.split('/').at(-1) ?? ''], {
+          status: 200,
+          headers: { etag: '"second-generation"' },
+        }),
+      );
+    });
+    await expect(store.refreshIfDue(true)).resolves.toMatchObject({ updated: true });
+    const after = await readFile(join(dir, 'pack.json'), 'utf8');
+    expect(after).not.toBe(before);
+    expect(JSON.parse(after)).toEqual(files);
+    expect(new PricingStore(dir).current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(
+      12,
+    );
+    const state = JSON.parse(await readFile(join(dir, 'state.json'), 'utf8')) as {
+      sources: Record<string, { etag?: string }>;
+    };
+    expect(Object.values(state.sources).map((source) => source.etag)).toEqual(
+      Array.from({ length: 4 }, () => '"second-generation"'),
+    );
+    const names = await readdir(dir);
+    expect(names.some((name) => name.endsWith('.tmp'))).toBe(false);
   });
 
   it('skips fresh caches, honors failure backoff, and allows a forced retry', async () => {

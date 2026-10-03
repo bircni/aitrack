@@ -10,6 +10,7 @@ import type { CompactCatalog } from './codecs.js';
 import { type ModelPricing, modelPricingFromPack } from './modelPricing.js';
 import { type PricingSupplement, pricingPackUrls } from './packMeta.js';
 import { supplementFromTables } from './supplementFromTables.js';
+import type { PricingOverride } from './types.js';
 import { isCompactCatalog, isPricingManifest, isPricingSupplement } from './validation.js';
 
 export const PRICING_CACHE_DIR = join(APP_DIR, 'pricing');
@@ -88,6 +89,34 @@ function pricingFromParts(
   return modelPricingFromPack({ supplement, litellm, modelsDev });
 }
 
+function mergeOverrides<P>(
+  local: Record<string, Array<PricingOverride<P>>>,
+  remote: Record<string, Array<PricingOverride<P>>>,
+): Record<string, Array<PricingOverride<P>>> {
+  const merged = { ...local };
+  for (const [model, entries] of Object.entries(remote)) {
+    const byCutoff = new Map(
+      [...(local[model] ?? []), ...entries].map((entry) => [entry.before, entry]),
+    );
+    merged[model] = [...byCutoff.values()].toSorted((a, b) => a.before.localeCompare(b.before));
+  }
+  return merged;
+}
+
+function mergeRules<T>(local: T[], remote: T[], key: (rule: T) => string): T[] {
+  const merged = [...remote];
+  const remoteKeys = new Set(remote.map((rule) => key(rule)));
+  for (const [index, rule] of local.entries()) {
+    if (remoteKeys.has(key(rule))) continue;
+    // Keep a bundled exception ahead of the next shared, potentially broader rule.
+    const next = local.slice(index + 1).find((entry) => remoteKeys.has(key(entry)));
+    const position =
+      next === undefined ? merged.length : merged.findIndex((entry) => key(entry) === key(next));
+    merged.splice(position, 0, rule);
+  }
+  return merged;
+}
+
 /** Local tables with a complete, validated disk overlay. Network refresh is optional. */
 export class PricingStore {
   private snapshot: ModelPricing;
@@ -146,29 +175,23 @@ export class PricingStore {
       ...remote,
       claude: {
         models: { ...local.claude.models, ...remote.claude.models },
-        overrides: { ...local.claude.overrides, ...remote.claude.overrides },
+        overrides: mergeOverrides(local.claude.overrides, remote.claude.overrides),
         familyFallback: { ...local.claude.familyFallback, ...remote.claude.familyFallback },
       },
       codex: {
         current: { ...local.codex.current, ...remote.codex.current },
         historical: { ...local.codex.historical, ...remote.codex.historical },
-        overrides: { ...local.codex.overrides, ...remote.codex.overrides },
-        familyFallback: [
-          ...remote.codex.familyFallback,
-          ...local.codex.familyFallback.filter(
-            (entry) => !remote.codex.familyFallback.some((rule) => rule.match === entry.match),
-          ),
-        ],
+        overrides: mergeOverrides(local.codex.overrides, remote.codex.overrides),
+        familyFallback: mergeRules(
+          local.codex.familyFallback,
+          remote.codex.familyFallback,
+          (rule) => rule.match,
+        ),
       },
       cursor: {
         models: { ...local.cursor.models, ...remote.cursor.models },
         fastMultipliers: { ...local.cursor.fastMultipliers, ...remote.cursor.fastMultipliers },
-        aliases: [
-          ...remote.cursor.aliases,
-          ...local.cursor.aliases.filter(
-            (entry) => !remote.cursor.aliases.some((rule) => rule.pattern === entry.pattern),
-          ),
-        ],
+        aliases: mergeRules(local.cursor.aliases, remote.cursor.aliases, (rule) => rule.pattern),
       },
     };
   }
