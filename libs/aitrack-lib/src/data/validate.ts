@@ -62,6 +62,10 @@ function checkTokenCounts(value: unknown, path: string): Checked<TokenCounts> {
     }
   }
 
+  if (value.hasUnpricedTokens !== undefined && typeof value.hasUnpricedTokens !== 'boolean') {
+    return invalid(`${path}.hasUnpricedTokens must be a boolean`);
+  }
+
   // The original object, not a rebuilt one: sync writes what it read back out,
   // and reconstructing this would reorder the keys and produce a spurious diff
   // on every already-up-to-date machine. The cast is sound because every field
@@ -74,7 +78,10 @@ export function approximatelyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
-function sumField(byModel: TokenCounts[], field: keyof TokenCounts): number {
+function sumField(
+  byModel: TokenCounts[],
+  field: Exclude<keyof TokenCounts, 'hasUnpricedTokens'>,
+): number {
   return byModel.reduce((sum, counts) => sum + (counts[field] ?? 0), 0);
 }
 

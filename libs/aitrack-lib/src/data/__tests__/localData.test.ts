@@ -156,3 +156,21 @@ describe('localData', () => {
     expect(machine.days['2024-01-01']?.claude_code).toBeDefined();
   });
 });
+
+it('preserves token breakdowns and partial pricing when writing machine data', () => {
+  const counts = {
+    inputTokens: 10,
+    outputTokens: 2,
+    rawInputTokens: 4,
+    cachedInputTokens: 3,
+    cacheCreationInputTokens: 2,
+    cacheCreation1hInputTokens: 1,
+    costUSD: 1,
+    hasUnpricedTokens: true,
+  };
+  const machine = buildMachineData('host', {
+    claude_code: new Map([['2026-01-01', { ...counts, byModel: { mixed: counts } }]]),
+  });
+  expect(machine.days['2026-01-01']?.claude_code?.totals).toEqual(counts);
+  expect(machine.days['2026-01-01']?.claude_code?.byModel.mixed).toEqual(counts);
+});

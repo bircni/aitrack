@@ -21,11 +21,13 @@ function periodFor(report: UsageReport | undefined, key: string): PeriodUsage {
     tokens: provider.subtotalTokens,
     costUSD: provider.subtotalCostUSD,
     hasCost: provider.subtotalHasCost,
-    models: provider.rows.map(({ model, tokens, costUSD, hasCost }) => ({
+    ...(provider.hasUnpricedTokens && { hasUnpricedTokens: true }),
+    models: provider.rows.map(({ model, tokens, costUSD, hasCost, hasUnpricedTokens }) => ({
       model,
       tokens,
       costUSD,
       hasCost,
+      ...(hasUnpricedTokens && { hasUnpricedTokens: true }),
     })),
   };
 }

@@ -12,6 +12,7 @@ export interface Spend {
   costUSD: number;
   /** Some of the tokens were priced; without it `costUSD` is not a real $0. */
   hasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface ModelUsage extends Spend {

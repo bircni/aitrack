@@ -117,6 +117,14 @@ function drawReceipt(document: PDFKit.PDFDocument, report: UsageReport, generate
   );
   divider(document);
 
+  if (report.totals.hasCost && report.totals.hasUnpricedTokens) {
+    document
+      .font(FONT)
+      .fontSize(8)
+      .text('Partial estimate: some usage is unpriced.', MARGIN, document.y, {
+        width: CONTENT_WIDTH,
+      });
+  }
   document.moveDown(1);
   document
     .font(FONT)

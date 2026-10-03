@@ -49,7 +49,8 @@ function isSpend(value: unknown): value is Spend & Record<string, unknown> {
     isRecord(value) &&
     isFiniteNumber(value.tokens) &&
     isFiniteNumber(value.costUSD) &&
-    typeof value.hasCost === 'boolean'
+    typeof value.hasCost === 'boolean' &&
+    (value.hasUnpricedTokens === undefined || typeof value.hasUnpricedTokens === 'boolean')
   );
 }
 

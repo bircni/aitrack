@@ -54,6 +54,9 @@
             >{amount.cents}</span
           >{:else}—{/if}
       </div>
+      {#if spend.hasCost && spend.hasUnpricedTokens}
+        <span class="sub">Partial estimate</span>
+      {/if}
       <div class="sub">
         {formatTokens(spend.tokens)} tokens{#if machineCount > 1}&nbsp;· {machineCount} machines{/if}
       </div>

@@ -62,7 +62,8 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(map.get('2024-01-10')).toEqual({
       inputTokens: 200,
       outputTokens: 0,
-      byModel: { 'gpt-4o': { inputTokens: 200, outputTokens: 0 } },
+      hasUnpricedTokens: true,
+      byModel: { 'gpt-4o': { inputTokens: 200, outputTokens: 0, hasUnpricedTokens: true } },
     });
   });
 
@@ -103,6 +104,7 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(map.get('2024-01-10')).toEqual({
       inputTokens: 350,
       outputTokens: 25,
+      hasUnpricedTokens: true,
       rawInputTokens: 200,
       cachedInputTokens: 50,
       cacheCreationInputTokens: 100,
@@ -110,6 +112,7 @@ describe('aggregateCursorCsvToDayMap', () => {
         'gpt-4o': {
           inputTokens: 350,
           outputTokens: 25,
+          hasUnpricedTokens: true,
           rawInputTokens: 200,
           cachedInputTokens: 50,
           cacheCreationInputTokens: 100,

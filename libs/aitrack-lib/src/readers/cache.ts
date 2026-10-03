@@ -38,6 +38,8 @@ interface CacheEntry {
 function isTokenCounts(value: unknown): value is TokenCounts {
   if (!isRecord(value)) return false;
   if (!isFiniteNumber(value.inputTokens) || !isFiniteNumber(value.outputTokens)) return false;
+  if (value.hasUnpricedTokens !== undefined && typeof value.hasUnpricedTokens !== 'boolean')
+    return false;
   return (
     [
       'cachedInputTokens',
