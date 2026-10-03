@@ -6,6 +6,7 @@ import { isFiniteNumber, isRecord } from '../data/guards.js';
 import type { DayEntry, DayMap, TokenCounts } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { CACHE_DIR } from '../paths.js';
+import { currentModelPricing } from '../pricing/store.js';
 import { machineTimezone } from '../timezone.js';
 import { packageVersion } from '../version.js';
 
@@ -14,7 +15,7 @@ import { packageVersion } from '../version.js';
  * by another format are dropped wholesale rather than migrated — they are
  * rebuildable from the logs.
  */
-const CACHE_FORMAT = 2;
+const CACHE_FORMAT = 3;
 
 /** One transcript file's contribution, as cached. */
 export interface CachedParse {
@@ -66,6 +67,7 @@ interface MemoizedCache {
   mtimeMs: number;
   size: number;
   timezone: string;
+  pricingFingerprint: string;
   entries: Record<string, CacheEntry>;
 }
 
@@ -81,29 +83,35 @@ function fileStamp(filePath: string): { mtimeMs: number; size: number } | null {
   }
 }
 
-function remember(filePath: string, entries: Record<string, CacheEntry>): void {
+function remember(
+  filePath: string,
+  entries: Record<string, CacheEntry>,
+  pricingFingerprint: string,
+): void {
   const stamp = fileStamp(filePath);
-  if (stamp) memoized.set(filePath, { ...stamp, timezone: machineTimezone(), entries });
+  if (stamp)
+    memoized.set(filePath, { ...stamp, timezone: machineTimezone(), pricingFingerprint, entries });
   else memoized.delete(filePath);
 }
 
-function loadCacheFile(filePath: string): Record<string, CacheEntry> {
+function loadCacheFile(filePath: string, pricingFingerprint: string): Record<string, CacheEntry> {
   const stamp = fileStamp(filePath);
   const memo = memoized.get(filePath);
   if (
     stamp &&
     memo?.mtimeMs === stamp.mtimeMs &&
     memo.size === stamp.size &&
-    memo.timezone === machineTimezone()
+    memo.timezone === machineTimezone() &&
+    memo.pricingFingerprint === pricingFingerprint
   ) {
     return memo.entries;
   }
-  const entries = readCacheFile(filePath);
-  remember(filePath, entries);
+  const entries = readCacheFile(filePath, pricingFingerprint);
+  remember(filePath, entries, pricingFingerprint);
   return entries;
 }
 
-function readCacheFile(filePath: string): Record<string, CacheEntry> {
+function readCacheFile(filePath: string, pricingFingerprint: string): Record<string, CacheEntry> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(filePath, 'utf8'));
@@ -120,6 +128,7 @@ function readCacheFile(filePath: string): Record<string, CacheEntry> {
     // tables must invalidate everything rather than serve stale dollars.
     parsed.appVersion !== packageVersion() ||
     parsed.timezone !== machineTimezone() ||
+    parsed.pricingFingerprint !== pricingFingerprint ||
     !isRecord(parsed.entries)
   ) {
     return {};
@@ -164,7 +173,8 @@ export function openParseCache(name: string): ParseCache {
   if (environmentValue('AITRACK_NO_CACHE')) return disabledCache();
 
   const cachePath = join(CACHE_DIR, `${name}.json`);
-  const previous = loadCacheFile(cachePath);
+  const pricingFingerprint = currentModelPricing().fingerprint;
+  const previous = loadCacheFile(cachePath, pricingFingerprint);
   const next: Record<string, CacheEntry> = {};
   let isRecorded = false;
 
@@ -206,6 +216,7 @@ export function openParseCache(name: string): ParseCache {
         format: CACHE_FORMAT,
         appVersion: packageVersion(),
         timezone: machineTimezone(),
+        pricingFingerprint,
         entries: next,
       });
       // Write-then-rename so a concurrent reader never sees a half-written
@@ -215,7 +226,7 @@ export function openParseCache(name: string): ParseCache {
         mkdirSync(CACHE_DIR, { recursive: true });
         writeFileSync(temporaryPath, payload, 'utf8');
         renameSync(temporaryPath, cachePath);
-        remember(cachePath, next);
+        remember(cachePath, next, pricingFingerprint);
       } catch {
         rmSync(temporaryPath, { force: true });
         // A cache that cannot be written (read-only home, full disk) must not
