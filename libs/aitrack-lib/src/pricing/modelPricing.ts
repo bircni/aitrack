@@ -68,6 +68,12 @@ export class ModelPricing {
     return this.supplement[provider].overrides;
   }
 
+  pricingTable<Provider extends 'claude' | 'codex' | 'cursor'>(
+    provider: Provider,
+  ): PricingSupplement[Provider] {
+    return this.supplement[provider];
+  }
+
   lookupClaude(modelId: string, usageDate?: string): ClaudePricing | undefined {
     const overridden = pickOverride(this.supplement.claude.overrides, modelId, usageDate);
     if (overridden) return overridden;

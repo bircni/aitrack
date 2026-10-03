@@ -97,7 +97,7 @@ export class PricingStore {
   private refreshInFlight: Promise<PricingRefreshResult> | undefined;
 
   constructor(private readonly cacheDir = PRICING_CACHE_DIR) {
-    this.snapshot = pricingFromParts(this.localSupplement);
+    this.snapshot = pricingFromParts(structuredClone(this.localSupplement));
     this.hydrateFromDiskSync();
   }
 
@@ -120,9 +120,9 @@ export class PricingStore {
       );
       const litellm = load(manifest.files.litellm, isCompactCatalog, manifest.hashes.litellm);
       const modelsDev = load(manifest.files.modelsDev, isCompactCatalog, manifest.hashes.modelsDev);
-      this.snapshot = pricingFromParts(this.newerSupplement(supplement), litellm, modelsDev);
+      this.snapshot = pricingFromParts(this.mergeSupplement(supplement), litellm, modelsDev);
     } catch {
-      this.snapshot = pricingFromParts(this.localSupplement);
+      this.snapshot = pricingFromParts(structuredClone(this.localSupplement));
       // An incomplete cache must recover immediately, except during failure backoff.
       for (const source of Object.values(this.state.sources)) source.fetchedAt = undefined;
     }
@@ -136,10 +136,41 @@ export class PricingStore {
     return body;
   }
 
-  private newerSupplement(remote: PricingSupplement): PricingSupplement {
-    return Date.parse(remote.updatedAt) > Date.parse(this.localSupplement.updatedAt)
-      ? remote
-      : this.localSupplement;
+  private mergeSupplement(remote: PricingSupplement): PricingSupplement {
+    if (Date.parse(remote.updatedAt) <= Date.parse(this.localSupplement.updatedAt)) {
+      return structuredClone(this.localSupplement);
+    }
+    // Pack build times do not guarantee that every bundled entry exists remotely.
+    const local = structuredClone(this.localSupplement);
+    return {
+      ...remote,
+      claude: {
+        models: { ...local.claude.models, ...remote.claude.models },
+        overrides: { ...local.claude.overrides, ...remote.claude.overrides },
+        familyFallback: { ...local.claude.familyFallback, ...remote.claude.familyFallback },
+      },
+      codex: {
+        current: { ...local.codex.current, ...remote.codex.current },
+        historical: { ...local.codex.historical, ...remote.codex.historical },
+        overrides: { ...local.codex.overrides, ...remote.codex.overrides },
+        familyFallback: [
+          ...remote.codex.familyFallback,
+          ...local.codex.familyFallback.filter(
+            (entry) => !remote.codex.familyFallback.some((rule) => rule.match === entry.match),
+          ),
+        ],
+      },
+      cursor: {
+        models: { ...local.cursor.models, ...remote.cursor.models },
+        fastMultipliers: { ...local.cursor.fastMultipliers, ...remote.cursor.fastMultipliers },
+        aliases: [
+          ...remote.cursor.aliases,
+          ...local.cursor.aliases.filter(
+            (entry) => !remote.cursor.aliases.some((rule) => rule.pattern === entry.pattern),
+          ),
+        ],
+      },
+    };
   }
 
   current(): ModelPricing {
@@ -196,7 +227,7 @@ export class PricingStore {
         manifest.value.hashes.modelsDev,
       );
       const next = pricingFromParts(
-        this.newerSupplement(supplement.value),
+        this.mergeSupplement(supplement.value),
         litellm.value,
         modelsDev.value,
       );
