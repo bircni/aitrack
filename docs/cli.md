@@ -93,7 +93,7 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 **Provider selection:** `--providers <list>` accepts comma-separated `claude`, `codex`, and `cursor` values and works with `show`, every `usage` window, `export`, and `top`. All three are selected by default. Filtered reports read only selected local providers. Excluding `cursor` prevents the Cursor credential read and HTTPS export request. `show` and sync still read complete local-machine data when staging requires it.
 
-**Live data refresh:** Cursor's CSV export is cached at `~/.config/aitrack/cache/cursor.json` (default 6 h, `AITRACK_CURSOR_CACHE_TTL` seconds to change, `AITRACK_NO_CACHE=1` to disable), so `show` / `usage` / `top` no longer hit the network on every run. Pass `--refresh` to `show` or any `usage` window to force a fresh fetch.
+**Live data refresh:** Cursor's CSV export is cached at `~/.config/aitrack/cache/cursor.json` (default 6 h, `AITRACK_CURSOR_CACHE_TTL` seconds to change, `AITRACK_NO_CACHE=1` to disable), so `show` / `usage` / `top` no longer hit the network on every run. Pass `--refresh` to `show` or any `usage` window to request a fresh fetch. The cache contains an account hash, never a token, and is served only after verifying the current local account. Legacy, mismatched or unverifiable-account exports are rejected.
 
 **`show` flags:** `--tui` (terminal table instead of PNG), `--all` (single merged heatmap), `--dark` (dark mode), `--no-open` (don't auto-open the PNG), `-o <path>` (custom output path), `--year <year>` (filter to one calendar year), and `--refresh` (re-fetch Cursor, ignoring the cache).
 
