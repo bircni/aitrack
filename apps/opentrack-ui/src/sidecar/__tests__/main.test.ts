@@ -200,6 +200,24 @@ describe('tray icon', () => {
     ).toMatchObject({ usedPercent: 90 });
   });
 
+  it('includes monetary limits in tray usage, tone and bars', () => {
+    const money = {
+      ...sessionWindow(95, 2.5),
+      id: 'onDemand',
+      label: 'On-demand',
+      format: 'dollars' as const,
+      usedValue: 95,
+      limitValue: 100,
+    };
+    const cursor = { ...provider([money]), key: 'cursor' as const, label: 'Cursor' };
+    expect(summarizeTray([cursor], NOW, { ...AUTO, trayStyle: 'bars' })).toEqual({
+      tone: 'crit',
+      usedPercent: 95,
+      bars: [{ tone: 'crit', usedPercent: 95 }],
+      tooltip: 'opentrack\nCursor On-demand: 95%',
+    });
+  });
+
   it('draws the outline ring, the used wedge solid and the rest faint', () => {
     const size = 32;
     const pixels = renderTrayIcon(size, 25, 'crit');
@@ -338,6 +356,27 @@ describe('summarizeUsage', () => {
     expect(summary.providers.codex).toBeUndefined();
     expect(summary.machineCount).toBe(1);
     expect(summarizeUsage(null)).toEqual({ providers: {}, machineCount: 1 });
+  });
+
+  it('counts an unsynced local machine alongside persisted machines', () => {
+    const summary = summarizeUsage({
+      providerData: { codex: new Map() },
+      machineData: [
+        {
+          schemaVersion: 1,
+          hostname: 'remote',
+          timezone: 'UTC',
+          dayBucket: 'local',
+          lastUpdated: '',
+          days: {},
+        },
+      ],
+      zonedSources: [
+        { timezone: 'UTC', days: {} },
+        { timezone: 'UTC', days: {} },
+      ],
+    });
+    expect(summary.machineCount).toBe(2);
   });
 
   it('gives an empty period for a provider with nothing in the window', () => {

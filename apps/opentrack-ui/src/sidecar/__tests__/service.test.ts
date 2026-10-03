@@ -270,28 +270,54 @@ describe('QuotaService', () => {
     });
   });
 
-  it('reloads synced usage after an earlier slow refresh finishes', async () => {
+  it('keeps sync exclusive through the prior refresh and the usage reload', async () => {
     const summary = { providers: {}, machineCount: 2 };
-    let finishUsage: ((value: { summary: typeof summary }) => void) | undefined;
-    const pending = new Promise<{ summary: typeof summary }>((resolve) => {
-      finishUsage = resolve;
+    let finishEarlier: (() => void) | undefined;
+    let finishReload: (() => void) | undefined;
+    const earlier = new Promise<void>((resolve) => {
+      finishEarlier = resolve;
+    });
+    const reloaded = new Promise<void>((resolve) => {
+      finishReload = resolve;
     });
     const loadUsage = vi
       .fn<ServiceDeps['loadUsage']>()
-      .mockReturnValueOnce(pending)
-      .mockResolvedValue({ summary });
-    const { service } = harness({}, { loadUsage });
+      .mockImplementationOnce(async () => {
+        await earlier;
+        return { summary };
+      })
+      .mockImplementationOnce(async () => {
+        await reloaded;
+        return { summary };
+      });
+    const sync = vi
+      .fn<ServiceDeps['sync']>()
+      .mockResolvedValue({ message: 'Done', machine: MACHINE });
+    const { service } = harness({}, { loadUsage, sync });
     const refreshing = service.refresh();
     const syncing = service.sync();
     await Promise.resolve();
-    finishUsage?.({ summary });
-    await Promise.all([refreshing, syncing]);
-    expect(loadUsage).toHaveBeenCalledTimes(2);
+    expect(service.state().syncing).toBe(true);
+    await service.sync();
+    expect(sync).toHaveBeenCalledTimes(1);
+    expect(service.state().syncing).toBe(true);
+
+    finishEarlier?.();
+    await refreshing;
+    await vi.waitFor(() => {
+      expect(loadUsage).toHaveBeenCalledTimes(2);
+    });
+    await service.sync();
+    expect(sync).toHaveBeenCalledTimes(1);
+    expect(service.state().syncing).toBe(true);
     expect(loadUsage).toHaveBeenLastCalledWith({
       pull: false,
       refreshLive: false,
       localMachine: MACHINE,
     });
+    finishReload?.();
+    await syncing;
+    expect(service.state()).toMatchObject({ syncing: false, refreshing: false });
   });
 
   it('starts from the cached state', () => {
@@ -334,6 +360,20 @@ describe('QuotaService', () => {
       rateLimitedUntil: {},
     });
   });
+
+  it.each([{ provider: 'claude_code' }, { plan: {} }, { usedValue: null }, { limitValue: '50' }])(
+    'drops malformed quota snapshot fields: %j',
+    ({ usedValue, limitValue, ...patch }) => {
+      const result = ok('codex');
+      if (!result.ok) throw new Error('expected quota');
+      const snapshot = {
+        ...result.snapshot,
+        ...patch,
+        windows: [{ ...result.snapshot.windows[0], format: 'dollars', usedValue, limitValue }],
+      };
+      expect(normalizeCachedState({ quotas: { codex: snapshot } }).quotas).toEqual({});
+    },
+  );
 
   it('fills missing allTime on a pre-upgrade usage cache', () => {
     const empty = EMPTY_PERIOD;

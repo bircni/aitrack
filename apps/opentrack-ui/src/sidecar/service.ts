@@ -98,13 +98,17 @@ function isWindow(value: unknown): value is QuotaWindow {
     isFiniteNumber(value.usedPercent) &&
     isFiniteNumber(value.periodSeconds) &&
     QUOTA_FORMATS.includes(value.format as QuotaFormat) &&
-    (value.resetsAt === undefined || typeof value.resetsAt === 'string')
+    (value.resetsAt === undefined || typeof value.resetsAt === 'string') &&
+    (value.usedValue === undefined || isFiniteNumber(value.usedValue)) &&
+    (value.limitValue === undefined || isFiniteNumber(value.limitValue))
   );
 }
 
-function isSnapshot(value: unknown): value is QuotaSnapshot {
+function isSnapshot(value: unknown, key: QuotaProviderKey): value is QuotaSnapshot {
   return (
     isRecord(value) &&
+    value.provider === key &&
+    (value.plan === undefined || typeof value.plan === 'string') &&
     typeof value.fetchedAt === 'string' &&
     Array.isArray(value.windows) &&
     value.windows.every(isWindow) &&
@@ -122,12 +126,12 @@ function isSnapshot(value: unknown): value is QuotaSnapshot {
 
 function providerMap<T>(
   value: unknown,
-  read: (entry: unknown) => T | undefined,
+  read: (entry: unknown, key: QuotaProviderKey) => T | undefined,
 ): Partial<Record<QuotaProviderKey, T>> {
   const entries: Partial<Record<QuotaProviderKey, T>> = {};
   if (!isRecord(value)) return entries;
   for (const key of QUOTA_PROVIDERS) {
-    const entry = read(value[key]);
+    const entry = read(value[key], key);
     if (entry !== undefined) entries[key] = entry;
   }
   return entries;
@@ -138,7 +142,7 @@ export function normalizeCachedState(input: unknown): CachedState {
   const raw = isRecord(input) ? input : {};
   const usage = isRecord(raw.usage) ? raw.usage : undefined;
   return {
-    quotas: providerMap(raw.quotas, (entry) => (isSnapshot(entry) ? entry : undefined)),
+    quotas: providerMap(raw.quotas, (entry, key) => (isSnapshot(entry, key) ? entry : undefined)),
     usage: usage && {
       providers: providerMap(usage.providers, readProviderUsage),
       machineCount: isFiniteNumber(usage.machineCount) ? usage.machineCount : 1,
@@ -185,7 +189,6 @@ export class QuotaService {
   private updatedAt: string | undefined;
   private syncing = false;
   private syncResult: AppState['syncResult'];
-  private syncedMachine: MachineFile | undefined;
   private emitQueued = false;
 
   private readonly cache: CachedState;
@@ -244,19 +247,21 @@ export class QuotaService {
     this.syncing = true;
     this.emit();
     try {
-      const { message, machine } = await this.deps.sync();
-      this.syncResult = { ok: true, message };
-      this.syncedMachine = machine;
-      this.nextPullAt = this.deps.now() + PULL_INTERVAL_MS; // The sync just pulled.
-    } catch (error) {
-      this.syncResult = { ok: false, message: errorMessage(error) };
+      let localMachine: MachineFile | undefined;
+      try {
+        const { message, machine } = await this.deps.sync();
+        this.syncResult = { ok: true, message };
+        localMachine = machine;
+        this.nextPullAt = this.deps.now() + PULL_INTERVAL_MS;
+      } catch (error) {
+        this.syncResult = { ok: false, message: errorMessage(error) };
+      }
+      await this.usageRun;
+      await Promise.all([this.refresh(), this.refreshUsage(false, localMachine)]);
     } finally {
       this.syncing = false;
+      this.persist();
     }
-    this.emit();
-    await this.usageRun;
-    this.nextUsageAt = 0;
-    await this.refresh();
   }
 
   /**
@@ -282,6 +287,10 @@ export class QuotaService {
       ...due.map((key) => this.refreshQuota(key)),
       usageDue ? this.refreshUsage(force) : Promise.resolve(),
     ]);
+    this.persist();
+  }
+
+  private persist(): void {
     this.updatedAt = new Date(this.deps.now()).toISOString();
     this.cache.fired = pruneFired(this.cache.fired, this.deps.now());
     this.cache.rateLimitedUntil = Object.fromEntries(
@@ -331,8 +340,8 @@ export class QuotaService {
     }
   }
 
-  private refreshUsage(force: boolean): Promise<void> {
-    const run = this.loadUsage(force).finally(() => {
+  private refreshUsage(force: boolean, localMachine?: MachineFile): Promise<void> {
+    const run = this.loadUsage(force, localMachine).finally(() => {
       this.usageRun = undefined;
     });
     this.usageRun = run;
@@ -340,11 +349,9 @@ export class QuotaService {
     return run;
   }
 
-  private async loadUsage(force: boolean): Promise<void> {
+  private async loadUsage(force: boolean, localMachine?: MachineFile): Promise<void> {
     const now = this.deps.now();
     const pull = this.settings.pullSyncedData && (force || now >= this.nextPullAt);
-    const localMachine = this.syncedMachine;
-    this.syncedMachine = undefined;
     try {
       const { summary, warning } = await this.deps.loadUsage({
         pull,

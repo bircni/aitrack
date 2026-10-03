@@ -37,10 +37,10 @@
   <div
     class="track"
     role="meter"
-    aria-label="{window.label} used"
+    aria-label="{window.label} {settings.display}"
     aria-valuemin={0}
     aria-valuemax={100}
-    aria-valuenow={Math.round(clampPercent(window.usedPercent))}
+    aria-valuenow={Math.round(fillPercent(window, settings.display))}
   >
     <div class="fill" style:width="{fillPercent(window, settings.display)}%"></div>
     {#if tick !== null}

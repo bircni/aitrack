@@ -56,7 +56,7 @@ export function summarizeTray(
     : 'auto';
   for (const provider of providers) {
     const followed = follow === 'auto' || follow === provider.key;
-    const windows = provider.quota?.windows.filter((window) => window.format === 'percent') ?? [];
+    const windows = provider.quota?.windows ?? [];
     if (windows.length === 0) continue;
     const shown = pickWindow(windows, choice.trayWindow);
     lines.push(

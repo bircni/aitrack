@@ -18,5 +18,5 @@
     "src/shared/**/*.ts",
     "src/shared/**/*.json"
   ],
-  "exclude": ["node_modules", "dist", "src/renderer/**/__tests__/**"]
+  "exclude": ["node_modules", "dist", "src/**/__tests__/**"]
 }

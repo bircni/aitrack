@@ -70,5 +70,8 @@ export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date())
       daily,
     };
   }
-  return { providers, machineCount: Math.max(1, loaded.machineData.length) };
+  return {
+    providers,
+    machineCount: Math.max(1, loaded.zonedSources?.length ?? loaded.machineData.length),
+  };
 }

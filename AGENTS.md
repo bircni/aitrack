@@ -1,0 +1,12 @@
+- Never assume, verify before claiming
+- Read `CONTRIBUTING.md` and relevant docs in `docs/` before changing behaviour
+- Use Conventional Commits for commit messages and PR titles
+- PR descriptions: minimal, only what and why, no task or file listings
+- Never rewrite git history unless asked; update PRs with new commits and a normal push
+- Comments: write almost none, short and preferably same-line, explaining why for a future reader. Never narrate code, the change or the prompt
+- Prefer relative imports with a `.js` extension inside packages; CLI imports the library by subpath
+- Fix the cause rather than disabling a linter or weakening a test
+- Write the fewest, fastest tests covering the behaviour, extending an existing one where possible
+- Cover local-calendar-day edge cases with `useTimeZone` / `EXTREME_TIME_ZONES` from `@aitrack/test-fixtures`, not by changing `TZ`
+- Scope checks with `pnpm exec nx run <project>:<target>` when possible; use `pnpm run validate:affected` for branch-scoped validation
+- Run `pnpm run validate` again before committing
