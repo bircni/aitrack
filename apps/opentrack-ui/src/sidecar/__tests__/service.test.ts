@@ -440,6 +440,46 @@ it('keeps pull failures through local reads, retries after one minute and restor
   expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({ pull: true }));
 });
 
+it('persists successful update times and keeps them unchanged when reads and quotas fail', async () => {
+  const persist = vi.fn<(cache: CachedState) => void>();
+  let fail = false;
+  const h = harness(
+    {
+      claude_code: () =>
+        fail ? { ok: false, error: { kind: 'network', message: 'offline' } } : ok('claude_code'),
+    },
+    { persist },
+  );
+  await h.service.refresh();
+  const initial = h.service.state();
+  expect(initial.usageUpdatedAt).toBe(new Date(START).toISOString());
+  h.advance(FAILURE_BACKOFF_MS);
+  h.failUsage();
+  fail = true;
+  await h.service.refresh(true);
+  expect(h.service.state().usageUpdatedAt).toBe(initial.usageUpdatedAt);
+  expect(h.service.state().providers[0]?.quota?.fetchedAt).toBe(
+    initial.providers[0]?.quota?.fetchedAt,
+  );
+  const cached = persist.mock.calls.at(-1)?.[0];
+  if (!cached) throw new Error('expected persisted cache');
+  expect(cached.usageUpdatedAt).toBe(initial.usageUpdatedAt);
+  const restarted = new QuotaService(
+    {
+      fetchQuota: vi.fn(),
+      loadUsage: vi.fn(),
+      now: () => START,
+      onState: () => {},
+      onAlert: () => {},
+      persist: () => {},
+      sync: vi.fn(),
+    },
+    DEFAULT_SETTINGS,
+    cached,
+  );
+  expect(restarted.state().usageUpdatedAt).toBe(initial.usageUpdatedAt);
+});
+
 it('retains both warnings when a pull and the following local read fail', async () => {
   const loadUsage = vi
     .fn<ServiceDeps['loadUsage']>()
@@ -451,6 +491,7 @@ it('retains both warnings when a pull and the following local read fail', async 
     usageError: 'local read failed',
     pullError: 'pull failed',
   });
+  expect(h.service.state().usageUpdatedAt).toBeUndefined();
   h.advance(FAILURE_BACKOFF_MS);
   await h.service.refresh();
   expect(loadUsage).toHaveBeenLastCalledWith(expect.objectContaining({ pull: true }));

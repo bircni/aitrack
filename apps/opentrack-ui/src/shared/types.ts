@@ -57,6 +57,7 @@ export interface AppState {
   machineCount: number;
   usageError?: string;
   pullError?: string;
+  usageUpdatedAt?: string;
   updatedAt?: string;
   syncing: boolean;
   /** The last sync's outcome, success or failure. */

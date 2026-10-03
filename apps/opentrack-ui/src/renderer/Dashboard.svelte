@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AppState, Settings } from '../shared/types.js';
-  import type { Period } from './format.js';
+  import { formatUpdated, type Period } from './format.js';
   import ProviderSection from './ProviderSection.svelte';
   import Summary from './Summary.svelte';
 
@@ -25,6 +25,9 @@
 
 {#if appState.pullError}
   <p class="banner">{appState.pullError}</p>
+{/if}
+{#if appState.usageError && appState.usageUpdatedAt}
+  <p class="banner">Cached usage: {formatUpdated(appState.usageUpdatedAt, now)}</p>
 {/if}
 {#if appState.usageError}
   <p class="banner">{appState.usageError}</p>

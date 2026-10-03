@@ -40,6 +40,8 @@ export interface CachedState {
   quotas: Partial<Record<QuotaProviderKey, QuotaSnapshot>>;
   usage?: UsageSummary;
   fired: FiredAlerts;
+  updatedAt?: string;
+  usageUpdatedAt?: string;
   pullError?: string;
   /** Epoch ms a provider's retry-after ends; kept so a relaunch does not hit it again. */
   rateLimitedUntil?: Partial<Record<QuotaProviderKey, number>>;
@@ -144,6 +146,10 @@ export function normalizeCachedState(input: unknown): CachedState {
   const raw = isRecord(input) ? input : {};
   const usage = isRecord(raw.usage) ? raw.usage : undefined;
   return {
+    ...(typeof raw.updatedAt === 'string' &&
+      Number.isFinite(Date.parse(raw.updatedAt)) && { updatedAt: raw.updatedAt }),
+    ...(typeof raw.usageUpdatedAt === 'string' &&
+      Number.isFinite(Date.parse(raw.usageUpdatedAt)) && { usageUpdatedAt: raw.usageUpdatedAt }),
     ...(typeof raw.pullError === 'string' && { pullError: raw.pullError }),
     quotas: providerMap(raw.quotas, (entry, key) => (isSnapshot(entry, key) ? entry : undefined)),
     usage: usage && {
@@ -189,7 +195,6 @@ export class QuotaService {
   private nextUsageAt = 0;
   private nextPullAt = 0;
   private usageError: string | undefined;
-  private updatedAt: string | undefined;
   private syncing = false;
   private syncResult: AppState['syncResult'];
   private emitQueued = false;
@@ -239,7 +244,8 @@ export class QuotaService {
       refreshing: this.usageRun !== undefined || providers.some((provider) => provider.refreshing),
       machineCount: this.cache.usage?.machineCount ?? 1,
       usageError: this.usageError,
-      updatedAt: this.updatedAt,
+      updatedAt: this.cache.updatedAt,
+      usageUpdatedAt: this.cache.usageUpdatedAt,
       pullError: this.settings.pullSyncedData ? this.cache.pullError : undefined,
       syncing: this.syncing,
       syncResult: this.syncResult,
@@ -297,7 +303,6 @@ export class QuotaService {
   }
 
   private persist(): void {
-    this.updatedAt = new Date(this.deps.now()).toISOString();
     this.cache.fired = pruneFired(this.cache.fired, this.deps.now());
     this.cache.rateLimitedUntil = Object.fromEntries(
       [...this.runtime]
@@ -323,6 +328,7 @@ export class QuotaService {
       runtime.error = undefined;
       runtime.nextAttemptAt = now + REFRESH_INTERVAL_MS;
       this.cache.quotas[key] = result.snapshot;
+      this.cache.updatedAt = new Date(now).toISOString();
       this.alertFor(key, result.snapshot, now);
     } else {
       runtime.error = result.error;
@@ -372,6 +378,8 @@ export class QuotaService {
       if ('error' in result) throw new Error(result.error);
       this.cache.usage = result.summary;
       this.usageError = undefined;
+      this.cache.usageUpdatedAt = new Date(completedAt).toISOString();
+      this.cache.updatedAt = this.cache.usageUpdatedAt;
       this.nextUsageAt =
         completedAt +
         (this.cache.pullError && this.settings.pullSyncedData
