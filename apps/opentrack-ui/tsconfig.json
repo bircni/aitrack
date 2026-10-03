@@ -15,6 +15,9 @@
   "references": [
     {
       "path": "../../libs/aitrack-lib"
+    },
+    {
+      "path": "../../libs/test-fixtures"
     }
   ]
 }
