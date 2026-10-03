@@ -145,6 +145,11 @@ Tests run `vitest run`; the `ci` configuration adds coverage. Run
 The CLI and library depend on the shared test-fixtures package, so fixture changes
 invalidate their cached checks.
 
+Run `pnpm exec tsx scripts/benchmark-readers.ts` for an isolated synthetic reader
+benchmark. It verifies cold/warm totals and ordering, reports median timings over
+five runs, filesystem/request counts, derived-cache size and process memory, and
+includes a 10,000-file listing. See [recorded results](docs/reader-benchmarks.md).
+
 If `nx` hangs without starting tasks (typically when Nx Cloud is unreachable),
 rerun with `NX_NO_CLOUD=true NX_DAEMON=false`.
 
