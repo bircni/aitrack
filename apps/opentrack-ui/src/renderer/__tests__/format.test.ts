@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { formatWhen, meterTone } from '../../shared/pace.js';
 import type { PeriodUsage, ProviderUsage, QuotaWindow } from '../../shared/types.js';
@@ -113,6 +113,27 @@ describe('limits', () => {
     expect(formatReset(new Date(later).toISOString(), NOW, 'relative')).toBe('Resets in 2h');
     expect(formatReset(new Date(NOW + 30_000).toISOString(), NOW, 'relative')).toBe('Resets soon');
     expect(formatReset(undefined, NOW, 'relative')).toBeUndefined();
+  });
+
+  it.each([
+    ['2026-03-29T12:00:00', '2026-03-30T00:30:00', 'weekday'],
+    ['2026-03-29T12:00:00', '2026-04-05T00:30:00', 'date'],
+    ['2026-10-25T12:00:00', '2026-10-25T23:30:00', 'time'],
+  ])('uses local calendar days across DST: %s → %s', (now, at, label) => {
+    vi.stubEnv('TZ', 'Europe/Berlin');
+    try {
+      const date = new Date(at);
+      const time = clock(date.getTime());
+      const expected =
+        label === 'time'
+          ? time
+          : label === 'weekday'
+            ? `${date.toLocaleDateString([], { weekday: 'short' })} ${time}`
+            : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      expect(formatWhen(date.getTime(), new Date(now).getTime())).toBe(expected);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('labels the pace in plain words', () => {

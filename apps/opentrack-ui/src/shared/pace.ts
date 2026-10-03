@@ -1,3 +1,5 @@
+import { inclusiveDayCount } from 'aitrack-lib/data/calendar';
+import { toLocalDateString } from 'aitrack-lib/data/dayMap';
 import type { PaceProjection } from 'aitrack-lib/quota/pacing';
 
 import type { QuotaWindow } from './types.js';
@@ -9,9 +11,7 @@ function clock(date: Date): string {
 /** "19:20" today, "Sun 21:00" within a week, "Oct 16" beyond. */
 export function formatWhen(at: number, now: number): string {
   const date = new Date(at);
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const days = Math.floor((at - start.getTime()) / 86_400_000);
+  const days = inclusiveDayCount(toLocalDateString(new Date(now)), toLocalDateString(date)) - 1;
   if (days <= 0) return clock(date);
   if (days < 7) return `${date.toLocaleDateString([], { weekday: 'short' })} ${clock(date)}`;
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
