@@ -23,6 +23,7 @@ import type { UsageSummary } from './usage.js';
 export const REFRESH_INTERVAL_MS = 5 * 60_000;
 export const PULL_INTERVAL_MS = 30 * 60_000;
 export const FAILURE_BACKOFF_MS = 60_000;
+export const CACHE_FORMAT = 2;
 const QUOTA_FORMATS: readonly QuotaFormat[] = ['percent', 'dollars', 'count'];
 
 /** How long a failure waits before the next attempt; a retry-after can only lengthen it. */
@@ -165,6 +166,31 @@ export function normalizeCachedState(input: unknown): CachedState {
       isFiniteNumber(entry) ? entry : undefined,
     ),
   };
+}
+
+type CacheMigration = (cache: Record<string, unknown>) => Record<string, unknown>;
+
+const CACHE_MIGRATIONS: Record<number, CacheMigration> = {
+  1: ({ updatedAt: _updatedAt, ...cache }) => cache,
+};
+
+export function loadCachedState(input: unknown): CachedState {
+  if (
+    !isRecord(input) ||
+    typeof input.format !== 'number' ||
+    !Number.isInteger(input.format) ||
+    input.format < 1
+  ) {
+    return normalizeCachedState({});
+  }
+  let version = input.format;
+  let cache = input;
+  while (version < CACHE_FORMAT) {
+    const migrate = CACHE_MIGRATIONS[version];
+    if (!migrate) return normalizeCachedState({});
+    cache = { ...migrate(cache), format: ++version };
+  }
+  return version === CACHE_FORMAT ? normalizeCachedState(cache) : normalizeCachedState({});
 }
 
 export interface ServiceDeps {

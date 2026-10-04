@@ -7,6 +7,7 @@ import { EMPTY_PERIOD } from '../../shared/types.js';
 import type { Alert } from '../alerts.js';
 import {
   FAILURE_BACKOFF_MS,
+  loadCachedState,
   normalizeCachedState,
   PULL_INTERVAL_MS,
   REFRESH_INTERVAL_MS,
@@ -359,6 +360,25 @@ describe('QuotaService', () => {
       fired: {},
       rateLimitedUntil: {},
     });
+  });
+
+  it('migrates each supported cache format and discards stale v1 update time', () => {
+    const snapshot = ok('codex');
+    const v1 = {
+      format: 1,
+      quotas: { codex: snapshot.ok ? snapshot.snapshot : undefined },
+      usage: { providers: {}, machineCount: 2 },
+      updatedAt: '2026-06-01T12:00:00.000Z',
+      fired: { alert: '2026-06-02T12:00:00.000Z' },
+    };
+    expect(loadCachedState(v1)).toMatchObject({
+      quotas: { codex: snapshot.ok ? snapshot.snapshot : undefined },
+      usage: { providers: {}, machineCount: 2 },
+      fired: { alert: '2026-06-02T12:00:00.000Z' },
+    });
+    expect(loadCachedState(v1).updatedAt).toBeUndefined();
+    expect(loadCachedState({ ...v1, format: 2 }).updatedAt).toBe(v1.updatedAt);
+    expect(loadCachedState({ ...v1, format: 3 })).toEqual(normalizeCachedState({}));
   });
 
   it.each([{ provider: 'claude_code' }, { plan: {} }, { usedValue: null }, { limitValue: '50' }])(
