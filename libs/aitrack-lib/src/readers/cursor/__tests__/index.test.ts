@@ -299,6 +299,15 @@ describe('readCursorData', () => {
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('Failed to authenticate Cursor usage export'),
     );
+
+    const callsAfterFailure = fetchCalls.length;
+    await expect(readCursorData({ maxAgeSeconds: 60 })).resolves.toEqual(new Map());
+    expect(fetchCalls).toHaveLength(callsAfterFailure);
+    expect(console.warn).toHaveBeenCalledWith(
+      'aitrack: Cursor skipped — retrying after a failed refresh.',
+    );
+    await readCursorData({ maxAgeSeconds: 0 });
+    expect(fetchCalls.length).toBeGreaterThan(callsAfterFailure);
   });
 
   it('returns an empty map when the CSV body fails mid-stream', async () => {

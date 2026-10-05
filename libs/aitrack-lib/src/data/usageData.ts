@@ -28,7 +28,7 @@ export function mergeProviderDay(
 ): void {
   // Token fields only. Day cost is a stored-total-plus-backfill policy, not a
   // straight sum of the incoming totals and model rows.
-  addTokenCounts(rec, { ...pData.totals, costUSD: undefined });
+  addTokenCounts(rec, { ...pData.totals, costUSD: undefined, hasUnpricedTokens: undefined });
 
   let summedModelCost = 0;
   let backfilledModelCost = 0;
@@ -39,9 +39,11 @@ export function mergeProviderDay(
     addTokenCounts(m, {
       ...counts,
       costUSD: undefined,
+      // A stored partial cost keeps its flag; a fresh estimate prices every token.
       hasUnpricedTokens:
-        counts.hasUnpricedTokens === true ||
-        (counts.inputTokens + counts.outputTokens > 0 && cost === undefined),
+        cost === undefined
+          ? counts.inputTokens + counts.outputTokens > 0
+          : counts.costUSD !== undefined && counts.hasUnpricedTokens === true,
     });
     if (m.hasUnpricedTokens) rec.hasUnpricedTokens = true;
     if (cost !== undefined) {
