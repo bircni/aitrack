@@ -36,11 +36,24 @@ function repriceProviderDay(
       }
       continue;
     }
-    if (counts.costUSD === undefined || !approximatelyEqual(counts.costUSD, cost)) {
+    if (
+      counts.costUSD === undefined ||
+      !approximatelyEqual(counts.costUSD, cost) ||
+      counts.hasUnpricedTokens
+    ) {
       counts.costUSD = cost;
+      delete counts.hasUnpricedTokens;
       isTouched = true;
     }
     dayTotal += cost;
+  }
+
+  if (
+    providerDay.totals.hasUnpricedTokens &&
+    !Object.values(providerDay.byModel).some((counts) => counts.hasUnpricedTokens)
+  ) {
+    delete providerDay.totals.hasUnpricedTokens;
+    isTouched = true;
   }
 
   // A day total is only safe to re-derive once every model in it has a cost.

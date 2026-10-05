@@ -90,6 +90,28 @@ describe('mergeProviderDay', () => {
     expect(rec.costUSD).toBe(18);
   });
 
+  it('clears a synced unpriced flag once the model is priced, but keeps stored partials', () => {
+    const rec = emptyDay();
+    mergeProviderDay(rec, 'claude_code', {
+      byModel: {
+        'claude-sonnet-4-6': {
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          hasUnpricedTokens: true,
+        },
+      },
+      totals: { inputTokens: 1_000_000, outputTokens: 1_000_000, hasUnpricedTokens: true },
+    });
+    expect(rec.hasUnpricedTokens).toBeUndefined();
+    expect(rec.byModel['claude-sonnet-4-6']?.hasUnpricedTokens).toBeUndefined();
+
+    mergeProviderDay(rec, 'claude_code', {
+      byModel: { mixed: { inputTokens: 10, outputTokens: 0, costUSD: 1, hasUnpricedTokens: true } },
+      totals: { inputTokens: 10, outputTokens: 0, costUSD: 1, hasUnpricedTokens: true },
+    });
+    expect(rec.hasUnpricedTokens).toBe(true);
+  });
+
   it('uses stored Claude cache breakdown when backfilling a missing day cost', () => {
     const rec = emptyDay();
     const pData: ProviderDay = {

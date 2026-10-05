@@ -7,7 +7,7 @@ import { cursorCacheAgeSeconds, readCursorCache, writeCursorCache } from './cach
 import { aggregateCursorCsvToDayMap } from './csv.js';
 import { cursorAccountId } from './jwt.js';
 
-let retry: { key: string; until: number } | undefined;
+let retry: { key: string; until: number; serverUntil: number } | undefined;
 
 export { getCursorStateDatabasePath } from './auth.js';
 export { aggregateCursorCsvToDayMap, parseCursorDateString } from './csv.js';
@@ -52,14 +52,18 @@ export async function readCursorData(options: ReadCursorDataOptions = {}): Promi
   const cached = stored?.accountId === accountId ? stored : null;
   const fromCache = () => (cached ? aggregateCursorCsvToDayMap(cached.csv) : new Map());
   const retryKey = `${databasePath}:${accountId}`;
-  if (retry?.key === retryKey && Date.now() < retry.until) return fromCache();
-  if (
-    cached &&
-    maxAgeSeconds !== undefined &&
-    maxAgeSeconds > 0 &&
-    cursorCacheAgeSeconds(cached) <= maxAgeSeconds
-  )
+  const isForced = maxAgeSeconds === undefined || maxAgeSeconds <= 0;
+  // A forced refresh skips the local backoff floor but still honors a server Retry-After.
+  const retryUntil = isForced ? retry?.serverUntil : retry?.until;
+  if (retry?.key === retryKey && retryUntil !== undefined && Date.now() < retryUntil) {
+    log.warn(
+      cached
+        ? `aitrack: Cursor — using cached export from ${cached.fetchedAt} (retrying after a failed refresh).`
+        : 'aitrack: Cursor skipped — retrying after a failed refresh.',
+    );
     return fromCache();
+  }
+  if (!isForced && cached && cursorCacheAgeSeconds(cached) <= maxAgeSeconds) return fromCache();
 
   // Reading the body is part of the request: the stream can still fail after a
   // 200, and an escaping rejection would take down the whole usage run rather
@@ -72,12 +76,9 @@ export async function readCursorData(options: ReadCursorDataOptions = {}): Promi
     shape = result.shape;
     retry = undefined;
   } catch (error) {
-    retry = {
-      key: retryKey,
-      until:
-        Date.now() +
-        Math.max(60_000, error instanceof QuotaFailure ? (error.retryAfterSeconds ?? 0) * 1000 : 0),
-    };
+    const serverUntil =
+      Date.now() + (error instanceof QuotaFailure ? (error.retryAfterSeconds ?? 0) * 1000 : 0);
+    retry = { key: retryKey, until: Math.max(Date.now() + 60_000, serverUntil), serverUntil };
     if (cached) {
       log.warn(
         `aitrack: Cursor — using cached export from ${cached.fetchedAt} (refresh failed: ${errorMessage(error)}).`,

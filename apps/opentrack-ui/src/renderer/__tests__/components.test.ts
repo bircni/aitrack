@@ -152,9 +152,14 @@ describe('desktop commands and settings', () => {
     mounted.push(mount(App, { target }));
     await settle();
     expect(target.textContent).toContain('Loading');
-    expect(target.textContent).toContain('offline');
+    expect(target.textContent).toContain('Could not load dashboard: offline');
+    click('[aria-label="Refresh"]');
+    await settle();
+    expect(target.textContent).toContain('Could not load dashboard: offline');
     click('.banner button');
     await settle();
+    expect(target.textContent).not.toContain('Could not load dashboard');
+    expect(target.textContent).not.toContain('Loading');
     const onState = mocks.api.onState.mock.calls[0]?.[0] as Parameters<OpentrackApi['onState']>[0];
     onState({ ...state, refreshing: true });
     const onSettings = mocks.api.onSettings.mock.calls[0]?.[0] as Parameters<

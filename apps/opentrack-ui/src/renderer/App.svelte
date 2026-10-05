@@ -39,6 +39,17 @@
   let saving = false;
   let settingsError = $state<string | undefined>();
   let commandError = $state.raw<{ label: string; action: () => Promise<void>; message: string } | undefined>();
+  let loadError = $state<string | undefined>();
+
+  // Kept apart from commandError so a later Refresh or Sync can't clear the only way out of "Loading".
+  async function load(): Promise<void> {
+    loadError = undefined;
+    const [state, saved] = await Promise.allSettled([api.getState(), api.getSettings()]);
+    if (state.status === 'fulfilled') appState ??= state.value;
+    if (saved.status === 'fulfilled') settings ??= saved.value;
+    const failure = [state, saved].find((result) => result.status === 'rejected');
+    if (failure) loadError = errorMessage(failure.reason);
+  }
 
   async function runCommand(label: string, action: () => Promise<void>): Promise<void> {
     commandError = undefined;
@@ -89,11 +100,7 @@
   }
 
   onMount(() => {
-    void runCommand('Load dashboard', async () => {
-      const [state, saved] = await Promise.all([api.getState(), api.getSettings()]);
-      appState ??= state;
-      settings ??= saved;
-    });
+    void load();
     const offState = api.onState((value) => {
       appState = value;
     });
@@ -118,6 +125,12 @@
 <main class="pop">
   <div class="scroll">
     <div bind:this={content}>
+      {#if loadError}
+        <p class="banner" role="alert">
+          Could not load dashboard: {loadError}
+          <button class="link" type="button" onclick={() => void load()}>Retry</button>
+        </p>
+      {/if}
       {#if commandError}
         <p class="banner" role="alert">
           {commandError.label} could not be sent: {commandError.message}
