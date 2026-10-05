@@ -150,6 +150,8 @@ jobs:
 
       - name: Package and check Opentrack
         run: pnpm nx run opentrack:bundle:check
+        env:
+          CARGO_BUILD_JOBS: 2
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
