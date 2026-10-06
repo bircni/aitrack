@@ -32,6 +32,7 @@ import Dashboard from '../Dashboard.svelte';
 import SettingsScreen from '../SettingsScreen.svelte';
 
 let target: HTMLDivElement;
+let reportResize: (() => void) | undefined;
 const mounted: Array<ReturnType<typeof mount>> = [];
 const state: AppState = {
   providers: [],
@@ -75,6 +76,9 @@ beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      constructor(callback: () => void) {
+        reportResize = callback;
+      }
       observe() {}
       disconnect() {}
     },
@@ -642,4 +646,16 @@ it('offers a found update and retries a failed install', async () => {
   await settle();
   expect(target.textContent).toContain('Installing opentrack 3.1.0');
   expect(mocks.api.installUpdate).toHaveBeenCalledTimes(2);
+});
+
+it('fits the window to the unrounded height of the content and footer', async () => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return { height: this.classList.contains('foot') ? 41.5 : 600.25 } as DOMRect;
+  });
+  mounted.push(mount(App, { target }));
+  await settle();
+  reportResize?.();
+  expect(mocks.api.fitHeight).toHaveBeenLastCalledWith(641.75);
 });
