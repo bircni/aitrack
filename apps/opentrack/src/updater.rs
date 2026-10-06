@@ -28,32 +28,32 @@ impl Updates {
     }
 }
 
-async fn check(app: &AppHandle) {
-    let found = match app.updater() {
-        Ok(updater) => updater.check().await,
-        Err(error) => Err(error),
-    };
-    match found {
-        Ok(Some(update)) => {
-            let _ = app.emit("update", &update.version);
-            *app.state::<Updates>().pending.lock().unwrap() = Some(update);
-        }
-        Ok(None) => {}
-        // Offline or GitHub unreachable: the next check tries again, nothing to show.
-        Err(error) => eprintln!("opentrack: update check failed: {error}"),
+/// The newer version the latest release offers, if any; the renderer hears of it as an event too.
+pub async fn check(app: &AppHandle) -> Result<Option<String>, String> {
+    // A dev build would offer to replace itself with the installed release.
+    if cfg!(debug_assertions) {
+        return Err("Development builds do not update".into());
     }
+    let found = app.updater().map_err(|error| error.to_string())?.check().await.map_err(|error| error.to_string())?;
+    let Some(update) = found else { return Ok(None) };
+    let version = update.version.clone();
+    let _ = app.emit("update", &version);
+    *app.state::<Updates>().pending.lock().unwrap() = Some(update);
+    Ok(Some(version))
 }
 
 /// Checks the latest GitHub release shortly after launch and then every few hours.
 pub fn watch(app: AppHandle) {
-    // A dev build would offer to replace itself with the installed release.
     if cfg!(debug_assertions) {
         return;
     }
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FIRST_CHECK_DELAY).await;
         loop {
-            check(&app).await;
+            // Offline or GitHub unreachable: the next check tries again, nothing to show.
+            if let Err(error) = check(&app).await {
+                eprintln!("opentrack: update check failed: {error}");
+            }
             tokio::time::sleep(CHECK_INTERVAL).await;
         }
     });

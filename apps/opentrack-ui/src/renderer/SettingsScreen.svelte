@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from 'aitrack-lib/errors';
   import { onMount } from 'svelte';
 
   import type { QuotaProviderKey, Settings } from '../shared/types.js';
@@ -6,19 +7,54 @@
   import Icon from './Icon.svelte';
   import ProviderIcon from './ProviderIcon.svelte';
 
+  type UpdateCheck =
+    | { status: 'idle' | 'checking' | 'current' }
+    | { status: 'failed'; error: string };
+
   interface Props {
     settings: Settings;
+    /** A newer version found by the shell, with the state of installing it. */
+    update: string | null;
+    installing: boolean;
+    updateError: string | undefined;
+    onInstallUpdate: () => void;
     onPatch: (patch: Partial<Settings>) => void;
     onBack: () => void;
   }
 
-  let { settings, onPatch, onBack }: Props = $props();
+  let { settings, update, installing, updateError, onInstallUpdate, onPatch, onBack }: Props =
+    $props();
   // The tray falls back to the most used provider when its choice is turned off.
   const enabled = $derived(settings.providers.filter((provider) => provider.enabled));
 
   let shortcutError = $state<string | null>(null);
+  let version = $state<string | undefined>();
+  let check = $state<UpdateCheck>({ status: 'idle' });
+  const updateStatus = $derived.by(() => {
+    if (update) {
+      if (installing) return `Installing ${update}…`;
+      return updateError ? `Could not install ${update}: ${updateError}` : `${update} is available`;
+    }
+    if (check.status === 'checking') return 'Checking…';
+    if (check.status === 'failed') return `Could not check: ${check.error}`;
+    return check.status === 'current' ? 'Up to date' : 'Checked every 6 hours';
+  });
+
+  async function checkForUpdate(): Promise<void> {
+    check = { status: 'checking' };
+    try {
+      // A found version reaches App through the update event and comes back as `update`.
+      check = { status: (await api.checkForUpdate()) ? 'idle' : 'current' };
+    } catch (error) {
+      check = { status: 'failed', error: errorMessage(error) };
+    }
+  }
 
   onMount(() => {
+    void api.appVersion().then(
+      (value) => (version = value),
+      () => undefined,
+    );
     void api.shortcutError().then(
       (error) => (shortcutError = error),
       () => undefined,
@@ -221,6 +257,33 @@
       onchange={(event) => onPatch({ globalShortcut: event.currentTarget.value })}
     />
   </label>
+</section>
+
+<section class="group" aria-labelledby="g-about">
+  <h2 id="g-about">About</h2>
+  <div class="row">
+    <span>Version</span>
+    <span class="row-value">{version ?? '…'}</span>
+  </div>
+  <div class="row">
+    <span class="row-text"
+      >Updates<small class:row-error={updateError || check.status === 'failed'}
+        >{updateStatus}</small
+      ></span
+    >
+    {#if update && !installing}
+      <button class="link" type="button" onclick={onInstallUpdate}
+        >{updateError ? 'Retry' : 'Install and restart'}</button
+      >
+    {:else if !update}
+      <button
+        class="link"
+        type="button"
+        disabled={check.status === 'checking'}
+        onclick={() => void checkForUpdate()}>Check now</button
+      >
+    {/if}
+  </div>
 </section>
 
 <button class="quit" type="button" onclick={() => void api.quit()}>Quit opentrack</button>
