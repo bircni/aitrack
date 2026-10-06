@@ -20,6 +20,7 @@
       "project": ["src/**/*.ts"]
     },
     "apps/aitrack": {
+      "ignoreBinaries": ["explorer.exe"],
       "entry": ["src/**/__tests__/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
