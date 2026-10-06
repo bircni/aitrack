@@ -12,6 +12,7 @@ export interface Spend {
   costUSD: number;
   /** Some of the tokens were priced; without it `costUSD` is not a real $0. */
   hasCost: boolean;
+  hasUnpricedTokens?: boolean;
 }
 
 export interface ModelUsage extends Spend {
@@ -55,6 +56,8 @@ export interface AppState {
   /** Machines contributing to the usage totals, this one included. */
   machineCount: number;
   usageError?: string;
+  pullError?: string;
+  usageUpdatedAt?: string;
   updatedAt?: string;
   syncing: boolean;
   /** The last sync's outcome, success or failure. */

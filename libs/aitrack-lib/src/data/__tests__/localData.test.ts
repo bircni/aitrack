@@ -156,3 +156,34 @@ describe('localData', () => {
     expect(machine.days['2024-01-01']?.claude_code).toBeDefined();
   });
 });
+
+it('skips unselected provider readers while keeping default local-machine reads complete', async () => {
+  vi.clearAllMocks();
+  mocks.readClaudeData.mockResolvedValue(dayMap(10, 2));
+  mocks.readCodexData.mockResolvedValue(dayMap(20, 3));
+  expect(Object.keys(await readLocalProviderMaps(undefined, ['claude_code']))).toEqual([
+    'claude_code',
+  ]);
+  expect(mocks.readClaudeData).toHaveBeenCalledTimes(1);
+  expect(mocks.readCodexData).not.toHaveBeenCalled();
+  await buildLocalMachineFile('host');
+  expect(mocks.readCodexData).toHaveBeenCalledTimes(1);
+});
+
+it('preserves token breakdowns and partial pricing when writing machine data', () => {
+  const counts = {
+    inputTokens: 10,
+    outputTokens: 2,
+    rawInputTokens: 4,
+    cachedInputTokens: 3,
+    cacheCreationInputTokens: 2,
+    cacheCreation1hInputTokens: 1,
+    costUSD: 1,
+    hasUnpricedTokens: true,
+  };
+  const machine = buildMachineData('host', {
+    claude_code: new Map([['2026-01-01', { ...counts, byModel: { mixed: counts } }]]),
+  });
+  expect(machine.days['2026-01-01']?.claude_code?.totals).toEqual(counts);
+  expect(machine.days['2026-01-01']?.claude_code?.byModel.mixed).toEqual(counts);
+});

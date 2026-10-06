@@ -2,7 +2,6 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { tryLoadConfig } from 'aitrack-lib/config';
-import { isRecord } from 'aitrack-lib/data/guards';
 import type { MachineFile } from 'aitrack-lib/data/types';
 import { loadMergedProviderData } from 'aitrack-lib/data/usageData';
 import { errorMessage } from 'aitrack-lib/errors';
@@ -12,7 +11,7 @@ import { syncData } from 'aitrack-lib/sync';
 
 import type { Settings } from '../shared/types.js';
 import { handleRequest, parseRequest, type SidecarMessage } from './protocol.js';
-import { normalizeCachedState, QuotaService } from './service.js';
+import { CACHE_FORMAT, loadCachedState, QuotaService } from './service.js';
 import { loadSettings, readJsonFile, writeJsonFile } from './settings.js';
 import { renderTrayIcon, summarizeTray } from './trayIcon.js';
 import { summarizeUsage } from './usage.js';
@@ -20,8 +19,6 @@ import { summarizeUsage } from './usage.js';
 const TICK_MS = 60_000;
 const TRAY_ICON_SIZE = 32;
 const GIT_TIMEOUT_MS = 60_000;
-/** Bump only for incompatible cache shapes; additive fields are filled with defaults. */
-const CACHE_FORMAT = 1;
 
 // stdout is the protocol channel; anything the library prints goes to stderr.
 console.log = console.error;
@@ -53,11 +50,15 @@ async function loadUsage(options: {
       warning = `Could not pull synced data: ${errorMessage(error)}`;
     }
   }
-  const loaded = await loadMergedProviderData({
-    refreshLive: options.refreshLive,
-    localMachine: options.localMachine,
-  });
-  return { summary: summarizeUsage(loaded), warning };
+  try {
+    const loaded = await loadMergedProviderData({
+      refreshLive: options.refreshLive,
+      localMachine: options.localMachine,
+    });
+    return { summary: summarizeUsage(loaded), warning };
+  } catch (error) {
+    return { error: errorMessage(error), warning };
+  }
 }
 
 async function main(): Promise<void> {
@@ -66,7 +67,7 @@ async function main(): Promise<void> {
   const cachePath = join(dataDir, 'cache.json');
   let settings: Settings = await loadSettings(settingsPath);
   const raw = await readJsonFile(cachePath);
-  const cached = normalizeCachedState(isRecord(raw) && raw.format === CACHE_FORMAT ? raw : {});
+  const cached = loadCachedState(raw);
   let lastTray = '';
 
   const service = new QuotaService(

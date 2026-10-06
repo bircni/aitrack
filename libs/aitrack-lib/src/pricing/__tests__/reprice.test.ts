@@ -42,6 +42,17 @@ describe('repriceMachineDays', () => {
     expect(repriceMachineDays(days)).toEqual({ isTouched: false, legacySkipped: 0 });
   });
 
+  it('clears the unpriced flag once every model is repriced', () => {
+    const days = daysWith('claude_code', {
+      'claude-opus-4-7': { ...opus, costUSD: 3.5, hasUnpricedTokens: true },
+    });
+    const providerDay = days['2026-09-01']?.claude_code;
+    if (providerDay) providerDay.totals.hasUnpricedTokens = true;
+    expect(repriceMachineDays(days).isTouched).toBe(true);
+    expect(providerDay?.byModel['claude-opus-4-7']?.hasUnpricedTokens).toBeUndefined();
+    expect(providerDay?.totals.hasUnpricedTokens).toBeUndefined();
+  });
+
   it('repairs a stale total even when model costs are current', () => {
     const days = daysWith('claude_code', { 'claude-opus-4-7': { ...opus, costUSD: 3.5 } });
     expect(repriceMachineDays(days).isTouched).toBe(true);

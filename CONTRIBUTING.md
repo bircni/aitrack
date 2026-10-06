@@ -138,12 +138,31 @@ The package projects are `aitrack`, `aitrack-lib`, `opentrack-ui`, and `@aitrack
 supplies the Rust build, lint and test executors.
 The `repo-tools` project in `scripts/` owns release tooling, pricing checks, script tests,
 and checks for root configuration files. Package lint, format and unused-code checks
-run per project. Lint uses `nx-oxlint:lint` with type-aware checking.
+run per project. Lint uses `nx-oxlint:lint` with type-aware checking for TypeScript.
+Svelte script blocks receive the supported Oxlint rules from the same overrides;
+Oxlint does not currently provide complete type-aware checking for `.svelte` files.
+`svelte-check --fail-on-warnings` remains required. Repository tests probe supported
+Svelte rules so configuration changes cannot silently stop enforcing them.
+Rust lint runs Clippy on application and test targets with `-D warnings`.
+Root `.oxlintrc.json` and `.oxfmtrc.json` are included in formatting checks and Nx inputs.
 
 Tests run `vitest run`; the `ci` configuration adds coverage. Run
 `pnpm exec nx run aitrack-lib:test:ci` for one package or `pnpm run test:ci` for all suites.
-The CLI and library depend on the shared test-fixtures package, so fixture changes
-invalidate their cached checks.
+Library, CLI and desktop coverage retains aggregate 90% lines/statements/functions
+and 80% branches, with an additional 80% minimum for every measured file and metric.
+The desktop suite uses the Svelte Vite plugin and jsdom, measures components and the
+API bridge, and exercises command failures, settings queues, provider controls and
+partial/stale presentation. Only the renderer entrypoint, sidecar process entrypoint
+and shared type declarations are excluded; builds, CLI smoke and native app checks
+validate the process/bootstrap glue.
+The CLI, library and desktop depend on the shared test-fixtures package, so fixture
+changes invalidate their cached checks. Calendar tests use `useTimeZone` and
+`EXTREME_TIME_ZONES` rather than changing `TZ`.
+
+Run `pnpm exec tsx scripts/benchmark-readers.ts` for an isolated synthetic reader
+benchmark. It verifies cold/warm totals and ordering, reports median timings over
+five runs, filesystem/request counts, derived-cache size and process memory, and
+includes a 10,000-file listing. See [recorded results](docs/reader-benchmarks.md).
 
 If `nx` hangs without starting tasks (typically when Nx Cloud is unreachable),
 rerun with `NX_NO_CLOUD=true NX_DAEMON=false`.

@@ -228,3 +228,25 @@ describe('initCommand', () => {
     expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
 });
+
+it('validates interactive URL and machine names and reports adopted pending files', async () => {
+  mocks.prompts
+    .mockReset()
+    .mockResolvedValueOnce({ repoUrl: 'repo' })
+    .mockResolvedValueOnce({ machineId: 'box' });
+  mocks.loadConfig.mockImplementation(() => {
+    throw new Error('missing');
+  });
+  mocks.isCloned.mockReturnValue(false);
+  mocks.adoptPendingDataFiles.mockReturnValue(2);
+  await initCommand();
+  const url = mocks.prompts.mock.calls[0]?.[0] as { validate: (value: string) => string | boolean };
+  const machine = mocks.prompts.mock.calls[1]?.[0] as {
+    validate: (value: string) => string | boolean;
+  };
+  expect(url.validate('  ')).toBe('URL is required');
+  expect(url.validate('repo')).toBe(true);
+  expect(machine.validate('box')).toBe(true);
+  expect(machine.validate('../escape')).toContain('Machine');
+  expect(console.log).toHaveBeenCalledWith('Adopted 2 pending data file(s) into the repo.');
+});

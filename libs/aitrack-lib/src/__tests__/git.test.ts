@@ -852,3 +852,56 @@ describe('git helpers', () => {
     expect(files.has(pendingNew)).toBe(false);
   });
 });
+
+import { isRebaseInProgress, pushWithRetry, runGit, runGitAsync } from '../git/exec.js';
+it('surfaces piped and inherited git failures including stdout-only diagnostics', () => {
+  mocks.spawnSync.mockReturnValue({ status: 1, stdout: ' rejected ', stderr: '' });
+  expect(() => runGit(['status'], { stdio: 'pipe' })).toThrow('rejected');
+  expect(() => runGit(['status'])).toThrow('exit code 1');
+  mocks.spawnSync.mockReturnValue({ status: 0, stdout: ' clean ' });
+  expect(runGit(['status'], { stdio: 'pipe' })).toBe('clean');
+});
+it('recovers an own-file rebase conflict and aborts unrelated concurrent conflicts', async () => {
+  mocks.execFile.mockReset();
+  mocks.existsSync.mockReturnValue(true);
+  asyncGitReplies(
+    { status: 1, stderr: 'non-fast-forward' },
+    { status: 1, stderr: 'conflict' },
+    { status: 0, stdout: 'data/host.json\n' },
+    { status: 0 },
+    { status: 0 },
+    { status: 0 },
+  );
+  await pushWithRetry({ path: 'data/host.json', contents: 'snapshot' }, {}, true);
+  expect(mocks.writeFileSync).toHaveBeenCalledWith(
+    join('/home/test/.config/aitrack/repo', 'data/host.json'),
+    'snapshot',
+    'utf8',
+  );
+  mocks.execFile.mockReset();
+  asyncGitReplies(
+    { status: 1, stderr: 'fetch first' },
+    { status: 1, stderr: 'conflict' },
+    { status: 0, stdout: 'unrelated.txt\n' },
+    { status: 1 },
+  );
+  await expect(pushWithRetry(undefined, {}, true)).rejects.toThrow('could not be replayed safely');
+  expect(isRebaseInProgress()).toBe(true);
+  mocks.existsSync.mockReturnValue(false);
+  expect(isRebaseInProgress()).toBe(false);
+});
+it('rejects asynchronous git failures with non-numeric exit codes', async () => {
+  mocks.execFile.mockImplementationOnce(
+    (
+      _command: string,
+      _args: string[],
+      _options: unknown,
+      callback: (...values: unknown[]) => void,
+    ) => {
+      queueMicrotask(() => {
+        callback(Object.assign(new Error('missing'), { code: 'ENOENT' }), '', 'not found');
+      });
+    },
+  );
+  await expect(runGitAsync(['status'])).rejects.toThrow('exit code null: not found');
+});

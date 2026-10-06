@@ -28,15 +28,24 @@ export function mergeProviderDay(
 ): void {
   // Token fields only. Day cost is a stored-total-plus-backfill policy, not a
   // straight sum of the incoming totals and model rows.
-  addTokenCounts(rec, { ...pData.totals, costUSD: undefined });
+  addTokenCounts(rec, { ...pData.totals, costUSD: undefined, hasUnpricedTokens: undefined });
 
   let summedModelCost = 0;
   let backfilledModelCost = 0;
   let isAnyModelHadCost = false;
   for (const [model, counts] of Object.entries(pData.byModel)) {
     const m = (rec.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-    addTokenCounts(m, { ...counts, costUSD: undefined });
     const cost = resolveModelCost(providerKey, model, counts, date);
+    addTokenCounts(m, {
+      ...counts,
+      costUSD: undefined,
+      // A stored partial cost keeps its flag; a fresh estimate prices every token.
+      hasUnpricedTokens:
+        cost === undefined
+          ? counts.inputTokens + counts.outputTokens > 0
+          : counts.costUSD !== undefined && counts.hasUnpricedTokens === true,
+    });
+    if (m.hasUnpricedTokens) rec.hasUnpricedTokens = true;
     if (cost !== undefined) {
       m.costUSD = (m.costUSD ?? 0) + cost;
       summedModelCost += cost;
@@ -240,7 +249,7 @@ export async function loadMergedProviderData(
   const livePending = startLiveFetches(providerFilter, options.refreshLive);
   const localMachine =
     options.localMachine === undefined
-      ? await buildLocalMachineFile(machineId)
+      ? await buildLocalMachineFile(machineId, undefined, options.providers)
       : options.localMachine;
 
   const isWarnedNotConfigured = !config || !isCloned();

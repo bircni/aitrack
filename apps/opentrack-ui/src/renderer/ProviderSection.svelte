@@ -6,6 +6,7 @@
   import {
     formatCost,
     formatTokens,
+    formatUpdated,
     PERIOD_LABELS,
     type Period,
     periodSpend,
@@ -26,6 +27,15 @@
 
   let { provider, settings, now, period, onPatch }: Props = $props();
   let open = $state(false);
+  let actionError = $state<string | undefined>();
+  async function act(action: () => Promise<void>): Promise<void> {
+    try {
+      await action();
+      actionError = undefined;
+    } catch {
+      actionError = 'Could not send the command. Try again.';
+    }
+  }
 
   const spend = $derived(periodSpend(provider.usage, period));
   const problem = $derived(
@@ -34,7 +44,7 @@
 
   function reading(value: Spend): string {
     const tokens = `${formatTokens(value.tokens)} tokens`;
-    return value.hasCost ? `${formatCost(value.costUSD)} · ${tokens}` : tokens;
+    return value.hasCost ? `${spendLabel(value)} · ${tokens}` : tokens;
   }
 </script>
 
@@ -58,13 +68,19 @@
     {/if}
   </button>
 
+  {#if actionError}
+    <p class="banner" role="alert">{actionError}</p>
+  {/if}
+  {#if provider.quotaError && provider.quota}
+    <div class="state">Cached limits: {formatUpdated(provider.quota.fetchedAt, now)}</div>
+  {/if}
   {#if problem && provider.quotaError}
     <div class="state">
       <span title={provider.quotaError.message}>{problem.text}</span>
       {#if problem.retry}
-        <button class="link" type="button" onclick={() => void api.refresh()}>Retry</button>
+        <button class="link" type="button" onclick={() => void act(() => api.refresh())}>Retry</button>
       {:else}
-        <button class="link" type="button" onclick={() => void api.openDashboard(provider.key)}
+        <button class="link" type="button" onclick={() => void act(() => api.openDashboard(provider.key))}
           >Open dashboard</button
         >
       {/if}

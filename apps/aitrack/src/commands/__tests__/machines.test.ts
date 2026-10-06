@@ -112,3 +112,20 @@ describe('machinesCommand', () => {
     });
   });
 });
+
+it('handles unsynced machines with empty days and cost-only records', async () => {
+  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'repo' });
+  mocks.isCloned.mockReturnValue(true);
+  const empty = makeMachine('empty', {});
+  empty.lastUpdated = '';
+  const credit = makeMachine('credit', {
+    '2026-01-01': [{ providerKey: 'codex', input: 0, output: 0, cost: 1 }],
+  });
+  mocks.loadReportedMachines.mockResolvedValue([empty, credit]);
+  await machinesCommand();
+  expect(loggedOutput()).toContain('not synced');
+  vi.mocked(console.log).mockClear();
+  await machinesCommand({ json: true });
+  expect(loggedOutput()).toContain('"firstDay": null');
+});

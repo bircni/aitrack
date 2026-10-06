@@ -695,3 +695,35 @@ describe('usageCommand', () => {
     expect(out).toContain('└');
   });
 });
+
+it('marks partially priced model, total, budget and comparison estimates', async () => {
+  vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'repo', budget: { monthlyUSD: 10 } });
+  mocks.isCloned.mockReturnValue(true);
+  const mixed = {
+    inputTokens: 10,
+    outputTokens: 2,
+    costUSD: 1,
+    hasUnpricedTokens: true,
+    byModel: { mixed: { inputTokens: 10, outputTokens: 2, costUSD: 1, hasUnpricedTokens: true } },
+  };
+  mocks.loadMergedProviderData.mockResolvedValue({
+    machineData: [],
+    providerData: {
+      claude_code: new Map([
+        ['2026-06-01', mixed],
+        ['2026-05-01', mixed],
+      ]),
+    },
+  });
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  try {
+    await usageCommand({ period: 'thismonth', compare: true });
+    expect(loggedOutput()).toContain('(partial)');
+    expect(loggedOutput()).toContain('Cost comparison is a partial estimate');
+    expect(loggedOutput()).toContain('Budget spend is a partial estimate');
+  } finally {
+    vi.useRealTimers();
+  }
+});

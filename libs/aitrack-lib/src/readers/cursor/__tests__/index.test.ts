@@ -95,6 +95,7 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(map.get('2024-06-01')?.byModel['gpt-4']).toEqual({
       inputTokens: 900,
       outputTokens: 600,
+      hasUnpricedTokens: true,
       rawInputTokens: 300,
       cachedInputTokens: 450,
       cacheCreationInputTokens: 150,
@@ -140,6 +141,7 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(map.get('2024-01-01')?.byModel['gpt, test']).toEqual({
       inputTokens: 350,
       outputTokens: 25,
+      hasUnpricedTokens: true,
       rawInputTokens: 200,
       cachedInputTokens: 50,
       cacheCreationInputTokens: 100,
@@ -249,6 +251,7 @@ describe('readCursorData', () => {
     expect(map.get('2024-01-01')).toEqual({
       inputTokens: 35,
       outputTokens: 7,
+      hasUnpricedTokens: true,
       rawInputTokens: 20,
       cachedInputTokens: 5,
       cacheCreationInputTokens: 10,
@@ -256,6 +259,7 @@ describe('readCursorData', () => {
         'gpt-4': {
           inputTokens: 35,
           outputTokens: 7,
+          hasUnpricedTokens: true,
           rawInputTokens: 20,
           cachedInputTokens: 5,
           cacheCreationInputTokens: 10,
@@ -295,6 +299,15 @@ describe('readCursorData', () => {
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('Failed to authenticate Cursor usage export'),
     );
+
+    const callsAfterFailure = fetchCalls.length;
+    await expect(readCursorData({ maxAgeSeconds: 60 })).resolves.toEqual(new Map());
+    expect(fetchCalls).toHaveLength(callsAfterFailure);
+    expect(console.warn).toHaveBeenCalledWith(
+      'aitrack: Cursor skipped — retrying after a failed refresh.',
+    );
+    await readCursorData({ maxAgeSeconds: 0 });
+    expect(fetchCalls.length).toBeGreaterThan(callsAfterFailure);
   });
 
   it('returns an empty map when the CSV body fails mid-stream', async () => {

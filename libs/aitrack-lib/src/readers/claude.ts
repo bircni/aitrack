@@ -7,7 +7,7 @@ import type { DayMap } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { claudeCacheWriteTokens, estimateClaudeCostUSD } from '../pricing/claude.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
-import type { CachedParse } from './cache.js';
+import type { CachedMessage, CachedParse } from './cache.js';
 import { streamJsonlObjects } from './jsonl.js';
 import { claudeHomeDirs, resolveSourceRoots } from './paths.js';
 import { parseProviderSources } from './pipeline.js';
@@ -63,10 +63,11 @@ export async function parseJsonlFile(
   filePath: string,
   seen: Set<string>,
   fallbacks?: FallbackCollector,
+  messages?: CachedMessage[],
 ): Promise<DayMap> {
   const result: DayMap = new Map();
   const chosen = new Map<string, CountedMessage>();
-  const unkeyed: CountedMessage[] = [];
+  const unkeyed: DayMap = new Map();
 
   for await (const parsed of streamJsonlObjects(filePath)) {
     const entry = parsed as unknown as ClaudeEntry;
@@ -109,7 +110,7 @@ export async function parseJsonlFile(
     // is not added twice.
     const key = `${entry.message?.id ?? ''}:${entry.requestId ?? ''}`;
     if (key === ':') {
-      unkeyed.push(counted);
+      addCachedMessage(unkeyed, cachedMessage(counted));
       continue;
     }
     if (seen.has(key)) continue;
@@ -119,26 +120,40 @@ export async function parseJsonlFile(
 
   for (const [key, counted] of chosen) {
     seen.add(key);
-    addCountedMessage(result, counted);
+    const message = cachedMessage(counted, key);
+    messages?.push(message);
+    addCachedMessage(result, message);
   }
-  for (const counted of unkeyed) addCountedMessage(result, counted);
+  mergeDayMaps(result, unkeyed);
+  for (const [date, day] of unkeyed) {
+    for (const [model, counts] of Object.entries(day.byModel))
+      messages?.push({ date, model, counts });
+  }
 
   return result;
 }
 
-function addCountedMessage(result: DayMap, counted: CountedMessage): void {
-  const day = getOrCreateDay(result, counted.dateString);
-  addModelUsage(day, counted.model, {
-    inputTokens: counted.inputTokens,
-    outputTokens: counted.outputTokens,
-    rawInputTokens: counted.rawInputTokens,
-    cachedInputTokens: counted.cachedInputTokens,
-    cacheCreationInputTokens: counted.cacheCreationInputTokens,
-    ...(counted.cacheCreation1hInputTokens > 0 && {
-      cacheCreation1hInputTokens: counted.cacheCreation1hInputTokens,
-    }),
-    ...(counted.costUSD !== undefined && { costUSD: counted.costUSD }),
-  });
+function cachedMessage(counted: CountedMessage, key?: string): CachedMessage {
+  return {
+    key,
+    date: counted.dateString,
+    model: counted.model,
+    counts: {
+      inputTokens: counted.inputTokens,
+      outputTokens: counted.outputTokens,
+      rawInputTokens: counted.rawInputTokens,
+      cachedInputTokens: counted.cachedInputTokens,
+      cacheCreationInputTokens: counted.cacheCreationInputTokens,
+      ...(counted.cacheCreation1hInputTokens > 0 && {
+        cacheCreation1hInputTokens: counted.cacheCreation1hInputTokens,
+      }),
+      ...(counted.costUSD !== undefined && { costUSD: counted.costUSD }),
+    },
+  };
+}
+
+function addCachedMessage(result: DayMap, message: CachedMessage): void {
+  addModelUsage(getOrCreateDay(result, message.date), message.model, message.counts);
 }
 
 /**
@@ -154,20 +169,30 @@ export async function parseClaudeFile(
   fallbacks?: FallbackCollector,
 ): Promise<CachedParse> {
   const keys = new Set<string>();
-  const days = await parseJsonlFile(filePath, keys, fallbacks);
-  return { days, keys: [...keys] };
+  const messages: CachedMessage[] = [];
+  const days = await parseJsonlFile(filePath, keys, fallbacks, messages);
+  return { days, keys: [...keys], messages };
 }
 
-/**
- * Fold the per-file parses into one DayMap, re-reading any file whose messages
- * an earlier file already counted (a resumed session copies another
- * transcript's history into itself, which the per-file parse cannot see).
- */
+/** Keep the first file's contribution when resumed transcripts repeat a message. */
 export async function mergeClaudeParsed(parsed: CachedParse[], files: string[]): Promise<DayMap> {
   const allDays: DayMap = new Map();
   const seenMessages = new Set<string>();
   for (const [index, entry] of parsed.entries()) {
     const filePath = files[index];
+    if (!entry.keys.some((key) => seenMessages.has(key))) {
+      for (const key of entry.keys) seenMessages.add(key);
+      mergeDayMaps(allDays, entry.days);
+      continue;
+    }
+    if (entry.messages) {
+      for (const message of entry.messages) {
+        if (message.key !== undefined && seenMessages.has(message.key)) continue;
+        if (message.key !== undefined) seenMessages.add(message.key);
+        addCachedMessage(allDays, message);
+      }
+      continue;
+    }
     if (filePath !== undefined && entry.keys.some((key) => seenMessages.has(key))) {
       // Re-read this file against the running set, which is what an uncached
       // run would have done.

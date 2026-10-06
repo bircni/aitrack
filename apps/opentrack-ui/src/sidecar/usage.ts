@@ -21,11 +21,13 @@ function periodFor(report: UsageReport | undefined, key: string): PeriodUsage {
     tokens: provider.subtotalTokens,
     costUSD: provider.subtotalCostUSD,
     hasCost: provider.subtotalHasCost,
-    models: provider.rows.map(({ model, tokens, costUSD, hasCost }) => ({
+    ...(provider.hasUnpricedTokens && { hasUnpricedTokens: true }),
+    models: provider.rows.map(({ model, tokens, costUSD, hasCost, hasUnpricedTokens }) => ({
       model,
       tokens,
       costUSD,
       hasCost,
+      ...(hasUnpricedTokens && { hasUnpricedTokens: true }),
     })),
   };
 }
@@ -44,13 +46,17 @@ function trailingDates(today: Date, days: number): string[] {
  */
 export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date()): UsageSummary {
   if (!loaded) return { providers: {}, machineCount: 1 };
-  const [today, yesterday, week, month, all] = buildUsageReportsFromLoaded(loaded, [
-    { period: 'today' },
-    { period: 'yesterday' },
-    { period: 'week' },
-    { period: 'month' },
-    { period: 'all' },
-  ]);
+  const [today, yesterday, week, month, all] = buildUsageReportsFromLoaded(
+    loaded,
+    [
+      { period: 'today' },
+      { period: 'yesterday' },
+      { period: 'week' },
+      { period: 'month' },
+      { period: 'all' },
+    ],
+    now,
+  );
   const dates = trailingDates(now, TREND_DAYS);
 
   const providers: UsageSummary['providers'] = {};

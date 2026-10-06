@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v3.0.1] - 2026-10-05
+
+
+
+### Bug Fixes
+
+- Use one clock for usage reports and desktop charts
+- Identify and deduplicate Cursor credential variants
+- Invalidate transcript caches when effective pricing changes
+- Mark mixed priced usage totals as partial estimates
+- Scope cached Cursor exports to the verified account
+- Stop Cursor credential probing on transient failures
+- Retain pull warnings and retry failed pulls promptly
+- Persist successful quota and usage update timestamps
+- Surface desktop command failures with retry controls
+- Migrate desktop cache versions
+- Clear stale pricing markers, unblock forced Cursor refreshes, and isolate startup load errors
+
+### CI
+
+- Treat Clippy warnings as errors for all targets
+
+### Performance
+
+- Read only selected providers for filtered reports
+- Reuse cached Claude contributions for transcript deduplication
+- Resolve transcript paths with bounded concurrency
+
+### Tests
+
+- Cover Svelte components and the desktop API bridge
+- Enforce 80 percent coverage for every measured file
+
 ## [v3.0.0] - 2026-10-03
 
 

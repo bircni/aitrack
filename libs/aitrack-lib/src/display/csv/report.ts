@@ -1,4 +1,4 @@
-import type { UsageReport } from '../../data/usageReport.js';
+import type { UsageReport, UsageReportTotals } from '../../data/usageReport.js';
 
 /**
  * The same window/provider/model breakdown the PDF receipt shows, as CSV — raw
@@ -14,6 +14,7 @@ const HEADER = [
   'output_tokens',
   'total_tokens',
   'cost_usd',
+  'pricing_status',
 ];
 
 function csvField(value: string | number): string {
@@ -27,6 +28,13 @@ function csvField(value: string | number): string {
 
 function csvLine(fields: Array<string | number>): string {
   return fields.map((field) => csvField(field)).join(',');
+}
+
+function pricingStatus(
+  value: Pick<UsageReportTotals, 'hasCost' | 'hasUnpricedTokens' | 'tokens'>,
+): string {
+  if (!value.hasCost) return value.tokens === 0 ? 'complete' : 'unpriced';
+  return value.hasUnpricedTokens ? 'partial' : 'complete';
 }
 
 export function renderUsageReportCsv(report: UsageReport): string {
@@ -43,6 +51,7 @@ export function renderUsageReportCsv(report: UsageReport): string {
           row.outputTokens,
           row.tokens,
           row.hasCost ? row.costUSD.toFixed(4) : '',
+          pricingStatus(row),
         ]),
       );
     }
@@ -58,6 +67,7 @@ export function renderUsageReportCsv(report: UsageReport): string {
       totals.outputTokens,
       totals.tokens,
       totals.hasCost ? totals.costUSD.toFixed(4) : '',
+      pricingStatus(totals),
     ]),
   );
 

@@ -155,3 +155,28 @@ describe.each(EXTREME_TIME_ZONES)('day keys at %s', (timeZone) => {
     expect(tryLocalDateString('not a date')).toBeNull();
   });
 });
+
+it.each([true, false])(
+  'retains unpriced usage when priced records arrive first: %s',
+  (pricedFirst) => {
+    const day = emptyDay();
+    const priced = { inputTokens: 10, outputTokens: 2, costUSD: 1 };
+    const unpriced = { inputTokens: 20, outputTokens: 3 };
+    for (const counts of pricedFirst ? [priced, unpriced] : [unpriced, priced])
+      addModelUsage(day, 'mixed', counts);
+    expect(day).toMatchObject({
+      inputTokens: 30,
+      outputTokens: 5,
+      costUSD: 1,
+      hasUnpricedTokens: true,
+    });
+    expect(day.byModel.mixed).toMatchObject({
+      inputTokens: 30,
+      costUSD: 1,
+      hasUnpricedTokens: true,
+    });
+    const merged: DayMap = new Map();
+    mergeDayMaps(merged, new Map([['2026-01-01', day]]));
+    expect(merged.get('2026-01-01')?.hasUnpricedTokens).toBe(true);
+  },
+);

@@ -90,6 +90,28 @@ describe('mergeProviderDay', () => {
     expect(rec.costUSD).toBe(18);
   });
 
+  it('clears a synced unpriced flag once the model is priced, but keeps stored partials', () => {
+    const rec = emptyDay();
+    mergeProviderDay(rec, 'claude_code', {
+      byModel: {
+        'claude-sonnet-4-6': {
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          hasUnpricedTokens: true,
+        },
+      },
+      totals: { inputTokens: 1_000_000, outputTokens: 1_000_000, hasUnpricedTokens: true },
+    });
+    expect(rec.hasUnpricedTokens).toBeUndefined();
+    expect(rec.byModel['claude-sonnet-4-6']?.hasUnpricedTokens).toBeUndefined();
+
+    mergeProviderDay(rec, 'claude_code', {
+      byModel: { mixed: { inputTokens: 10, outputTokens: 0, costUSD: 1, hasUnpricedTokens: true } },
+      totals: { inputTokens: 10, outputTokens: 0, costUSD: 1, hasUnpricedTokens: true },
+    });
+    expect(rec.hasUnpricedTokens).toBe(true);
+  });
+
   it('uses stored Claude cache breakdown when backfilling a missing day cost', () => {
     const rec = emptyDay();
     const pData: ProviderDay = {
@@ -528,4 +550,28 @@ describe('loadReportedMachines', () => {
     expect(machines[0]?.lastUpdated).toBe('');
     expect(machines[0]?.days['2024-01-02']?.claude_code?.totals.inputTokens).toBe(40);
   });
+});
+
+import { providerDataForWindows } from '../usageData.js';
+it('filters live-provider days using the viewer calendar while retaining zoned machine data', () => {
+  const day = {
+    inputTokens: 1,
+    outputTokens: 2,
+    byModel: { auto: { inputTokens: 1, outputTokens: 2 } },
+  };
+  const result = providerDataForWindows(
+    {
+      machineData: [],
+      providerData: {},
+      zonedSources: [],
+      liveProviderData: {
+        cursor: new Map([
+          ['2026-01-01', day],
+          ['2026-01-02', day],
+        ]),
+      },
+    },
+    () => ({ start: '2026-01-01', end: '2026-01-01' }),
+  );
+  expect([...(result.cursor?.keys() ?? [])]).toEqual(['2026-01-01']);
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from 'aitrack-lib/errors';
   import { onMount } from 'svelte';
 
   import type { AppState, Screen, Settings } from '../shared/types.js';
@@ -36,6 +37,36 @@
 
   // One save in flight and only the newest change queued behind it, so no echo is ever stale.
   let saving = false;
+  let settingsError = $state<string | undefined>();
+  let commandError = $state.raw<{ label: string; action: () => Promise<void>; message: string } | undefined>();
+  let loadError = $state<string | undefined>();
+
+  // Kept apart from commandError so a later Refresh or Sync can't clear the only way out of "Loading".
+  async function load(): Promise<void> {
+    loadError = undefined;
+    const [state, saved] = await Promise.allSettled([api.getState(), api.getSettings()]);
+    if (state.status === 'fulfilled') appState ??= state.value;
+    if (saved.status === 'fulfilled') settings ??= saved.value;
+    const failure = [state, saved].find((result) => result.status === 'rejected');
+    if (failure) loadError = errorMessage(failure.reason);
+  }
+
+  async function runCommand(label: string, action: () => Promise<void>): Promise<void> {
+    commandError = undefined;
+    try {
+      await action();
+    } catch (error) {
+      commandError = { label, action, message: errorMessage(error) };
+    }
+  }
+  function refresh(): void {
+    void runCommand('Refresh', () => api.refresh());
+  }
+
+  function sync(): void {
+    void runCommand('Sync', () => api.sync());
+  }
+
   let queued: Settings | undefined;
 
   function patch(change: Partial<Settings>): void {
@@ -53,11 +84,15 @@
       while (queued) {
         const next = queued;
         queued = undefined;
-        const saved = await api
-          .saveSettings(next)
-          .catch(() => api.getSettings())
-          .catch(() => undefined); // Unreachable sidecar: its settings event will correct this.
-        if (saved && !queued) settings = saved;
+        try {
+          const saved = await api.saveSettings(next);
+          settingsError = undefined;
+          if (!queued) settings = saved;
+        } catch (error) {
+          queued ??= next;
+          settingsError = errorMessage(error);
+          break;
+        }
       }
     } finally {
       saving = false;
@@ -65,20 +100,12 @@
   }
 
   onMount(() => {
-    // A pushed event may land first and is newer; a failed read waits for the next push.
-    void api.getState().then(
-      (value) => (appState ??= value),
-      () => undefined,
-    );
-    void api.getSettings().then(
-      (value) => (settings ??= value),
-      () => undefined,
-    );
+    void load();
     const offState = api.onState((value) => {
       appState = value;
     });
     const offSettings = api.onSettings((value) => {
-      if (!saving) settings = value;
+      if (!saving && !queued) settings = value;
     });
     const offScreen = api.onScreen((value) => {
       screen = value;
@@ -98,22 +125,54 @@
 <main class="pop">
   <div class="scroll">
     <div bind:this={content}>
-    {#if appState && settings}
-      {#if screen === 'settings'}
-        <SettingsScreen {settings} onPatch={patch} onBack={() => (screen = 'dashboard')} />
-      {:else}
-        <Dashboard
-          {appState}
-          {settings}
-          {now}
-          {period}
-          onPeriod={(next) => (period = next)}
-          onPatch={patch}
-        />
+      {#if loadError}
+        <p class="banner" role="alert">
+          Could not load dashboard: {loadError}
+          <button class="link" type="button" onclick={() => void load()}>Retry</button>
+        </p>
       {/if}
-    {:else}
-      <p class="empty">Loading…</p>
-    {/if}
+      {#if commandError}
+        <p class="banner" role="alert">
+          {commandError.label} could not be sent: {commandError.message}
+          <button
+            class="link"
+            type="button"
+            onclick={() => {
+              if (commandError) void runCommand(commandError.label, commandError.action);
+            }}>Retry</button
+          >
+        </p>
+      {/if}
+      {#if settingsError}
+        <p class="banner" role="alert">
+          Could not save settings: {settingsError}
+          <button
+            class="link"
+            type="button"
+            onclick={() => {
+              if (!saving) void flushSettings();
+            }}>Retry</button
+          >
+        </p>
+      {/if}
+      {#if appState && settings}
+        {#if screen === 'settings'}
+          <SettingsScreen {settings} onPatch={patch} onBack={() => (screen = 'dashboard')} />
+        {:else}
+          <Dashboard
+            {appState}
+            {settings}
+            {now}
+            {period}
+            onPeriod={(next) => (period = next)}
+            onPatch={patch}
+            onRefresh={refresh}
+            onSync={sync}
+          />
+        {/if}
+      {:else}
+        <p class="empty">Loading…</p>
+      {/if}
     </div>
   </div>
 
@@ -138,7 +197,7 @@
         aria-label="Sync this machine"
         title={appState?.syncResult?.message ?? 'Sync this machine (aitrack sync)'}
         disabled={appState?.syncing || appState?.refreshing}
-        onclick={() => void api.sync()}
+        onclick={sync}
         ><span class:pulsing={appState?.syncing}><Icon name="sync" size={15} /></span></button
       >
       <button
@@ -147,7 +206,7 @@
         aria-label="Refresh"
         title="Refresh"
         disabled={appState?.refreshing || appState?.syncing}
-        onclick={() => void api.refresh()}
+        onclick={refresh}
         ><span class:spinning={appState?.refreshing}><Icon name="refresh" size={15} /></span></button
       >
       <button

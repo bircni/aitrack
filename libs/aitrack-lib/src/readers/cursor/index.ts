@@ -1,9 +1,13 @@
 import type { DayMap } from '../../data/types.js';
 import { errorMessage } from '../../errors.js';
 import { log } from '../../output.js';
+import { QuotaFailure } from '../../quota/http.js';
 import { fetchCursorUsageCsv, getCursorStateDatabasePath, readCursorAuthState } from './auth.js';
 import { cursorCacheAgeSeconds, readCursorCache, writeCursorCache } from './cache.js';
 import { aggregateCursorCsvToDayMap } from './csv.js';
+import { cursorAccountId } from './jwt.js';
+
+let retry: { key: string; until: number; serverUntil: number } | undefined;
 
 export { getCursorStateDatabasePath } from './auth.js';
 export { aggregateCursorCsvToDayMap, parseCursorDateString } from './csv.js';
@@ -22,34 +26,44 @@ export interface ReadCursorDataOptions {
  *
  * Returns an empty map if the DB is missing, there is no access token, or the
  * request fails with no cache to fall back on. A fresh-enough cached CSV is
- * served without touching the database or the network; a failed refresh falls
- * back to a stale cache when one exists.
+ * served only after verifying local account identity; a failed refresh falls
+ * back to a stale export from the same account.
  */
 export async function readCursorData(options: ReadCursorDataOptions = {}): Promise<DayMap> {
-  const cached = readCursorCache();
   const { maxAgeSeconds } = options;
-
-  if (cached && maxAgeSeconds !== undefined && cursorCacheAgeSeconds(cached) <= maxAgeSeconds) {
-    return aggregateCursorCsvToDayMap(cached.csv);
-  }
-
   const databasePath = getCursorStateDatabasePath();
-  if (!databasePath) {
-    return cached ? aggregateCursorCsvToDayMap(cached.csv) : new Map();
-  }
+  if (!databasePath) return new Map();
 
   let authState: Awaited<ReturnType<typeof readCursorAuthState>>;
   try {
     authState = await readCursorAuthState(databasePath);
   } catch (error) {
     log.warn(`aitrack: Cursor skipped — could not read ${databasePath}: ${errorMessage(error)}`);
-    return cached ? aggregateCursorCsvToDayMap(cached.csv) : new Map();
+    return new Map();
   }
 
   if (!authState.accessToken) {
     log.warn('aitrack: Cursor skipped — no cursorAuth/accessToken in state.vscdb.');
-    return cached ? aggregateCursorCsvToDayMap(cached.csv) : new Map();
+    return new Map();
   }
+
+  const accountId = cursorAccountId(authState.accessToken);
+  const stored = readCursorCache();
+  const cached = stored?.accountId === accountId ? stored : null;
+  const fromCache = () => (cached ? aggregateCursorCsvToDayMap(cached.csv) : new Map());
+  const retryKey = `${databasePath}:${accountId}`;
+  const isForced = maxAgeSeconds === undefined || maxAgeSeconds <= 0;
+  // A forced refresh skips the local backoff floor but still honors a server Retry-After.
+  const retryUntil = isForced ? retry?.serverUntil : retry?.until;
+  if (retry?.key === retryKey && retryUntil !== undefined && Date.now() < retryUntil) {
+    log.warn(
+      cached
+        ? `aitrack: Cursor — using cached export from ${cached.fetchedAt} (retrying after a failed refresh).`
+        : 'aitrack: Cursor skipped — retrying after a failed refresh.',
+    );
+    return fromCache();
+  }
+  if (!isForced && cached && cursorCacheAgeSeconds(cached) <= maxAgeSeconds) return fromCache();
 
   // Reading the body is part of the request: the stream can still fail after a
   // 200, and an escaping rejection would take down the whole usage run rather
@@ -60,7 +74,11 @@ export async function readCursorData(options: ReadCursorDataOptions = {}): Promi
     const result = await fetchCursorUsageCsv(authState.accessToken, cached?.workingAuthShape);
     text = await result.response.text();
     shape = result.shape;
+    retry = undefined;
   } catch (error) {
+    const serverUntil =
+      Date.now() + (error instanceof QuotaFailure ? (error.retryAfterSeconds ?? 0) * 1000 : 0);
+    retry = { key: retryKey, until: Math.max(Date.now() + 60_000, serverUntil), serverUntil };
     if (cached) {
       log.warn(
         `aitrack: Cursor — using cached export from ${cached.fetchedAt} (refresh failed: ${errorMessage(error)}).`,
@@ -81,6 +99,11 @@ export async function readCursorData(options: ReadCursorDataOptions = {}): Promi
     return cached ? aggregateCursorCsvToDayMap(cached.csv) : map;
   }
 
-  writeCursorCache({ fetchedAt: new Date().toISOString(), csv: text, workingAuthShape: shape });
+  writeCursorCache({
+    fetchedAt: new Date().toISOString(),
+    csv: text,
+    accountId,
+    workingAuthShape: shape,
+  });
   return map;
 }

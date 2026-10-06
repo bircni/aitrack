@@ -1,9 +1,22 @@
+import { createHash } from 'node:crypto';
+
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
+import { isRecord } from '../data/guards.js';
 import { type ClaudeFamily } from '../data/modelId.js';
 import { findPricingCatalogRates, type PricingCatalogs } from './catalogs.js';
 import { catalogFromCompact, type PricingCatalog } from './codecs.js';
 import type { PricingSupplement } from './packMeta.js';
 import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
+
+function canonicalPricing(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((entry: unknown) => canonicalPricing(entry));
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .toSorted(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => [key, canonicalPricing(entry)]),
+  );
+}
 
 interface CompiledAlias {
   pattern: RegExp;
@@ -33,12 +46,24 @@ function pickOverride<P>(
  */
 export class ModelPricing {
   readonly updatedAt: string;
+  readonly fingerprint: string;
   private readonly supplement: PricingSupplement;
   private readonly catalogs: PricingCatalogs;
   private readonly aliases: CompiledAlias[];
   private readonly codexFamilyFallback: Array<{ match: RegExp; pricing: CodexPricing }>;
 
   constructor(supplement: PricingSupplement, primary: PricingCatalog, secondary: PricingCatalog) {
+    this.fingerprint = createHash('sha256')
+      .update(
+        JSON.stringify(
+          canonicalPricing([
+            { ...supplement, updatedAt: undefined, comment: undefined },
+            [...primary.entries].toSorted(([a], [b]) => a.localeCompare(b)),
+            [...secondary.entries].toSorted(([a], [b]) => a.localeCompare(b)),
+          ]),
+        ),
+      )
+      .digest('hex');
     this.supplement = supplement;
     this.updatedAt = supplement.updatedAt;
     this.catalogs = { primary, secondary };

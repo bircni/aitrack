@@ -23,6 +23,7 @@ import type { UsageSummary } from './usage.js';
 export const REFRESH_INTERVAL_MS = 5 * 60_000;
 export const PULL_INTERVAL_MS = 30 * 60_000;
 export const FAILURE_BACKOFF_MS = 60_000;
+export const CACHE_FORMAT = 2;
 const QUOTA_FORMATS: readonly QuotaFormat[] = ['percent', 'dollars', 'count'];
 
 /** How long a failure waits before the next attempt; a retry-after can only lengthen it. */
@@ -40,6 +41,9 @@ export interface CachedState {
   quotas: Partial<Record<QuotaProviderKey, QuotaSnapshot>>;
   usage?: UsageSummary;
   fired: FiredAlerts;
+  updatedAt?: string;
+  usageUpdatedAt?: string;
+  pullError?: string;
   /** Epoch ms a provider's retry-after ends; kept so a relaunch does not hit it again. */
   rateLimitedUntil?: Partial<Record<QuotaProviderKey, number>>;
 }
@@ -49,7 +53,8 @@ function isSpend(value: unknown): value is Spend & Record<string, unknown> {
     isRecord(value) &&
     isFiniteNumber(value.tokens) &&
     isFiniteNumber(value.costUSD) &&
-    typeof value.hasCost === 'boolean'
+    typeof value.hasCost === 'boolean' &&
+    (value.hasUnpricedTokens === undefined || typeof value.hasUnpricedTokens === 'boolean')
   );
 }
 
@@ -142,6 +147,11 @@ export function normalizeCachedState(input: unknown): CachedState {
   const raw = isRecord(input) ? input : {};
   const usage = isRecord(raw.usage) ? raw.usage : undefined;
   return {
+    ...(typeof raw.updatedAt === 'string' &&
+      Number.isFinite(Date.parse(raw.updatedAt)) && { updatedAt: raw.updatedAt }),
+    ...(typeof raw.usageUpdatedAt === 'string' &&
+      Number.isFinite(Date.parse(raw.usageUpdatedAt)) && { usageUpdatedAt: raw.usageUpdatedAt }),
+    ...(typeof raw.pullError === 'string' && { pullError: raw.pullError }),
     quotas: providerMap(raw.quotas, (entry, key) => (isSnapshot(entry, key) ? entry : undefined)),
     usage: usage && {
       providers: providerMap(usage.providers, readProviderUsage),
@@ -158,6 +168,31 @@ export function normalizeCachedState(input: unknown): CachedState {
   };
 }
 
+type CacheMigration = (cache: Record<string, unknown>) => Record<string, unknown>;
+
+const CACHE_MIGRATIONS: Record<number, CacheMigration> = {
+  1: ({ updatedAt: _updatedAt, ...cache }) => cache,
+};
+
+export function loadCachedState(input: unknown): CachedState {
+  if (
+    !isRecord(input) ||
+    typeof input.format !== 'number' ||
+    !Number.isInteger(input.format) ||
+    input.format < 1
+  ) {
+    return normalizeCachedState({});
+  }
+  let version = input.format;
+  let cache = input;
+  while (version < CACHE_FORMAT) {
+    const migrate = CACHE_MIGRATIONS[version];
+    if (!migrate) return normalizeCachedState({});
+    cache = { ...migrate(cache), format: ++version };
+  }
+  return version === CACHE_FORMAT ? normalizeCachedState(cache) : normalizeCachedState({});
+}
+
 export interface ServiceDeps {
   fetchQuota: (provider: QuotaProviderKey) => Promise<QuotaResult>;
   loadUsage: (options: {
@@ -165,7 +200,7 @@ export interface ServiceDeps {
     refreshLive: boolean;
     /** This machine's logs as a sync just read them, so they are not parsed again. */
     localMachine?: MachineFile;
-  }) => Promise<{ summary: UsageSummary; warning?: string }>;
+  }) => Promise<{ summary: UsageSummary; warning?: string } | { error: string; warning?: string }>;
   now: () => number;
   onState: (state: AppState) => void;
   onAlert: (alert: Alert) => void;
@@ -186,7 +221,6 @@ export class QuotaService {
   private nextUsageAt = 0;
   private nextPullAt = 0;
   private usageError: string | undefined;
-  private updatedAt: string | undefined;
   private syncing = false;
   private syncResult: AppState['syncResult'];
   private emitQueued = false;
@@ -212,6 +246,7 @@ export class QuotaService {
 
   setSettings(settings: Settings): void {
     this.settings = settings;
+    if (!settings.pullSyncedData) this.cache.pullError = undefined;
     this.emit();
   }
 
@@ -235,7 +270,9 @@ export class QuotaService {
       refreshing: this.usageRun !== undefined || providers.some((provider) => provider.refreshing),
       machineCount: this.cache.usage?.machineCount ?? 1,
       usageError: this.usageError,
-      updatedAt: this.updatedAt,
+      updatedAt: this.cache.updatedAt,
+      usageUpdatedAt: this.cache.usageUpdatedAt,
+      pullError: this.settings.pullSyncedData ? this.cache.pullError : undefined,
       syncing: this.syncing,
       syncResult: this.syncResult,
     };
@@ -253,6 +290,7 @@ export class QuotaService {
         this.syncResult = { ok: true, message };
         localMachine = machine;
         this.nextPullAt = this.deps.now() + PULL_INTERVAL_MS;
+        this.cache.pullError = undefined;
       } catch (error) {
         this.syncResult = { ok: false, message: errorMessage(error) };
       }
@@ -291,7 +329,6 @@ export class QuotaService {
   }
 
   private persist(): void {
-    this.updatedAt = new Date(this.deps.now()).toISOString();
     this.cache.fired = pruneFired(this.cache.fired, this.deps.now());
     this.cache.rateLimitedUntil = Object.fromEntries(
       [...this.runtime]
@@ -317,6 +354,7 @@ export class QuotaService {
       runtime.error = undefined;
       runtime.nextAttemptAt = now + REFRESH_INTERVAL_MS;
       this.cache.quotas[key] = result.snapshot;
+      this.cache.updatedAt = new Date(now).toISOString();
       this.alertFor(key, result.snapshot, now);
     } else {
       runtime.error = result.error;
@@ -353,15 +391,26 @@ export class QuotaService {
     const now = this.deps.now();
     const pull = this.settings.pullSyncedData && (force || now >= this.nextPullAt);
     try {
-      const { summary, warning } = await this.deps.loadUsage({
+      const result = await this.deps.loadUsage({
         pull,
         refreshLive: force,
         localMachine,
       });
-      this.cache.usage = summary;
-      this.usageError = warning;
-      if (pull) this.nextPullAt = now + PULL_INTERVAL_MS;
-      this.nextUsageAt = now + REFRESH_INTERVAL_MS;
+      const completedAt = this.deps.now();
+      if (pull) {
+        this.cache.pullError = result.warning;
+        this.nextPullAt = completedAt + (result.warning ? FAILURE_BACKOFF_MS : PULL_INTERVAL_MS);
+      }
+      if ('error' in result) throw new Error(result.error);
+      this.cache.usage = result.summary;
+      this.usageError = undefined;
+      this.cache.usageUpdatedAt = new Date(completedAt).toISOString();
+      this.cache.updatedAt = this.cache.usageUpdatedAt;
+      this.nextUsageAt =
+        completedAt +
+        (this.cache.pullError && this.settings.pullSyncedData
+          ? FAILURE_BACKOFF_MS
+          : REFRESH_INTERVAL_MS);
     } catch (error) {
       this.usageError = errorMessage(error);
       this.nextUsageAt = now + FAILURE_BACKOFF_MS;
