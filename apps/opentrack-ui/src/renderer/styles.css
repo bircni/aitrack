@@ -120,6 +120,11 @@ p {
   width: 0;
 }
 
+/* Holds its children's margins, which would otherwise collapse out of its measured height. */
+.content {
+  display: flow-root;
+}
+
 .empty {
   padding: 24px 16px;
   color: var(--ink-3);

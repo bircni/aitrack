@@ -22,7 +22,8 @@
     const parts = [content, footer].filter((part) => part instanceof HTMLElement);
     if (parts.length === 0) return;
     const report = () => {
-      api.fitHeight(parts.reduce((sum, part) => sum + part.offsetHeight, 0));
+      // Unrounded, so a fractional pixel never leaves the content a pixel short of fitting.
+      api.fitHeight(parts.reduce((sum, part) => sum + part.getBoundingClientRect().height, 0));
     };
     const observer = new ResizeObserver(report);
     for (const part of parts) observer.observe(part);
@@ -148,7 +149,7 @@
 
 <main class="pop">
   <div class="scroll">
-    <div bind:this={content}>
+    <div class="content" bind:this={content}>
       {#if loadError}
         <p class="banner" role="alert">
           Could not load dashboard: {loadError}
