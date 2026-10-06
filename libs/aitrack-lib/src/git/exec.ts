@@ -17,6 +17,13 @@ const MAX_PUSH_ATTEMPTS = 3;
 /** Without this, git run from a windowless process (opentrack's worker) opens a console on Windows. */
 const GIT_SPAWN_BASE = { cwd: LOCAL_REPO, windowsHide: true } as const;
 
+/** Sync commits are unattended: a GUI launch lacks the signer on PATH, and a passphrase prompt would hang. */
+const UNSIGNED_ENV = {
+  GIT_CONFIG_COUNT: '1',
+  GIT_CONFIG_KEY_0: 'commit.gpgsign',
+  GIT_CONFIG_VALUE_0: 'false',
+};
+
 class GitCommandError extends Error {
   constructor(
     readonly args: string[],
@@ -48,6 +55,7 @@ export function runGit(args: string[], options: { stdio?: 'inherit' | 'pipe' } =
   if (stdio === 'pipe') {
     const result = spawnSync('git', args, {
       ...GIT_SPAWN_BASE,
+      env: { ...process.env, ...UNSIGNED_ENV },
       stdio: 'pipe',
       encoding: 'utf8',
     });
@@ -55,7 +63,11 @@ export function runGit(args: string[], options: { stdio?: 'inherit' | 'pipe' } =
     return trimmedText(result.stdout);
   }
 
-  const result = spawnSync('git', args, { ...GIT_SPAWN_BASE, stdio: 'inherit' });
+  const result = spawnSync('git', args, {
+    ...GIT_SPAWN_BASE,
+    env: { ...process.env, ...UNSIGNED_ENV },
+    stdio: 'inherit',
+  });
   if (result.status !== 0) {
     throw new GitCommandError(args, result.status, '');
   }
@@ -81,7 +93,11 @@ export interface GitOptions {
 
 /** Piped like `runGit(..., { stdio: 'pipe' })`, but without blocking the event loop. */
 export function runGitAsync(args: string[], options: GitOptions = {}): Promise<string> {
-  const env = options.timeoutMs === undefined ? process.env : { ...process.env, ...NO_PROMPT_ENV };
+  const env = {
+    ...process.env,
+    ...UNSIGNED_ENV,
+    ...(options.timeoutMs === undefined ? {} : NO_PROMPT_ENV),
+  };
   return new Promise((resolve, reject) => {
     const child = execFile(
       'git',

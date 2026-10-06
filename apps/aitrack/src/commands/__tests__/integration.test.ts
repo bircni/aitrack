@@ -90,6 +90,9 @@ describe('integration', { timeout: 60_000 }, () => {
   });
 
   it('sync writes a machine JSON file and commits it to git', async () => {
+    // A signing setup the sync process cannot reach, like gpg outside a GUI app's PATH.
+    execSync('git config commit.gpgsign true', { cwd: LOCAL_REPO, stdio: 'pipe' });
+    execSync('git config gpg.program aitrack-missing-gpg', { cwd: LOCAL_REPO, stdio: 'pipe' });
     writeClaudeData([
       assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500),
       assistantLine('msg2', localTimestamp('2024-06-02'), 2000, 800),
