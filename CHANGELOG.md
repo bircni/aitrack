@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v3.1.0] - 2026-10-06
+
+
+
+### Bug Fixes
+
+- **opentrack:** Make sync commits without signing (#104)
+- Avoid shell interpretation when opening files on Windows (#101)
+
+### Features
+
+- Install and update opentrack from the CLI, in-app and Homebrew (#105)
+
 ## [v3.0.1] - 2026-10-05
 
 
