@@ -4,6 +4,7 @@ mod commands;
 mod panel;
 mod position;
 mod sidecar;
+mod updater;
 
 use std::sync::Mutex;
 
@@ -20,6 +21,7 @@ use tauri_plugin_notification::NotificationExt;
 use crate::panel::{main_window, Panel};
 use crate::position::Rect;
 use crate::sidecar::Sidecar;
+use crate::updater::Updates;
 
 const TRAY_ID: &str = "main";
 
@@ -179,7 +181,9 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Panel::new())
+        .manage(Updates::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::get_settings,
@@ -189,6 +193,8 @@ fn main() {
             commands::open_dashboard,
             commands::fit_height,
             commands::shortcut_error,
+            commands::available_update,
+            commands::install_update,
             commands::quit,
         ])
         .setup(|app| {
@@ -212,6 +218,7 @@ fn main() {
                 });
             }
             build_tray(&handle)?;
+            updater::watch(handle.clone());
 
             // Last: its first events need the Shell state and the tray.
             let program = app.path().resource_dir()?.join("opentrack-sidecar.exe");

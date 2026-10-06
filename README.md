@@ -72,12 +72,22 @@ provider limits alongside the usage history and cost estimates used by aitrack.
 - A configurable tray icon or bars for your available limits, with colour or monochrome rendering.
 - A floating dashboard, global shortcut and optional launch at login.
 
-Download opentrack from [GitHub Releases](https://github.com/bircni/aitrack/releases):
+Install opentrack with Homebrew on macOS 13.5+ (Apple Silicon), or with the CLI on macOS or
+64-bit Windows:
+
+```sh
+brew install --cask bircni/tap/opentrack
+npx aitrack install-opentrack
+```
+
+Or download it from [GitHub Releases](https://github.com/bircni/aitrack/releases):
 
 | Platform                   | Download         | Install                                                |
 | -------------------------- | ---------------- | ------------------------------------------------------ |
 | Windows                    | `.exe` installer | Run the installer                                      |
 | macOS 13.5+, Apple Silicon | `aarch64.dmg`    | Open the disk image and drag opentrack to Applications |
+
+opentrack checks GitHub for new releases and offers to install them from the dashboard.
 
 The desktop app bundles its runtime; you do not need to install Node.js or the CLI to
 view local usage and limits. Sign in to Claude Code, Codex or Cursor as usual: opentrack

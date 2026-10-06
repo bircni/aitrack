@@ -26,6 +26,15 @@
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJDMTk5RTc3QkFBMURBQzEKUldUQjJxRzZkNTRadkdJTDNlb0l2NDNBVTVkbzFBSDdnUzl6ZHp6eXJDQWw4SXJpMFR0VVU0TU4K",
+      "endpoints": ["https://github.com/bircni/aitrack/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["nsis"],

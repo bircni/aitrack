@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   machinesCommand: vi.fn(),
   recomputeCostsCommand: vi.fn(),
   configCommand: vi.fn(),
+  installOpentrackCommand: vi.fn(),
 }));
 
 vi.mock('../../commands/init.js', () => ({ initCommand: mocks.initCommand }));
@@ -23,6 +24,9 @@ vi.mock('../../commands/top.js', () => ({ topCommand: mocks.topCommand }));
 vi.mock('../../commands/machines.js', () => ({ machinesCommand: mocks.machinesCommand }));
 vi.mock('../../commands/recompute.js', () => ({
   recomputeCostsCommand: mocks.recomputeCostsCommand,
+}));
+vi.mock('../../commands/installOpentrack.js', () => ({
+  installOpentrackCommand: mocks.installOpentrackCommand,
 }));
 vi.mock('../../commands/config.js', () => ({
   CONFIG_KEYS: ['repoUrl', 'machineId', 'claudeProjectsDir', 'codexSessionsDir'],
@@ -89,6 +93,8 @@ describe('buildProgram', () => {
     expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: true, json: undefined });
     await run('doctor', '--json');
     expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: undefined, json: true });
+    await run('install-opentrack', '--dir', '/tmp/apps');
+    expect(mocks.installOpentrackCommand).toHaveBeenCalledWith({ dir: '/tmp/apps' });
   });
 
   it('maps show options', async () => {

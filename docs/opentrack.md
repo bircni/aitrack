@@ -47,15 +47,35 @@ Refresh and sync command-delivery failures show retry controls separately from o
 failures. Failed settings saves keep the newest queued changes and provide a retry;
 pushed settings cannot overwrite those pending edits.
 
+Shortly after launch and every six hours, opentrack fetches `latest.json` from the latest
+GitHub release. When it lists a newer version, the dashboard offers **Install and restart**;
+the download must carry a signature from the release key or it is refused. Development
+builds never check.
+
 Settings and the last snapshot live in the app's data folder (`%APPDATA%\dev.bircni.opentrack` on
 Windows): `settings.json`, `cache.json`, and `sidecar.log`. There is no account, telemetry or
-backend.
+backend: the update check is the only request that is not to a provider or your data repo.
 
 ## Downloads
 
-Windows installers and macOS disk images (Apple Silicon, macOS 13.5+) are attached to the
-[same GitHub releases](https://github.com/bircni/aitrack/releases) as aitrack. Choose the
-`.exe` on Windows, or the `.dmg` matching your Mac, and drag opentrack to Applications.
+```sh
+brew install --cask bircni/tap/opentrack   # macOS 13.5+, Apple Silicon
+npx aitrack install-opentrack              # macOS (Apple Silicon) or 64-bit Windows
+```
+
+The cask lives in [bircni/homebrew-tap](https://github.com/bircni/homebrew-tap), not in
+Homebrew's own cask repository, which only accepts notarized apps. It removes the
+quarantine flag after installing, since an app that is not notarized would otherwise be
+refused by Gatekeeper. opentrack then updates itself, so `brew upgrade` leaves it alone
+unless you pass `--greedy`.
+
+`aitrack install-opentrack` fetches the same release the in-app updater uses, checks its
+signature and installs it: on macOS it replaces `opentrack.app` in `/Applications`
+(`--dir` for another folder), on Windows it runs the installer.
+
+Windows installers and macOS disk images (Apple Silicon, macOS 13.5+) are also attached to
+the [same GitHub releases](https://github.com/bircni/aitrack/releases) as aitrack. Choose
+the `.exe` on Windows, or the `.dmg` matching your Mac, and drag opentrack to Applications.
 
 Windows builds are unsigned. macOS builds are ad hoc signed and are not notarized.
 SmartScreen or Gatekeeper may block the first launch.

@@ -6,6 +6,7 @@ import { CONFIG_KEYS, configCommand } from '../commands/config.js';
 import { doctorCommand } from '../commands/doctor.js';
 import type { ExportOptions } from '../commands/export.js';
 import { initCommand } from '../commands/init.js';
+import { installOpentrackCommand } from '../commands/installOpentrack.js';
 import { machinesCommand } from '../commands/machines.js';
 import { recomputeCostsCommand } from '../commands/recompute.js';
 import type { ShowOptions } from '../commands/show.js';
@@ -201,6 +202,14 @@ export function buildProgram(): Command {
     .option('--json', 'print machine-readable JSON')
     .action((options: { pricingCheck?: boolean; json?: boolean }) => {
       runAsync(() => doctorCommand({ pricingCheck: options.pricingCheck, json: options.json }));
+    });
+
+  program
+    .command('install-opentrack')
+    .description('Install the opentrack desktop app from the latest GitHub release')
+    .option('--dir <path>', 'macOS: folder to put opentrack.app in (default: /Applications)')
+    .action((options: { dir?: string }) => {
+      runAsync(() => installOpentrackCommand({ dir: options.dir }));
     });
 
   const config = program
