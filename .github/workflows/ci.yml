@@ -56,31 +56,27 @@ jobs:
       - name: Set up Rust
         uses: ./.github/actions/setup-rust
 
-      # opentrack's Tauri shell links against WebKitGTK and the tray libraries on Linux.
-      - name: Install Tauri system dependencies
-        run: >-
-          sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev
-          libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
-
       - uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
 
+      # The Rust shell ships only for macOS and Windows, whose jobs check it; here it would
+      # only be compiled again, against Linux-only WebKitGTK.
       - name: Check formatting
-        run: pnpm nx affected -t format:check
+        run: pnpm nx affected -t format:check --exclude opentrack
 
       - name: Lint
-        run: pnpm nx affected -t lint
+        run: pnpm nx affected -t lint --exclude opentrack
 
       - name: Typecheck
-        run: pnpm nx affected -t typecheck
+        run: pnpm nx affected -t typecheck --exclude opentrack
 
       - name: Check unused files and dependencies
-        run: pnpm nx affected -t check:unused
+        run: pnpm nx affected -t check:unused --exclude opentrack
 
       - name: Test
-        run: pnpm nx affected -t test --configuration ci
+        run: pnpm nx affected -t test --configuration ci --exclude opentrack
 
       - name: Build
-        run: pnpm nx affected -t build
+        run: pnpm nx affected -t build --exclude opentrack
 
       - name: CLI smoke tests
         run: pnpm nx affected -t test:smoke
@@ -92,7 +88,6 @@ jobs:
 
   cross-platform:
     name: Check (${{ matrix.os }})
-    needs: test
     runs-on: ${{ matrix.os }}
     env:
       NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}

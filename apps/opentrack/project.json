@@ -14,6 +14,7 @@
     },
     "build": {
       "executor": "@monodon/rust:build",
+      "cache": false,
       "inputs": ["production", "^production", "rustToolchain", "{workspaceRoot}/package.json"],
       "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
       "outputs": ["{workspaceRoot}/target/debug"],
