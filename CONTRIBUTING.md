@@ -266,7 +266,26 @@ The [Publish workflow](.github/workflows/publish.yml) triggers on that same `v*`
 - For non-prerelease tags, the Homebrew job writes `Casks/opentrack.rb` with the new
   version and DMG checksum to `bircni/homebrew-tap` and pushes it.
 
-Every job that invokes Nx or Rust installs the toolchain from `rust-toolchain.toml`
+### winget
+
+opentrack's winget package (`bircni.opentrack`) is not in `microsoft/winget-pkgs` yet, and
+release automation can only update an existing package, so the first version is submitted
+by hand. `scripts/winget-manifest.ts` writes that version's manifests into a `winget-pkgs`
+checkout:
+
+```sh
+gh release download vX.Y.Z -p '*-setup.exe'
+node scripts/winget-manifest.ts vX.Y.Z opentrack_X.Y.Z_x64-setup.exe ../winget-pkgs
+```
+
+On Windows, `winget validate --manifest manifests/b/bircni/opentrack/X.Y.Z` checks them, and
+`winget install --manifest manifests/b/bircni/opentrack/X.Y.Z` (after
+`winget settings --enable LocalManifestFiles`) installs from them. Commit them in a fork as
+`New package: bircni.opentrack version X.Y.Z` and open a pull request to
+`microsoft/winget-pkgs`. The manifest's publisher and product code must match what the
+installer registers: `bundle.publisher` and `productName` in `apps/opentrack/tauri.conf.json`.
+
+from `rust-toolchain.toml`
 with `dtolnay/rust-toolchain@stable`, passing the version and components read from
 that file. This includes the pricing job (Nx reads Cargo metadata).
 
