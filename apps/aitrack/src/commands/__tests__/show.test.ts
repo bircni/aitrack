@@ -162,10 +162,10 @@ describe('showCommand', () => {
   it('opens generated files with platform-specific commands', async () => {
     mocks.buildLocalMachineFile.mockResolvedValue(localMachineWithData());
 
-    await withPlatform('win32', () => showCommand({ output: 'out.png' }));
+    await withPlatform('win32', () => showCommand({ output: 'out&whoami.png' }));
     expect(mocks.spawn).toHaveBeenLastCalledWith(
-      'cmd',
-      ['/c', 'start', '', expect.stringContaining('out.png')],
+      'explorer.exe',
+      [expect.stringContaining('out&whoami.png')],
       expect.objectContaining({ detached: true, stdio: 'ignore' }),
     );
 
