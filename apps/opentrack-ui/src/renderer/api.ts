@@ -8,6 +8,7 @@ interface Events {
   settings: Settings;
   screen: Screen;
   'shortcut-error': string | null;
+  update: string;
 }
 
 function subscribe<K extends keyof Events>(
@@ -43,4 +44,7 @@ export const api: OpentrackApi = {
   onScreen: (listener) => subscribe('screen', listener),
   shortcutError: () => invoke('shortcut_error'),
   onShortcutError: (listener) => subscribe('shortcut-error', listener),
+  availableUpdate: () => invoke('available_update'),
+  onUpdate: (listener) => subscribe('update', listener),
+  installUpdate: () => invoke('install_update'),
 };

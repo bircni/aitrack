@@ -221,6 +221,15 @@ Releases are generated from Conventional Commits using [git-cliff](https://git-c
 
 Configure the `aitrack` and `aitrack-lib` packages on npm with [GitHub Actions as a trusted publisher](https://docs.npmjs.com/trusted-publishers/) for this repository and `.github/workflows/publish.yml`. The workflow exchanges GitHub's OIDC identity for short-lived npm credentials; do not add a long-lived `NPM_TOKEN` repository secret.
 
+opentrack's in-app updater only installs files signed with its release key. Add the
+private key from `pnpm exec tauri signer generate` and its password as the
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets; the public
+key is `plugins.updater.pubkey` in `apps/opentrack/tauri.conf.json` and
+`OPENTRACK_PUBLIC_KEY` in `apps/aitrack/src/minisign.ts`. Losing the private key means
+installed apps can no longer update. The cask update pushes to
+`bircni/homebrew-tap` with the private half of a write deploy key on that repository,
+stored as the `HOMEBREW_TAP_DEPLOY_KEY` secret.
+
 ### Cut a release locally
 
 ```sh
@@ -247,11 +256,16 @@ The [Publish workflow](.github/workflows/publish.yml) triggers on that same `v*`
   and publishes `aitrack-lib` before `aitrack`
   with provenance. pnpm rewrites `workspace:*` to the published library version.
 - Desktop jobs package a Windows NSIS installer and a macOS DMG for Apple Silicon,
-  then upload them as workflow artifacts. Missing installers fail the build.
+  plus the updater's signed `.app.tar.gz` and installer signatures, then upload them
+  as workflow artifacts. Missing installers fail the build.
 - After npm publishing and all desktop jobs succeed, the release job extracts that
   tag's section from `CHANGELOG.md`, creates or updates the GitHub release, downloads
   the installer artifacts and uploads them to that release. Reruns replace existing
   assets with the same names. Prerelease tags produce GitHub prereleases.
+  It also uploads `latest.json`, which opentrack and `aitrack install-opentrack` read
+  from the latest non-prerelease release.
+- For non-prerelease tags, the Homebrew job writes `Casks/opentrack.rb` with the new
+  version and DMG checksum to `bircni/homebrew-tap` and pushes it.
 
 Every job that invokes Nx or Rust installs the toolchain from `rust-toolchain.toml`
 with `dtolnay/rust-toolchain@stable`, passing the version and components read from

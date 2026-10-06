@@ -65,10 +65,11 @@ jobs:
         include:
           - os: windows-latest
             platform: windows-x64
-            installer: target/release/bundle/nsis/*.exe
+            # The setup.exe doubles as the update package; each .sig is an updater signature.
+            installer: target/release/bundle/nsis/*.exe*
           - os: macos-latest
             platform: macos-arm64
-            installer: target/release/bundle/dmg/*.dmg
+            installer: target/release/bundle/dmg/*.dmg target/release/bundle/macos/*.app.tar.gz*
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -96,13 +97,23 @@ jobs:
         uses: ./.github/actions/setup-rust
 
       - name: Package and check
-        run: pnpm nx run opentrack:bundle:check
+        run: pnpm nx run opentrack:bundle:check -c release
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      # One flat folder, so the release job finds every file at the top of the artifact.
+      - name: Collect installer files
+        shell: bash
+        env:
+          INSTALLER: ${{ matrix.installer }}
+        run: mkdir installers && cp $INSTALLER installers/ # Unquoted: the globs must expand.
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: opentrack-${{ matrix.platform }}
-          path: ${{ matrix.installer }}
+          path: installers
           if-no-files-found: error
 
   github-release:
@@ -118,6 +129,7 @@ jobs:
             .node-version
             CHANGELOG.md
             scripts/release-notes.ts
+            scripts/updater-manifest.ts
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -135,6 +147,9 @@ jobs:
           pattern: opentrack-*
           path: installers
           merge-multiple: true
+
+      - name: Write the updater manifest
+        run: node scripts/updater-manifest.ts "$GITHUB_REF_NAME" installers > installers/latest.json
 
       - name: Create GitHub release
         shell: bash
@@ -176,4 +191,48 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber
-          installers/*.exe installers/*.dmg
+          installers/*.exe installers/*.dmg installers/*.app.tar.gz installers/latest.json
+
+  homebrew:
+    name: Update the Homebrew cask
+    needs: github-release
+    # Prereleases never become the cask's version.
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: |
+            .node-version
+            scripts/homebrew-cask.ts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .node-version
+
+      - name: Download the macOS disk image
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: opentrack-macos-arm64
+          path: installers
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: bircni/homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          path: tap
+
+      - name: Commit the cask
+        shell: bash
+        run: |
+          mkdir -p tap/Casks
+          node scripts/homebrew-cask.ts "$GITHUB_REF_NAME" installers/*.dmg > tap/Casks/opentrack.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/opentrack.rb
+          if ! git diff --cached --quiet; then
+            git commit -m "opentrack ${GITHUB_REF_NAME#v}"
+            git push
+          fi

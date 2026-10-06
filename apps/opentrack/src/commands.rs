@@ -6,6 +6,7 @@ use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::panel::{main_window, Panel};
+use crate::updater::Updates;
 use crate::Shell;
 
 /// Same JSON the TypeScript UI imports (`apps/opentrack-ui/src/shared/provider-dashboards.json`).
@@ -64,6 +65,17 @@ pub fn fit_height(app: AppHandle, panel: State<'_, Panel>, height: f64) {
 #[tauri::command]
 pub fn shortcut_error(shell: State<'_, Shell>) -> Option<String> {
     shell.shortcut_error.lock().unwrap().clone()
+}
+
+/// The version a newer release offers, or none while this one is current.
+#[tauri::command]
+pub fn available_update(updates: State<'_, Updates>) -> Option<String> {
+    updates.version()
+}
+
+#[tauri::command]
+pub async fn install_update(app: AppHandle, updates: State<'_, Updates>) -> Result<(), String> {
+    updates.install(&app).await
 }
 
 #[tauri::command]

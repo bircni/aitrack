@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
     onShortcutError: vi.fn(),
     quit: vi.fn(),
     openDashboard: vi.fn(),
+    availableUpdate: vi.fn(),
+    onUpdate: vi.fn(),
+    installUpdate: vi.fn(),
   },
 }));
 vi.mock('../api.js', () => mocks);
@@ -82,7 +85,14 @@ beforeEach(() => {
   mocks.api.getSettings.mockResolvedValue(structuredClone(DEFAULT_SETTINGS));
   mocks.api.saveSettings.mockImplementation((settings: Settings) => Promise.resolve(settings));
   mocks.api.shortcutError.mockResolvedValue(null);
-  for (const name of ['onState', 'onSettings', 'onScreen', 'onShortcutError'] as const) {
+  mocks.api.availableUpdate.mockResolvedValue(null);
+  for (const name of [
+    'onState',
+    'onSettings',
+    'onScreen',
+    'onShortcutError',
+    'onUpdate',
+  ] as const) {
     mocks.api[name].mockReturnValue(vi.fn());
   }
 });
@@ -613,4 +623,23 @@ it('retries failed operations separately from command delivery', async () => {
   click('[role="alert"] button');
   await settle();
   expect(mocks.api.sync).toHaveBeenCalledTimes(2);
+});
+
+it('offers a found update and retries a failed install', async () => {
+  mounted.push(mount(App, { target }));
+  await settle();
+  expect(target.textContent).not.toContain('is available');
+  const onUpdate = mocks.api.onUpdate.mock.calls[0]?.[0] as Parameters<OpentrackApi['onUpdate']>[0];
+  onUpdate('3.1.0');
+  await settle();
+  expect(target.textContent).toContain('opentrack 3.1.0 is available.');
+  mocks.api.installUpdate.mockRejectedValueOnce(new Error('signature mismatch'));
+  click('[role="status"] button');
+  await settle();
+  expect(target.textContent).toContain('Could not install opentrack 3.1.0: signature mismatch');
+  mocks.api.installUpdate.mockReturnValueOnce(new Promise(() => {}));
+  click('[role="alert"] button');
+  await settle();
+  expect(target.textContent).toContain('Installing opentrack 3.1.0');
+  expect(mocks.api.installUpdate).toHaveBeenCalledTimes(2);
 });

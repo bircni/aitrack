@@ -40,6 +40,9 @@
   let settingsError = $state<string | undefined>();
   let commandError = $state.raw<{ label: string; action: () => Promise<void>; message: string } | undefined>();
   let loadError = $state<string | undefined>();
+  let update = $state<string | null>(null);
+  let installing = $state(false);
+  let updateError = $state<string | undefined>();
 
   // Kept apart from commandError so a later Refresh or Sync can't clear the only way out of "Loading".
   async function load(): Promise<void> {
@@ -65,6 +68,19 @@
 
   function sync(): void {
     void runCommand('Sync', () => api.sync());
+  }
+
+  // Success never returns here: the app restarts into the new version.
+  async function installUpdate(): Promise<void> {
+    installing = true;
+    updateError = undefined;
+    try {
+      await api.installUpdate();
+    } catch (error) {
+      updateError = errorMessage(error);
+    } finally {
+      installing = false;
+    }
   }
 
   let queued: Settings | undefined;
@@ -110,12 +126,20 @@
     const offScreen = api.onScreen((value) => {
       screen = value;
     });
+    void api.availableUpdate().then(
+      (version) => (update = version),
+      () => undefined,
+    );
+    const offUpdate = api.onUpdate((version) => {
+      update = version;
+    });
     const timer = setInterval(tick, 15_000);
     window.addEventListener('focus', tick);
     return () => {
       offState();
       offSettings();
       offScreen();
+      offUpdate();
       clearInterval(timer);
       window.removeEventListener('focus', tick);
     };
@@ -141,6 +165,20 @@
               if (commandError) void runCommand(commandError.label, commandError.action);
             }}>Retry</button
           >
+        </p>
+      {/if}
+      {#if update}
+        <p class="banner" role={updateError ? 'alert' : 'status'}>
+          {#if installing}
+            Installing opentrack {update}…
+          {:else}
+            {updateError
+              ? `Could not install opentrack ${update}: ${updateError}`
+              : `opentrack ${update} is available.`}
+            <button class="link" type="button" onclick={() => void installUpdate()}
+              >{updateError ? 'Retry' : 'Install and restart'}</button
+            >
+          {/if}
         </p>
       {/if}
       {#if settingsError}

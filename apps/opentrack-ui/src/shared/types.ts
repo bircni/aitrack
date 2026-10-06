@@ -110,4 +110,9 @@ export interface OpentrackApi {
   /** Why the global shortcut could not be registered, or null when it was (or none is set). */
   shortcutError: () => Promise<string | null>;
   onShortcutError: (listener: (error: string | null) => void) => () => void;
+  /** The version a newer release offers, or null while this one is current. */
+  availableUpdate: () => Promise<string | null>;
+  onUpdate: (listener: (version: string) => void) => () => void;
+  /** Downloads and installs the update, then restarts into it. */
+  installUpdate: () => Promise<void>;
 }

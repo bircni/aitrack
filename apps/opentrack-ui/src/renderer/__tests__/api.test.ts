@@ -17,6 +17,9 @@ it('delivers every shell command and preserves operation arguments and delivery 
   await api.openDashboard('cursor');
   await api.quit();
   await api.shortcutError();
+  await api.availableUpdate();
+  await api.installUpdate();
+  expect(mocks.invoke).toHaveBeenCalledWith('install_update');
   expect(mocks.invoke).toHaveBeenCalledWith('save_settings', { settings: DEFAULT_SETTINGS });
   expect(mocks.invoke).toHaveBeenCalledWith('open_dashboard', { provider: 'cursor' });
   mocks.invoke.mockRejectedValue(new Error('disconnected'));
@@ -36,15 +39,16 @@ it('delivers event payloads and releases asynchronous subscriptions safely', asy
     api.onSettings(callback),
     api.onScreen(callback),
     api.onShortcutError(callback),
+    api.onUpdate(callback),
   ];
   for (const call of mocks.listen.mock.calls) {
     const handler = call[1] as (event: { payload: unknown }) => void;
     handler({ payload: 'payload' });
   }
-  expect(callback).toHaveBeenCalledTimes(4);
+  expect(callback).toHaveBeenCalledTimes(5);
   for (const release of releases) release();
   await Promise.resolve();
-  expect(stop).toHaveBeenCalledTimes(4);
+  expect(stop).toHaveBeenCalledTimes(5);
   mocks.listen.mockRejectedValue(new Error('closed'));
   api.onScreen(callback)();
   await Promise.resolve();

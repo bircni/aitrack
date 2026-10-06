@@ -42,6 +42,9 @@
       "dependsOn": ["package"],
       "options": {
         "command": "node scripts/smoke-opentrack-bundle.ts"
+      },
+      "configurations": {
+        "release": {}
       }
     },
     "package": {
@@ -51,6 +54,11 @@
       "options": {
         "cwd": "{projectRoot}",
         "command": "tauri build"
+      },
+      "configurations": {
+        "release": {
+          "command": "tauri build --config tauri.updater.conf.json"
+        }
       }
     }
   }
