@@ -193,6 +193,8 @@ fn main() {
             commands::open_dashboard,
             commands::fit_height,
             commands::shortcut_error,
+            commands::app_version,
+            commands::check_update,
             commands::available_update,
             commands::install_update,
             commands::quit,

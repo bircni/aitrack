@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
     onShortcutError: vi.fn(),
     quit: vi.fn(),
     openDashboard: vi.fn(),
+    appVersion: vi.fn(),
+    checkForUpdate: vi.fn(),
     availableUpdate: vi.fn(),
     onUpdate: vi.fn(),
     installUpdate: vi.fn(),
@@ -90,6 +92,7 @@ beforeEach(() => {
   mocks.api.saveSettings.mockImplementation((settings: Settings) => Promise.resolve(settings));
   mocks.api.shortcutError.mockResolvedValue(null);
   mocks.api.availableUpdate.mockResolvedValue(null);
+  mocks.api.appVersion.mockResolvedValue('3.1.0');
   for (const name of [
     'onState',
     'onSettings',
@@ -658,4 +661,31 @@ it('fits the window to the unrounded height of the content and footer', async ()
   await settle();
   reportResize?.();
   expect(mocks.api.fitHeight).toHaveBeenLastCalledWith(641.75);
+});
+
+it('shows the version and checks for and installs updates from settings', async () => {
+  const button = (text: string) =>
+    [...target.querySelectorAll('button')].find((element) => element.textContent === text);
+  mocks.api.checkForUpdate.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(null);
+  mounted.push(mount(App, { target }));
+  await settle();
+  click('[aria-label="Settings"]');
+  await settle();
+  expect(target.querySelector('.row-value')?.textContent).toBe('3.1.0');
+  expect(target.textContent).toContain('Checked every 6 hours');
+  button('Check now')?.click();
+  await settle();
+  expect(target.textContent).toContain('Could not check: offline');
+  button('Check now')?.click();
+  await settle();
+  expect(target.textContent).toContain('Up to date');
+  const onUpdate = mocks.api.onUpdate.mock.calls[0]?.[0] as Parameters<OpentrackApi['onUpdate']>[0];
+  onUpdate('3.2.0');
+  await settle();
+  expect(target.textContent).toContain('3.2.0 is available');
+  mocks.api.installUpdate.mockReturnValueOnce(new Promise(() => {}));
+  button('Install and restart')?.click();
+  await settle();
+  expect(mocks.api.installUpdate).toHaveBeenCalledTimes(1);
+  expect(target.textContent).toContain('Installing 3.2.0');
 });

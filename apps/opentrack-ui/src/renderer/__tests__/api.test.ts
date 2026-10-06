@@ -17,6 +17,9 @@ it('delivers every shell command and preserves operation arguments and delivery 
   await api.openDashboard('cursor');
   await api.quit();
   await api.shortcutError();
+  await api.appVersion();
+  await api.checkForUpdate();
+  expect(mocks.invoke).toHaveBeenCalledWith('check_update');
   await api.availableUpdate();
   await api.installUpdate();
   expect(mocks.invoke).toHaveBeenCalledWith('install_update');

@@ -558,6 +558,10 @@ p {
   color: var(--crit);
 }
 
+.row-value {
+  color: var(--ink-2);
+}
+
 .row-controls {
   display: flex;
   align-items: center;

@@ -168,7 +168,8 @@
           >
         </p>
       {/if}
-      {#if update}
+      <!-- Settings shows the update in its About section instead. -->
+      {#if update && screen === 'dashboard'}
         <p class="banner" role={updateError ? 'alert' : 'status'}>
           {#if installing}
             Installing opentrack {update}…
@@ -196,7 +197,15 @@
       {/if}
       {#if appState && settings}
         {#if screen === 'settings'}
-          <SettingsScreen {settings} onPatch={patch} onBack={() => (screen = 'dashboard')} />
+          <SettingsScreen
+            {settings}
+            {update}
+            {installing}
+            {updateError}
+            onInstallUpdate={() => void installUpdate()}
+            onPatch={patch}
+            onBack={() => (screen = 'dashboard')}
+          />
         {:else}
           <Dashboard
             {appState}

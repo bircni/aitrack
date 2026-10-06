@@ -67,6 +67,16 @@ pub fn shortcut_error(shell: State<'_, Shell>) -> Option<String> {
     shell.shortcut_error.lock().unwrap().clone()
 }
 
+#[tauri::command]
+pub fn app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> Result<Option<String>, String> {
+    crate::updater::check(&app).await
+}
+
 /// The version a newer release offers, or none while this one is current.
 #[tauri::command]
 pub fn available_update(updates: State<'_, Updates>) -> Option<String> {
