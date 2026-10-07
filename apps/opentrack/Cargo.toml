@@ -14,7 +14,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-base64 = "0.22"
+base64 = "0.23"
 serde_json = "1"
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
