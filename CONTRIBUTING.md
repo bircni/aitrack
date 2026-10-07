@@ -89,7 +89,9 @@ libs/
       providers/      Provider registry and descriptors
       store/          Machine files on disk and their schema migrations
   test-fixtures/      Fixtures shared by both test suites. Never published.
-scripts/              Repo tooling: release, release notes, pricing pack build/check
+scripts/              Repo tooling: release and release notes, pricing pack build/check,
+                      sidecar SEA build, bundle smoke check, updater manifest, Homebrew
+                      cask and winget manifests, reader benchmark
 ```
 
 ### Pricing updates
@@ -161,7 +163,7 @@ changes invalidate their cached checks. Calendar tests use `useTimeZone` and
 
 Run `pnpm exec tsx scripts/benchmark-readers.ts` for an isolated synthetic reader
 benchmark. It verifies cold/warm totals and ordering, reports median timings over
-five runs, filesystem/request counts, derived-cache size and process memory, and
+five runs, filesystem counts, derived-cache size and process memory, and
 includes a 10,000-file listing. See [recorded results](docs/reader-benchmarks.md).
 
 If `nx` hangs without starting tasks (typically when Nx Cloud is unreachable),
@@ -237,7 +239,7 @@ pnpm run release
 
 Patch bump by default. Pass a bump type if needed: `pnpm run release -- minor`.
 
-This runs `validate` and `build`, sets the same version in the workspace root and both published packages, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes the current branch plus that exact tag to the configured remote. Opentrack's app and installer version comes from that workspace version. npm publish, desktop packaging and GitHub Release creation happen in CI.
+This runs `validate`, which includes the build, sets the same version in the workspace root and both published packages, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes the current branch plus that exact tag to the configured remote. Opentrack's app and installer version comes from that workspace version. npm publish, desktop packaging and GitHub Release creation happen in CI.
 
 Preview without changing anything:
 
@@ -251,12 +253,13 @@ The dry run calculates and prints the next version, changelog command, commit, a
 
 The [Publish workflow](.github/workflows/publish.yml) triggers on that same `v*` tag:
 
-- After both desktop packages succeed, the npm job re-runs `validate`, builds,
-  and publishes `aitrack-lib` before `aitrack`
-  with provenance. pnpm rewrites `workspace:*` to the published library version.
-- Desktop jobs package a Windows NSIS installer and a macOS DMG for Apple Silicon,
-  plus the updater's signed `.app.tar.gz` and installer signatures, then upload them
-  as workflow artifacts. Missing installers fail the build.
+- After both desktop packages succeed, the npm job re-runs `validate`, which also
+  builds, for every project except the Rust shell, which the desktop jobs check. It
+  then publishes `aitrack-lib` before `aitrack` with provenance. pnpm rewrites
+  `workspace:*` to the published library version.
+- Desktop jobs check the Rust shell's formatting, Clippy and tests, and package a
+  Windows NSIS installer and a macOS DMG for Apple Silicon, plus the updater's signed
+  `.app.tar.gz` and installer signatures, then upload them as workflow artifacts. Missing installers fail the build.
 - After npm publishing and all desktop jobs succeed, the release job extracts that
   tag's section from `CHANGELOG.md`, creates or updates the GitHub release, downloads
   the installer artifacts and uploads them to that release. Reruns replace existing
@@ -265,6 +268,14 @@ The [Publish workflow](.github/workflows/publish.yml) triggers on that same `v*`
   from the latest non-prerelease release.
 - For non-prerelease tags, the Homebrew job writes `Casks/opentrack.rb` with the new
   version and DMG checksum to `bircni/homebrew-tap` and pushes it.
+
+CI and Publish jobs that run Nx install the toolchain from `rust-toolchain.toml` through
+`.github/actions/setup-rust`, which passes the version and components read from that file
+to a pinned `dtolnay/rust-toolchain`; the Nx Rust plugin reads Cargo metadata.
+
+Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
+Public npm access comes from `publishConfig` in each package's `package.json`;
+authentication comes from npm trusted publishing through `id-token: write`.
 
 ### winget
 
@@ -284,11 +295,3 @@ On Windows, `winget validate --manifest manifests/b/bircni/opentrack/X.Y.Z` chec
 `New package: bircni.opentrack version X.Y.Z` and open a pull request to
 `microsoft/winget-pkgs`. The manifest's publisher and product code must match what the
 installer registers: `bundle.publisher` and `productName` in `apps/opentrack/tauri.conf.json`.
-
-from `rust-toolchain.toml`
-with `dtolnay/rust-toolchain@stable`, passing the version and components read from
-that file. This includes the pricing job (Nx reads Cargo metadata).
-
-Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
-Public npm access comes from `publishConfig` in each package's `package.json`;
-authentication comes from npm trusted publishing through `id-token: write`.

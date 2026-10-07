@@ -8,7 +8,6 @@ import { join, resolve } from 'node:path';
 import {
   applyCatalogRatesToSupplement,
   fetchPricingCatalogs,
-  type PricingCatalogs,
 } from '../libs/aitrack-lib/src/pricing/catalogs.js';
 import {
   catalogFromCompact,
@@ -29,12 +28,12 @@ const TABLES = join(ROOT, 'libs/aitrack-lib/src/pricing/tables');
 /** Published by CI to the orphan `pricing` branch — not part of aitrack-lib. */
 const PACK = join(ROOT, 'artifacts/pricing-pack');
 
+type CatalogChanges = ReturnType<typeof applyCatalogRatesToSupplement>;
+
 export interface BuildPackOptions {
   writeTablesFromFeeds?: boolean;
   /** Skip network; only rebuild supplement + manifest from existing catalog files. */
   offline?: boolean;
-  /** Overlay current Claude/Codex rates; preserve history and Cursor tables. */
-  applyCatalogRatesToSupplement?: boolean;
 }
 
 function sha256File(body: string): string {
@@ -57,12 +56,11 @@ async function readPricingTables(): Promise<PricingTables> {
   };
 }
 
-async function writeTablesFromCatalogs(
+async function writeChangedTables(
   tables: PricingTables,
   supplement: PricingSupplement,
-  catalogs: PricingCatalogs,
-) {
-  const changed = applyCatalogRatesToSupplement(supplement, catalogs);
+  changed: CatalogChanges,
+): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   if (changed.claudeChanged.length > 0) {
     tables.claude.updatedAt = today;
@@ -74,7 +72,6 @@ async function writeTablesFromCatalogs(
     tables.codex.current = supplement.codex.current;
     await writeFile(join(TABLES, 'codex.json'), pretty(tables.codex), 'utf8');
   }
-  return changed;
 }
 
 export async function buildPricingPack(options: BuildPackOptions = {}): Promise<{
@@ -82,7 +79,7 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
   manifest: PricingManifest;
   litellmCount: number;
   modelsDevCount: number;
-  tableWrites?: { claudeChanged: string[]; codexChanged: string[] };
+  tableWrites?: CatalogChanges;
 }> {
   await mkdir(PACK, { recursive: true });
 
@@ -109,26 +106,18 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
     primary: catalogFromCompact(litellmCompact),
     secondary: catalogFromCompact(modelsDevCompact),
   };
-  let tableWrites: { claudeChanged: string[]; codexChanged: string[] } | undefined;
+  const changed = applyCatalogRatesToSupplement(supplement, catalogs);
+  const summary = `Claude [${changed.claudeChanged.join(', ') || 'none'}], Codex [${changed.codexChanged.join(', ') || 'none'}]`;
+  const anyChanged = changed.claudeChanged.length > 0 || changed.codexChanged.length > 0;
   if (options.writeTablesFromFeeds) {
-    tableWrites = await writeTablesFromCatalogs(tables, supplement, catalogs);
-    if (tableWrites.claudeChanged.length > 0 || tableWrites.codexChanged.length > 0) {
-      console.log(
-        `Wrote table updates: Claude [${tableWrites.claudeChanged.join(', ') || 'none'}], Codex [${tableWrites.codexChanged.join(', ') || 'none'}]`,
-      );
-    } else {
-      console.log('Tables already match catalog input/output rates.');
-    }
-  }
-
-  const applyToSupplement = options.applyCatalogRatesToSupplement !== false;
-  if (applyToSupplement) {
-    const applied = applyCatalogRatesToSupplement(supplement, catalogs);
-    if (applied.claudeChanged.length > 0 || applied.codexChanged.length > 0) {
-      console.log(
-        `Supplement catalog merge: Claude [${applied.claudeChanged.join(', ') || 'none'}], Codex [${applied.codexChanged.join(', ') || 'none'}]`,
-      );
-    }
+    await writeChangedTables(tables, supplement, changed);
+    console.log(
+      anyChanged
+        ? `Wrote table updates: ${summary}`
+        : 'Tables already match catalog input/output rates.',
+    );
+  } else if (anyChanged) {
+    console.log(`Supplement catalog merge: ${summary}`);
   }
   // Always stamp so the orphan pricing branch sorts newer than a shipped CLI bundle.
   supplement.updatedAt = new Date().toISOString();
@@ -166,7 +155,7 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
     manifest,
     litellmCount: Object.keys(litellmCompact.models).length,
     modelsDevCount: Object.keys(modelsDevCompact.models).length,
-    tableWrites,
+    tableWrites: options.writeTablesFromFeeds ? changed : undefined,
   };
 }
 

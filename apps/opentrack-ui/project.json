@@ -25,6 +25,8 @@
     },
     "build-sidecar": {
       "executor": "@nx/esbuild:esbuild",
+      "cache": true,
+      "inputs": ["production", "^production"],
       "outputs": ["{options.outputPath}"],
       "options": {
         "main": "apps/opentrack-ui/src/sidecar/index.ts",

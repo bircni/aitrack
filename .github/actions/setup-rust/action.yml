@@ -15,7 +15,7 @@ runs:
             print(f"version={toolchain['channel']}", file=output)
             print(f"components={','.join(toolchain['components'])}", file=output)
         PYTHON
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
       with:
         toolchain: ${{ steps.toolchain.outputs.version }}
         components: ${{ steps.toolchain.outputs.components }}

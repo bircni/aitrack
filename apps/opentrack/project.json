@@ -7,7 +7,7 @@
   "targets": {
     "format:check": {
       "executor": "nx:run-commands",
-      "inputs": ["{projectRoot}/src/**/*.rs", "{workspaceRoot}/rustfmt.toml", "rustToolchain"],
+      "inputs": ["{projectRoot}/**/*.rs", "{workspaceRoot}/rustfmt.toml", "rustToolchain"],
       "options": {
         "command": "cargo fmt --check -p opentrack"
       }
@@ -15,20 +15,38 @@
     "build": {
       "executor": "@monodon/rust:build",
       "cache": false,
-      "inputs": ["production", "^production", "rustToolchain", "{workspaceRoot}/package.json"],
+      "inputs": [
+        "production",
+        "^production",
+        "rustToolchain",
+        "{workspaceRoot}/package.json",
+        "cargo"
+      ],
       "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
       "outputs": ["{workspaceRoot}/target/debug"],
       "options": {}
     },
     "test": {
       "executor": "@monodon/rust:test",
-      "inputs": ["default", "^production", "rustToolchain", "{workspaceRoot}/package.json"],
+      "inputs": [
+        "default",
+        "^production",
+        "rustToolchain",
+        "{workspaceRoot}/package.json",
+        "cargo"
+      ],
       "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
       "options": {}
     },
     "lint": {
       "executor": "@monodon/rust:lint",
-      "inputs": ["default", "^production", "rustToolchain", "{workspaceRoot}/package.json"],
+      "inputs": [
+        "default",
+        "^production",
+        "rustToolchain",
+        "{workspaceRoot}/package.json",
+        "cargo"
+      ],
       "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
       "options": { "all-targets": true, "args": ["-D", "warnings"] }
     },
@@ -43,9 +61,6 @@
       "dependsOn": ["package"],
       "options": {
         "command": "node scripts/smoke-opentrack-bundle.ts"
-      },
-      "configurations": {
-        "release": {}
       }
     },
     "package": {

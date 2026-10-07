@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NX_NO_CLOUD: true # Never restore release builds from PR runs' remote cache.
+
 jobs:
   publish:
     name: Publish to npm
@@ -31,27 +34,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The Nx Rust plugin reads Cargo metadata to build the project graph.
       - name: Set up Rust
         uses: ./.github/actions/setup-rust
 
-      # opentrack's Tauri shell links against WebKitGTK and the tray libraries on Linux.
-      - name: Install Tauri system dependencies
-        run: >-
-          sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev
-          libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
-
-      - name: Validate
-        run: pnpm run validate
-
-      - name: Build
-        run: pnpm run build
+      # The opentrack jobs check the Rust shell, which needs WebKitGTK on Linux.
+      - name: Validate and build
+        run: pnpm run validate --exclude opentrack
 
       - name: Publish
-        # `id-token: write` above + provenance here attaches a signed build
-        # attestation linking the tarball to this workflow run.
-        # `-r` publishes every non-private workspace package in dependency
-        # order (aitrack-lib before aitrack) and rewrites the `workspace:*`
-        # range to the version it just published.
+        # Dependency order with `workspace:*` rewritten; provenance needs `id-token: write`.
         run: pnpm publish -r --no-git-checks --provenance
 
   opentrack:
@@ -96,11 +88,22 @@ jobs:
       - name: Set up Rust
         uses: ./.github/actions/setup-rust
 
-      - name: Package and check
-        run: pnpm nx run opentrack:bundle:check -c release
+      - name: Build the renderer and sidecar
+        run: pnpm nx run-many -t build,sea -p opentrack-ui
+
+      - name: Check the Rust shell
+        run: pnpm nx run-many -t format:check,lint,test -p opentrack
+
+      # The JS and sidecar builds ran above without the signing key and are restored from
+      # Nx's local cache here; the Tauri build and its cargo build scripts do see it.
+      - name: Package
+        run: pnpm nx run opentrack:package -c release
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Check the bundle
+        run: pnpm nx run opentrack:bundle:check --excludeTaskDependencies
 
       # One flat folder, so the release job finds every file at the top of the artifact.
       - name: Collect installer files

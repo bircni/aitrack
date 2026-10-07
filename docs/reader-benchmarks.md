@@ -1,8 +1,8 @@
 # Reader benchmark
 
 Measured on 2026-10-03, macOS ARM64, Node v26.10.0. Each timing is the median of
-five runs in an isolated temporary home. The baseline is the checkout's original
-`HEAD`; the comparison uses the implementation working tree. These are synthetic
+five runs in an isolated temporary home. Baseline is the reader before per-message
+contributions; Updated is the reader that introduced them. These are synthetic
 local measurements, not guarantees for other machines or storage.
 
 Reproduce with `pnpm exec tsx scripts/benchmark-readers.ts`. Set
@@ -34,7 +34,6 @@ identical totals and ordering between cold and warm reads. The unique corpus has
 | Warm transcript bytes              |                   0 / 0 |            1,738,080 |                   0 |
 | Async metadata calls, cold or warm |               201 / 201 |                  201 |                 201 |
 | Synchronous reads, cold / warm     |                   2 / 1 |                2 / 1 |               2 / 1 |
-| Network requests                   |                   0 / 0 |                    0 |                   0 |
 
 Listing uses 10,001 metadata calls in both versions. Bounded concurrent `realpath`
 changes latency while preserving the filesystem's input ordering and deduplication.
