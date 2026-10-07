@@ -220,7 +220,6 @@ function main(): void {
   const pushRemote = getPushRemote({ allowPlaceholder: dryRun });
 
   run('pnpm', ['run', 'validate'], options);
-  run('pnpm', ['run', 'build'], options);
 
   const currentVersion = getPackageVersion();
   const version = previewVersionBump(currentVersion, bump);

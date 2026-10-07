@@ -70,6 +70,7 @@
         "runtime": "rustc --version --verbose"
       }
     ],
+    "cargo": ["{workspaceRoot}/Cargo.toml", "{workspaceRoot}/Cargo.lock"],
     "lintConfig": ["{workspaceRoot}/.oxlintrc.json"],
     "formatConfig": ["{workspaceRoot}/.oxfmtrc.json"],
     "platform": [
@@ -142,6 +143,7 @@
       "cache": true
     }
   },
+  "tui": { "enabled": false },
   "analytics": false,
   "nxCloudId": "6aa326a3b1ff8cd53a6d2932"
 }

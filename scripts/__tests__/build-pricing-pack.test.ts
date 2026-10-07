@@ -50,8 +50,10 @@ afterEach(() => {
 });
 
 describe('buildPricingPack', () => {
-  it('fetches catalogs and writes Codex updates without changing history', async () => {
+  it('fetches catalogs and writes table updates without changing history', async () => {
     const original = JSON.parse(files.get('codex.json') ?? '') as Record<string, unknown>;
+    const originalClaude = JSON.parse(files.get('claude.json') ?? '') as Record<string, unknown>;
+    const cursorBefore = files.get('cursor.json');
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -59,18 +61,33 @@ describe('buildPricingPack', () => {
           new Response(
             JSON.stringify({
               'openai/gpt-5.4': { input_cost_per_token: 0.000008, output_cost_per_token: 0.00004 },
+              'anthropic/claude-sonnet-4-6': {
+                input_cost_per_token: 0.000006,
+                output_cost_per_token: 0.00003,
+              },
               openai: { models: { 'gpt-5.4': { cost: { input: 8, output: 40 } } } },
+              anthropic: { models: { 'claude-sonnet-4-6': { cost: { input: 6, output: 30 } } } },
             }),
           ),
         ),
       ),
     );
     const result = await buildPricingPack({ writeTablesFromFeeds: true });
-    expect(result.tableWrites?.codexChanged).toEqual(['gpt-5.4']);
+    expect(result.tableWrites).toEqual({
+      claudeChanged: ['claude-sonnet-4-6'],
+      codexChanged: ['gpt-5.4'],
+    });
     const updated = JSON.parse(files.get('codex.json') ?? '') as Record<string, unknown>;
     expect(updated.historical).toEqual(original.historical);
     expect(updated.overrides).toEqual(original.overrides);
-    expect(result.litellmCount).toBe(1);
+    const claude = JSON.parse(files.get('claude.json') ?? '') as Record<string, unknown>;
+    expect(claude.overrides).toEqual(originalClaude.overrides);
+    expect(claude.familyFallback).toEqual(originalClaude.familyFallback);
+    expect(files.get('cursor.json')).toBe(cursorBefore);
+    const supplement = JSON.parse(files.get('supplement.json') ?? '') as PricingSupplement;
+    expect(supplement.claude.models['claude-sonnet-4-6']?.inputPerMillion).toBe(6);
+    expect(supplementFromTables().claude.models['claude-sonnet-4-6']?.inputPerMillion).toBe(3);
+    expect(result.litellmCount).toBe(2);
   });
 
   it('leaves matching source tables untouched on write', async () => {
@@ -111,26 +128,6 @@ describe('buildPricingPack', () => {
       }
     },
   );
-
-  it('publishes newly written table rates even when a separate catalog overlay is disabled', async () => {
-    const codexBefore = files.get('codex.json');
-    const cursorBefore = files.get('cursor.json');
-    const original = JSON.parse(files.get('claude.json') ?? '') as Record<string, unknown>;
-    const built = await buildPricingPack({
-      offline: true,
-      writeTablesFromFeeds: true,
-      applyCatalogRatesToSupplement: false,
-    });
-    const supplement = JSON.parse(files.get('supplement.json') ?? '') as PricingSupplement;
-    const claude = JSON.parse(files.get('claude.json') ?? '') as Record<string, unknown>;
-    expect(built.tableWrites).toEqual({ claudeChanged: ['claude-sonnet-4-6'], codexChanged: [] });
-    expect(supplement.claude.models['claude-sonnet-4-6']?.inputPerMillion).toBe(6);
-    expect(claude.overrides).toEqual(original.overrides);
-    expect(claude.familyFallback).toEqual(original.familyFallback);
-    expect(files.get('codex.json')).toBe(codexBefore);
-    expect(files.get('cursor.json')).toBe(cursorBefore);
-    expect(supplementFromTables().claude.models['claude-sonnet-4-6']?.inputPerMillion).toBe(3);
-  });
 
   it('keeps source tables untouched when only publishing a catalog overlay', async () => {
     const source = files.get('claude.json');

@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc", "vitest", "react"],
+  "plugins": ["typescript", "unicorn", "oxc", "vitest"],
   "categories": {
     "correctness": "error",
     "pedantic": "error"
@@ -41,7 +41,7 @@
   },
   "overrides": [
     {
-      "files": ["**/*.ts", "**/*.tsx", "**/*.svelte"],
+      "files": ["**/*.ts", "**/*.svelte"],
       "rules": {
         "typescript/adjacent-overload-signatures": "error",
         "typescript/array-type": [
@@ -141,7 +141,7 @@
       }
     },
     {
-      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "files": ["**/*.test.ts"],
       "rules": {
         "vitest/no-focused-tests": "error",
         "vitest/no-disabled-tests": "warn",

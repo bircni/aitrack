@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-const REPO_ROOT = new URL('../..', import.meta.url);
-const RELEASE_SCRIPT = new URL('../release.ts', import.meta.url);
-const REPO_ROOT_PATH = fileURLToPath(REPO_ROOT);
-const RELEASE_SCRIPT_PATH = fileURLToPath(RELEASE_SCRIPT);
+import { previewVersionBump } from '../release.js';
+
+const REPO_ROOT_PATH = fileURLToPath(new URL('../..', import.meta.url));
+const RELEASE_SCRIPT_PATH = fileURLToPath(new URL('../release.ts', import.meta.url));
 
 function runRelease(arguments_: string[]) {
   return spawnSync(process.execPath, [RELEASE_SCRIPT_PATH, ...arguments_], {
@@ -37,15 +37,7 @@ describe('release tooling', () => {
     ['1.2.3-beta.2', 'prerelease', '1.2.3-beta.3'],
     ['1.2.3', 'none', '1.2.3'],
   ])('previews %s with a %s bump as %s', (current, bump, expected) => {
-    const source = `import { previewVersionBump } from ${JSON.stringify(RELEASE_SCRIPT.href)}; process.stdout.write(previewVersionBump(${JSON.stringify(current)}, ${JSON.stringify(bump)}));`;
-    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', source], {
-      cwd: REPO_ROOT_PATH,
-      encoding: 'utf8',
-    });
-
-    expect(result.stderr).toBe('');
-    expect(result.status).toBe(0);
-    expect(result.stdout).toBe(expected);
+    expect(previewVersionBump(current, bump)).toBe(expected);
   });
 
   it('previews the next tag and pushes only that exact tag', () => {

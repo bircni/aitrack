@@ -100,7 +100,7 @@ try {
       const start = performance.now();
       const data = await readClaudeData();
       cold.push(performance.now() - start);
-      coldCounts = { streams, metadata, cacheReads, bytes, requests: 0 };
+      coldCounts = { streams, metadata, cacheReads, bytes };
       reference = JSON.stringify([...data]);
       tokens = [...data.values()].reduce((sum, day) => sum + day.inputTokens + day.outputTokens, 0);
     }
@@ -109,7 +109,7 @@ try {
       const start = performance.now();
       const data = await readClaudeData();
       warm.push(performance.now() - start);
-      warmCounts = { streams, metadata, cacheReads, bytes, requests: 0 };
+      warmCounts = { streams, metadata, cacheReads, bytes };
       assert.equal(
         JSON.stringify([...data]),
         reference,
@@ -117,6 +117,11 @@ try {
       );
     }
     assert.equal(tokens, overlap ? 260_000 : 1_250_000);
+    const cacheDir = join(dir, '.config/aitrack/cache');
+    const cacheFile = fs
+      .readdirSync(cacheDir)
+      .find((name) => /^claude(?:-[0-9a-f]+)?\.json$/u.test(name));
+    assert.ok(cacheFile, 'the warm runs must write a Claude parse cache');
     results.push({
       corpus: overlap ? 'overlap' : 'unique',
       tokens,
@@ -124,7 +129,7 @@ try {
       warmMs: median(warm),
       coldCounts,
       warmCounts,
-      cacheBytes: fs.statSync(join(dir, '.config/aitrack/cache/claude.json')).size,
+      cacheBytes: fs.statSync(join(cacheDir, cacheFile)).size,
       ...process.memoryUsage(),
     });
   }

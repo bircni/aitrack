@@ -32,10 +32,6 @@ InstallModes:
 - silentWithProgress
 UpgradeBehavior: install
 ProductCode: ${PRODUCT}
-AppsAndFeaturesEntries:
-- DisplayName: ${PRODUCT}
-  Publisher: ${PUBLISHER}
-  ProductCode: ${PRODUCT}
 Installers:
 - Architecture: x64
   InstallerUrl: https://github.com/bircni/aitrack/releases/download/v${version}/opentrack_${version}_x64-setup.exe
