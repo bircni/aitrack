@@ -1,9 +1,4 @@
-/**
- * Public subpath for provider labels and ordering.
- *
- * The implementation lives on the registry — this file exists so
- * `aitrack-lib/display/providers` keeps working.
- */
+// Kept so the published `aitrack-lib/display/providers` subpath still resolves.
 export {
   activeProviderKeys,
   costColumnLabel,

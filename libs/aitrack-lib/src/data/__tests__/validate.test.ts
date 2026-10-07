@@ -26,10 +26,19 @@ const validMachine = {
   },
 };
 
+interface MutableProvider {
+  totals: Record<string, unknown>;
+  byModel: Record<string, Record<string, unknown>>;
+}
+
+function withProvider(edit: (provider: MutableProvider) => void): unknown {
+  const copy = structuredClone(validMachine);
+  edit(copy.days['2026-01-15'].claude_code);
+  return copy;
+}
+
 beforeEach(() => {
-  // The reporter remembers which files it has warned about, so tests would
-  // otherwise depend on the order they ran in.
-  resetMachineFileDiagnostics();
+  resetMachineFileDiagnostics(); // the reporter remembers warned files across tests
 });
 
 describe('validateMachineFile', () => {
@@ -98,70 +107,6 @@ describe('validateMachineFile', () => {
     expect(validateMachineFile(withBreakdown, 'data/laptop.json')).toEqual(withBreakdown);
   });
 
-  it('warns and returns null for invalid cache breakdown fields', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = structuredClone(validMachine);
-    const model = invalid.days['2026-01-15'].claude_code.byModel['claude-sonnet-4'] as Record<
-      string,
-      unknown
-    >;
-    model.rawInputTokens = 'nope';
-    const result = validateMachineFile(invalid, 'data/bad.json');
-    expect(result).toBeNull();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('days.2026-01-15.claude_code.byModel.claude-sonnet-4.rawInputTokens'),
-    );
-    warn.mockRestore();
-  });
-
-  it('warns and returns null for missing hostname', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const result = validateMachineFile({ ...validMachine, hostname: '' }, 'data/bad.json');
-    expect(result).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('data/bad.json'));
-    warn.mockRestore();
-  });
-
-  it('warns and returns null for invalid provider totals', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = structuredClone(validMachine);
-    invalid.days['2026-01-15'].claude_code.totals.inputTokens = 'nope' as unknown as number;
-    const result = validateMachineFile(invalid, 'data/bad.json');
-    expect(result).toBeNull();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('days.2026-01-15.claude_code.totals.inputTokens'),
-    );
-    warn.mockRestore();
-  });
-
-  it('rejects provider totals that do not equal the by-model token sum', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = structuredClone(validMachine);
-    invalid.days['2026-01-15'].claude_code.totals.inputTokens = 101;
-
-    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('totals.inputTokens must equal the sum of byModel.inputTokens'),
-    );
-    warn.mockRestore();
-  });
-
-  it('rejects cache-breakdown totals that do not equal the by-model sum', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = structuredClone(validMachine);
-    const provider = invalid.days['2026-01-15'].claude_code;
-    (provider.totals as Record<string, unknown>).cachedInputTokens = 10;
-    (provider.byModel['claude-sonnet-4'] as Record<string, unknown>).cachedInputTokens = 9;
-
-    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'totals.cachedInputTokens must equal the sum of byModel.cachedInputTokens',
-      ),
-    );
-    warn.mockRestore();
-  });
-
   it('rejects a stale aggregate cost but lets recompute load it for repair', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const stale = structuredClone(validMachine);
@@ -188,64 +133,75 @@ describe('validateMachineFile', () => {
     expect(validateMachineFile(legacy, 'data/legacy.json')).toEqual(legacy);
   });
 
-  it('warns and returns null when root is not an object', () => {
+  it.each<[string, () => unknown, string]>([
+    ['root is not an object', () => null, 'root must be an object'],
+    ['hostname is missing', () => ({ ...validMachine, hostname: '' }), 'hostname'],
+    ['lastUpdated is missing', () => ({ ...validMachine, lastUpdated: '' }), 'lastUpdated'],
+    ['days is not an object', () => ({ ...validMachine, days: [] }), 'days must be an object'],
+    [
+      'a day entry is not an object',
+      () => ({ ...validMachine, days: { '2026-01-15': 'nope' } }),
+      'days.2026-01-15 must be an object',
+    ],
+    [
+      'byModel is not an object',
+      () =>
+        withProvider((provider) => {
+          Object.assign(provider, { byModel: [] });
+        }),
+      'byModel must be an object',
+    ],
+    [
+      'a total is not a number',
+      () =>
+        withProvider((provider) => {
+          provider.totals.inputTokens = 'nope';
+        }),
+      'days.2026-01-15.claude_code.totals.inputTokens',
+    ],
+    [
+      'a cache total is not a number',
+      () =>
+        withProvider((provider) => {
+          provider.totals.cachedInputTokens = 'bad';
+        }),
+      'days.2026-01-15.claude_code.totals.cachedInputTokens',
+    ],
+    [
+      'a model breakdown field is not a number',
+      () =>
+        withProvider((provider) => {
+          Object.assign(provider.byModel['claude-sonnet-4'] ?? {}, { rawInputTokens: 'nope' });
+        }),
+      'days.2026-01-15.claude_code.byModel.claude-sonnet-4.rawInputTokens',
+    ],
+    [
+      'totals disagree with the by-model token sum',
+      () =>
+        withProvider((provider) => {
+          provider.totals.inputTokens = 101;
+        }),
+      'totals.inputTokens must equal the sum of byModel.inputTokens',
+    ],
+    [
+      'cache totals disagree with the by-model sum',
+      () =>
+        withProvider((provider) => {
+          provider.totals.cachedInputTokens = 10;
+          Object.assign(provider.byModel['claude-sonnet-4'] ?? {}, { cachedInputTokens: 9 });
+        }),
+      'totals.cachedInputTokens must equal the sum of byModel.cachedInputTokens',
+    ],
+  ])('warns and returns null when %s', (_, build, message) => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    expect(validateMachineFile(null, 'data/bad.json')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('root must be an object'));
-    warn.mockRestore();
-  });
-
-  it('warns and returns null when lastUpdated is missing', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = { ...validMachine, lastUpdated: '' };
-    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('lastUpdated'));
-    warn.mockRestore();
-  });
-
-  it('warns and returns null when days is not an object', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = { ...validMachine, days: [] };
-    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('days must be an object'));
-    warn.mockRestore();
-  });
-
-  it('warns and returns null when a day entry is not an object', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = { ...validMachine, days: { '2026-01-15': 'nope' } };
-    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('days.2026-01-15'));
-    warn.mockRestore();
-  });
-
-  it('warns and returns null when byModel is not an object', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = structuredClone(validMachine);
-    const provider = invalid.days['2026-01-15'].claude_code as { byModel: unknown };
-    provider.byModel = [];
-    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('byModel must be an object'));
-    warn.mockRestore();
-  });
-
-  it('warns and returns null for invalid cachedInputTokens on totals', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const invalid = structuredClone(validMachine);
-    (invalid.days['2026-01-15'].claude_code.totals as Record<string, unknown>).cachedInputTokens =
-      'bad';
-    expect(validateMachineFile(invalid, 'data/bad.json')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('days.2026-01-15.claude_code.totals.cachedInputTokens'),
-    );
+    expect(validateMachineFile(build(), 'data/bad.json')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(message));
     warn.mockRestore();
   });
 });
 
 describe('checkMachineFile', () => {
   it('returns findings instead of printing them', () => {
-    // The whole point of the pure form: a caller can inspect what was wrong
-    // without spying on the console, and decide for itself how to report.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const checked = checkMachineFile({ hostname: '' }, 'data/bad.json');
@@ -334,8 +290,6 @@ describe('schema migration on read', () => {
     expect(machine?.schemaVersion).toBe(2);
     expect(machine?.dayBucket).toBe('local');
     expect(machine?.days['2026-01-15']?.codex?.totals.inputTokens).toBe(10);
-    // The header is metadata nothing reads; an older file is not something the
-    // user has to act on, so reading one is silent.
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -350,9 +304,6 @@ describe('schema migration on read', () => {
   });
 
   it('tolerates an unusable header field instead of dropping the machine', () => {
-    // Failing the whole file here would take that machine's entire history out
-    // of every report over metadata nothing reads, and there is no repair path
-    // for another machine's file.
     const checked = checkRawMachineFile(
       JSON.stringify({ ...validMachine, dayBucket: 'sideways', timezone: '' }),
       'data/laptop.json',

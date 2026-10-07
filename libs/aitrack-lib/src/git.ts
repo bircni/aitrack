@@ -1,12 +1,8 @@
-/**
- * The data repo, as one entry point.
- *
- * The implementation lives in `git/` (running git, repo lifecycle) and `store/`
- * (the machine JSON files, and renaming them). This barrel is what the commands
- * and the test mocks import, so the split did not ripple through them.
- */
+export type { GitOptions } from './git/exec.js';
+export { withRepoLock } from './git/lock.js';
 export { LOCAL_REPO } from './paths.js';
 export {
+  cloneOriginUrl,
   cloneRepo,
   commitAndPush,
   commitDataChanges,

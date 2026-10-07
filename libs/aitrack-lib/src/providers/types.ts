@@ -2,7 +2,6 @@ import type { DayMap, TokenCounts } from '../data/types.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CheckResult } from './checkResult.js';
 
-/** Static facts about a provider — the old `ProviderDescriptor` table. */
 export interface ProviderDescriptor {
   /** Canonical key, as used in the data files. */
   key: string;
@@ -10,11 +9,6 @@ export interface ProviderDescriptor {
   label: string;
   /** Friendly spellings accepted by `--providers`, lowercase. */
   aliases: readonly string[];
-  /**
-   * Whether this provider's data is written to git during sync. A non-synced
-   * provider is fetched live on every command and never persisted.
-   */
-  synced: boolean;
   /** Column heading for money. Estimates say "Est. cost"; billed values say "Cost". */
   costLabel: string;
 }
@@ -32,9 +26,7 @@ export type PriceMode = 'merge' | 'recompute';
 export interface ProviderPricing {
   /**
    * Cost for one model's tokens on a given day, or undefined when the model
-   * cannot be priced. Replaces the provider `if`-chain in
-   * `src/pricing/resolve.ts`. The `merge && counts.costUSD !== undefined`
-   * short-circuit is applied by the caller, not here.
+   * cannot be priced. Caller applies the merge/costUSD short-circuit.
    */
   priceModelCost: (
     model: string,
@@ -48,19 +40,9 @@ export interface ProviderPricing {
    * that lacks a cache breakdown (Claude's older synced data). Default false.
    */
   repriceRequiresBreakdown?: boolean;
-  /** Count of bundled model entries, for `doctor`'s pricing summary. */
-  modelCount: number;
 }
 
-/**
- * How a synced provider's data is read from local transcript files.
- *
- * Deliberately just the one entry point. An earlier shape also restated the
- * cache namespace, the source roots and the per-file parser here, but nothing
- * consumed them — each reader still passed its own copies to
- * `parseProviderSources`, so the two could drift silently and editing the copy
- * in this table would have looked authoritative while doing nothing.
- */
+/** How a synced provider's data is read from local transcript files. */
 export interface SyncedProviderReader {
   /** Full read: list sources, parse (cached), merge. */
   readData: (fallbacks?: FallbackCollector) => Promise<DayMap>;

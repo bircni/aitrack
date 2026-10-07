@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { estimateCursorCostUSD, resolveCursorRates } from '../cursor.js';
-import { applyCursorAlias } from '../tables.js';
+import { currentModelPricing } from '../store.js';
 
 describe('cursor pricing', () => {
   it('prices composer-1 output at the published native rate', () => {
@@ -30,16 +30,18 @@ describe('cursor pricing', () => {
   });
 
   it('maps Cursor Router labels and Claude effort slugs onto catalog rates', () => {
-    expect(applyCursorAlias('Opus 5 (Auto Balanced)')).toBe('claude-opus-5');
-    expect(applyCursorAlias('Opus 5.5 (Auto Balanced)')).toBe('claude-opus-5-5');
-    expect(applyCursorAlias('claude-opus-4-8-thinking-max')).toBe('claude-opus-4-8');
-    expect(applyCursorAlias('claude-opus-5-5-thinking-medium')).toBe('claude-opus-5-5');
+    const pricing = currentModelPricing();
+    expect(pricing.applyCursorAlias('Opus 5 (Auto Balanced)')).toBe('claude-opus-5');
+    expect(pricing.applyCursorAlias('Opus 5.5 (Auto Balanced)')).toBe('claude-opus-5-5');
+    expect(pricing.applyCursorAlias('claude-opus-4-8-thinking-max')).toBe('claude-opus-4-8');
+    expect(pricing.applyCursorAlias('claude-opus-5-5-thinking-medium')).toBe('claude-opus-5-5');
+    expect(pricing.applyCursorAlias('Sonnet 5.5 (Auto Balanced)')).toBe('claude-sonnet-5-5');
+    expect(pricing.applyCursorAlias('GPT-6.1 Sol (Auto Balanced)')).toBe('gpt-6.1-sol');
+    expect(resolveCursorRates('Opus 5.5 (Auto Balanced)')?.inputPerMillion).toBe(4);
     expect(resolveCursorRates('claude-opus-5')?.inputPerMillion).toBe(5);
     expect(resolveCursorRates('claude-opus-5-5')?.inputPerMillion).toBe(4);
     expect(resolveCursorRates('claude-opus-5-5-fast')?.inputPerMillion).toBe(8);
     expect(resolveCursorRates('claude-opus-4-8-thinking-max')?.inputPerMillion).toBe(5);
-    expect(applyCursorAlias('Sonnet 5.5 (Auto Balanced)')).toBe('claude-sonnet-5-5');
-    expect(applyCursorAlias('GPT-6.1 Sol (Auto Balanced)')).toBe('gpt-6.1-sol');
     expect(resolveCursorRates('claude-sonnet-5-5')?.inputPerMillion).toBe(2);
     expect(resolveCursorRates('gpt-6-sol')?.inputPerMillion).toBe(2);
     expect(resolveCursorRates('gpt-6.1-sol')?.inputPerMillion).toBe(2);

@@ -16,10 +16,3 @@ it('distinguishes setup, missing usage and empty calendar windows', () => {
   expect(usageEmptyWindowMessage('today')).toBe('No usage recorded for today.');
   expect(usageEmptyWindowMessage()).toBe('No usage recorded.');
 });
-
-import { formatUsageEmptyMessage } from '../emptyState.js';
-it('reports unsupported runtime empty-state values explicitly', () => {
-  expect(() => {
-    Reflect.apply(formatUsageEmptyMessage, undefined, ['unsupported']);
-  }).toThrow('Unhandled empty-state reason');
-});

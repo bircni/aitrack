@@ -9,9 +9,6 @@ import { cursorAccountId } from './jwt.js';
 
 let retry: { key: string; until: number; serverUntil: number } | undefined;
 
-export { getCursorStateDatabasePath } from './auth.js';
-export { aggregateCursorCsvToDayMap, parseCursorDateString } from './csv.js';
-
 export interface ReadCursorDataOptions {
   /**
    * Serve a cached CSV export up to this many seconds old without a network

@@ -1,6 +1,7 @@
 import { isDayKey } from '../constants.js';
 import { errorMessage } from '../errors.js';
-import { applyMigrations, UNKNOWN_TIMEZONE } from '../store/migrations/index.js';
+import { applyMigrations } from '../store/migrations/index.js';
+import { UNKNOWN_TIMEZONE } from '../timezone.js';
 import { reportMachineFileDiagnostics } from './diagnostics.js';
 import { isFiniteNumber, isRecord } from './guards.js';
 import { CURRENT_SCHEMA_VERSION } from './schema.js';
@@ -11,14 +12,7 @@ export interface MachineFileValidationOptions {
   allowInconsistentCostTotals?: boolean;
 }
 
-/**
- * Something the reader noticed about a machine file.
- *
- * Validation used to `console.warn` at eight sites, which meant the data layer
- * decided how problems were presented and every caller inherited that choice.
- * Returning the findings lets the command decide — and lets a test assert on
- * them without spying on the console.
- */
+/** Something the reader noticed about a machine file; the caller decides how to present it. */
 export type MachineFileDiagnostic =
   | { kind: 'file-skipped'; filePath: string; reason: string }
   | { kind: 'day-dropped'; filePath: string; date: string; reason: string };
@@ -36,15 +30,7 @@ function invalid(error: string): { ok: false; error: string } {
   return { ok: false, error };
 }
 
-/**
- * Validate token counts and hand back the value.
- *
- * Returning the value rather than only an error message is what removes the
- * casts the callers used to need: a validator that returns `string | null`
- * cannot narrow anything for the type checker, so every success path had to
- * assert the type again. The one remaining assertion is here, next to the
- * checks that justify it.
- */
+/** Validate token counts and hand back the value. */
 function checkTokenCounts(value: unknown, path: string): Checked<TokenCounts> {
   if (!isRecord(value)) return invalid(`${path} must be an object`);
   if (!isFiniteNumber(value.inputTokens)) return invalid(`${path}.inputTokens must be a number`);
@@ -66,10 +52,7 @@ function checkTokenCounts(value: unknown, path: string): Checked<TokenCounts> {
     return invalid(`${path}.hasUnpricedTokens must be a boolean`);
   }
 
-  // The original object, not a rebuilt one: sync writes what it read back out,
-  // and reconstructing this would reorder the keys and produce a spurious diff
-  // on every already-up-to-date machine. The cast is sound because every field
-  // TokenCounts declares has just been checked.
+  // The original object keeps the round trip byte-identical; every field was checked above.
   return { ok: true, value: value as unknown as TokenCounts };
 }
 
@@ -146,20 +129,11 @@ export function checkMachineFile(
 
   if (!isRecord(data)) return skip('root must be an object');
 
-  // Bring an older file up to the current schema before validating it. A file
-  // already current comes back by reference, so its round-trip stays
-  // byte-identical; a newer-than-us file throws and is skipped with a clear
-  // reason so the other machines' files still load.
-  //
-  // Silently: the header is metadata no report reads, so an older file is not a
-  // problem the user has to act on. Warning per file per run, and forcing a
-  // rewrite of every machine's file to clear the warning, would be noise for a
-  // change nothing depends on — and would fight any machine still on 1.x, which
-  // drops fields it does not recognise on its own next write.
+  // Silent: an older header is nothing the user has to act on.
   const diagnostics: MachineFileDiagnostic[] = [];
   let file: Record<string, unknown>;
   try {
-    file = applyMigrations(data).file;
+    file = applyMigrations(data);
   } catch (error) {
     return skip(errorMessage(error));
   }
@@ -170,10 +144,7 @@ export function checkMachineFile(
   if (typeof file.lastUpdated !== 'string' || file.lastUpdated.length === 0) {
     return skip('lastUpdated must be a non-empty string');
   }
-  // The header fields are tolerated, not required: absent or malformed, they
-  // fall back to what the migration would have written. Failing the file here
-  // would take that machine's entire history out of every report over metadata
-  // nothing reads, and there is no repair path for another machine's file.
+  // Tolerated, not required: there is no repair path for another machine's file.
   const timezone =
     typeof file.timezone === 'string' && file.timezone.length > 0
       ? file.timezone
@@ -185,12 +156,7 @@ export function checkMachineFile(
   const days: MachineFile['days'] = {};
 
   for (const [date, providers] of Object.entries(file.days)) {
-    // A day key that is not a date can only come from a reader that wrote one
-    // (an unparseable timestamp used to yield "NaN-NaN-NaN"). Such a day is
-    // skipped by every year and window filter yet still counted in all-time
-    // totals, and nothing removes it on its own: the sync merge carries
-    // persisted days forward forever. Drop it on read instead of failing the
-    // whole file, which would take the machine's real history with it.
+    // Drop the day, not the file: the sync merge would otherwise carry it forward forever.
     if (!isDayKey(date)) {
       diagnostics.push({ kind: 'day-dropped', filePath, date, reason: 'not a YYYY-MM-DD date' });
       continue;

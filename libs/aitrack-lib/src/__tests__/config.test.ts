@@ -1,15 +1,18 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// vi.hoisted runs before any module is loaded, so its value is available in vi.mock factories
-const TEST_HOME = vi.hoisted(() => {
-  const temporary = process.env.TEMP ?? process.env.TMPDIR ?? '/tmp';
-  return `${temporary}/aitrack-config-test`;
+// vi.hoisted runs before module loading, so TEST_HOME is available in the vi.mock factory below
+const TEST_HOME = await vi.hoisted(async () => {
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  return mkdtempSync(join(tmpdir(), 'aitrack-config-test-'));
 });
 
 const osMock = vi.hoisted(() => ({ hostname: 'MB-Pro-M4.int.example.com' }));
+const DEFAULT_HOSTNAME = osMock.hostname;
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:os')>();
@@ -24,48 +27,33 @@ import {
   tryLoadConfig,
 } from '../config.js';
 
+const CONFIG_DIR = join(TEST_HOME, '.config', 'aitrack');
+const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
+
 function writeRawConfig(raw: string): void {
-  const dir = join(TEST_HOME, '.config', 'aitrack');
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'config.json'), raw, 'utf8');
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  writeFileSync(CONFIG_PATH, raw, 'utf8');
 }
 
 describe('config', () => {
-  beforeAll(() => mkdirSync(TEST_HOME, { recursive: true }));
   afterAll(() => {
     rmSync(TEST_HOME, { recursive: true, force: true });
   });
 
   beforeEach(() => {
-    // wipe config file between tests
-    const configPath = join(TEST_HOME, '.config', 'aitrack', 'config.json');
-    if (existsSync(configPath)) rmSync(configPath);
+    rmSync(CONFIG_PATH, { recursive: true, force: true });
   });
 
-  it('round-trips a config through save and load', () => {
-    const config = { repoUrl: 'git@github.com:test/repo.git' };
-    saveConfig(config);
-    expect(loadConfig()).toEqual(config);
-  });
-
-  it('overwrites existing config on second save', () => {
-    saveConfig({ repoUrl: 'old' });
-    saveConfig({ repoUrl: 'new' });
-    expect(loadConfig()).toEqual({ repoUrl: 'new' });
-  });
-
-  it('round-trips a config with machineId through save and load', () => {
-    const config = { repoUrl: 'git@github.com:test/repo.git', machineId: 'Work Laptop_01.2' };
-    saveConfig(config);
-    expect(loadConfig()).toEqual(config);
-  });
-
-  it('loads every optional source setting', () => {
-    const config = {
+  it.each([
+    { repoUrl: 'git@github.com:test/repo.git' },
+    {
       repoUrl: 'git@github.com:test/repo.git',
+      machineId: 'Work Laptop_01.2',
       claudeProjectsDir: '/data/claude-a,/data/claude-b',
       codexSessionsDir: '/data/codex',
-    };
+      budget: { monthlyUSD: 5 },
+    },
+  ])('round-trips %j through save and load', (config) => {
     saveConfig(config);
     expect(loadConfig()).toEqual(config);
   });
@@ -80,20 +68,12 @@ describe('config', () => {
     },
   );
 
-  it('resolveMachineId falls back to hostname when machineId is unset', () => {
-    expect(resolveMachineId({ repoUrl: 'git@github.com:test/repo.git' })).toBeTruthy();
-  });
-
   it('resolveMachineId uses configured machineId', () => {
-    expect(
-      resolveMachineId({ repoUrl: 'git@github.com:test/repo.git', machineId: 'work-laptop' }),
-    ).toBe('work-laptop');
+    expect(resolveMachineId({ machineId: 'work-laptop' })).toBe('work-laptop');
   });
 
   it('rejects an unsafe machineId passed directly to resolveMachineId', () => {
-    expect(() =>
-      resolveMachineId({ repoUrl: 'git@github.com:test/repo.git', machineId: '../../escape' }),
-    ).toThrow('Machine name');
+    expect(() => resolveMachineId({ machineId: '../../escape' })).toThrow('Machine name');
   });
 
   it('throws when no config file exists', () => {
@@ -101,42 +81,42 @@ describe('config', () => {
     expect(tryLoadConfig()).toBeNull();
   });
 
-  it('returns null for malformed JSON', () => {
+  it('reports an unreadable config as invalid, not missing', () => {
+    mkdirSync(CONFIG_PATH, { recursive: true });
+    expect(() => loadConfig()).toThrow(/is unreadable \(.*EISDIR/u);
+  });
+
+  it('rejects malformed JSON', () => {
     writeRawConfig('{ not valid json');
     expect(tryLoadConfig()).toBeNull();
-  });
-
-  it('returns null when repoUrl is missing or not a string', () => {
-    writeRawConfig(JSON.stringify({ machineId: 'work-laptop' }));
-    expect(tryLoadConfig()).toBeNull();
-    writeRawConfig(JSON.stringify({ repoUrl: 123 }));
-    expect(tryLoadConfig()).toBeNull();
-  });
-
-  it('returns null when loaded config contains an unsafe machineId', () => {
-    writeRawConfig(
-      JSON.stringify({ repoUrl: 'git@example.com:test/repo.git', machineId: '../../escape' }),
-    );
-    expect(tryLoadConfig()).toBeNull();
-  });
-
-  it('returns null when the JSON root is not an object', () => {
-    writeRawConfig(JSON.stringify('a string'));
-    expect(tryLoadConfig()).toBeNull();
+    expect(() => loadConfig()).toThrow('not valid JSON');
   });
 
   it.each([
-    { repoUrl: 'git@example.com:test/repo.git', claudeProjectsDir: 42 },
-    { repoUrl: 'git@example.com:test/repo.git', codexSessionsDir: [] },
-    { repoUrl: 'git@example.com:test/repo.git', machineId: 42 },
-  ])('returns null for invalid optional config values: %j', (config) => {
+    'a string',
+    { machineId: 'work-laptop' },
+    { repoUrl: 123 },
+    { repoUrl: 'repo', machineId: '../../escape' },
+    { repoUrl: 'repo', machineId: '  ' },
+    { repoUrl: 'repo', machineId: 42 },
+    { repoUrl: 'repo', claudeProjectsDir: 42 },
+    { repoUrl: 'repo', codexSessionsDir: [] },
+    { repoUrl: 'repo', budget: null },
+    { repoUrl: 'repo', budget: [] },
+    { repoUrl: 'repo', budget: 'bad' },
+    { repoUrl: 'repo', budget: { monthlyUSD: '5' } },
+    { repoUrl: 'repo', budget: { monthlyUSD: -1 } },
+    { repoUrl: 'repo', budget: { monthlyUSD: 0 } },
+  ])('returns null for invalid config %j', (config) => {
     writeRawConfig(JSON.stringify(config));
     expect(tryLoadConfig()).toBeNull();
   });
 
   describe('localMachineId', () => {
-    // The same machine reports different FQDNs per network; keying data files
-    // off the FQDN mints a second identity and double-counts every total.
+    afterEach(() => {
+      osMock.hostname = DEFAULT_HOSTNAME;
+    });
+
     it('uses the short hostname so network/DNS changes do not fork the identity', () => {
       osMock.hostname = 'MB-Pro-M4.local';
       expect(localMachineId()).toBe('MB-Pro-M4');
@@ -144,34 +124,14 @@ describe('config', () => {
       osMock.hostname = 'MB-Pro-M4.int.example.com';
       expect(localMachineId()).toBe('MB-Pro-M4');
 
-      expect(resolveMachineId({ repoUrl: '' })).toBe('MB-Pro-M4');
+      expect(resolveMachineId(null)).toBe('MB-Pro-M4');
     });
 
-    it('keeps a bare hostname unchanged', () => {
+    it('keeps a bare or empty hostname unchanged', () => {
       osMock.hostname = 'pridwen';
       expect(localMachineId()).toBe('pridwen');
+      osMock.hostname = '';
+      expect(localMachineId()).toBe('');
     });
   });
-});
-
-it('rejects malformed budgets and preserves a valid monthly ceiling', () => {
-  for (const budget of [
-    null,
-    [],
-    'bad',
-    { monthlyUSD: '5' },
-    { monthlyUSD: -1 },
-    { monthlyUSD: 0 },
-  ]) {
-    writeRawConfig(JSON.stringify({ repoUrl: 'repo', budget }));
-    expect(tryLoadConfig()).toBeNull();
-  }
-  writeRawConfig(JSON.stringify({ repoUrl: 'repo', budget: { monthlyUSD: 5 } }));
-  expect(loadConfig().budget).toEqual({ monthlyUSD: 5 });
-  writeRawConfig('{');
-  expect(() => loadConfig()).toThrow('not valid JSON');
-  writeRawConfig(JSON.stringify({ repoUrl: 'repo', machineId: '  ' }));
-  expect(tryLoadConfig()).toBeNull();
-  osMock.hostname = '';
-  expect(localMachineId()).toBe('');
 });

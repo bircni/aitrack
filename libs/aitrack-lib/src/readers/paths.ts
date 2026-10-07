@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
 import { readdir, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 
 import { environmentValue } from '../env.js';
+import { isMissingPathError } from '../errors.js';
 import type { CheckResult } from '../providers/checkResult.js';
 import { mapWithConcurrency } from './concurrency.js';
 
@@ -14,18 +15,16 @@ export function splitConfiguredPaths(value: string | undefined): string[] {
     .filter((v) => v.length > 0);
 }
 
-/**
- * Every `.jsonl` path under `dir`, depth-first in directory-entry order.
- *
- * Sibling directories are walked concurrently — the walk was sequential inside
- * an otherwise-parallel module. Results are reassembled in entry order rather
- * than completion order: the Claude reader resolves cross-file key collisions
- * by file order, so a nondeterministic listing would make its output depend on
- * disk timing.
- */
+/** Every `.jsonl` path under `dir`, depth-first in directory-entry order. */
 async function walkJsonlFiles(dir: string): Promise<string[]> {
-  if (!existsSync(dir)) return [];
-  const entries = await readdir(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingPathError(error)) return [];
+    throw error;
+  }
+  // Entry order, not completion order: Claude dedup is first-file-wins.
   const perEntry = await mapWithConcurrency(entries, (entry) => {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) return walkJsonlFiles(full);
@@ -47,21 +46,21 @@ export function listJsonlFiles(root: string): Promise<string[]> {
  * a file listed twice would double every token it holds.
  */
 export async function listUniqueSourceFiles(roots: string[]): Promise<string[]> {
-  const perRoot = await Promise.all(roots.map((root) => listJsonlFiles(root)));
+  const perRoot = await Promise.all(
+    roots.map(async (root) => {
+      const [realRoot, files] = await Promise.all([
+        realpath(root).catch(() => root),
+        listJsonlFiles(root),
+      ]);
+      return files.map((file) => ({ file, identity: join(realRoot, relative(root, file)) }));
+    }),
+  );
   const seen = new Set<string>();
   const files: string[] = [];
-  const identities = await mapWithConcurrency(perRoot.flat(), async (file) => {
-    try {
-      return { file, identity: await realpath(file) };
-    } catch {
-      return { file, identity: file };
-    }
-  });
-  for (const { file, identity } of identities) {
+  for (const { file, identity } of perRoot.flat()) {
     if (seen.has(identity)) continue;
     seen.add(identity);
-    // Keep the path we listed. realpath is only the identity: on macOS it
-    // rewrites /var to /private/var, which would change every cached key.
+    // Keep the listed path: realpath rewrites /var to /private/var on macOS, changing cache keys.
     files.push(file);
   }
   return files;
@@ -80,11 +79,6 @@ export async function jsonlSourceSummary(
   return { existing, fileCount: counts.reduce((sum, count) => sum + count, 0) };
 }
 
-/**
- * A `doctor` check that a synced provider's transcript directories exist and
- * hold JSONL files. Lived in `src/commands/doctor.ts` as a private helper; a
- * provider module now calls it from its own `doctorCheck`.
- */
 export async function sourceCheck(label: string, roots: string[]): Promise<CheckResult> {
   const { existing, fileCount } = await jsonlSourceSummary(roots);
   if (fileCount > 0) {

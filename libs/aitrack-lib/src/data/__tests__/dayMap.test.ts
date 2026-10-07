@@ -48,36 +48,7 @@ describe('dayMap helpers', () => {
     expect(second.inputTokens).toBe(10);
   });
 
-  it('toLocalDateString uses local calendar components', () => {
-    // Two probes so the UTC and local dates disagree whichever side of UTC the
-    // machine runs on: just before local midnight the UTC date has already
-    // rolled over west of UTC, and just after it has not yet rolled over east
-    // of it. Pinning a single UTC instant only held for offsets near zero.
-    expect(toLocalDateString(new Date(2024, 5, 15, 23, 30, 0))).toBe('2024-06-15');
-    expect(toLocalDateString(new Date(2024, 5, 15, 0, 30, 0))).toBe('2024-06-15');
-  });
-
-  it('toLocalDateString treats a string and a Date the same', () => {
-    const iso = new Date(2024, 5, 15, 12).toISOString();
-    expect(toLocalDateString(iso)).toBe(toLocalDateString(new Date(iso)));
-    expect(toLocalDateString(iso)).toBe('2024-06-15');
-  });
-
-  it('tryLocalDateString rejects timestamps that cannot be parsed', () => {
-    expect(tryLocalDateString('corrupted')).toBeNull();
-    expect(tryLocalDateString(new Date('nonsense'))).toBeNull();
-    // Without the guard this is the string "NaN-NaN-NaN", a usable Map key.
-    expect(toLocalDateString('corrupted')).toBe('NaN-NaN-NaN');
-  });
-
-  it('tryLocalDateString matches toLocalDateString for valid input', () => {
-    const date = new Date(2024, 5, 15, 23, 30, 0);
-    expect(tryLocalDateString(date)).toBe(toLocalDateString(date));
-  });
-
   it('mergeDayMaps carries the cache token breakdown across', () => {
-    // The heatmap used to have its own copy of this merge that dropped these
-    // fields, so a merged view silently reported zero cached tokens.
     const dst: DayMap = new Map();
     const source: DayMap = new Map([
       [
@@ -148,11 +119,14 @@ describe.each(EXTREME_TIME_ZONES)('day keys at %s', (timeZone) => {
   it('agrees with the calendar date the timestamp reads as locally', () => {
     const iso = new Date(2024, 11, 31, 23, 30).toISOString();
     expect(toLocalDateString(iso)).toBe('2024-12-31');
+    expect(toLocalDateString(new Date(iso))).toBe('2024-12-31');
     expect(tryLocalDateString(iso)).toBe('2024-12-31');
   });
 
-  it('still rejects an unparseable timestamp', () => {
+  it('rejects an unparseable timestamp that would otherwise key as NaN-NaN-NaN', () => {
     expect(tryLocalDateString('not a date')).toBeNull();
+    expect(tryLocalDateString(new Date('nonsense'))).toBeNull();
+    expect(toLocalDateString('not a date')).toBe('NaN-NaN-NaN');
   });
 });
 

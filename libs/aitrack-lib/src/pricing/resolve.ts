@@ -1,15 +1,14 @@
 import type { TokenCounts } from '../data/types.js';
 import { getProvider } from '../providers/index.js';
+import type { PriceMode } from '../providers/types.js';
 import type { FallbackCollector } from './fallback.js';
-
-export type ResolveModelCostMode = 'merge' | 'recompute';
 
 export function resolveModelCost(
   providerKey: string,
   model: string,
   counts: TokenCounts,
   usageDate?: string,
-  mode: ResolveModelCostMode = 'merge',
+  mode: PriceMode = 'merge',
   fallbacks?: FallbackCollector,
 ): number | undefined {
   if (mode === 'merge' && counts.costUSD !== undefined) return counts.costUSD;

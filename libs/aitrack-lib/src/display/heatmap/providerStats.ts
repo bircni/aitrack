@@ -2,14 +2,7 @@ import { sumDayMap } from '../../data/aggregate.js';
 import type { DayMap } from '../../data/types.js';
 import { currentStreak, longestStreak, peakMonth } from './stats.js';
 
-/**
- * The headline numbers for one provider, unformatted.
- *
- * The terminal table and the PNG/HTML stat cells show the same six figures in
- * different shapes, and each used to derive them itself — so a change to what
- * counts as an "active day" had to be made twice to keep the two agreeing.
- * Formatting stays with the renderer; only the arithmetic is shared.
- */
+/** The headline numbers for one provider, unformatted; each renderer formats them. */
 export interface ProviderStats {
   inputTokens: number;
   outputTokens: number;

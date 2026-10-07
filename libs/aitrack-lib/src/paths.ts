@@ -1,14 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-/**
- * Every directory aitrack owns under the user's home.
- *
- * These were previously rebuilt from `homedir()` in four separate modules, so
- * moving the application directory meant finding all four. They are evaluated
- * at module load time: the test suite mocks `node:os` before importing anything
- * that reaches these, and making them lazy would break that arrangement.
- */
+// Evaluated at load time on purpose: tests mock node:os before importing these.
 export const APP_DIR = join(homedir(), '.config', 'aitrack');
 
 export const CONFIG_PATH = join(APP_DIR, 'config.json');

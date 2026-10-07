@@ -56,6 +56,25 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(day.costUSD).toBeCloseTo(0.000981);
   });
 
+  it('ignores provider-reported Cursor cost columns', () => {
+    const map = aggregateCursorCsvToDayMap(
+      [
+        'Date,Model,Total Tokens,Input (w/ Cache Write),Input (w/o Cache Write),Cache Read,Output Tokens,Total Cost (USD)',
+        '2024-01-01,gpt-4,100,10,20,5,7,$0.12',
+        '2024-01-01,gpt-4,50,5,10,0,3,0.03',
+        '2024-01-01,claude,100,10,20,5,7,',
+      ].join('\n'),
+    );
+
+    const day = map.get('2024-01-01');
+    expect(day?.costUSD).toBeUndefined();
+    expect(day?.byModel['gpt-4']?.costUSD).toBeUndefined();
+    expect(day?.byModel.claude?.costUSD).toBeUndefined();
+    expect(day?.rawInputTokens).toBe(50);
+    expect(day?.cachedInputTokens).toBe(10);
+    expect(day?.cacheCreationInputTokens).toBe(25);
+  });
+
   it('preserves legacy rows that only expose aggregate Tokens', () => {
     const map = aggregateCursorCsvToDayMap('Date,Model,Tokens\n2024-01-10,gpt-4o,200');
 

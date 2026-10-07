@@ -6,10 +6,12 @@ import { machineDataFilename, normalizeMachineId } from '../machineId.js';
 import { LOCAL_REPO } from '../paths.js';
 import {
   commitStagedData,
+  GitCommandError,
   type GitOptions,
   hasUpstream,
   isRebaseInProgress,
   pushWithRetry,
+  runGit,
   runGitAsync,
 } from './exec.js';
 import { withRepoLock } from './lock.js';
@@ -26,6 +28,15 @@ export function cloneRepo(url: string): void {
   });
   if (result.status !== 0) {
     throw new Error(`git clone failed with exit code ${String(result.status)}`);
+  }
+}
+
+/** The URL as stored, which outlives a deleted or corrupt config; `get-url` would apply insteadOf rewrites. */
+export function cloneOriginUrl(): string | null {
+  try {
+    return runGit(['config', '--get', 'remote.origin.url']);
+  } catch {
+    return null;
   }
 }
 
@@ -67,11 +78,14 @@ export function pushPendingCommits(options: GitOptions = {}): Promise<boolean> {
 
 export function pull(options: GitOptions = {}): Promise<void> {
   return withRepoLock(async () => {
-    const references = await runGitAsync(['ls-remote', '--heads', 'origin'], options);
-    if (!references) return;
     try {
       await runGitAsync(['pull', '--ff-only', '--quiet'], options);
     } catch (error) {
+      if (!(error instanceof GitCommandError)) throw error; // A timeout says nothing about an empty remote.
+      const heads = await runGitAsync(['ls-remote', '--heads', 'origin'], options).catch(() => {
+        throw error;
+      });
+      if (!heads) return; // Empty remote: nothing to pull yet.
       // An earlier push that failed leaves the branch diverged once the remote
       // moves on, and --ff-only cannot resolve that. Replay the local commits on
       // top of the remote instead of failing every future sync.
@@ -107,10 +121,7 @@ async function stageAndPushMachine(hostname: string, options: GitOptions): Promi
   const machineId = normalizeMachineId(hostname);
   const path = `data/${machineDataFilename(machineId)}`;
   await runGitAsync(['add', '--', `:(literal)${path}`]);
-  // The staged change can be a deletion (the user cleared their history), in
-  // which case there is nothing to read back and nothing to replay on a
-  // push-retry conflict. Reading unconditionally aborted the sync with a raw
-  // ENOENT instead of committing the deletion.
+  // Staged change may be a deletion.
   const absolute = join(LOCAL_REPO, path);
   const conflict = existsSync(absolute)
     ? { path, contents: readFileSync(absolute, 'utf8') }

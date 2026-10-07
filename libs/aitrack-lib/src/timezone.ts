@@ -1,3 +1,8 @@
+import { isDayKey } from './constants.js';
+
+/** Recorded when a machine file's zone is unrecoverable; deliberately not a valid IANA name. */
+export const UNKNOWN_TIMEZONE = 'unknown';
+
 /**
  * IANA zone of this machine, recorded on machine files and used as a parse-cache
  * key. Day keys are local calendar days, so a cache written in another zone
@@ -16,7 +21,7 @@ export function machineTimezone(): string {
  * not a real IANA name. `en-CA` formats as YYYY-MM-DD.
  */
 export function calendarDateInTimeZone(timeZone: string, now = new Date()): string | null {
-  if (timeZone === '' || timeZone === 'unknown') return null;
+  if (timeZone === '' || timeZone === UNKNOWN_TIMEZONE) return null;
   try {
     const formatted = new Intl.DateTimeFormat('en-CA', {
       timeZone,
@@ -24,7 +29,7 @@ export function calendarDateInTimeZone(timeZone: string, now = new Date()): stri
       month: '2-digit',
       day: '2-digit',
     }).format(now);
-    return /^\d{4}-\d{2}-\d{2}$/u.test(formatted) ? formatted : null;
+    return isDayKey(formatted) ? formatted : null;
   } catch {
     return null;
   }

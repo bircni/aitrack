@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { isRecord } from '../data/guards.js';
 import { environmentValue } from '../env.js';
+import { errorMessage } from '../errors.js';
 import { APP_DIR } from '../paths.js';
 import type { CompactCatalog } from './codecs.js';
 import { type ModelPricing, modelPricingFromPack } from './modelPricing.js';
@@ -32,6 +33,7 @@ export interface PricingRefreshResult {
   updated: boolean;
   reason: string;
   updatedAt: string;
+  failed?: true;
 }
 
 function isStale(state: SourceState | undefined, now: number): boolean {
@@ -228,27 +230,24 @@ export class PricingStore {
         'manifest.json',
         isPricingManifest,
       );
-      const supplement = await this.refreshFile(
-        'supplement',
-        urls.supplement,
-        'supplement.json',
-        isPricingSupplement,
-        manifest.value.hashes.supplement,
-      );
-      const litellm = await this.refreshFile(
-        'litellm',
-        urls.litellm,
-        'litellm.json',
-        isCompactCatalog,
-        manifest.value.hashes.litellm,
-      );
-      const modelsDev = await this.refreshFile(
-        'modelsDev',
-        urls.modelsDev,
-        'models_dev.json',
-        isCompactCatalog,
-        manifest.value.hashes.modelsDev,
-      );
+      const { hashes } = manifest.value;
+      const [supplement, litellm, modelsDev] = await Promise.all([
+        this.refreshFile(
+          'supplement',
+          urls.supplement,
+          'supplement.json',
+          isPricingSupplement,
+          hashes.supplement,
+        ),
+        this.refreshFile('litellm', urls.litellm, 'litellm.json', isCompactCatalog, hashes.litellm),
+        this.refreshFile(
+          'modelsDev',
+          urls.modelsDev,
+          'models_dev.json',
+          isCompactCatalog,
+          hashes.modelsDev,
+        ),
+      ]);
       const next = pricingFromParts(
         this.mergeSupplement(supplement.value),
         litellm.value,
@@ -267,7 +266,9 @@ export class PricingStore {
       await writeAtomic(join(this.cacheDir, 'state.json'), JSON.stringify(nextState));
       const updated =
         next.updatedAt !== this.snapshot.updatedAt ||
-        files.slice(0, 3).some((file) => file.changed);
+        supplement.changed ||
+        litellm.changed ||
+        modelsDev.changed;
       this.cachedFiles = cachedFiles;
       this.state = nextState;
       this.snapshot = next;
@@ -282,10 +283,7 @@ export class PricingStore {
       await writeAtomic(join(this.cacheDir, 'state.json'), JSON.stringify(this.state)).catch(
         () => undefined,
       );
-      return this.result(
-        false,
-        `refresh failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      return { ...this.result(false, `refresh failed: ${errorMessage(error)}`), failed: true };
     }
   }
 

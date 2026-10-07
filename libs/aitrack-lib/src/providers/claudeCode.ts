@@ -1,5 +1,4 @@
 import {
-  CLAUDE_PRICING_BY_ID,
   estimateClaudeCostFromAggregateTokens,
   estimateClaudeCostFromStoredCounts,
 } from '../pricing/claude.js';
@@ -13,7 +12,6 @@ export const claudeCodeProvider: SyncedProvider = {
     key: 'claude_code',
     label: 'Claude Code',
     aliases: ['claude', 'claude-code', 'claude_code', 'claudecode'],
-    synced: true,
     costLabel: 'Est. cost',
   },
   heatmap: {
@@ -22,7 +20,6 @@ export const claudeCodeProvider: SyncedProvider = {
   },
   pricing: {
     repriceRequiresBreakdown: true,
-    modelCount: Object.keys(CLAUDE_PRICING_BY_ID).length,
     priceModelCost(model, counts, usageDate, mode, fallbacks) {
       if (mode === 'recompute') {
         return estimateClaudeCostFromStoredCounts(model, counts, usageDate, fallbacks);
@@ -39,10 +36,6 @@ export const claudeCodeProvider: SyncedProvider = {
       );
     },
   },
-  reader: {
-    // Wrapped rather than passed by reference so a test that partially mocks
-    // `readers/claude.js` only trips the missing export if it actually calls in.
-    readData: (fallbacks) => readClaudeData(fallbacks),
-  },
+  reader: { readData: readClaudeData },
   doctorCheck: (): Promise<CheckResult> => sourceCheck('Claude Code source', getClaudePaths()),
 };

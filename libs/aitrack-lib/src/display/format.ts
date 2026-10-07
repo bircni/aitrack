@@ -17,8 +17,7 @@ export function fmt(n: number): string {
 /** Format a USD amount. Null/undefined/non-positive values render as an em dash. */
 export function fmtUSD(n: number | null | undefined): string {
   if (n === null || n === undefined || n <= 0) return '—';
-  if (n < 0.01) return '<$0.01';
-  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return fmtUSDCost(n);
 }
 
 /** Format a USD amount when cost is known to exist (e.g. heatmap stats). Zero shows as $0.00. */

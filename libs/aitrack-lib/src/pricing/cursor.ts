@@ -3,11 +3,6 @@ import { lookupClaudePricing } from './claude.js';
 import { lookupCodexPricing } from './codex.js';
 import { costFromRates, type FullModelRates, scaleRates } from './rates.js';
 import { currentModelPricing } from './store.js';
-import { CURSOR_FAST_MULTIPLIERS, CURSOR_MODELS } from './tables.js';
-import type { CursorPricing } from './types.js';
-
-export { CURSOR_MODELS };
-export type { CursorPricing };
 
 function claudeToCursorRates(pricing: {
   inputPerMillion: number;
@@ -81,10 +76,3 @@ export function estimateCursorCostUSD(
   const raw = counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheWrite);
   return costFromRates(rates, { raw, output: counts.outputTokens, cacheRead, cacheWrite });
 }
-
-// Re-export for callers that imported applyCursorAlias from tables via cursor.
-export function applyCursorAlias(model: string): string {
-  return currentModelPricing().applyCursorAlias(model);
-}
-
-export { CURSOR_FAST_MULTIPLIERS };

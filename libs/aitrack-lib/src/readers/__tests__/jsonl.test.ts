@@ -6,7 +6,7 @@ import { expect, it } from 'vitest';
 
 import { streamJsonlObjects } from '../jsonl.js';
 
-it('streams only objects while tolerating blank, malformed and scalar lines', async () => {
+it('streams only objects, tolerating bad lines and a path that is gone', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'aitrack-jsonl-'));
   try {
     const file = join(dir, 'events.jsonl');
@@ -14,6 +14,8 @@ it('streams only objects while tolerating blank, malformed and scalar lines', as
     const entries = [];
     for await (const entry of streamJsonlObjects(file)) entries.push(entry);
     expect(entries).toEqual([{ n: 1 }, { n: 2 }]);
+    for await (const entry of streamJsonlObjects(join(file, 'gone.jsonl'))) entries.push(entry);
+    expect(entries).toHaveLength(2);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

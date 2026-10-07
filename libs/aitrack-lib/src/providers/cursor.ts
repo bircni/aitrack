@@ -1,5 +1,5 @@
 import { errorMessage } from '../errors.js';
-import { CURSOR_MODELS, estimateCursorCostUSD } from '../pricing/cursor.js';
+import { estimateCursorCostUSD } from '../pricing/cursor.js';
 import { getCursorStateDatabasePath, readCursorAuthState } from '../readers/cursor/auth.js';
 import { cursorCacheTtlSeconds } from '../readers/cursor/cache.js';
 import { readCursorData } from '../readers/cursor/index.js';
@@ -35,7 +35,6 @@ export const cursorProvider: LiveProvider = {
     key: 'cursor',
     label: 'Cursor',
     aliases: ['cursor'],
-    synced: false,
     costLabel: 'Est. cost',
   },
   heatmap: {
@@ -43,7 +42,6 @@ export const cursorProvider: LiveProvider = {
     dark: ['#1e1e24', '#3a1800', '#7a3200', '#c45a00', '#f08820'],
   },
   pricing: {
-    modelCount: Object.keys(CURSOR_MODELS).length,
     priceModelCost(model, counts, usageDate) {
       return estimateCursorCostUSD(model, counts, usageDate);
     },

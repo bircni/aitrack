@@ -47,20 +47,21 @@ export async function requestJson(
   } catch (error) {
     throw new QuotaFailure('network', `${label} request failed: ${errorMessage(error)}`);
   }
-  if (response.status === 401 || response.status === 403) {
-    throw new QuotaFailure(
-      'auth',
-      `${label} rejected the saved login (HTTP ${String(response.status)})`,
-    );
-  }
-  if (response.status === 429) {
-    throw new QuotaFailure(
-      'rateLimited',
-      `${label} is rate limiting quota requests`,
-      parseRetryAfter(response.headers.get('retry-after')),
-    );
-  }
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined); // Unread bodies hold the connection open.
+    if (response.status === 401 || response.status === 403) {
+      throw new QuotaFailure(
+        'auth',
+        `${label} rejected the saved login (HTTP ${String(response.status)})`,
+      );
+    }
+    if (response.status === 429) {
+      throw new QuotaFailure(
+        'rateLimited',
+        `${label} is rate limiting quota requests`,
+        parseRetryAfter(response.headers.get('retry-after')),
+      );
+    }
     throw new QuotaFailure('network', `${label} returned HTTP ${String(response.status)}`);
   }
   let body: unknown;

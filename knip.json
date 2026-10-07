@@ -16,7 +16,7 @@
       ]
     },
     "libs/aitrack-lib": {
-      "entry": ["src/index.ts", "src/**/*.ts"],
+      "entry": ["src/index.ts", "src/display/checkResult.ts"],
       "project": ["src/**/*.ts"]
     },
     "apps/aitrack": {

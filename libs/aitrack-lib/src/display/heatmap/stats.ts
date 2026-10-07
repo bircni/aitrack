@@ -1,6 +1,7 @@
-import { toLocalDateString } from '../../data/dayMap.js';
+import { inclusiveDayCount, shiftDate, weekdayOf, yearOf } from '../../data/calendar.js';
 import type { DayMap } from '../../data/types.js';
-import { HEATMAP_WEEKS, MS_PER_DAY, RECENT_WINDOW_DAYS } from './constants.js';
+import { rollingWindow, todayString } from '../../data/usagePeriods.js';
+import { HEATMAP_WEEKS, RECENT_WINDOW_DAYS } from './constants.js';
 
 export const MONTHS = [
   'Jan',
@@ -17,29 +18,19 @@ export const MONTHS = [
   'Dec',
 ] as const;
 
-function dateKey(d: Date): string {
-  return toLocalDateString(d);
-}
-
 function hasActivity(dayMap: DayMap, key: string): boolean {
   const v = dayMap.get(key);
   return v !== undefined && v.inputTokens + v.outputTokens > 0;
 }
 
 export function currentStreak(dayMap: DayMap): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const current = new Date(today);
-  // Today is still in progress. Counting from it would report 0 all morning
-  // and then jump to the full streak after the first request of the day, so
-  // start from yesterday when today has no activity yet.
-  if (!hasActivity(dayMap, dateKey(current))) {
-    current.setDate(current.getDate() - 1);
-  }
+  const today = todayString();
+  // Today is still in progress, so an idle today does not break the streak.
+  let day = hasActivity(dayMap, today) ? today : shiftDate(today, -1);
   let streak = 0;
-  while (hasActivity(dayMap, dateKey(current))) {
+  while (hasActivity(dayMap, day)) {
     streak++;
-    current.setDate(current.getDate() - 1);
+    day = shiftDate(day, -1);
   }
   return streak;
 }
@@ -49,20 +40,13 @@ export function longestStreak(dayMap: DayMap): number {
     .filter(([, v]) => v.inputTokens + v.outputTokens > 0)
     .map(([d]) => d)
     .toSorted((a, b) => a.localeCompare(b));
-  if (activeDates.length === 0) return 0;
-
-  let longest = 1;
-  let current = 1;
-  for (let index = 1; index < activeDates.length; index++) {
-    const previous = new Date(`${activeDates[index - 1]}T12:00:00`);
-    const current_ = new Date(`${activeDates[index]}T12:00:00`);
-    const diffDays = Math.round((current_.getTime() - previous.getTime()) / MS_PER_DAY);
-    if (diffDays === 1) {
-      current++;
-      longest = Math.max(longest, current);
-    } else if (diffDays > 1) {
-      current = 1;
-    }
+  let longest = 0;
+  let current = 0;
+  let previous: string | undefined;
+  for (const date of activeDates) {
+    current = previous !== undefined && shiftDate(previous, 1) === date ? current + 1 : 1;
+    longest = Math.max(longest, current);
+    previous = date;
   }
   return longest;
 }
@@ -96,12 +80,6 @@ export interface ModelStats {
   peak: PeakDay | null;
 }
 
-function recentWindowStart(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - RECENT_WINDOW_DAYS);
-  return toLocalDateString(d);
-}
-
 function bumpModelTotal(
   table: Map<string, number>,
   model: string,
@@ -117,7 +95,7 @@ function bumpModelTotal(
 }
 
 export function computeModelStats(dayMap: DayMap): ModelStats {
-  const since = recentWindowStart();
+  const since = rollingWindow(todayString(), RECENT_WINDOW_DAYS).start;
   const allTime = new Map<string, number>();
   const recent = new Map<string, number>();
   let topAll: ModelTop | null = null;
@@ -154,52 +132,23 @@ export function formatMonthLabel(month: string): string {
 }
 
 export function buildDateGrid(year?: number): Array<Array<string | null>> {
-  if (year !== undefined) {
-    return buildYearGrid(year);
+  const today = todayString();
+  let first: string;
+  let last: string;
+  if (year === undefined) {
+    first = shiftDate(today, -weekdayOf(today) - HEATMAP_WEEKS * 7);
+    last = today;
+  } else {
+    const yearKey = String(year).padStart(4, '0');
+    first = `${yearKey}-01-01`;
+    last = year === yearOf(today) ? today : `${yearKey}-12-31`;
   }
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const start = new Date(today);
-  start.setDate(start.getDate() - today.getDay() - HEATMAP_WEEKS * 7);
-  const weeks: Array<Array<string | null>> = [];
-  const current = new Date(start);
-  while (current <= today) {
-    const week: Array<string | null> = [];
-    for (let d = 0; d < 7; d++) {
-      if (current <= today) {
-        week.push(toLocalDateString(current));
-      } else {
-        week.push(null);
-      }
-      current.setDate(current.getDate() + 1);
-    }
-    weeks.push(week);
-  }
-  return weeks;
-}
-
-function buildYearGrid(year: number): Array<Array<string | null>> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const start = new Date(year, 0, 1);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - start.getDay());
-  const end = year === today.getFullYear() ? today : new Date(year, 11, 31);
-  end.setHours(0, 0, 0, 0);
-
-  const weeks: Array<Array<string | null>> = [];
-  const current = new Date(start);
-  do {
-    const week: Array<string | null> = [];
-    for (let d = 0; d < 7; d++) {
-      if (current <= end && current.getFullYear() === year) {
-        week.push(toLocalDateString(current));
-      } else {
-        week.push(null);
-      }
-      current.setDate(current.getDate() + 1);
-    }
-    weeks.push(week);
-  } while (current <= end || current.getDay() !== 0);
-  return weeks;
+  const lead = weekdayOf(first);
+  const end = lead + inclusiveDayCount(first, last); // Counted, not compared: past 9999 the keys stop sorting.
+  return Array.from({ length: Math.ceil(end / 7) }, (_, week) =>
+    Array.from({ length: 7 }, (_, weekday) => {
+      const index = week * 7 + weekday;
+      return index >= lead && index < end ? shiftDate(first, index - lead) : null;
+    }),
+  );
 }

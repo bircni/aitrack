@@ -6,12 +6,6 @@ import { log } from '../output.js';
  * A fallback price is a guess: the model id had no exact entry, so the cost
  * written to the data file can be off by a whole tier, and the user needs to
  * know which models are affected.
- *
- * This used to be two module-level `Set`s inside the pricing tables, drained by
- * a `consume*FallbackHits()` pair. That made pricing lookups impure and
- * order-dependent, and it leaked from one long-lived run into the next — the
- * "consume" step existed only to paper over the shared state. Passing a
- * collector explicitly makes each run's hits its own.
  */
 export interface FallbackCollector {
   record: (modelId: string) => void;
@@ -38,7 +32,6 @@ export function reportFallbackPricing(fallbacks: FallbackCollector): void {
   const ids = fallbacks.drain();
   if (ids.length === 0) return;
   log.warn(
-    `\nWarning: priced via family fallback (no exact pricing in src/pricing/tables/): ${ids.join(', ')}`,
+    `\nWarning: priced via family fallback (no exact rate yet): ${ids.join(', ')} — costs may be off until aitrack or the pricing pack is updated.`,
   );
-  log.warn('  These costs may be wrong — update src/pricing/tables/ with the correct rates.');
 }

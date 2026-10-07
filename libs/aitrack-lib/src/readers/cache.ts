@@ -1,8 +1,17 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { isFiniteNumber, isRecord } from '../data/guards.js';
+import { isFiniteNumber, isOptionalString, isRecord } from '../data/guards.js';
 import type { DayEntry, DayMap, TokenCounts } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { CACHE_DIR } from '../paths.js';
@@ -16,6 +25,8 @@ import { packageVersion } from '../version.js';
  * rebuildable from the logs.
  */
 const CACHE_FORMAT = 3;
+
+const STALE_SIBLING_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface CachedMessage {
   key?: string;
@@ -77,7 +88,7 @@ function isCacheEntry(value: unknown): value is CacheEntry {
       !value.messages.every(
         (message) =>
           isRecord(message) &&
-          (message.key === undefined || typeof message.key === 'string') &&
+          isOptionalString(message.key) &&
           typeof message.date === 'string' &&
           typeof message.model === 'string' &&
           isTokenCounts(message.counts),
@@ -88,15 +99,18 @@ function isCacheEntry(value: unknown): value is CacheEntry {
 }
 
 interface MemoizedCache {
+  path: string;
   mtimeMs: number;
   size: number;
   timezone: string;
-  pricingFingerprint: string;
   entries: Record<string, CacheEntry>;
 }
 
-/** Last validated contents per cache file, so a long-lived process skips re-reading an unchanged one. */
+/** Last validated contents per provider, so a long-lived process skips re-reading an unchanged file. */
 const memoized = new Map<string, MemoizedCache>();
+
+/** Pruned once per file per process: whoever writes a new sibling prunes on its own first save. */
+const prunedPaths = new Set<string>();
 
 function fileStamp(filePath: string): { mtimeMs: number; size: number } | null {
   try {
@@ -107,35 +121,30 @@ function fileStamp(filePath: string): { mtimeMs: number; size: number } | null {
   }
 }
 
-function remember(
-  filePath: string,
-  entries: Record<string, CacheEntry>,
-  pricingFingerprint: string,
-): void {
-  const stamp = fileStamp(filePath);
-  if (stamp)
-    memoized.set(filePath, { ...stamp, timezone: machineTimezone(), pricingFingerprint, entries });
-  else memoized.delete(filePath);
+function remember(name: string, path: string, entries: Record<string, CacheEntry>): void {
+  const stamp = fileStamp(path);
+  if (stamp) memoized.set(name, { path, ...stamp, timezone: machineTimezone(), entries });
+  else memoized.delete(name);
 }
 
-function loadCacheFile(filePath: string, pricingFingerprint: string): Record<string, CacheEntry> {
-  const stamp = fileStamp(filePath);
-  const memo = memoized.get(filePath);
+function loadCacheFile(name: string, path: string): Record<string, CacheEntry> {
+  const stamp = fileStamp(path);
+  const memo = memoized.get(name);
   if (
     stamp &&
-    memo?.mtimeMs === stamp.mtimeMs &&
+    memo?.path === path &&
+    memo.mtimeMs === stamp.mtimeMs &&
     memo.size === stamp.size &&
-    memo.timezone === machineTimezone() &&
-    memo.pricingFingerprint === pricingFingerprint
+    memo.timezone === machineTimezone()
   ) {
     return memo.entries;
   }
-  const entries = readCacheFile(filePath, pricingFingerprint);
-  remember(filePath, entries, pricingFingerprint);
+  const entries = readCacheFile(path);
+  remember(name, path, entries);
   return entries;
 }
 
-function readCacheFile(filePath: string, pricingFingerprint: string): Record<string, CacheEntry> {
+function readCacheFile(filePath: string): Record<string, CacheEntry> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(filePath, 'utf8'));
@@ -145,16 +154,7 @@ function readCacheFile(filePath: string, pricingFingerprint: string): Record<str
     return {};
   }
 
-  if (
-    !isRecord(parsed) ||
-    parsed.format !== CACHE_FORMAT ||
-    // Costs are baked in at parse time, so a release that changes the pricing
-    // tables must invalidate everything rather than serve stale dollars.
-    parsed.appVersion !== packageVersion() ||
-    parsed.timezone !== machineTimezone() ||
-    parsed.pricingFingerprint !== pricingFingerprint ||
-    !isRecord(parsed.entries)
-  ) {
+  if (!isRecord(parsed) || parsed.timezone !== machineTimezone() || !isRecord(parsed.entries)) {
     return {};
   }
 
@@ -163,6 +163,36 @@ function readCacheFile(filePath: string, pricingFingerprint: string): Record<str
     if (isCacheEntry(entry)) entries[path] = entry;
   }
   return entries;
+}
+
+/** Costs are baked in at parse time, so format, version and pricing pack all key the file; the CLI and sidecar may differ. */
+function cacheFileName(name: string, pricingFingerprint: string): string {
+  const key = createHash('sha256')
+    .update(`${String(CACHE_FORMAT)}\0${packageVersion()}\0${pricingFingerprint}`)
+    .digest('hex')
+    .slice(0, 12);
+  return `${name}-${key}.json`;
+}
+
+/** Keeps the newest other keyed file, which another live writer (CLI or app) refreshes on each save. */
+function pruneSiblings(name: string, current: string): void {
+  const keyed = new RegExp(`^${name}-[0-9a-f]+\\.json$`, 'u');
+  try {
+    const others = readdirSync(CACHE_DIR)
+      .filter((file) => file !== current && keyed.test(file))
+      .map((file) => ({
+        path: join(CACHE_DIR, file),
+        mtimeMs: fileStamp(join(CACHE_DIR, file))?.mtimeMs ?? 0,
+      }))
+      .toSorted((a, b) => b.mtimeMs - a.mtimeMs);
+    for (const { path } of others.slice(1)) rmSync(path, { force: true });
+    const legacy = join(CACHE_DIR, `${name}.json`); // Still read by a not-yet-updated CLI or app.
+    const legacyStamp = fileStamp(legacy);
+    if (legacyStamp && Date.now() - legacyStamp.mtimeMs > STALE_SIBLING_MS)
+      rmSync(legacy, { force: true });
+  } catch {
+    // Pruning is housekeeping; a failure must not fail the command.
+  }
 }
 
 export interface ParseCache {
@@ -196,9 +226,10 @@ function disabledCache(): ParseCache {
 export function openParseCache(name: string): ParseCache {
   if (environmentValue('AITRACK_NO_CACHE')) return disabledCache();
 
-  const cachePath = join(CACHE_DIR, `${name}.json`);
   const pricingFingerprint = currentModelPricing().fingerprint;
-  const previous = loadCacheFile(cachePath, pricingFingerprint);
+  const fileName = cacheFileName(name, pricingFingerprint);
+  const cachePath = join(CACHE_DIR, fileName);
+  const previous = loadCacheFile(name, cachePath);
   const next: Record<string, CacheEntry> = {};
   let isRecorded = false;
 
@@ -241,13 +272,7 @@ export function openParseCache(name: string): ParseCache {
     save() {
       const isEvicted = Object.keys(previous).some((filePath) => !(filePath in next));
       if (!isRecorded && !isEvicted) return;
-      const payload = JSON.stringify({
-        format: CACHE_FORMAT,
-        appVersion: packageVersion(),
-        timezone: machineTimezone(),
-        pricingFingerprint,
-        entries: next,
-      });
+      const payload = JSON.stringify({ timezone: machineTimezone(), entries: next });
       // Write-then-rename so a concurrent reader never sees a half-written
       // file. A lost race just costs the next run a full parse.
       const temporaryPath = `${cachePath}.${String(process.pid)}.tmp`;
@@ -255,7 +280,11 @@ export function openParseCache(name: string): ParseCache {
         mkdirSync(CACHE_DIR, { recursive: true });
         writeFileSync(temporaryPath, payload, 'utf8');
         renameSync(temporaryPath, cachePath);
-        remember(cachePath, next, pricingFingerprint);
+        remember(name, cachePath, next);
+        if (!prunedPaths.has(cachePath)) {
+          prunedPaths.add(cachePath);
+          pruneSiblings(name, fileName);
+        }
       } catch {
         rmSync(temporaryPath, { force: true });
         // A cache that cannot be written (read-only home, full disk) must not

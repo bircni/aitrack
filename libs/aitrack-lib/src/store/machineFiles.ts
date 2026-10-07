@@ -11,18 +11,11 @@ import {
 import { basename, dirname, join } from 'node:path';
 
 import type { MachineFile } from '../data/types.js';
-import { parseMachineFile } from '../data/validate.js';
-import { machineDataFilename, machineIdValidationError, normalizeMachineId } from '../machineId.js';
+import { type MachineFileValidationOptions, parseMachineFile } from '../data/validate.js';
+import { machineDataFilename, machineIdValidationError } from '../machineId.js';
 import { log } from '../output.js';
 import { DATA_DIR, PENDING_DATA_DIR } from '../paths.js';
 
-/**
- * Reading and writing the machine JSON files.
- *
- * This is filesystem I/O, not git — it lived in `src/git.ts` only because the
- * files happen to sit inside the clone, which is why that module had to import
- * the validator.
- */
 /** Path of a machine's JSON file inside `directory`. */
 export function machineFilePath(directory: string, machineId: string): string {
   return join(directory, machineDataFilename(machineId));
@@ -35,13 +28,15 @@ export function listDataFiles(): string[] {
     .map((f: string) => join(DATA_DIR, f));
 }
 
-export function readDataFile(filePath: string): MachineFile | null {
-  const raw = readFileSync(filePath, 'utf8');
-  return parseMachineFile(raw, filePath);
+export function readDataFile(
+  filePath: string,
+  options?: MachineFileValidationOptions,
+): MachineFile | null {
+  return parseMachineFile(readFileSync(filePath, 'utf8'), filePath, options);
 }
 
 /** Serialize a machine file the way every writer must, so round-trips stay stable. */
-function serializeMachineFile(machine: MachineFile): string {
+export function serializeMachineFile(machine: MachineFile): string {
   return JSON.stringify(machine, null, 2);
 }
 
@@ -86,15 +81,8 @@ export function adoptPendingDataFiles(targetDataDir: string): number {
   const skipped: string[] = [];
   for (const source of pending) {
     const filename = basename(source);
-    const machineId = filename.slice(0, -'.json'.length);
-    if (normalizeMachineId(machineId) !== machineId) {
-      throw new Error(`Cannot adopt pending machine file with an invalid name: ${filename}`);
-    }
-    const target = machineFilePath(targetDataDir, machineId);
-    // The repo already holds synced data for this machine, which supersedes the
-    // staged copy. Leave it alone rather than aborting the whole adoption —
-    // throwing here used to make init unrecoverable once a stale staged file
-    // existed, since init is also the only way to write the config back.
+    const target = join(targetDataDir, filename);
+    // Synced data supersedes the staged copy; aborting would leave init unrecoverable.
     if (existsSync(target)) {
       skipped.push(filename);
       continue;
@@ -112,10 +100,7 @@ export function adoptPendingDataFiles(targetDataDir: string): number {
     }
   }
   if (skipped.length > 0) {
-    // The skipped sources stay put — a synced file for the machine exists, but
-    // it is not necessarily a superset of what was staged, so deleting them
-    // here could drop history. Name the directory instead: nothing else clears
-    // it, so this warning repeats on every init until the user does.
+    // Kept: the synced file is not necessarily a superset of what was staged.
     log.warn(
       `Skipped ${String(skipped.length)} staged data file(s) already synced in the repo: ${skipped.join(', ')}`,
     );

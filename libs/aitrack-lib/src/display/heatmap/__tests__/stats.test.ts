@@ -1,5 +1,5 @@
-import { makeDay } from '@aitrack/test-fixtures';
-import { describe, expect, it } from 'vitest';
+import { makeDay, useTimeZone } from '@aitrack/test-fixtures';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { toLocalDateString } from '../../../data/dayMap.js';
 import type { DayEntry } from '../../../data/types.js';
@@ -47,6 +47,16 @@ describe('computeModelStats', () => {
     expect(stats.topAllTime?.tokens).toBe(3800);
   });
 
+  it('counts the last 30 days including today as recent', () => {
+    const stats = computeModelStats(
+      new Map([
+        [dayKey(30), makeDay(100, 0, undefined, 'old')],
+        [dayKey(29), makeDay(1, 0, undefined, 'recent')],
+      ]),
+    );
+    expect(stats.topRecent).toEqual({ model: 'recent', tokens: 1 });
+  });
+
   it('returns nulls on empty input', () => {
     const stats = computeModelStats(new Map());
     expect(stats.topAllTime).toBeNull();
@@ -70,8 +80,6 @@ describe('longestStreak', () => {
 
 describe('currentStreak', () => {
   it('counts a run that ends yesterday, before today has any usage', () => {
-    // Today is still in progress: counting from it reported 0 all morning and
-    // then jumped to the full streak after the first request.
     const dayMap = new Map([
       [dayKey(3), makeDay(1, 0)],
       [dayKey(2), makeDay(1, 0)],
@@ -107,6 +115,18 @@ describe('peakMonth', () => {
 });
 
 describe('buildDateGrid', () => {
+  useTimeZone('America/Santiago'); // DST starts at midnight, so local 00:00 can be skipped
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('ends the rolling grid on today', () => {
+    vi.useFakeTimers({ now: new Date(2026, 8, 20, 12) });
+    const dates = buildDateGrid().flat();
+    expect(dates.findLast((d) => d !== null)).toBe('2026-09-20');
+    expect(dates).toContain('2026-09-06');
+  });
+
   it('needs 54 columns for a leap year starting on Saturday', () => {
     // Jan 1 is a Saturday in each of these, so the grid opens with a nearly
     // empty week and still has to carry all 366 days.
@@ -126,5 +146,10 @@ describe('buildDateGrid', () => {
       .filter((d): d is string => d !== null);
     expect(new Set(dates).size).toBe(366);
     expect(dates).toContain('2028-12-31');
+    expect(
+      buildDateGrid(9999)
+        .flat()
+        .findLast((d) => d !== null),
+    ).toBe('9999-12-31');
   });
 });

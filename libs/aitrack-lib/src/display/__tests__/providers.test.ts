@@ -4,14 +4,11 @@ import type { ProviderData } from '../../data/types.js';
 import {
   activeProviderKeys,
   costColumnLabel,
-  isSyncedProvider,
   normalizeProviderKey,
   orderedProviderKeys,
   PROVIDERS,
-  providerKeys,
   providerLabel,
   sortProviderKeys,
-  syncedProviderKeys,
 } from '../../providers/index.js';
 
 describe('provider helpers', () => {
@@ -50,26 +47,14 @@ describe('provider helpers', () => {
       'zebra',
     ]);
   });
-});
 
-describe('provider registry', () => {
-  it('derives every list from one table, so they cannot drift', () => {
-    // These were five separate declarations; adding a provider meant finding
-    // all of them.
+  it('reads labels and aliases from each descriptor', () => {
     for (const { descriptor } of PROVIDERS) {
-      expect(providerKeys()).toContain(descriptor.key);
       expect(providerLabel(descriptor.key)).toBe(descriptor.label);
-      expect(isSyncedProvider(descriptor.key)).toBe(descriptor.synced);
       expect(costColumnLabel(descriptor.key)).toBe(descriptor.costLabel);
       for (const alias of descriptor.aliases) {
         expect(normalizeProviderKey(alias.toUpperCase())).toBe(descriptor.key);
       }
     }
-  });
-
-  it('keeps Cursor out of the synced set', () => {
-    // Cursor is fetched live on every command and never written to git.
-    expect(syncedProviderKeys()).not.toContain('cursor');
-    expect(syncedProviderKeys()).toEqual(['claude_code', 'codex']);
   });
 });

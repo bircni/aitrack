@@ -47,6 +47,7 @@ describe('listJsonlFiles', () => {
 
   it('returns nothing for a directory that does not exist', async () => {
     expect(await listJsonlFiles(join(root, 'missing'))).toEqual([]);
+    expect(await listJsonlFiles(join(root, 'a.jsonl'))).toEqual([]);
   });
 
   it('lists files in a stable order across runs', async () => {

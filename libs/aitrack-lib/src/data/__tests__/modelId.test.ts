@@ -36,6 +36,8 @@ describe('model id suffixes', () => {
     expect(stripModelEffortSuffix('gpt-5.4-mini')).toBe('gpt-5.4-mini');
     expect(stripModelEffortSuffix('gpt-5.5-pro')).toBe('gpt-5.5-pro');
     expect(stripModelEffortSuffix('muse-spark-1.3-extra-high')).toBe('muse-spark-1.3');
+    expect(stripModelEffortSuffix('gpt-5.1-codex-max')).toBe('gpt-5.1-codex-max');
+    expect(stripModelEffortSuffix('gpt-5.1-codex-max-high')).toBe('gpt-5.1-codex-max');
   });
 
   it('names the effort knob without the priced model id', () => {

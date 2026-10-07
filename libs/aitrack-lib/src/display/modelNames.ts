@@ -1,9 +1,8 @@
 import {
   CLAUDE_FAMILIES,
+  canonicalModelId,
   canonicalizeClaudeModelId,
   modelEffortLabel,
-  stripModelEffortSuffix,
-  stripModelVersionSuffixes,
 } from '../data/modelId.js';
 
 function titleCase(word: string): string {
@@ -21,7 +20,7 @@ function displayStem(model: string): string {
     .replace(/^cursor-/u, '');
   const canonical = lowered.startsWith('claude-')
     ? canonicalizeClaudeModelId(lowered)
-    : stripModelEffortSuffix(stripModelVersionSuffixes(lowered));
+    : canonicalModelId(lowered);
   return canonical.replace(/^claude-/u, '');
 }
 

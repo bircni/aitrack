@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { calendarDateInTimeZone } from '../timezone.js';
+import { calendarDateInTimeZone, machineTimezone } from '../timezone.js';
 
 describe('calendarDateInTimeZone', () => {
   const instant = new Date('2026-06-15T03:00:00Z');
@@ -16,9 +16,6 @@ describe('calendarDateInTimeZone', () => {
   });
 });
 
-import { vi } from 'vitest';
-
-import { machineTimezone } from '../timezone.js';
 it('falls back to UTC when Intl cannot report a zone', () => {
   const spy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementationOnce(() => {
     throw new Error('unsupported');
