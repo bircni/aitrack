@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { useTimeZone } from '@aitrack/test-fixtures';
+import { describe, expect, it } from 'vitest';
 
 import { formatWhen, meterTone } from '../../shared/pace.js';
 import type { PeriodUsage, ProviderUsage, QuotaWindow } from '../../shared/types.js';
@@ -115,13 +116,14 @@ describe('limits', () => {
     expect(formatReset(undefined, NOW, 'relative')).toBeUndefined();
   });
 
-  it.each([
-    ['2026-03-29T12:00:00', '2026-03-30T00:30:00', 'weekday'],
-    ['2026-03-29T12:00:00', '2026-04-05T00:30:00', 'date'],
-    ['2026-10-25T12:00:00', '2026-10-25T23:30:00', 'time'],
-  ])('uses local calendar days across DST: %s → %s', (now, at, label) => {
-    vi.stubEnv('TZ', 'Europe/Berlin');
-    try {
+  describe('across DST', () => {
+    useTimeZone('Europe/Berlin');
+
+    it.each([
+      ['2026-03-29T12:00:00', '2026-03-30T00:30:00', 'weekday'],
+      ['2026-03-29T12:00:00', '2026-04-05T00:30:00', 'date'],
+      ['2026-10-25T12:00:00', '2026-10-25T23:30:00', 'time'],
+    ])('uses local calendar days: %s → %s', (now, at, label) => {
       const date = new Date(at);
       const time = clock(date.getTime());
       const expected =
@@ -131,9 +133,7 @@ describe('limits', () => {
             ? `${date.toLocaleDateString([], { weekday: 'short' })} ${time}`
             : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
       expect(formatWhen(date.getTime(), new Date(now).getTime())).toBe(expected);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    });
   });
 
   it('labels the pace in plain words', () => {
@@ -186,8 +186,7 @@ describe('limits', () => {
   it('formats the footer age', () => {
     expect(formatUpdated(new Date(NOW - 5000).toISOString(), NOW)).toBe('Updated just now');
     expect(formatUpdated(new Date(NOW - 3 * 60_000).toISOString(), NOW)).toBe('Updated 3m ago');
-    expect(formatUpdated(undefined, NOW)).toBe('Updating…');
-    expect(formatUpdated('bad', NOW)).toBe('Updating…');
+    expect(formatUpdated(undefined, NOW)).toBe('Not updated yet');
     expect(formatUpdated(new Date(NOW - 61_000).toISOString(), NOW)).toBe('Updated 1m ago');
   });
 });

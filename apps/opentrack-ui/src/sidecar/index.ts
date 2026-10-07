@@ -1,17 +1,16 @@
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
-import { tryLoadConfig } from 'aitrack-lib/config';
-import type { MachineFile } from 'aitrack-lib/data/types';
+import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
 import { loadMergedProviderData } from 'aitrack-lib/data/usageData';
 import { errorMessage } from 'aitrack-lib/errors';
-import { isCloned, pull } from 'aitrack-lib/git';
+import { pull } from 'aitrack-lib/git';
 import { fetchQuota } from 'aitrack-lib/quota/index';
 import { syncData } from 'aitrack-lib/sync';
 
 import type { Settings } from '../shared/types.js';
 import { handleRequest, parseRequest, type SidecarMessage } from './protocol.js';
-import { CACHE_FORMAT, loadCachedState, QuotaService } from './service.js';
+import { CACHE_FORMAT, loadCachedState, QuotaService, type ServiceDeps } from './service.js';
 import { loadSettings, readJsonFile, writeJsonFile } from './settings.js';
 import { renderTrayIcon, summarizeTray } from './trayIcon.js';
 import { summarizeUsage } from './usage.js';
@@ -37,28 +36,24 @@ function argument(name: string): string | undefined {
   return index === -1 ? undefined : process.argv[index + 1];
 }
 
-async function loadUsage(options: {
-  pull: boolean;
-  refreshLive: boolean;
-  localMachine?: MachineFile;
-}) {
-  let warning: string | undefined;
-  if (options.pull && tryLoadConfig() && isCloned()) {
-    try {
-      await pull({ timeoutMs: GIT_TIMEOUT_MS });
-    } catch (error) {
-      warning = `Could not pull synced data: ${errorMessage(error)}`;
-    }
-  }
-  try {
-    const loaded = await loadMergedProviderData({
-      refreshLive: options.refreshLive,
-      localMachine: options.localMachine,
-    });
-    return { summary: summarizeUsage(loaded), warning };
-  } catch (error) {
-    return { error: errorMessage(error), warning };
-  }
+async function loadUsage(options: Parameters<ServiceDeps['loadUsage']>[0]) {
+  // Pulls while this machine's logs are parsed; only the synced files wait for it.
+  const pulled =
+    options.pull && !isUsageNotConfigured()
+      ? pull({ timeoutMs: GIT_TIMEOUT_MS }).then(
+          () => undefined,
+          (error: unknown) => `Could not pull synced data: ${errorMessage(error)}`,
+        )
+      : undefined;
+  const result = await loadMergedProviderData({
+    providers: options.providers,
+    refreshLive: options.refreshLive,
+    localMachine: options.localMachine,
+    syncedReady: pulled,
+  })
+    .then((loaded) => ({ summary: summarizeUsage(loaded) }))
+    .catch((error: unknown) => ({ error: errorMessage(error) }));
+  return { ...result, warning: await pulled };
 }
 
 async function main(): Promise<void> {
@@ -100,7 +95,9 @@ async function main(): Promise<void> {
         send({ event: 'alert', data: { title: alert.title, body: alert.body } });
       },
       persist: (cache) => {
-        writeJsonFile(cachePath, { format: CACHE_FORMAT, ...cache }).catch(() => undefined);
+        writeJsonFile(cachePath, { format: CACHE_FORMAT, ...cache }).catch((error: unknown) => {
+          console.error('opentrack sidecar:', error);
+        });
       },
       sync: () => syncData({ timeoutMs: GIT_TIMEOUT_MS }),
     },

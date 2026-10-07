@@ -48,6 +48,10 @@ export interface CachedState {
   rateLimitedUntil?: Partial<Record<QuotaProviderKey, number>>;
 }
 
+function isTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
+}
+
 function isSpend(value: unknown): value is Spend & Record<string, unknown> {
   return (
     isRecord(value) &&
@@ -114,7 +118,7 @@ function isSnapshot(value: unknown, key: QuotaProviderKey): value is QuotaSnapsh
     isRecord(value) &&
     value.provider === key &&
     (value.plan === undefined || typeof value.plan === 'string') &&
-    typeof value.fetchedAt === 'string' &&
+    isTimestamp(value.fetchedAt) &&
     Array.isArray(value.windows) &&
     value.windows.every(isWindow) &&
     Array.isArray(value.values) &&
@@ -143,14 +147,12 @@ function providerMap<T>(
 }
 
 /** A cache.json read from disk, which may be hand-edited: whatever does not fit is dropped. */
-export function normalizeCachedState(input: unknown): CachedState {
+function normalizeCachedState(input: unknown): CachedState {
   const raw = isRecord(input) ? input : {};
   const usage = isRecord(raw.usage) ? raw.usage : undefined;
   return {
-    ...(typeof raw.updatedAt === 'string' &&
-      Number.isFinite(Date.parse(raw.updatedAt)) && { updatedAt: raw.updatedAt }),
-    ...(typeof raw.usageUpdatedAt === 'string' &&
-      Number.isFinite(Date.parse(raw.usageUpdatedAt)) && { usageUpdatedAt: raw.usageUpdatedAt }),
+    ...(isTimestamp(raw.updatedAt) && { updatedAt: raw.updatedAt }),
+    ...(isTimestamp(raw.usageUpdatedAt) && { usageUpdatedAt: raw.usageUpdatedAt }),
     ...(typeof raw.pullError === 'string' && { pullError: raw.pullError }),
     quotas: providerMap(raw.quotas, (entry, key) => (isSnapshot(entry, key) ? entry : undefined)),
     usage: usage && {
@@ -193,9 +195,15 @@ export function loadCachedState(input: unknown): CachedState {
   return version === CACHE_FORMAT ? normalizeCachedState(cache) : normalizeCachedState({});
 }
 
+function providersKey(providers: readonly QuotaProviderKey[]): string {
+  return providers.toSorted().join();
+}
+
 export interface ServiceDeps {
   fetchQuota: (provider: QuotaProviderKey) => Promise<QuotaResult>;
   loadUsage: (options: {
+    /** Only enabled providers are read, so a disabled Cursor is never contacted. */
+    providers: QuotaProviderKey[];
     pull: boolean;
     refreshLive: boolean;
     /** This machine's logs as a sync just read them, so they are not parsed again. */
@@ -219,6 +227,8 @@ export class QuotaService {
   private readonly runtime = new Map<QuotaProviderKey, ProviderRuntime>();
   private usageRun: Promise<void> | undefined;
   private nextUsageAt = 0;
+  /** Sorted providers the last usage load read; a change makes usage due so a re-enabled one shows. */
+  private usageProviders: string | undefined;
   private nextPullAt = 0;
   private usageError: string | undefined;
   private syncing = false;
@@ -251,20 +261,18 @@ export class QuotaService {
   }
 
   state(): AppState {
-    const providers = this.settings.providers
-      .filter((provider) => provider.enabled)
-      .map(({ key }): ProviderState => {
-        const runtime = this.runtime.get(key);
-        return {
-          key,
-          label: providerLabel(key),
-          quota: this.cache.quotas[key],
-          quotaError: runtime?.error,
-          retryAt: runtime?.error?.kind === 'rateLimited' ? runtime.nextAttemptAt : undefined,
-          usage: this.cache.usage?.providers[key],
-          refreshing: runtime?.refreshing ?? false,
-        };
-      });
+    const providers = this.enabledProviders().map((key): ProviderState => {
+      const runtime = this.runtime.get(key);
+      return {
+        key,
+        label: providerLabel(key),
+        quota: this.cache.quotas[key],
+        quotaError: runtime?.error,
+        retryAt: runtime?.error?.kind === 'rateLimited' ? runtime.nextAttemptAt : undefined,
+        usage: this.cache.usage?.providers[key],
+        refreshing: runtime?.refreshing ?? false,
+      };
+    });
     return {
       providers,
       refreshing: this.usageRun !== undefined || providers.some((provider) => provider.refreshing),
@@ -295,7 +303,10 @@ export class QuotaService {
         this.syncResult = { ok: false, message: errorMessage(error) };
       }
       await this.usageRun;
-      await Promise.all([this.refresh(), this.refreshUsage(false, localMachine)]);
+      await Promise.all([
+        this.refresh(),
+        this.refreshUsage(false, this.enabledProviders(), localMachine),
+      ]);
     } finally {
       this.syncing = false;
       this.persist();
@@ -308,24 +319,28 @@ export class QuotaService {
    */
   async refresh(force = false): Promise<void> {
     const now = this.deps.now();
-    const due = this.settings.providers
-      .filter(({ enabled }) => enabled)
-      .map(({ key }) => key)
-      .filter((key) => {
-        const runtime = this.runtime.get(key);
-        if (runtime?.refreshing) return false;
-        if (runtime?.error?.kind === 'rateLimited') return now >= runtime.nextAttemptAt;
-        return force || now >= (runtime?.nextAttemptAt ?? 0);
-      });
+    const providers = this.enabledProviders();
+    const due = providers.filter((key) => {
+      const runtime = this.runtime.get(key);
+      if (runtime?.refreshing) return false;
+      if (runtime?.error?.kind === 'rateLimited') return now >= runtime.nextAttemptAt;
+      return force || now >= (runtime?.nextAttemptAt ?? 0);
+    });
     const usageDue =
-      this.usageRun === undefined && !this.syncing && (force || now >= this.nextUsageAt);
+      this.usageRun === undefined &&
+      !this.syncing &&
+      (force || now >= this.nextUsageAt || providersKey(providers) !== this.usageProviders);
     if (due.length === 0 && !usageDue) return;
 
     await Promise.all([
       ...due.map((key) => this.refreshQuota(key)),
-      usageDue ? this.refreshUsage(force) : Promise.resolve(),
+      usageDue ? this.refreshUsage(force, providers) : Promise.resolve(),
     ]);
     this.persist();
+  }
+
+  private enabledProviders(): QuotaProviderKey[] {
+    return this.settings.providers.filter(({ enabled }) => enabled).map(({ key }) => key);
   }
 
   private persist(): void {
@@ -378,20 +393,31 @@ export class QuotaService {
     }
   }
 
-  private refreshUsage(force: boolean, localMachine?: MachineFile): Promise<void> {
-    const run = this.loadUsage(force, localMachine).finally(() => {
+  private refreshUsage(
+    force: boolean,
+    providers: QuotaProviderKey[],
+    localMachine?: MachineFile,
+  ): Promise<void> {
+    const run = this.loadUsage(force, providers, localMachine).finally(() => {
       this.usageRun = undefined;
+      this.emit(); // Usage shows now rather than with the slowest quota fetch.
     });
     this.usageRun = run;
     this.emit();
     return run;
   }
 
-  private async loadUsage(force: boolean, localMachine?: MachineFile): Promise<void> {
+  private async loadUsage(
+    force: boolean,
+    providers: QuotaProviderKey[],
+    localMachine?: MachineFile,
+  ): Promise<void> {
     const now = this.deps.now();
     const pull = this.settings.pullSyncedData && (force || now >= this.nextPullAt);
+    this.usageProviders = providersKey(providers);
     try {
       const result = await this.deps.loadUsage({
+        providers,
         pull,
         refreshLive: force,
         localMachine,

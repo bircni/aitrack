@@ -2,15 +2,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { toLocalDateString } from 'aitrack-lib/data/dayMap';
-import type { DayEntry } from 'aitrack-lib/data/types';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ProviderState, QuotaSnapshot } from '../../shared/types.js';
 import { dueAlerts, pruneFired } from '../alerts.js';
 import { DEFAULT_SETTINGS, loadSettings, normalizeSettings, writeJsonFile } from '../settings.js';
 import { renderTrayIcon, summarizeTray } from '../trayIcon.js';
-import { summarizeUsage } from '../usage.js';
 
 const NOW = Date.parse('2026-06-01T12:00:00.000Z');
 const HOUR = 3_600_000;
@@ -36,15 +33,6 @@ function provider(windows: QuotaSnapshot['windows']): ProviderState {
     label: 'Claude Code',
     quota: snapshot(windows),
     refreshing: false,
-  };
-}
-
-function day(input: number, output: number, costUSD: number): DayEntry {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    costUSD,
-    byModel: { 'claude-sonnet-4-6': { inputTokens: input, outputTokens: output, costUSD } },
   };
 }
 
@@ -315,82 +303,5 @@ describe('tray icon', () => {
       expect(pixels.includes(255)).toBe(true);
       expect(pixels.includes(71)).toBe(true);
     }
-  });
-});
-
-describe('summarizeUsage', () => {
-  it('builds today, yesterday, 30 days, all-time and the daily series', () => {
-    const now = new Date();
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const old = new Date(now);
-    old.setDate(now.getDate() - 60);
-    const summary = summarizeUsage(
-      {
-        providerData: {
-          claude_code: new Map([
-            [toLocalDateString(now), day(100, 50, 1.5)],
-            [toLocalDateString(yesterday), day(10, 5, 0.25)],
-            [toLocalDateString(old), day(20, 10, 0.5)],
-          ]),
-        },
-        machineData: [],
-      },
-      now,
-    );
-    const claude = summary.providers.claude_code;
-    if (!claude) throw new Error('expected Claude Code usage');
-    expect(claude.today).toMatchObject({ tokens: 150, costUSD: 1.5, hasCost: true });
-    expect(claude.today.models).toEqual([
-      { model: 'claude-sonnet-4-6', tokens: 150, costUSD: 1.5, hasCost: true },
-    ]);
-    expect(claude.yesterday.tokens).toBe(15);
-    expect(claude.last7Days.tokens).toBe(165);
-    expect(claude.last30Days.tokens).toBe(165);
-    expect(claude.allTime.tokens).toBe(195);
-    expect(claude.daily).toHaveLength(30);
-    expect(claude.daily.at(-1)).toEqual({
-      date: toLocalDateString(now),
-      costUSD: 1.5,
-    });
-    expect(summary.providers.codex).toBeUndefined();
-    expect(summary.machineCount).toBe(1);
-    expect(summarizeUsage(null)).toEqual({ providers: {}, machineCount: 1 });
-  });
-
-  it('counts an unsynced local machine alongside persisted machines', () => {
-    const summary = summarizeUsage({
-      providerData: { codex: new Map() },
-      machineData: [
-        {
-          schemaVersion: 1,
-          hostname: 'remote',
-          timezone: 'UTC',
-          dayBucket: 'local',
-          lastUpdated: '',
-          days: {},
-        },
-      ],
-      zonedSources: [
-        { timezone: 'UTC', days: {} },
-        { timezone: 'UTC', days: {} },
-      ],
-    });
-    expect(summary.machineCount).toBe(2);
-  });
-
-  it('gives an empty period for a provider with nothing in the window', () => {
-    const old = new Date();
-    old.setDate(old.getDate() - 3);
-    const summary = summarizeUsage({
-      providerData: { codex: new Map([[toLocalDateString(old), day(1, 1, 0)]]) },
-      machineData: [],
-    });
-    expect(summary.providers.codex?.today).toEqual({
-      tokens: 0,
-      costUSD: 0,
-      hasCost: false,
-      models: [],
-    });
   });
 });

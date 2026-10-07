@@ -19,6 +19,7 @@ struct PanelState {
     /// Content height in CSS pixels, as the renderer measured it.
     content_height: f64,
     tray: Option<Rect>,
+    deferred_show: Option<&'static str>,
 }
 
 impl Panel {
@@ -29,6 +30,7 @@ impl Panel {
                 hidden_by_blur_at: None,
                 content_height: 560.0,
                 tray: None,
+                deferred_show: None,
             }),
         }
     }
@@ -77,6 +79,20 @@ impl Panel {
         if let Some(screen) = screen {
             let _ = window.emit("screen", screen);
         }
+    }
+
+    /// A launch while WebView2 still starts (slow at login) is shown once setup has built the window.
+    pub fn window_or_defer(&self, app: &AppHandle, screen: &'static str) -> Option<WebviewWindow> {
+        let mut state = self.state.lock().unwrap(); // Held across the lookup so setup's take cannot slip between.
+        let window = main_window(app);
+        if window.is_none() {
+            state.deferred_show = Some(screen);
+        }
+        window
+    }
+
+    pub fn take_deferred_show(&self) -> Option<&'static str> {
+        self.state.lock().unwrap().deferred_show.take()
     }
 
     pub fn fit(&self, window: &WebviewWindow, height: f64) {
@@ -129,6 +145,8 @@ impl Panel {
     }
 }
 
+pub const MAIN_WINDOW: &str = "main";
+
 pub fn main_window(app: &AppHandle) -> Option<WebviewWindow> {
-    app.get_webview_window("main")
+    app.get_webview_window(MAIN_WINDOW)
 }

@@ -23,7 +23,7 @@ interface TrayBar {
 
 export interface TraySummary {
   tone: TrayTone;
-  /** Highest percent used across the enabled providers' windows, 0–100. */
+  /** Percent used of the shown window, the highest over the followed providers, 0–100. */
   usedPercent: number;
   tooltip: string;
   bars: TrayBar[];
@@ -124,12 +124,7 @@ interface TrayAppearance {
 
 const DEFAULT_APPEARANCE: TrayAppearance = { style: 'icon', colored: true, bars: [] };
 
-/**
- * The opentrack "O" filled like a pie, as straight RGBA (the layout Tauri's
- * tray image takes): a solid outline ring, and inside it a wedge from 12
- * o'clock covering `usedPercent`, over a faint disc for what is left. All in
- * the tone, so it reads on light and dark taskbars alike.
- */
+/** The "O" filled like a pie, or one bar per limit, as straight RGBA for Tauri's tray image. */
 export function renderTrayIcon(
   size: number,
   usedPercent: number,

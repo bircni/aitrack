@@ -32,10 +32,13 @@ opentrack reuses the logins your tools already saved and never writes to them:
 Tokens are not refreshed by opentrack: when one expires, the provider shows a message until you
 next use that tool. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
 
-Usage history is read locally (Claude/Codex logs, Cursor's usage export) and merged with the other
-machines in your aitrack data repo when one is configured (`aitrack init`). opentrack `git pull`s
-that repo every 30 minutes (can be turned off). It commits and pushes only when you press the sync
-button in the popup, which does exactly what `aitrack sync` does.
+Usage history comes from the local Claude/Codex logs and, while Cursor is enabled, Cursor's CSV
+usage export, which is downloaded from `CURSOR_WEB_BASE_URL` (`https://cursor.com` by default) with
+the saved Cursor token at most every 6 hours (`AITRACK_CURSOR_CACHE_TTL`) and on each manual
+refresh. A provider turned off in Settings is neither read nor contacted. Usage is merged with the
+other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
+`git pull`s that repo every 30 minutes (can be turned off). It commits and pushes only when you
+press the sync button in the popup, which does exactly what `aitrack sync` does.
 
 A failed pull remains visible until recovery and retries after one minute; a successful
 pull restores the 30-minute schedule. Failed local reads retain their own warning.
@@ -54,7 +57,8 @@ builds never check.
 
 Settings and the last snapshot live in the app's data folder (`%APPDATA%\dev.bircni.opentrack` on
 Windows): `settings.json`, `cache.json`, and `sidecar.log`. There is no account, telemetry or
-backend: the update check is the only request that is not to a provider or your data repo.
+backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
+check, and for the pricing refresh the sync button runs like `aitrack sync` (at most daily).
 
 ## Downloads
 
