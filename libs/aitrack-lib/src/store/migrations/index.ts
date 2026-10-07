@@ -1,9 +1,10 @@
 import { CURRENT_SCHEMA_VERSION } from '../../data/schema.js';
-import type { AppliedMigration, MigratableFile, Migration } from './types.js';
+import type { MigratableFile, Migration } from './types.js';
 import { v2 } from './v2.js';
 
 export type { Migration } from './types.js';
-export { UNKNOWN_TIMEZONE } from './v2.js';
+/** @public Kept for the published subpath; lives in `timezone.ts`. */
+export { UNKNOWN_TIMEZONE } from '../../timezone.js';
 
 /**
  * Ordered migration chain. Each entry consumes `from` and produces `to`; the
@@ -28,26 +29,19 @@ function schemaVersionOf(file: MigratableFile): number {
   return typeof raw === 'number' && Number.isInteger(raw) && raw > 0 ? raw : 1;
 }
 
-export interface MigrationResult {
-  file: MigratableFile;
-  applied: AppliedMigration[];
-}
-
 /**
  * Bring a parsed machine file up to the current schema version.
  *
- * A file already at the current version is returned by reference with an empty
- * `applied` list — that identity is what keeps an up-to-date file's git
- * round-trip byte-identical. Throws {@link SchemaFromTheFutureError} for a
- * newer version, and a plain error if the chain has a gap (a bug).
+ * A file already at the current version is returned by reference, which keeps
+ * its git round trip byte-identical. Throws {@link SchemaFromTheFutureError} for
+ * a newer version, and a plain error if the chain has a gap (a bug).
  */
-export function applyMigrations(file: MigratableFile): MigrationResult {
+export function applyMigrations(file: MigratableFile): MigratableFile {
   let version = schemaVersionOf(file);
-  if (version === CURRENT_SCHEMA_VERSION) return { file, applied: [] };
+  if (version === CURRENT_SCHEMA_VERSION) return file;
   if (version > CURRENT_SCHEMA_VERSION) throw new SchemaFromTheFutureError(version);
 
   let current = file;
-  const applied: AppliedMigration[] = [];
   while (version < CURRENT_SCHEMA_VERSION) {
     const from = version;
     const step = MIGRATIONS.find((migration) => migration.from === from);
@@ -55,8 +49,7 @@ export function applyMigrations(file: MigratableFile): MigrationResult {
       throw new Error(`no migration registered from schema version ${String(from)}`);
     }
     current = step.migrate(current);
-    applied.push({ from: step.from, to: step.to, describe: step.describe });
     version = step.to;
   }
-  return { file: current, applied };
+  return current;
 }

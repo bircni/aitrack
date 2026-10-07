@@ -1,29 +1,13 @@
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
-import { stripModelEffortSuffix, stripModelVersionSuffixes } from '../data/modelId.js';
+import { canonicalModelId } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';
 import { currentModelPricing } from './store.js';
-import {
-  CODEX_PRICING_BY_ID,
-  CODEX_PRICING_CURRENT,
-  CODEX_PRICING_HISTORICAL,
-  CODEX_PRICING_OVERRIDES,
-} from './tables.js';
 import type { CodexPricing } from './types.js';
 
 export type { CodexPricing };
-export {
-  CODEX_PRICING_BY_ID,
-  CODEX_PRICING_CURRENT,
-  CODEX_PRICING_HISTORICAL,
-  CODEX_PRICING_OVERRIDES,
-};
-
-function canonicalCodexModelId(model: string): string {
-  return stripModelEffortSuffix(stripModelVersionSuffixes(model.toLowerCase()));
-}
 
 export function lookupCodexPricing(model: string, usageDate?: string): CodexPricing | undefined {
-  const id = canonicalCodexModelId(model);
+  const id = canonicalModelId(model);
   return currentModelPricing().lookupCodex(id, usageDate);
 }
 
@@ -34,7 +18,7 @@ export function findCodexPricing(
 ): CodexPricing | undefined {
   const exact = lookupCodexPricing(model, usageDate);
   if (exact) return exact;
-  const id = canonicalCodexModelId(model);
+  const id = canonicalModelId(model);
   const fromCatalog = currentModelPricing().lookupCatalogCodex(id);
   if (fromCatalog) return fromCatalog;
   for (const { match, pricing } of currentModelPricing().codexFamilyFallbacks()) {

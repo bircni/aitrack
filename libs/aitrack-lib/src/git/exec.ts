@@ -5,13 +5,6 @@ import { join } from 'node:path';
 import { errorMessage } from '../errors.js';
 import { LOCAL_REPO } from '../paths.js';
 
-/**
- * Running git and surviving a concurrent push.
- *
- * Split out of the old `src/git.ts`, which mixed process invocation with repo
- * lifecycle and with a filesystem store for machine JSON that involved no git
- * at all.
- */
 const MAX_PUSH_ATTEMPTS = 3;
 
 /** Without this, git run from a windowless process (opentrack's worker) opens a console on Windows. */
@@ -24,7 +17,7 @@ const UNSIGNED_ENV = {
   GIT_CONFIG_VALUE_0: 'false',
 };
 
-class GitCommandError extends Error {
+export class GitCommandError extends Error {
   constructor(
     readonly args: string[],
     readonly status: number | null,
@@ -50,28 +43,15 @@ function gitFailure(
   return new GitCommandError(args, status, trimmedText(stderr) || trimmedText(stdout));
 }
 
-export function runGit(args: string[], options: { stdio?: 'inherit' | 'pipe' } = {}): string {
-  const stdio = options.stdio ?? 'inherit';
-  if (stdio === 'pipe') {
-    const result = spawnSync('git', args, {
-      ...GIT_SPAWN_BASE,
-      env: { ...process.env, ...UNSIGNED_ENV },
-      stdio: 'pipe',
-      encoding: 'utf8',
-    });
-    if (result.status !== 0) throw gitFailure(args, result.status, result.stdout, result.stderr);
-    return trimmedText(result.stdout);
-  }
-
+export function runGit(args: string[]): string {
   const result = spawnSync('git', args, {
     ...GIT_SPAWN_BASE,
     env: { ...process.env, ...UNSIGNED_ENV },
-    stdio: 'inherit',
+    stdio: 'pipe',
+    encoding: 'utf8',
   });
-  if (result.status !== 0) {
-    throw new GitCommandError(args, result.status, '');
-  }
-  return '';
+  if (result.status !== 0) throw gitFailure(args, result.status, result.stdout, result.stderr);
+  return trimmedText(result.stdout);
 }
 
 /** Windows needs the whole tree: git's ssh/https helpers otherwise live on. */
@@ -91,7 +71,7 @@ export interface GitOptions {
   timeoutMs?: number;
 }
 
-/** Piped like `runGit(..., { stdio: 'pipe' })`, but without blocking the event loop. */
+/** Like `runGit`, but without blocking the event loop. */
 export function runGitAsync(args: string[], options: GitOptions = {}): Promise<string> {
   const env = {
     ...process.env,

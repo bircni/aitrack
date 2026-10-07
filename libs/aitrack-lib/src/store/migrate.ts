@@ -4,7 +4,7 @@ import { parseMachineFile } from '../data/validate.js';
 import { runGit } from '../git/exec.js';
 import { machineDataFilename, normalizeMachineId } from '../machineId.js';
 import { DATA_DIR, PENDING_DATA_DIR } from '../paths.js';
-import { machineFilePath } from './machineFiles.js';
+import { machineFilePath, serializeMachineFile } from './machineFiles.js';
 
 /**
  * Renaming a machine's files when its id changes.
@@ -47,7 +47,7 @@ function planMachineFileMigration(
     source,
     target,
     sourceContents,
-    contents: JSON.stringify({ ...machine, hostname: nextMachineId }, null, 2),
+    contents: serializeMachineFile({ ...machine, hostname: nextMachineId }),
     repositoryPaths:
       directory === DATA_DIR
         ? [
@@ -93,9 +93,7 @@ export function migrateMachineDataFiles(previousId: string, nextId: string): voi
     }
     for (const plan of plans) {
       if (plan.repositoryPaths === undefined) continue;
-      runGit(['add', '--', ...plan.repositoryPaths.map((path) => `:(literal)${path}`)], {
-        stdio: 'pipe',
-      });
+      runGit(['add', '--', ...plan.repositoryPaths.map((path) => `:(literal)${path}`)]);
     }
   } catch (error) {
     let rollbackError: unknown;

@@ -5,12 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  aggregateCursorCsvToDayMap,
-  getCursorStateDatabasePath,
-  parseCursorDateString,
-  readCursorData,
-} from '../index.js';
+import { readCursorData } from '../index.js';
 
 let tmpDir: string;
 const originalFetch = fetch;
@@ -45,139 +40,6 @@ function createStateDatabase(path: string, rows: Record<string, string | Buffer>
   for (const [key, value] of Object.entries(rows)) insert.run(key, value);
   database.close();
 }
-
-describe('parseCursorDateString', () => {
-  beforeEach(() => {
-    tmpDir = join(tmpdir(), `cursor-test-${String(Date.now())}-${String(Math.random())}`);
-    mkdirSync(tmpDir, { recursive: true });
-    fetchCalls = [];
-    resetCursorEnvironment();
-    // These tests exercise the live fetch/degrade paths; the CSV cache has its
-    // own suite. Disabling it keeps each case independent of the last.
-    process.env.AITRACK_NO_CACHE = '1';
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-  });
-
-  afterEach(() => {
-    resetCursorEnvironment();
-    delete process.env.AITRACK_NO_CACHE;
-    globalThis.fetch = originalFetch;
-    vi.restoreAllMocks();
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('parses ISO date-only', () => {
-    expect(parseCursorDateString('2024-03-15')).toBe('2024-03-15');
-  });
-
-  it('parses timestamp-like dates and rejects blank or invalid dates', () => {
-    // A full timestamp resolves to the local calendar day it falls on, so the
-    // fixture is built from local components rather than a fixed UTC instant.
-    expect(parseCursorDateString(new Date(2024, 2, 15, 12).toISOString())).toBe('2024-03-15');
-    expect(parseCursorDateString('')).toBeNull();
-    expect(parseCursorDateString('not a date')).toBeNull();
-  });
-});
-
-describe('aggregateCursorCsvToDayMap', () => {
-  it('aggregates rows by date and model', () => {
-    const csv = [
-      'Date,Model,Total Tokens,Input (w/ Cache Write),Input (w/o Cache Write),Cache Read,Output Tokens',
-      '2024-06-01,gpt-4,1000,100,200,300,400',
-      '2024-06-01,gpt-4,500,50,100,150,200',
-      '2024-06-02,claude-3-opus,2000,0,800,0,1200',
-    ].join('\n');
-
-    const map = aggregateCursorCsvToDayMap(csv);
-
-    expect(map.get('2024-06-01')?.inputTokens).toBe(900);
-    expect(map.get('2024-06-01')?.outputTokens).toBe(600);
-    expect(map.get('2024-06-01')?.byModel['gpt-4']).toEqual({
-      inputTokens: 900,
-      outputTokens: 600,
-      hasUnpricedTokens: true,
-      rawInputTokens: 300,
-      cachedInputTokens: 450,
-      cacheCreationInputTokens: 150,
-    });
-    expect(map.get('2024-06-01')?.costUSD).toBeUndefined();
-
-    expect(map.get('2024-06-02')?.inputTokens).toBe(800);
-    expect(map.get('2024-06-02')?.outputTokens).toBe(1200);
-    expect(map.get('2024-06-02')?.byModel['claude-3-opus']).toMatchObject({
-      inputTokens: 800,
-      outputTokens: 1200,
-      rawInputTokens: 800,
-      cachedInputTokens: 0,
-      cacheCreationInputTokens: 0,
-    });
-    expect(map.get('2024-06-02')?.byModel['claude-3-opus']?.costUSD).toBeCloseTo(0.102);
-    expect(map.get('2024-06-02')?.costUSD).toBeCloseTo(0.102);
-  });
-
-  it('uses Tokens column when Total Tokens header is absent', () => {
-    const csv = [
-      'Date,Model,Tokens,Input (w/ Cache Write),Input (w/o Cache Write),Cache Read,Output Tokens',
-      '2024-01-01,foo,42,10,20,5,7',
-    ].join('\n');
-    const map = aggregateCursorCsvToDayMap(csv);
-    expect(map.get('2024-01-01')?.inputTokens).toBe(35);
-    expect(map.get('2024-01-01')?.outputTokens).toBe(7);
-  });
-
-  it('handles quoted CSV fields, thousands separators, latest suffixes, and invalid rows', () => {
-    const csv = [
-      'Date,Model,Total Tokens,Input (w/ Cache Write),Input (w/o Cache Write),Cache Read,Output Tokens',
-      '"2024-01-01","gpt, test-latest","1,000","100","200","50","25"',
-      'bad-date,gpt-4,100,10,20,0,5',
-      '2024-01-01,,100,10,20,0,5',
-      '2024-01-01,gpt-4,0,10,20,0,5',
-      '',
-    ].join('\n');
-
-    const map = aggregateCursorCsvToDayMap(csv);
-
-    expect(map.size).toBe(1);
-    expect(map.get('2024-01-01')?.byModel['gpt, test']).toEqual({
-      inputTokens: 350,
-      outputTokens: 25,
-      hasUnpricedTokens: true,
-      rawInputTokens: 200,
-      cachedInputTokens: 50,
-      cacheCreationInputTokens: 100,
-    });
-  });
-});
-
-describe('getCursorStateDatabasePath', () => {
-  beforeEach(() => {
-    tmpDir = join(tmpdir(), `cursor-test-${String(Date.now())}-${String(Math.random())}`);
-    mkdirSync(tmpDir, { recursive: true });
-    resetCursorEnvironment();
-  });
-
-  afterEach(() => {
-    resetCursorEnvironment();
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('uses an explicit state DB path when it exists', () => {
-    const databasePath = join(tmpDir, 'state.vscdb');
-    createStateDatabase(databasePath);
-    process.env.CURSOR_STATE_DB_PATH = databasePath;
-
-    expect(getCursorStateDatabasePath()).toBe(databasePath);
-  });
-
-  it('resolves configured Cursor directories and skips missing candidates', () => {
-    const configDir = join(tmpDir, 'cursor-config');
-    const databasePath = join(configDir, 'User', 'globalStorage', 'state.vscdb');
-    createStateDatabase(databasePath);
-    process.env.CURSOR_CONFIG_DIR = `${join(tmpDir, 'missing')}, ${configDir}`;
-
-    expect(getCursorStateDatabasePath()).toBe(databasePath);
-  });
-});
 
 describe('readCursorData', () => {
   beforeEach(() => {
@@ -266,25 +128,6 @@ describe('readCursorData', () => {
         },
       },
     });
-  });
-
-  it('ignores provider-reported Cursor cost columns', () => {
-    const map = aggregateCursorCsvToDayMap(
-      [
-        'Date,Model,Total Tokens,Input (w/ Cache Write),Input (w/o Cache Write),Cache Read,Output Tokens,Total Cost (USD)',
-        '2024-01-01,gpt-4,100,10,20,5,7,$0.12',
-        '2024-01-01,gpt-4,50,5,10,0,3,0.03',
-        '2024-01-01,claude,100,10,20,5,7,',
-      ].join('\n'),
-    );
-
-    const day = map.get('2024-01-01');
-    expect(day?.costUSD).toBeUndefined();
-    expect(day?.byModel['gpt-4']?.costUSD).toBeUndefined();
-    expect(day?.byModel.claude?.costUSD).toBeUndefined();
-    expect(day?.rawInputTokens).toBe(50);
-    expect(day?.cachedInputTokens).toBe(10);
-    expect(day?.cacheCreationInputTokens).toBe(25);
   });
 
   it('returns an empty map when authentication attempts fail', async () => {

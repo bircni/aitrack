@@ -42,15 +42,6 @@ describe('provider registry', () => {
     }
   });
 
-  it('keeps descriptor.synced in step with which reader a provider carries', () => {
-    // descriptor.synced is the display-facing flag; the reader/live split is
-    // what the type system enforces. They must agree.
-    for (const provider of PROVIDERS) {
-      expect(provider.reader !== undefined).toBe(provider.descriptor.synced);
-      expect(provider.live !== undefined).toBe(!provider.descriptor.synced);
-    }
-  });
-
   it('gives every provider a five-stop heatmap ramp for both themes', () => {
     for (const provider of PROVIDERS) {
       expect(provider.heatmap.light).toHaveLength(5);

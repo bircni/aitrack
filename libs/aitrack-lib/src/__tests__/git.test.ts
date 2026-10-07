@@ -49,6 +49,7 @@ vi.mock('os', () => ({ homedir: () => '/home/test' }));
 
 import {
   adoptPendingDataFiles,
+  cloneOriginUrl,
   cloneRepo,
   commitAndPush,
   commitDataChanges,
@@ -66,6 +67,7 @@ import {
   writeMachineFile,
   writePendingMachineFile,
 } from '../git.js';
+import { isRebaseInProgress, pushWithRetry, runGit, runGitAsync } from '../git/exec.js';
 import { withRepoLock } from '../git/lock.js';
 
 describe('git helpers', () => {
@@ -97,6 +99,16 @@ describe('git helpers', () => {
       recursive: true,
       force: true,
     });
+
+    mocks.spawnSync.mockReturnValueOnce({ status: 0, stdout: 'git@example.com:me/data.git\n' });
+    expect(cloneOriginUrl()).toBe('git@example.com:me/data.git');
+    expect(mocks.spawnSync).toHaveBeenLastCalledWith(
+      'git',
+      ['config', '--get', 'remote.origin.url'],
+      expect.anything(),
+    );
+    mocks.spawnSync.mockReturnValueOnce({ status: 2, stderr: 'no such remote' });
+    expect(cloneOriginUrl()).toBeNull();
   });
 
   it('surfaces clone failures', () => {
@@ -107,13 +119,13 @@ describe('git helpers', () => {
     }).toThrow('git clone failed with exit code 1');
   });
 
-  it('does not pull when the remote has no heads', async () => {
-    asyncGitReplies({ status: 0, stdout: '' });
+  it('tolerates a failed pull when the remote has no heads', async () => {
+    asyncGitReplies({ status: 1, stderr: "couldn't find remote ref" }, { status: 0, stdout: '' });
 
     await pull();
 
-    expect(mocks.execFile).toHaveBeenCalledTimes(1);
-    expect(mocks.execFile).toHaveBeenCalledWith(
+    expect(mocks.execFile).toHaveBeenCalledTimes(2);
+    expect(mocks.execFile).toHaveBeenLastCalledWith(
       'git',
       ['ls-remote', '--heads', 'origin'],
       expect.anything(),
@@ -121,17 +133,12 @@ describe('git helpers', () => {
     );
   });
 
-  it('pulls fast-forward-only when the remote has a branch', async () => {
-    asyncGitReplies({ status: 0, stdout: 'refs/heads/main' }, { status: 0 });
+  it('pulls fast-forward-only in one round trip', async () => {
+    asyncGitReplies({ status: 0 });
 
     await pull({ timeoutMs: 1000 });
 
-    expect(mocks.execFile).toHaveBeenCalledWith(
-      'git',
-      ['ls-remote', '--heads', 'origin'],
-      expect.objectContaining({ windowsHide: true }),
-      expect.any(Function),
-    );
+    expect(mocks.execFile).toHaveBeenCalledTimes(1);
     expect(mocks.execFile).toHaveBeenLastCalledWith(
       'git',
       ['pull', '--ff-only', '--quiet'],
@@ -144,12 +151,13 @@ describe('git helpers', () => {
     vi.useFakeTimers();
     try {
       const kill = vi.fn();
-      mocks.execFile.mockReturnValueOnce({ pid: undefined, kill });
+      mocks.execFile.mockReturnValue({ pid: undefined, kill });
       await Promise.all([
-        expect(pull({ timeoutMs: 1000 })).rejects.toThrow('git ls-remote --heads origin timed out'),
+        expect(pull({ timeoutMs: 1000 })).rejects.toThrow('git pull --ff-only --quiet timed out'),
         vi.advanceTimersByTimeAsync(1000),
       ]);
       expect(kill).toHaveBeenCalled();
+      expect(mocks.execFile).toHaveBeenCalledTimes(1);
       const options = mocks.execFile.mock.calls[0]?.[2] as { env?: Record<string, string> };
       expect(options.env?.GIT_TERMINAL_PROMPT).toBe('0');
     } finally {
@@ -238,10 +246,10 @@ describe('git helpers', () => {
 
   it('rebases instead of failing when a stranded commit diverged the branch', async () => {
     asyncGitReplies(
-      // ls-remote
-      { status: 0, stdout: 'refs/heads/main' },
       // pull --ff-only rejects the diverged branch
       { status: 1, stderr: 'Not possible to fast-forward' },
+      // ls-remote
+      { status: 0, stdout: 'refs/heads/main' },
       // hasUnpushedCommits: hasUpstream, then rev-list
       { status: 0, stdout: 'origin/main' },
       { status: 0, stdout: '1\n' },
@@ -264,10 +272,10 @@ describe('git helpers', () => {
     // detached. Leaving that behind makes every later aitrack command fail with
     // a confusing git error the user never asked for.
     asyncGitReplies(
-      // ls-remote
-      { status: 0, stdout: 'refs/heads/main' },
       // pull --ff-only rejects the diverged branch
       { status: 1, stderr: 'Not possible to fast-forward' },
+      // ls-remote
+      { status: 0, stdout: 'refs/heads/main' },
       // hasUnpushedCommits: hasUpstream, then rev-list
       { status: 0, stdout: 'origin/main' },
       { status: 0, stdout: '1\n' },
@@ -293,8 +301,8 @@ describe('git helpers', () => {
     // Nothing can be done about a failed abort, but the original rebase error
     // is what explains the situation, so it must not be replaced.
     asyncGitReplies(
-      { status: 0, stdout: 'refs/heads/main' },
       { status: 1, stderr: 'Not possible to fast-forward' },
+      { status: 0, stdout: 'refs/heads/main' },
       { status: 0, stdout: 'origin/main' },
       { status: 0, stdout: '1\n' },
       { status: 1, stderr: 'could not apply' },
@@ -308,8 +316,8 @@ describe('git helpers', () => {
 
   it('surfaces a fast-forward failure that no local commit explains', async () => {
     asyncGitReplies(
-      { status: 0, stdout: 'refs/heads/main' },
       { status: 1, stderr: 'some other failure' },
+      { status: 0, stdout: 'refs/heads/main' },
       // hasUnpushedCommits: no upstream
       { status: 1 },
     );
@@ -853,13 +861,11 @@ describe('git helpers', () => {
   });
 });
 
-import { isRebaseInProgress, pushWithRetry, runGit, runGitAsync } from '../git/exec.js';
-it('surfaces piped and inherited git failures including stdout-only diagnostics', () => {
+it('surfaces git failures including stdout-only diagnostics', () => {
   mocks.spawnSync.mockReturnValue({ status: 1, stdout: ' rejected ', stderr: '' });
-  expect(() => runGit(['status'], { stdio: 'pipe' })).toThrow('rejected');
-  expect(() => runGit(['status'])).toThrow('exit code 1');
+  expect(() => runGit(['status'])).toThrow('rejected');
   mocks.spawnSync.mockReturnValue({ status: 0, stdout: ' clean ' });
-  expect(runGit(['status'], { stdio: 'pipe' })).toBe('clean');
+  expect(runGit(['status'])).toBe('clean');
 });
 it('recovers an own-file rebase conflict and aborts unrelated concurrent conflicts', async () => {
   mocks.execFile.mockReset();

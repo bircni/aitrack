@@ -62,24 +62,6 @@ function dayTokens(day: ProviderDay): number {
 }
 
 /**
- * Union of the persisted days and the freshly read ones, preferring fresh data
- * for any (date, provider) it covers — unless the persisted record holds more
- * tokens, which means the local logs have been pruned out from under it.
- *
- * The tools that write the local logs prune them (Claude Code trims transcripts
- * after ~30 days), so for older dates the synced file is the only remaining
- * record. Replacing it wholesale with what the local logs still show would
- * delete that history permanently on the next push.
- *
- * Pruning removes one session file at a time, so the oldest date the logs still
- * reach is typically covered only in part: fresh has that (date, provider) but
- * with fewer tokens than were synced from it earlier. Taking the larger of the
- * two keeps that boundary day from being ratcheted down on every sync.
- *
- * Date and provider keys are sorted so the serialized file is stable and the
- * caller's change detection does not trip on key ordering alone.
- */
-/**
  * How many persisted provider-days the fresh read would not replace, because
  * it still covers that day but with fewer tokens.
  */
@@ -98,6 +80,10 @@ export function ratchetedProviderDays(
   return kept;
 }
 
+/**
+ * Persisted days overlaid with fresh ones; the larger day wins because tools prune
+ * their logs. Keys are sorted so the serialized file is stable.
+ */
 export function mergePersistedDays(
   persisted: MachineFile['days'] | null,
   fresh: MachineFile['days'],

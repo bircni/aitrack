@@ -10,13 +10,5 @@ export interface Migration {
   from: number;
   /** Schema version it produces. */
   to: number;
-  /** One line, shown to the user when a file is migrated. */
-  describe: string;
   migrate: (file: MigratableFile) => MigratableFile;
-}
-
-export interface AppliedMigration {
-  from: number;
-  to: number;
-  describe: string;
 }

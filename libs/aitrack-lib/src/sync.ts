@@ -10,20 +10,21 @@ import {
   readLocalProviderMaps,
 } from './data/localData.js';
 import { REPO_NOT_CLONED_MESSAGE } from './data/messages.js';
-import type { MachineFile } from './data/types.js';
+import type { DayMap, MachineFile } from './data/types.js';
 import { checkRawMachineFile } from './data/validate.js';
+import { isMissingPathError } from './errors.js';
 import {
   commitAndPush,
+  type GitOptions,
   hasMachineDataChanges,
   isCloned,
   LOCAL_REPO,
   pull,
   pushPendingCommits,
   removePendingMachineFile,
+  withRepoLock,
   writeMachineFile,
 } from './git.js';
-import type { GitOptions } from './git/exec.js';
-import { withRepoLock } from './git/lock.js';
 import { machineDataFilename } from './machineId.js';
 import { log } from './output.js';
 import {
@@ -68,50 +69,73 @@ async function pushMachineData(host: string, options: GitOptions): Promise<boole
   );
 }
 
+export interface DataRun {
+  machineId: string;
+  fallbacks: FallbackCollector;
+  /** The local logs, read once the pricing refresh has settled. */
+  readLocalMaps: () => Promise<Record<string, DayMap>>;
+}
+
+/**
+ * The steps sync and recompute-costs share. The local logs are parsed outside
+ * the repo lock, overlapping the lock wait and the pull; the lock covers only
+ * the repo work. One fallback collector per run, so a long-lived process never
+ * carries one run's models into the next.
+ */
+export async function runDataPipeline<T>(
+  options: { pull: boolean; git?: GitOptions },
+  step: (run: DataRun) => Promise<T>,
+): Promise<T> {
+  const config = loadConfig(); // Before the refresh, so an unconfigured machine never contacts GitHub.
+  if (!isCloned()) {
+    throw new Error(REPO_NOT_CLONED_MESSAGE);
+  }
+  const fallbacks = createFallbackCollector();
+  const localRead = syncPricingPack().then(async () => {
+    const maps = await readLocalProviderMaps(fallbacks);
+    recordPricingFallbacks(maps, fallbacks); // Cache hits never call the pricer.
+    return maps;
+  });
+  void localRead.catch(() => undefined); // Rejecting before the step awaits it is not unhandled.
+  try {
+    return await withRepoLock(async () => {
+      if (options.pull) {
+        log.info('Pulling latest from remote...');
+        await pull(options.git);
+      }
+      return step({
+        machineId: resolveMachineId(config),
+        fallbacks,
+        readLocalMaps: () => localRead,
+      });
+    });
+  } finally {
+    await localRead.catch(() => undefined); // Settle it on an early exit too.
+    reportFallbackPricing(fallbacks); // Report even when nothing was pushed.
+  }
+}
+
 /**
  * Push this machine's usage data. Returns the machine file built from the local
  * logs, so a caller that needs it as well does not have to parse the whole
  * JSONL corpus a second time.
  */
-export async function syncData(options: SyncDataOptions = {}): Promise<SyncResult> {
-  // One collector per run, so a long-lived process never carries one run's
-  // models into the next.
-  const fallbacks = createFallbackCollector();
-  try {
-    await syncPricingPack();
-    return await withRepoLock(() => pushLocalUsage(options, fallbacks));
-  } finally {
-    // Fallback hits accumulate while the logs are read, so they exist however
-    // the push turns out. Reporting them only after a successful push hid the
-    // warning from every already-up-to-date run.
-    reportFallbackPricing(fallbacks);
-  }
+export function syncData(options: SyncDataOptions = {}): Promise<SyncResult> {
+  return runDataPipeline({ pull: !options.dryRun, git: options }, (run) =>
+    pushLocalUsage(options, run),
+  );
 }
 
 async function pushLocalUsage(
   options: SyncDataOptions,
-  fallbacks: FallbackCollector,
+  { machineId: host, readLocalMaps }: DataRun,
 ): Promise<SyncResult> {
-  const config = loadConfig();
   const isDryRun = Boolean(options.dryRun);
-
-  if (!isCloned()) {
-    throw new Error(REPO_NOT_CLONED_MESSAGE);
-  }
-
-  if (!isDryRun) {
-    log.info('Pulling latest from remote...');
-    await pull(options);
-  }
-
-  const host = resolveMachineId(config);
   const dataFilePath = join(LOCAL_REPO, 'data', machineDataFilename(host));
 
   // Cursor usage is loaded locally by report/display commands; it is never written to git.
   log.info('Reading local data...');
-  const maps = await readLocalProviderMaps(fallbacks);
-  // Cache hits never call the pricer, so scan the maps that were actually loaded.
-  recordPricingFallbacks(maps, fallbacks);
+  const maps = await readLocalMaps();
 
   const freshData = buildMachineData(host, maps);
   const done = (message: string): SyncResult => {
@@ -148,7 +172,7 @@ async function pushLocalUsage(
   } catch (error) {
     // Anything other than "not synced yet" is a real read failure, and treating
     // it as an empty file would push the local logs over whatever is there.
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    if (!isMissingPathError(error)) throw error;
   }
 
   // The check also returns a null machine for a file that exists but is invalid.

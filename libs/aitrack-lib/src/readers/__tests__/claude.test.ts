@@ -6,7 +6,7 @@ import { localTimestamp, writeJsonl } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { estimateClaudeCostFromStoredCounts, estimateClaudeCostUSD } from '../../pricing/claude.js';
-import { parseJsonlFile } from '../claude.js';
+import { mergeClaudeParsed, parseClaudeFile } from '../claude.js';
 
 let tmpDir: string;
 
@@ -17,7 +17,7 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe('parseJsonlFile', () => {
+describe('parseClaudeFile', () => {
   it('parses a basic assistant message', async () => {
     const file = join(tmpDir, 'a.jsonl');
     writeJsonl(file, [
@@ -33,7 +33,7 @@ describe('parseJsonlFile', () => {
       },
     ]);
 
-    const result = await parseJsonlFile(file, new Set());
+    const { days: result } = await parseClaudeFile(file);
     expect(result.size).toBe(1);
     const day = result.get('2024-01-15');
     expect(day?.inputTokens).toBe(100);
@@ -61,7 +61,7 @@ describe('parseJsonlFile', () => {
       },
     ]);
 
-    const result = await parseJsonlFile(file, new Set());
+    const { days: result } = await parseClaudeFile(file);
     expect(result.get('2024-01-15')?.byModel).toHaveProperty('claude-3-5-sonnet');
     expect(result.get('2024-01-15')?.byModel).not.toHaveProperty('claude-3-5-sonnet-latest');
   });
@@ -84,7 +84,7 @@ describe('parseJsonlFile', () => {
       },
     ]);
 
-    const result = await parseJsonlFile(file, new Set());
+    const { days: result } = await parseClaudeFile(file);
     expect(result.get('2024-01-15')?.inputTokens).toBe(100); // not 200
   });
 
@@ -108,7 +108,7 @@ describe('parseJsonlFile', () => {
       },
     ]);
 
-    const result = await parseJsonlFile(file, new Set());
+    const { days: result } = await parseClaudeFile(file);
     const day = result.get('2024-01-15');
     expect(day?.inputTokens).toBe(160); // 100 + 50 cache_read + 10 cache_creation
     expect(day?.outputTokens).toBe(25);
@@ -140,7 +140,7 @@ describe('parseJsonlFile', () => {
       },
     ]);
 
-    const parsed = await parseJsonlFile(file, new Set());
+    const { days: parsed } = await parseClaudeFile(file);
     const day = parsed.get('2024-01-15');
     expect(day?.cacheCreationInputTokens).toBe(100);
     expect(day?.cacheCreation1hInputTokens).toBe(1_000_000);
@@ -235,8 +235,13 @@ describe('parseJsonlFile', () => {
       { type: 'summary', timestamp: localTimestamp('2024-01-15') },
     ]);
 
-    const result = await parseJsonlFile(file, new Set());
+    const { days: result } = await parseClaudeFile(file);
     expect(result.size).toBe(0);
+    await expect(parseClaudeFile(join(tmpDir, 'deleted.jsonl'))).resolves.toEqual({
+      days: new Map(),
+      keys: [],
+      messages: [],
+    });
   });
 
   it('counts a cache-only turn and ignores a message with no tokens', async () => {
@@ -264,7 +269,7 @@ describe('parseJsonlFile', () => {
       },
     ]);
 
-    const result = await parseJsonlFile(file, new Set());
+    const { days: result } = await parseClaudeFile(file);
     expect(result.get('2024-01-15')?.inputTokens).toBe(100);
     expect(result.get('2024-01-15')?.outputTokens).toBe(0);
   });
@@ -294,7 +299,7 @@ describe('parseJsonlFile', () => {
       },
     ]);
 
-    const result = await parseJsonlFile(file, new Set());
+    const { days: result } = await parseClaudeFile(file);
     expect(result.get('2024-01-15')?.inputTokens).toBe(100);
     expect(result.get('2024-01-15')?.outputTokens).toBe(50);
   });
@@ -316,14 +321,13 @@ describe('parseJsonlFile', () => {
       },
     ]);
 
-    const result = await parseJsonlFile(file, new Set());
+    const { days: result } = await parseClaudeFile(file);
     expect(result.size).toBe(2);
     expect(result.get('2024-01-15')?.inputTokens).toBe(100);
     expect(result.get('2024-01-16')?.inputTokens).toBe(200);
   });
 });
 
-import { mergeClaudeParsed, parseClaudeFile } from '../claude.js';
 it('keeps richer within-file records, first-file precedence and all unkeyed contributions', async () => {
   const file = join(tmpDir, 'richer.jsonl');
   const base = {
@@ -343,13 +347,10 @@ it('keeps richer within-file records, first-file precedence and all unkeyed cont
     { ...base, message: { usage: {} } },
   ]);
   const parsed = await parseClaudeFile(file);
-  const result = await mergeClaudeParsed([parsed, parsed], [file, file]);
+  const result = mergeClaudeParsed([parsed, parsed]);
   expect(result.get('2024-01-15')).toMatchObject({
     inputTokens: 28,
     outputTokens: 8,
     hasUnpricedTokens: true,
   });
-  const legacy = { days: parsed.days, keys: parsed.keys };
-  expect(await mergeClaudeParsed([legacy, legacy], [file, file])).toEqual(result);
-  expect(await mergeClaudeParsed([legacy], [])).toEqual(parsed.days);
 });

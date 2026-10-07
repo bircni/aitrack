@@ -181,7 +181,7 @@ export async function parseCodexFile(
 }
 
 export async function readCodexData(fallbacks?: FallbackCollector): Promise<DayMap> {
-  const { parsed } = await parseProviderSources({
+  const parsed = await parseProviderSources({
     cacheName: 'codex',
     roots: getCodexPaths(),
     parseFile: parseCodexFile,

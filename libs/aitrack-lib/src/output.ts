@@ -1,14 +1,7 @@
 /**
- * The single place aitrack writes human-readable output.
- *
- * Commands used to call `console.*` directly from ~20 modules, including the
- * domain layer, so there was no way to silence progress chatter. `log` is what
- * the CLI prints through; `createLogger({ quiet: true })` is for an embedder
- * that wants the work without the running commentary.
- *
- * These wrap `console.*` rather than `process.stdout` on purpose: it keeps the
- * stdout/stderr split that `console.log` and `console.warn` already imply, and
- * it keeps the existing test suite's console spies working.
+ * The single place aitrack writes human-readable output. `log` is what the CLI
+ * prints through; `createLogger({ quiet: true })` drops progress for embedders.
+ * Wraps `console.*` rather than `process.stdout` to keep its stdout/stderr split.
  */
 export interface Logger {
   /** Progress and results. Suppressed when quiet. */
@@ -19,31 +12,21 @@ export interface Logger {
   error: (message: string) => void;
 }
 
-function emit(stream: 'log' | 'warn' | 'error', message: string): void {
-  console[stream](message);
-}
-
 export function createLogger(options: { quiet?: boolean } = {}): Logger {
-  const quiet = options.quiet ?? false;
   return {
-    info: quiet
+    info: options.quiet
       ? () => undefined
       : (message) => {
-          emit('log', message);
+          console.log(message);
         },
     warn: (message) => {
-      emit('warn', message);
+      console.warn(message);
     },
     error: (message) => {
-      emit('error', message);
+      console.error(message);
     },
   };
 }
 
-/**
- * Default sink for command output.
- *
- * Machine-readable output does not go through here — see `cli/json.ts`, which
- * must stay uncolored, on stdout, and free of interleaved log lines.
- */
+/** Default sink for command output; machine-readable output goes through `cli/json.ts` instead. */
 export const log: Logger = createLogger();

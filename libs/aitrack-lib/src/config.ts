@@ -2,16 +2,11 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 
 import type { Config } from './configTypes.js';
-import { isRecord } from './data/guards.js';
+import { isOptionalString, isRecord } from './data/guards.js';
 import { INIT_HINT, NO_CONFIG_MESSAGE } from './data/messages.js';
-import { errorMessage } from './errors.js';
+import { errorMessage, isMissingPathError } from './errors.js';
 import { normalizeMachineId } from './machineId.js';
 import { APP_DIR, CONFIG_PATH } from './paths.js';
-
-function optionalString(value: unknown): string | undefined {
-  if (value === undefined) return undefined;
-  return typeof value === 'string' ? value : undefined;
-}
 
 function validateBudget(value: unknown): Config['budget'] | undefined {
   if (value === undefined) return undefined;
@@ -32,10 +27,16 @@ function validateBudget(value: unknown): Config['budget'] | undefined {
 
 function validateConfig(parsed: unknown): Config | null {
   if (!isRecord(parsed)) return null;
-  if (typeof parsed.repoUrl !== 'string') return null;
+  const { repoUrl, machineId: rawMachineId, claudeProjectsDir, codexSessionsDir } = parsed;
+  if (
+    typeof repoUrl !== 'string' ||
+    !isOptionalString(rawMachineId) ||
+    !isOptionalString(claudeProjectsDir) ||
+    !isOptionalString(codexSessionsDir)
+  ) {
+    return null;
+  }
 
-  const rawMachineId = optionalString(parsed.machineId);
-  if (parsed.machineId !== undefined && rawMachineId === undefined) return null;
   let machineId: string | undefined;
   if (rawMachineId !== undefined) {
     try {
@@ -45,17 +46,11 @@ function validateConfig(parsed: unknown): Config | null {
     }
   }
 
-  const claudeProjectsDir = optionalString(parsed.claudeProjectsDir);
-  if (parsed.claudeProjectsDir !== undefined && claudeProjectsDir === undefined) return null;
-
-  const codexSessionsDir = optionalString(parsed.codexSessionsDir);
-  if (parsed.codexSessionsDir !== undefined && codexSessionsDir === undefined) return null;
-
   const budget = validateBudget(parsed.budget);
   if (parsed.budget !== undefined && budget === undefined) return null;
 
   return {
-    repoUrl: parsed.repoUrl,
+    repoUrl,
     ...(machineId !== undefined && { machineId }),
     ...(claudeProjectsDir !== undefined && { claudeProjectsDir }),
     ...(codexSessionsDir !== undefined && { codexSessionsDir }),
@@ -63,14 +58,7 @@ function validateConfig(parsed: unknown): Config | null {
   };
 }
 
-/**
- * Outcome of reading the config file.
- *
- * `missing` and `invalid` used to collapse into the same `null`, so a config
- * that existed but was corrupt was reported as "No config found. Run: npx
- * aitrack init" — advice that would overwrite the very file the user needed to
- * fix, and that hid the real problem.
- */
+/** Outcome of reading the config file; `invalid` must not suggest `init`, which would overwrite it. */
 export type ConfigLoad =
   | { status: 'ok'; config: Config }
   | { status: 'missing' }
@@ -80,8 +68,9 @@ export function readConfig(): ConfigLoad {
   let raw: string;
   try {
     raw = readFileSync(CONFIG_PATH, 'utf8');
-  } catch {
-    return { status: 'missing' };
+  } catch (error) {
+    if (isMissingPathError(error)) return { status: 'missing' };
+    return { status: 'invalid', reason: `unreadable (${errorMessage(error)})` };
   }
 
   let parsed: unknown;
@@ -98,12 +87,19 @@ export function readConfig(): ConfigLoad {
   return { status: 'ok', config };
 }
 
+/** Without the init hint, for `init` itself. */
+export function describeInvalidConfig(reason: string): string {
+  return `Config at ${CONFIG_PATH} is ${reason}.`;
+}
+
+export function invalidConfigMessage(reason: string): string {
+  return `${describeInvalidConfig(reason)} Fix it or re-run: ${INIT_HINT}`;
+}
+
 export function loadConfig(): Config {
   const loaded = readConfig();
   if (loaded.status === 'ok') return loaded.config;
-  if (loaded.status === 'invalid') {
-    throw new Error(`Config at ${CONFIG_PATH} is ${loaded.reason}. Fix it or re-run: ${INIT_HINT}`);
-  }
+  if (loaded.status === 'invalid') throw new Error(invalidConfigMessage(loaded.reason));
   throw new Error(NO_CONFIG_MESSAGE);
 }
 
@@ -121,17 +117,13 @@ export function saveConfig(config: Config): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf8');
 }
 
-// Use the short hostname, not the FQDN: the same machine reports different
-// fully-qualified names depending on the network it is on (e.g. `host.local`
-// at home vs `host.corp.example` on a VPN). Keying data files off the FQDN
-// mints a fresh machine identity per network, and the old file keeps being
-// counted as a separate machine — silently multiplying every total.
+// Short hostname: the FQDN changes per network and would fork the machine's identity.
 export function localMachineId(): string {
   const raw = hostname();
   const shortName = raw.split('.', 1)[0];
   return shortName && shortName.length > 0 ? shortName : raw;
 }
 
-export function resolveMachineId(config: Config): string {
-  return normalizeMachineId(config.machineId ?? localMachineId());
+export function resolveMachineId(config: Pick<Config, 'machineId'> | null): string {
+  return normalizeMachineId(config?.machineId ?? localMachineId());
 }

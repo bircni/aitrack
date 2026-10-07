@@ -5,28 +5,9 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  CLAUDE_PRICING_BY_ID,
-  CLAUDE_PRICING_OVERRIDES,
-  estimateClaudeCostUSD,
-  findClaudePricing,
-  lookupClaudePricing,
-} from '../claude.js';
-import {
-  CODEX_PRICING_BY_ID,
-  CODEX_PRICING_CURRENT,
-  CODEX_PRICING_HISTORICAL,
-  CODEX_PRICING_OVERRIDES,
-  estimateCodexCostUSD,
-  findCodexPricing,
-  lookupCodexPricing,
-} from '../codex.js';
-import {
-  CURSOR_FAST_MULTIPLIERS,
-  CURSOR_MODELS,
-  estimateCursorCostUSD,
-  resolveCursorRates,
-} from '../cursor.js';
+import { findClaudePricing, lookupClaudePricing } from '../claude.js';
+import { estimateCodexCostUSD, findCodexPricing, lookupCodexPricing } from '../codex.js';
+import { resolveCursorRates } from '../cursor.js';
 import type { PricingManifest, PricingSupplement } from '../packMeta.js';
 import { pricingPackBaseUrl } from '../packMeta.js';
 import {
@@ -38,7 +19,6 @@ import {
 import { supplementFromTables } from '../supplementFromTables.js';
 import * as pricingTables from '../supplementFromTables.js';
 import { syncPricingPack } from '../syncPack.js';
-import { CLAUDE_FAMILY_FALLBACK, CODEX_FAMILY_FALLBACK } from '../tables.js';
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -139,144 +119,32 @@ async function fixture(modify?: (supplement: PricingSupplement) => void) {
 }
 
 describe('PricingStore', () => {
-  it.each(['claude', 'codex', 'codexCurrent', 'codexHistorical', 'cursor'] as const)(
-    'keeps mutable %s model exports connected to costs and refreshes',
-    async (provider) => {
-      const { dir } = await fixture();
-      const store = new PricingStore(dir);
-      vi.spyOn(sharedPricingStore(), 'current').mockImplementation(() => store.current());
-      const exports = {
-        claude: CLAUDE_PRICING_BY_ID,
-        codex: CODEX_PRICING_BY_ID,
-        codexCurrent: CODEX_PRICING_CURRENT,
-        codexHistorical: CODEX_PRICING_HISTORICAL,
-        cursor: CURSOR_MODELS,
-      };
-      const model = 'custom-pricing-model';
-      const pricing = {
+  it('uses refreshed family fallbacks and fast multipliers in live resolvers', async () => {
+    const { dir } = await fixture((remote) => {
+      remote.claude.familyFallback.sonnet = {
         inputPerMillion: 7,
         outputPerMillion: 35,
         cacheReadPerMillion: 0.7,
         cacheCreatePerMillion: 8.75,
-        cacheWritePerMillion: 8.75,
       };
-      const models = exports[provider];
-      const cost = {
-        claude: () =>
-          estimateClaudeCostUSD(model, { input_tokens: 1_000_000, output_tokens: 1_000_000 }),
-        codex: () => estimateCodexCostUSD(model, 1_000_000, 1_000_000),
-        codexCurrent: () => estimateCodexCostUSD(model, 1_000_000, 1_000_000),
-        codexHistorical: () => estimateCodexCostUSD(model, 1_000_000, 1_000_000),
-        cursor: () =>
-          estimateCursorCostUSD(model, { inputTokens: 1_000_000, outputTokens: 1_000_000 }),
-      }[provider];
-      expect(cost()).toBeUndefined();
-      models[model] = pricing;
-      expect(cost()).toBe(42);
-      expect(Object.keys(models)).toContain(model);
-      expect({ ...models }[model]).toBe(pricing);
-      pricing.inputPerMillion = 8;
-      expect(cost()).toBe(43);
-      Object.assign(models[model] ?? {}, { outputPerMillion: 40 });
-      expect(cost()).toBe(48);
-      models[model] = { ...pricing, inputPerMillion: 9 };
-      expect(cost()).toBe(49);
-      expect(Reflect.defineProperty(models, model, { value: pricing })).toBe(false);
-      expect(Reflect.preventExtensions(models)).toBe(false);
-      expect(Reflect.deleteProperty(models, model)).toBe(true);
-      expect(cost()).toBeUndefined();
-      models[model] = pricing;
-      await expect(store.refreshIfDue(true)).resolves.toMatchObject({ updated: true });
-      expect(cost()).toBeUndefined();
-      expect(model in models).toBe(false);
-    },
-  );
-
-  it('shares Codex rows between the combined and current/historical exports', async () => {
-    const { dir } = await fixture();
-    const store = new PricingStore(dir);
-    vi.spyOn(sharedPricingStore(), 'current').mockImplementation(() => store.current());
-    const pricing = { inputPerMillion: 7, outputPerMillion: 35 };
-    CODEX_PRICING_BY_ID['gpt-5.4'] = pricing;
-    expect(CODEX_PRICING_CURRENT['gpt-5.4']).toBe(pricing);
-    CODEX_PRICING_BY_ID['gpt-5.1'] = pricing;
-    expect(CODEX_PRICING_HISTORICAL['gpt-5.1']).toBe(pricing);
-    Reflect.deleteProperty(CODEX_PRICING_BY_ID, 'gpt-5.1');
-    expect(lookupCodexPricing('gpt-5.1')).toBeUndefined();
-    await store.refreshIfDue(true);
-    expect(CODEX_PRICING_BY_ID['gpt-5.4']).toEqual(CODEX_PRICING_CURRENT['gpt-5.4']);
-    expect(lookupCodexPricing('gpt-5.4')?.inputPerMillion).toBe(2.5);
-  });
-
-  it.each(['claude', 'codex'] as const)(
-    'preserves dated %s prices when base rates change and refresh',
-    async (provider) => {
-      const historical = {
-        inputPerMillion: 4,
-        outputPerMillion: 20,
-        cacheReadPerMillion: 0.4,
-        cacheCreatePerMillion: 5,
-      };
-      const { dir } = await fixture((remote) => {
-        remote.claude.overrides['claude-sonnet-4-6'] = [
-          { before: '2026-04-01', pricing: historical },
-        ];
-        remote.codex.overrides['gpt-5.4'] = [{ before: '2026-04-01', pricing: historical }];
+      remote.codex.familyFallback.unshift({
+        match: '^custom-fallback$',
+        inputPerMillion: 7,
+        outputPerMillion: 35,
       });
-      const store = new PricingStore(dir);
-      vi.spyOn(sharedPricingStore(), 'current').mockImplementation(() => store.current());
-      const model = provider === 'claude' ? 'claude-sonnet-4-6' : 'gpt-5.4';
-      const models = provider === 'claude' ? CLAUDE_PRICING_BY_ID : CODEX_PRICING_BY_ID;
-      const overrides = provider === 'claude' ? CLAUDE_PRICING_OVERRIDES : CODEX_PRICING_OVERRIDES;
-      const cost =
-        provider === 'claude'
-          ? (date?: string) => estimateClaudeCostUSD(model, { input_tokens: 1_000_000 }, date)
-          : (date?: string) => estimateCodexCostUSD(model, 1_000_000, 0, 0, date);
-      overrides[model] = [{ before: '2026-04-01', pricing: historical }];
-      const current = { ...historical, inputPerMillion: 7 };
-      models[model] = current;
-      expect(cost('2026-03-31')).toBe(4);
-      expect(cost('2026-04-01')).toBe(7);
-      expect(cost()).toBe(7);
-      current.inputPerMillion = 8;
-      expect(cost('2026-03-31')).toBe(4);
-      expect(cost('2026-04-01')).toBe(8);
-      await store.refreshIfDue(true);
-      expect(cost('2026-03-31')).toBe(4);
-      expect(cost('2026-04-01')).toBe(provider === 'claude' ? 9 : 2.5);
-    },
-  );
-
-  it('uses mutable family fallbacks and fast multipliers in live resolvers', async () => {
-    const { dir } = await fixture();
+      remote.cursor.fastMultipliers['gpt-5.4'] = 3;
+    });
     const store = new PricingStore(dir);
     vi.spyOn(sharedPricingStore(), 'current').mockImplementation(() => store.current());
-    CLAUDE_FAMILY_FALLBACK.sonnet = {
-      inputPerMillion: 7,
-      outputPerMillion: 35,
-      cacheReadPerMillion: 0.7,
-      cacheCreatePerMillion: 8.75,
-    };
-    expect(findClaudePricing('claude-sonnet-future')?.inputPerMillion).toBe(7);
-    CLAUDE_FAMILY_FALLBACK.sonnet.inputPerMillion = 8;
-    expect(findClaudePricing('claude-sonnet-future')?.inputPerMillion).toBe(8);
-    CODEX_FAMILY_FALLBACK.unshift({
-      match: /^custom-fallback$/u,
-      pricing: { inputPerMillion: 7, outputPerMillion: 35 },
-    });
-    expect(findCodexPricing('custom-fallback')?.inputPerMillion).toBe(7);
-    Object.assign(CODEX_FAMILY_FALLBACK[0]?.pricing ?? {}, { inputPerMillion: 8 });
-    expect(findCodexPricing('custom-fallback')?.inputPerMillion).toBe(8);
-    CURSOR_FAST_MULTIPLIERS['gpt-5.4'] = 3;
-    expect(resolveCursorRates('gpt-5.4-fast')?.inputPerMillion).toBe(7.5);
-    expect(Array.isArray(CODEX_FAMILY_FALLBACK)).toBe(true);
-    expect([...CODEX_FAMILY_FALLBACK][0]?.match.source).toBe('^custom-fallback$');
-    expect(Object.keys(CODEX_FAMILY_FALLBACK)).toContain('0');
-    await store.refreshIfDue(true);
     expect(findClaudePricing('claude-sonnet-future')?.inputPerMillion).toBe(3);
     expect(findCodexPricing('custom-fallback')).toBeUndefined();
     expect(resolveCursorRates('gpt-5.4-fast')?.inputPerMillion).toBe(5);
+    await store.refreshIfDue(true);
+    expect(findClaudePricing('claude-sonnet-future')?.inputPerMillion).toBe(7);
+    expect(findCodexPricing('custom-fallback')?.inputPerMillion).toBe(7);
+    expect(resolveCursorRates('gpt-5.4-fast')?.inputPerMillion).toBe(7.5);
   });
+
   it('loads the offline baseline and a complete newer disk pack without init', async () => {
     const { dir, cache } = await fixture();
     const store = new PricingStore(dir);
@@ -385,9 +253,6 @@ describe('PricingStore', () => {
       await cache();
       const store = new PricingStore(dir);
       expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(3);
-      vi.spyOn(sharedPricingStore(), 'current').mockImplementation(() => store.current());
-      Object.assign(CLAUDE_PRICING_BY_ID['claude-sonnet-4-6'] ?? {}, { inputPerMillion: 7 });
-      expect(lookupClaudePricing('claude-sonnet-4-6')?.inputPerMillion).toBe(7);
       await store.refreshIfDue(true);
       expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(3);
     },
@@ -448,11 +313,12 @@ describe('PricingStore', () => {
         expect(lookupCodexPricing('gpt-5.6-sol', '2026-08-21')?.inputPerMillion).toBe(6);
         expect(lookupCodexPricing('gpt-5.6-sol', '2026-10-01')?.inputPerMillion).toBe(4);
         expect(lookupCodexPricing('gpt-5.6-terra', '2026-07-01')?.inputPerMillion).toBe(9);
-        expect(CODEX_PRICING_OVERRIDES['gpt-5.6-sol']?.map((entry) => entry.before)).toEqual([
-          '2026-01-01',
-          '2026-08-21',
-          '2026-10-01',
-        ]);
+        expect(
+          store
+            .current()
+            .pricingOverrides('codex')
+            ['gpt-5.6-sol']?.map((entry) => entry.before),
+        ).toEqual(['2026-01-01', '2026-08-21', '2026-10-01']);
         expect(findCodexPricing('gpt-5-new-nano')?.inputPerMillion).toBe(0.2);
         expect(findCodexPricing('remote-fallback')?.inputPerMillion).toBe(8);
         expect(store.current().applyCursorAlias('local-alias')).toBe('composer-2.5');
@@ -465,56 +331,6 @@ describe('PricingStore', () => {
       expect(
         new PricingStore(dir).current().lookupCodex('gpt-5.6-sol', '2026-07-01')?.inputPerMillion,
       ).toBe(5);
-    },
-  );
-
-  it.each(['claude', 'codex'] as const)(
-    'keeps the mutable %s override export synchronized with lookups and refreshes',
-    async (provider) => {
-      const { dir } = await fixture((supplement) => {
-        const pricing = {
-          inputPerMillion: 4,
-          outputPerMillion: 20,
-          cacheReadPerMillion: 0.4,
-          cacheCreatePerMillion: 5,
-        };
-        supplement.claude.overrides['claude-sonnet-4-6'] = [{ before: '2026-04-01', pricing }];
-        supplement.codex.overrides['gpt-5.4'] = [{ before: '2026-04-01', pricing }];
-      });
-      const store = new PricingStore(dir);
-      vi.spyOn(sharedPricingStore(), 'current').mockImplementation(() => store.current());
-      const overrides = provider === 'claude' ? CLAUDE_PRICING_OVERRIDES : CODEX_PRICING_OVERRIDES;
-      const lookup = provider === 'claude' ? lookupClaudePricing : lookupCodexPricing;
-      const model = provider === 'claude' ? 'claude-sonnet-4-6' : 'gpt-5.4';
-      const baseline = lookup(model);
-      const pricing = {
-        inputPerMillion: 7,
-        outputPerMillion: 35,
-        cacheReadPerMillion: 0.7,
-        cacheCreatePerMillion: 8.75,
-      };
-      overrides[model] = [{ before: '2026-04-01', pricing }];
-      expect(lookup(model, '2026-03-15')?.inputPerMillion).toBe(7);
-      expect(lookup(model, '2026-04-01')).toEqual(baseline);
-      expect(lookup(model)).toEqual(baseline);
-      pricing.inputPerMillion = 8;
-      expect(lookup(model, '2026-03-15')?.inputPerMillion).toBe(8);
-      expect(Object.keys(overrides)).toContain(model);
-      expect(model in overrides).toBe(true);
-      expect({ ...overrides }[model]).toEqual([{ before: '2026-04-01', pricing }]);
-      expect(Reflect.defineProperty(overrides, model, { value: [] })).toBe(false);
-      expect(Reflect.preventExtensions(overrides)).toBe(false);
-      expect(Object.keys(overrides)).toContain(model);
-      expect(lookup(model, '2026-03-15')?.inputPerMillion).toBe(8);
-      Reflect.deleteProperty(overrides, model);
-      expect(lookup(model, '2026-03-15')).toEqual(baseline);
-      await expect(store.refreshIfDue(true)).resolves.toMatchObject({ updated: true });
-      expect(overrides[model][0]?.pricing.inputPerMillion).toBe(4);
-      expect(lookup(model, '2026-03-15')?.inputPerMillion).toBe(4);
-      overrides[model].push({ before: '2026-05-01', pricing });
-      expect(lookup(model, '2026-04-15')?.inputPerMillion).toBe(8);
-      await expect(store.refreshIfDue(true)).resolves.toMatchObject({ updated: false });
-      expect(lookup(model, '2026-04-15')).toEqual(lookup(model));
     },
   );
 
@@ -718,6 +534,7 @@ describe('PricingStore', () => {
     });
     const result = await store.refreshIfDue(true);
 
+    expect(result).toMatchObject({ failed: true });
     expect(result.reason).toContain('hash mismatch');
     expect(await readFile(join(dir, 'pack.json'), 'utf8')).toBe(before);
     expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(9);

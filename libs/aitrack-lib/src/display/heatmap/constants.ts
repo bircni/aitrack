@@ -1,6 +1,3 @@
-/** Milliseconds in one day — used for day-distance arithmetic between dates. */
-export const MS_PER_DAY = 86_400_000;
-
 /** Number of trailing weeks shown in the default (non-year) heatmap grid. */
 export const HEATMAP_WEEKS = 52;
 

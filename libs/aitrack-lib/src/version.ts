@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { isRecord } from './data/guards.js';
+
 /**
  * The `version` field of the package.json one directory above `directory`.
  *
@@ -15,13 +17,7 @@ export function readPackageVersion(directory: string): string {
   const packagePath = join(directory, '../package.json');
   try {
     const parsed: unknown = JSON.parse(readFileSync(packagePath, 'utf8'));
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'version' in parsed &&
-      typeof parsed.version === 'string' &&
-      parsed.version.length > 0
-    ) {
+    if (isRecord(parsed) && typeof parsed.version === 'string' && parsed.version.length > 0) {
       return parsed.version;
     }
   } catch {

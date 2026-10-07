@@ -84,7 +84,7 @@ async function withCursorStateSnapshot<T>(
   }
 }
 
-export async function readCursorAuthState(databasePath: string): Promise<CursorAuthState> {
+async function readCursorAuthStateOnce(databasePath: string): Promise<CursorAuthState> {
   try {
     return readCursorAuthStateFromDatabase(databasePath);
   } catch (error) {
@@ -94,4 +94,16 @@ export async function readCursorAuthState(databasePath: string): Promise<CursorA
     );
     return state;
   }
+}
+
+const inFlight = new Map<string, Promise<CursorAuthState>>(); // Quota and usage read it at once on startup.
+
+export function readCursorAuthState(databasePath: string): Promise<CursorAuthState> {
+  const pending = inFlight.get(databasePath);
+  if (pending) return pending;
+  const read = readCursorAuthStateOnce(databasePath).finally(() => {
+    inFlight.delete(databasePath);
+  });
+  inFlight.set(databasePath, read);
+  return read;
 }

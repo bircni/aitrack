@@ -15,9 +15,6 @@ export interface DuplicateMachineDays {
  * all-time total then counts that usage twice. Identical payloads are the
  * signal: two machines genuinely used on the same day produce different
  * numbers.
- *
- * Pure so it can be tested directly — this was ~40 lines inside the doctor
- * command, wedged between subprocess calls and chalk formatting.
  */
 export function findDuplicateMachineDays(machines: MachineFile[]): DuplicateMachineDays {
   const byDay = new Map<string, Map<string, string[]>>();

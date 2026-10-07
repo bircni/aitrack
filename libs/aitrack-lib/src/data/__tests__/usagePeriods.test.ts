@@ -1,6 +1,13 @@
+import { useTimeZone } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { computePreviousUsageWindow, computeUsageWindow } from '../usagePeriods.js';
+import {
+  computePreviousUsageWindow,
+  computeUsageWindow,
+  USAGE_PERIOD_DEFINITIONS,
+  type UsagePeriod,
+  usagePeriodDefinition,
+} from '../usagePeriods.js';
 
 describe('comparison usage windows', () => {
   beforeEach(() => {
@@ -137,23 +144,29 @@ describe('computeUsageWindow', () => {
     });
   });
 
-  it('stays on local calendar days across a DST transition', () => {
-    // 2026-03-29 is when European clocks jump forward. Day arithmetic that goes
-    // through a wall clock loses or gains an hour here and can land a day off.
-    vi.setSystemTime(new Date('2026-03-30T10:00:00'));
+  describe('across a DST transition', () => {
+    useTimeZone('Europe/Berlin'); // clocks jump forward on 2026-03-29
 
-    expect(computeUsageWindow({ period: 'yesterday' })).toMatchObject({
-      start: '2026-03-29',
-      end: '2026-03-29',
-    });
-    expect(computeUsageWindow({ period: 'thisweek' })).toMatchObject({
-      start: '2026-03-30',
-      end: '2026-03-30',
+    it('stays on local calendar days', () => {
+      vi.setSystemTime(new Date('2026-03-30T10:00:00'));
+
+      expect(computeUsageWindow({ period: 'yesterday' })).toMatchObject({
+        start: '2026-03-29',
+        end: '2026-03-29',
+      });
+      expect(computeUsageWindow({ period: 'thisweek' })).toMatchObject({
+        start: '2026-03-30',
+        end: '2026-03-30',
+      });
     });
   });
 });
 
-import { USAGE_PERIOD_DEFINITIONS, usagePeriodDefinition } from '../usagePeriods.js';
+const SAMPLE_ARGS: Partial<Record<UsagePeriod, string[]>> = {
+  date: ['2026-06-10'],
+  range: ['2026-06-10', '2026-06-12'],
+  last: ['3'],
+};
 
 it('validates registry arguments and compares fixed and rolling calendar windows', () => {
   const now = new Date('2026-06-17T10:00:00');
@@ -166,23 +179,18 @@ it('validates registry arguments and compares fixed and rolling calendar windows
         ? current
         : computePreviousUsageWindow(options, current, '2026-06-17');
     expect(previous.start <= current.start).toBe(true);
-    const args =
-      period.argShape === 'date'
-        ? ['2026-06-10']
-        : period.argShape === 'range'
-          ? ['2026-06-10', '2026-06-12']
-          : period.argShape === 'last'
-            ? ['3']
-            : [];
+    const args = SAMPLE_ARGS[period.period] ?? [];
     expect(() => period.parseArgs(args)).not.toThrow(/./u);
     expect(() => period.parseArgs(['invalid', 'extra', 'arguments'])).toThrow(/./u);
   }
   for (const [period, args] of [
     ['date', []],
     ['date', ['bad']],
+    ['date', ['2026-02-30']],
     ['range', []],
     ['range', ['bad', 'bad']],
     ['range', ['2026-06-12', '2026-06-10']],
+    ['range', ['2026-01-01', '2026-13-45']],
     ['last', []],
     ['last', ['0']],
     ['last', ['1.5']],

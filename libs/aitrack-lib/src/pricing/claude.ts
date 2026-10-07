@@ -5,11 +5,9 @@ import { CLAUDE_FAMILIES, canonicalizeClaudeModelId } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';
 import { costFromRates } from './rates.js';
 import { currentModelPricing } from './store.js';
-import { CLAUDE_MODELS, CLAUDE_PRICING_OVERRIDES } from './tables.js';
 import type { ClaudePricing } from './types.js';
 
 export type { ClaudePricing };
-export { CLAUDE_MODELS as CLAUDE_PRICING_BY_ID, CLAUDE_PRICING_OVERRIDES };
 
 const canonicalIdCache = new Map<string, string>();
 

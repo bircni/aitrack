@@ -1,11 +1,4 @@
-/**
- * Remediation strings shared across commands.
- *
- * Eight near-variants of "Run: npx aitrack init" had drifted apart in wording
- * and punctuation. This module is deliberately dependency-free so that
- * `config.ts` can use it without importing `emptyState.ts`, which reads config
- * and would form a cycle.
- */
+// Dependency-free so config.ts can import it without a cycle through emptyState.ts.
 
 /** The command that fixes an unconfigured install. */
 export const INIT_HINT = 'npx aitrack init';

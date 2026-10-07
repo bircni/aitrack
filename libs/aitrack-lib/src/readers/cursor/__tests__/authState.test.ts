@@ -49,10 +49,12 @@ afterEach(() => {
 
 describe('readCursorAuthState', () => {
   it('reads the tokens straight from the database when it is not locked', async () => {
-    await expect(readCursorAuthState(databasePath)).resolves.toEqual({
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-    });
+    const [state, concurrent] = await Promise.all([
+      readCursorAuthState(databasePath),
+      readCursorAuthState(databasePath),
+    ]);
+    expect(state).toEqual({ accessToken: 'access-token', refreshToken: 'refresh-token' });
+    expect(concurrent).toBe(state);
     expect(mocks.open).toHaveBeenCalledTimes(1);
     expect(mocks.backup).not.toHaveBeenCalled();
   });

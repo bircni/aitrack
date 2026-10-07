@@ -31,6 +31,7 @@ import {
   loadPersistedMachines,
   loadReportedMachines,
   mergeProviderDay,
+  providerDataForWindows,
 } from '../usageData.js';
 
 function emptyDay(): DayEntry {
@@ -216,10 +217,9 @@ describe('loadMergedProviderData', () => {
     expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
   });
 
-  it('skips the local log read when localMachine is passed in', async () => {
+  it('skips the local log read and reads synced files only once syncedReady resolves', async () => {
     mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
     mocks.isCloned.mockReturnValue(true);
-    mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
     mocks.readDataFile.mockReturnValue({
       hostname: 'other',
       lastUpdated: 'now',
@@ -232,12 +232,25 @@ describe('loadMergedProviderData', () => {
         },
       },
     });
+    const events: string[] = [];
+    mocks.listDataFiles.mockImplementationOnce(() => {
+      events.push('read');
+      return ['/repo/data/other.json'];
+    });
+    const syncedReady = new Promise((resolve) => {
+      setImmediate(() => {
+        events.push('ready');
+        resolve(undefined);
+      });
+    });
 
     const loaded = await loadMergedProviderData({
       providers: ['claude_code'],
       localMachine: null,
+      syncedReady,
     });
 
+    expect(events).toEqual(['ready', 'read']);
     expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
     expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['other']);
   });
@@ -552,7 +565,6 @@ describe('loadReportedMachines', () => {
   });
 });
 
-import { providerDataForWindows } from '../usageData.js';
 it('filters live-provider days using the viewer calendar while retaining zoned machine data', () => {
   const day = {
     inputTokens: 1,

@@ -70,14 +70,15 @@ export function renderTerminalTable<Row>(
   );
   lines.push(hLine('├', '┼', '┤'));
 
+  const { firstColumnStyle } = options;
+  const bodyStyle = firstColumnStyle
+    ? (text: string, index: number) => (index === 0 ? firstColumnStyle(text) : text)
+    : undefined;
   for (const row of bodyRows) {
     lines.push(
       renderRow(
         columns.map((col) => col.cell(row)),
-        options.firstColumnStyle
-          ? (text, index) =>
-              index === 0 && options.firstColumnStyle ? options.firstColumnStyle(text) : text
-          : undefined,
+        bodyStyle,
       ),
     );
   }

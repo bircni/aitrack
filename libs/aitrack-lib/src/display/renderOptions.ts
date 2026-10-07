@@ -1,9 +1,4 @@
-/**
- * Options shared by every renderer.
- *
- * Previously in `data/types.ts`, which meant the domain layer carried a display
- * type used only by the renderers.
- */
+/** Options shared by every renderer. */
 export interface RenderOptions {
   dark?: boolean;
   /**

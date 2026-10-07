@@ -70,6 +70,7 @@ vi.mock('../git.js', () => ({
   hasMachineDataChanges: mocks.hasMachineDataChanges,
   pushPendingCommits: mocks.pushPendingCommits,
   removePendingMachineFile: vi.fn(),
+  withRepoLock: (fn: () => Promise<unknown>) => fn(),
   writeMachineFile: (filePath: string, machine: object) => {
     mocks.mkdirSync(filePath, { recursive: true });
     mocks.writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
@@ -89,6 +90,7 @@ import { loggedOutput } from '@aitrack/test-fixtures';
 
 import type { DayMap } from '../data/types.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
+import { syncPricingPack } from '../pricing/syncPack.js';
 import { syncData } from '../sync.js';
 
 /** Header fields a file already on the current schema carries. */
@@ -145,6 +147,7 @@ describe('syncData', () => {
     mocks.isCloned.mockReturnValue(false);
 
     await expect(syncData()).rejects.toThrow('Repo not cloned');
+    expect(syncPricingPack).not.toHaveBeenCalled();
   });
 
   it('writes codex-only data and pushes it', async () => {

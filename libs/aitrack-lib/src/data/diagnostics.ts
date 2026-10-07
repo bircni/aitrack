@@ -1,16 +1,7 @@
 import { log } from '../output.js';
 import type { MachineFileDiagnostic } from './validate.js';
 
-/**
- * Files already warned about, so a dropped day stays a one-shot per file.
- *
- * Only the current machine self-heals — sync rewrites its own file — so for
- * another machine's file this would otherwise print on every command and every
- * run with nothing the local user could do about it.
- *
- * This lived inside the validator, which made a pure check impure. It belongs
- * with the reporting, since it is a presentation decision.
- */
+// Warn once per file: other machines' files cannot self-heal, so this would repeat on every run.
 const warnedDroppedDays = new Set<string>();
 
 function formatMachineFileDiagnostic(diagnostic: MachineFileDiagnostic): string {

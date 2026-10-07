@@ -68,7 +68,7 @@ export function mondayOfWeek(date: string): string {
 }
 
 /** Day of the week a calendar date falls on, 0 = Sunday. */
-function weekdayOf(date: string): number {
+export function weekdayOf(date: string): number {
   return parseDateString(date).getUTCDay();
 }
 

@@ -3,13 +3,7 @@ import { type AggregateModelsFilter, aggregateModelsByDayMap, dateInFilter } fro
 import { compareByCostThenTokens } from './sort.js';
 import type { DayMap, ProviderData } from './types.js';
 
-/**
- * Ranking days and models by tokens or cost.
- *
- * This is data work, not presentation — it lived in `commands/top.ts`, which
- * also owned the JSON envelope and the terminal table. `data/usageReport.ts`
- * already sets the pattern this follows: pure, no I/O, no output.
- */
+/** Ranking days and models by tokens or cost. */
 export type TopSort = 'tokens' | 'cost';
 
 interface TopSortable {
@@ -33,10 +27,7 @@ function compareTopEntries(a: TopSortable, b: TopSortable, sort: TopSort): numbe
   if (sort === 'tokens') {
     return b.tokens - a.tokens || (b.cost ?? 0) - (a.cost ?? 0);
   }
-  return compareByCostThenTokens(
-    { tokens: a.tokens, cost: a.cost },
-    { tokens: b.tokens, cost: b.cost },
-  );
+  return compareByCostThenTokens(a, b);
 }
 
 export function topProviderKey(byProvider: Record<string, number>): string | null {
@@ -77,17 +68,14 @@ function aggregateModels(
   providerKey: string,
   filter?: AggregateModelsFilter,
 ): ModelAccumulator[] {
-  const byModel = aggregateModelsByDayMap(dayMap, filter);
-  return [...byModel]
-    .filter(([, agg]) => agg.inputTokens + agg.outputTokens > 0 || agg.hasCost)
-    .map(([model, agg]) => ({
-      providerKey,
-      provider: providerLabel(providerKey),
-      model,
-      tokens: agg.inputTokens + agg.outputTokens,
-      cost: agg.hasCost ? agg.costUSD : null,
-      days: agg.days,
-    }));
+  return [...aggregateModelsByDayMap(dayMap, filter)].map(([model, agg]) => ({
+    providerKey,
+    provider: providerLabel(providerKey),
+    model,
+    tokens: agg.inputTokens + agg.outputTokens,
+    cost: agg.hasCost ? agg.costUSD : null,
+    days: agg.days,
+  }));
 }
 
 export function topModels(

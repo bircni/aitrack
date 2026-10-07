@@ -1,4 +1,5 @@
 import type { ClaudeFamily } from '../data/modelId.js';
+import { environmentValue } from '../env.js';
 import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
 
 export interface PricingSupplementClaude {
@@ -60,7 +61,7 @@ export const PRICING_REPO = 'bircni/aitrack';
  * point at a mirror (for example jsDelivr) if needed.
  */
 export function pricingPackBaseUrl(): string {
-  const fromEnv = process.env.AITRACK_PRICING_URL?.trim();
+  const fromEnv = environmentValue('AITRACK_PRICING_URL');
   if (fromEnv) return fromEnv.replace(/\/$/u, '');
   return `https://raw.githubusercontent.com/${PRICING_REPO}/${PRICING_BRANCH}`;
 }

@@ -8,13 +8,10 @@ import { fmt, fmtUSD } from './format.js';
 import { resolveProviderLayout } from './heatmap/layout.js';
 import { providerStats } from './heatmap/providerStats.js';
 import { formatMonthLabel } from './heatmap/stats.js';
+import type { RenderOptions } from './renderOptions.js';
 import { defaultTableStyle, renderTerminalTable } from './terminalTable.js';
 
-export interface TuiOptions {
-  dark?: boolean;
-  all?: boolean;
-  year?: number;
-}
+export type TuiOptions = RenderOptions;
 
 interface StatsRow {
   provider: string;
@@ -41,20 +38,13 @@ function summarizeDayMap(dayMap: DayMap, providerKey: string): StatsRow {
   };
 }
 
-/**
- * Summarize every provider together.
- *
- * Merging the day maps first is what keeps the Days column honest: a date on
- * which two providers were both active is one day, not two, which is also how
- * --all counts it. Tokens and cost fall out of the same pass.
- */
+/** Every provider together, merged first so a day two providers shared counts once. */
 function totalRow(dayMaps: DayMap[]): StatsRow {
   const merged: DayMap = new Map();
   for (const dayMap of dayMaps) mergeDayMaps(merged, dayMap);
   const { inputTokens, outputTokens, costUSD, hasCost, days } = sumDayMap(merged);
 
-  // Streak and peak month are per-provider figures; a merged row would need a
-  // different definition of each, so they are left blank rather than guessed.
+  // Streak and peak month are per-provider figures, so they are left blank rather than guessed.
   return {
     provider: 'TOTAL',
     days,
@@ -84,21 +74,17 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
     const merged = layoutData.all;
     bodyRows = merged && merged.size > 0 ? [summarizeDayMap(merged, 'all')] : [];
   } else {
-    const dayMaps = keys
-      .map((key) => layoutData[key])
-      .filter((dayMap): dayMap is DayMap => dayMap !== undefined);
-    bodyRows = keys
-      .map((key) => {
-        const dayMap = layoutData[key];
-        return dayMap ? summarizeDayMap(dayMap, key) : null;
-      })
-      .filter((row): row is StatsRow => row !== null);
-    if (bodyRows.length > 1) footer = totalRow(dayMaps);
+    const present = keys.flatMap((key) => {
+      const dayMap = layoutData[key];
+      return dayMap ? [{ key, dayMap }] : [];
+    });
+    bodyRows = present.map(({ key, dayMap }) => summarizeDayMap(dayMap, key));
+    if (bodyRows.length > 1) footer = totalRow(present.map(({ dayMap }) => dayMap));
   }
 
   if (bodyRows.length === 0) return '';
 
-  const isDark = Boolean(options.dark);
+  const style = defaultTableStyle(Boolean(options.dark));
   const title =
     options.year === undefined
       ? chalk.bold('aitrack stats')
@@ -118,10 +104,10 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
       { header: 'Peak month', align: 'left', cell: (r) => r.peak },
     ],
     {
-      style: defaultTableStyle(isDark),
+      style,
       bodyRows,
       footerRow: footer,
-      firstColumnStyle: defaultTableStyle(isDark).header,
+      firstColumnStyle: style.header,
     },
   );
 

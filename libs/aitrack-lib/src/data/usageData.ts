@@ -9,9 +9,7 @@ import { resolveModelCost } from '../pricing/resolve.js';
 import { isSyncedProvider, liveProviders } from '../providers/index.js';
 import { machineTimezone } from '../timezone.js';
 import { addTokenCounts, getOrCreateDay } from './dayMap.js';
-import { isUsageNotConfigured } from './emptyState.js';
 import { buildLocalMachineFile, machineHasData, mergePersistedDays } from './localData.js';
-import { CURRENT_SCHEMA_VERSION } from './schema.js';
 import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';
 
 export { usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
@@ -86,6 +84,8 @@ export interface LoadUsageOptions {
    * the logs), the loader does not parse the JSONL corpus again.
    */
   localMachine?: MachineFile | null;
+  /** Awaited after the local logs are read and before synced files are, e.g. a concurrent pull. */
+  syncedReady?: Promise<unknown>;
 }
 
 export interface PersistedMachine {
@@ -113,8 +113,8 @@ export interface LoadedUsageData {
   liveProviderData?: ProviderData;
 }
 
-function overlayMachineFile(providerData: ProviderData, machine: MachineFile): void {
-  for (const [date, dayProviders] of Object.entries(machine.days)) {
+function overlayDays(providerData: ProviderData, days: MachineFile['days']): void {
+  for (const [date, dayProviders] of Object.entries(days)) {
     for (const [providerKey, pData] of Object.entries(dayProviders)) {
       if (!isSyncedProvider(providerKey)) continue;
       const dayMap = (providerData[providerKey] ??= new Map());
@@ -123,45 +123,21 @@ function overlayMachineFile(providerData: ProviderData, machine: MachineFile): v
   }
 }
 
-function splitByProvider(machineFiles: MachineFile[]): ProviderData {
-  const providers: ProviderData = {};
-  for (const file of machineFiles) {
-    overlayMachineFile(providers, file);
-  }
-  return providers;
-}
-
 /**
  * Machines as reports should show them: other machines as synced, this machine
  * overlaid with the local logs so its totals match `show`. A machine that has
  * only been read locally is included with an empty `lastUpdated`.
  */
 export async function loadReportedMachines(): Promise<MachineFile[]> {
-  if (isUsageNotConfigured()) return [];
   const config = tryLoadConfig();
-  if (!config) return [];
+  if (!config || !isCloned()) return [];
 
   const machineId = resolveMachineId(config);
-  const currentFile = machineDataFilename(machineId);
-  const local = await buildLocalMachineFile(machineId);
-  const hasLocal = machineHasData(local);
-  const machines: MachineFile[] = [];
-  let isCurrentIncluded = false;
-  for (const entry of loadPersistedMachines()) {
-    if (hasLocal && basename(entry.filePath) === currentFile) {
-      isCurrentIncluded = true;
-      machines.push({
-        ...entry.machine,
-        days: mergePersistedDays(entry.machine.days, local.days),
-      });
-      continue;
-    }
-    machines.push(entry.machine);
-  }
-  if (!isCurrentIncluded && hasLocal) {
-    machines.push({ ...local, lastUpdated: '' });
-  }
-  return machines;
+  return mergePersistedWithLocal(
+    loadPersistedMachines(),
+    await buildLocalMachineFile(machineId),
+    machineDataFilename(machineId),
+  );
 }
 
 /** Synced machine files that parsed, with the path used to identify the current one. */
@@ -171,21 +147,12 @@ export function loadPersistedMachines(): PersistedMachine[] {
     .filter((entry): entry is PersistedMachine => entry.machine !== null);
 }
 
-/**
- * Overlay this machine's local logs onto its persisted file through the same
- * rule sync writes with, then split the result by provider.
- */
+/** Overlay this machine's local logs onto its persisted file through the same rule sync writes with. */
 function mergePersistedWithLocal(
   persisted: PersistedMachine[],
   localMachine: MachineFile | null,
   currentFile: string,
-): {
-  machineData: MachineFile[];
-  reportMachines: MachineFile[];
-  providerData: ProviderData;
-  isLocalMerged: boolean;
-} {
-  const machineData = persisted.map((entry) => entry.machine);
+): MachineFile[] {
   const reportMachines: MachineFile[] = [];
   let isLocalMerged = false;
 
@@ -204,13 +171,10 @@ function mergePersistedWithLocal(
     });
     isLocalMerged = true;
   }
-
-  return {
-    machineData,
-    reportMachines,
-    providerData: splitByProvider(reportMachines),
-    isLocalMerged,
-  };
+  if (localMachine !== null && !isLocalMerged && machineHasData(localMachine)) {
+    reportMachines.push({ ...localMachine, lastUpdated: '' }); // Never synced.
+  }
+  return reportMachines;
 }
 
 /**
@@ -243,7 +207,7 @@ export async function loadMergedProviderData(
   options: LoadUsageOptions = {},
 ): Promise<LoadedUsageData | null> {
   const config = tryLoadConfig();
-  const machineId = resolveMachineId(config ?? { repoUrl: '' });
+  const machineId = resolveMachineId(config);
   const providerFilter = options.providers ? new Set(options.providers) : undefined;
 
   const livePending = startLiveFetches(providerFilter, options.refreshLive);
@@ -251,38 +215,22 @@ export async function loadMergedProviderData(
     options.localMachine === undefined
       ? await buildLocalMachineFile(machineId, undefined, options.providers)
       : options.localMachine;
+  await options.syncedReady;
 
   const isWarnedNotConfigured = !config || !isCloned();
+  const persisted = isWarnedNotConfigured ? [] : loadPersistedMachines();
+  const reportMachines = mergePersistedWithLocal(
+    persisted,
+    localMachine,
+    machineDataFilename(machineId),
+  );
 
-  let machineData: MachineFile[] = [];
-  let providerData: ProviderData = {};
-  let isLocalMerged = false;
+  const providerData: ProviderData = {};
   const zonedSources: ZonedUsageSource[] = [];
-
-  if (config && isCloned()) {
-    const merged = mergePersistedWithLocal(
-      loadPersistedMachines(),
-      localMachine,
-      machineDataFilename(machineId),
-    );
-    machineData = merged.machineData;
-    providerData = merged.providerData;
-    isLocalMerged = merged.isLocalMerged;
-    for (const machine of merged.reportMachines) {
-      zonedSources.push({
-        timezone: machine.timezone,
-        days: filterDaysByProviders(machine.days, providerFilter),
-      });
-    }
-  }
-
-  // Only when no persisted file absorbed it above; merging already covers it.
-  if (localMachine !== null && !isLocalMerged && machineHasData(localMachine)) {
-    overlayMachineFile(providerData, localMachine);
-    zonedSources.push({
-      timezone: localMachine.timezone,
-      days: filterDaysByProviders(localMachine.days, providerFilter),
-    });
+  for (const machine of reportMachines) {
+    const days = filterDaysByProviders(machine.days, providerFilter);
+    overlayDays(providerData, days);
+    zonedSources.push({ timezone: machine.timezone, days });
   }
 
   const liveProviderData: ProviderData = {};
@@ -294,19 +242,13 @@ export async function loadMergedProviderData(
     }
   }
 
-  if (providerFilter) {
-    providerData = Object.fromEntries(
-      Object.entries(providerData).filter(([key]) => providerFilter.has(key)),
-    );
-  }
-
   if (Object.keys(providerData).length === 0) {
     return null;
   }
 
   return {
     providerData,
-    machineData,
+    machineData: persisted.map((entry) => entry.machine),
     warnedNotConfigured: isWarnedNotConfigured,
     zonedSources,
     liveProviderData,
@@ -351,14 +293,7 @@ export function providerDataForWindows(
 
   const data: ProviderData = {};
   for (const source of loaded.zonedSources) {
-    overlayMachineFile(data, {
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      hostname: source.timezone,
-      timezone: source.timezone,
-      dayBucket: 'local',
-      lastUpdated: '',
-      days: daysInWindow(source.days, windowFor(source.timezone)),
-    });
+    overlayDays(data, daysInWindow(source.days, windowFor(source.timezone)));
   }
 
   const { liveProviderData } = loaded;

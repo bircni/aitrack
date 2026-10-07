@@ -7,13 +7,7 @@ import {
   reportFallbackPricing,
 } from './fallback.js';
 
-/**
- * Record family-fallback hits for models already loaded.
- *
- * Parse-time collection misses cache hits: a cached transcript never calls the
- * pricer, so the warning used to vanish on the second run and never appeared
- * on `show` or `usage` at all.
- */
+/** Record family-fallback hits for models already loaded. */
 export function recordPricingFallbacks(
   providerData: ProviderData,
   fallbacks: FallbackCollector,

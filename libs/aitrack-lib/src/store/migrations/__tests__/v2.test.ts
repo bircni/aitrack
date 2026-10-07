@@ -22,9 +22,6 @@ describe('v1 -> v2 migration', () => {
     expect(migrated).toMatchObject({
       schemaVersion: 2,
       dayBucket: 'local',
-      // Not a real IANA zone: the producing machine's zone is unrecoverable, and
-      // a plausible-looking 'UTC' would be indistinguishable from a machine that
-      // genuinely ran in UTC.
       timezone: 'unknown',
       hostname: 'laptop',
     });
@@ -45,13 +42,6 @@ describe('v1 -> v2 migration', () => {
     expect(machine).not.toBeNull();
     expect(machine?.schemaVersion).toBe(2);
     expect(machine?.dayBucket).toBe('local');
-    // Silently: the header is metadata no report reads, so an older file is
-    // read and upgraded in memory without asking the user to do anything.
     expect(diagnostics).toEqual([]);
-  });
-
-  it('keeps an explicit timezone if the file somehow has one', () => {
-    const migrated = v2.migrate({ ...structuredClone(v1File), timezone: 'Europe/Berlin' });
-    expect(migrated.timezone).toBe('Europe/Berlin');
   });
 });

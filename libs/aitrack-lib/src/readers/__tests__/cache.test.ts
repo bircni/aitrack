@@ -1,6 +1,7 @@
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -36,7 +37,7 @@ vi.mock('../../pricing/store.js', () => ({ currentModelPricing: () => pricing })
 import type { DayMap } from '../../data/types.js';
 import { openParseCache } from '../cache.js';
 
-const CACHE_FILE = join(TEST_HOME, '.config', 'aitrack', 'cache', 'claude.json');
+const CACHE_DIR = join(TEST_HOME, '.config', 'aitrack', 'cache');
 const SOURCE = join(TEST_HOME, 'a.jsonl');
 
 function days(inputTokens: number): DayMap {
@@ -48,11 +49,16 @@ function days(inputTokens: number): DayMap {
   ]);
 }
 
-/** Populate the cache for SOURCE and persist it, as one run would. */
-async function seedCache(inputTokens = 10): Promise<void> {
+function cacheFilePath(): string {
+  return join(CACHE_DIR, readdirSync(CACHE_DIR).find((file) => file.startsWith('claude-')) ?? '');
+}
+
+/** Populate the cache for SOURCE and persist it, as one run would; returns the cache file. */
+async function seedCache(inputTokens = 10): Promise<string> {
   const cache = openParseCache('claude');
   await cache.record(SOURCE, { days: days(inputTokens), keys: ['k1'] });
   cache.save();
+  return cacheFilePath();
 }
 
 describe('openParseCache', () => {
@@ -103,24 +109,11 @@ describe('openParseCache', () => {
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });
 
-  it('drops a cache written by a different aitrack version', async () => {
-    await seedCache();
-    const stored: unknown = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
-    writeFileSync(
-      CACHE_FILE,
-      JSON.stringify({ ...(stored as object), appVersion: '0.0.0-other' }),
-      'utf8',
-    );
-
-    // Costs are baked in at parse time, so pricing changes must not survive.
-    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
-  });
-
   it('drops a cache written in a different timezone', async () => {
-    await seedCache();
-    const stored: unknown = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
+    const cacheFile = await seedCache();
+    const stored: unknown = JSON.parse(readFileSync(cacheFile, 'utf8'));
     writeFileSync(
-      CACHE_FILE,
+      cacheFile,
       JSON.stringify({ ...(stored as object), timezone: 'Not/A-Zone' }),
       'utf8',
     );
@@ -128,26 +121,17 @@ describe('openParseCache', () => {
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });
 
-  it('drops a cache written in a different format', async () => {
-    await seedCache();
-    const stored: unknown = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
-    writeFileSync(CACHE_FILE, JSON.stringify({ ...(stored as object), format: 99 }), 'utf8');
-
-    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
-  });
-
   it('ignores a corrupt cache file instead of throwing', async () => {
-    mkdirSync(join(TEST_HOME, '.config', 'aitrack', 'cache'), { recursive: true });
-    writeFileSync(CACHE_FILE, '{not json', 'utf8');
+    writeFileSync(await seedCache(), '{not json', 'utf8');
 
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });
 
   it('ignores an entry whose day totals are not finite numbers', async () => {
-    await seedCache();
+    const cacheFile = await seedCache();
     writeFileSync(
-      CACHE_FILE,
-      readFileSync(CACHE_FILE, 'utf8').replace('"inputTokens":10', '"inputTokens":null'),
+      cacheFile,
+      readFileSync(cacheFile, 'utf8').replace('"inputTokens":10', '"inputTokens":null'),
       'utf8',
     );
 
@@ -155,8 +139,8 @@ describe('openParseCache', () => {
   });
 
   it('ignores an entry whose dedup keys are not all strings', async () => {
-    await seedCache();
-    writeFileSync(CACHE_FILE, readFileSync(CACHE_FILE, 'utf8').replace('"k1"', '42'), 'utf8');
+    const cacheFile = await seedCache();
+    writeFileSync(cacheFile, readFileSync(cacheFile, 'utf8').replace('"k1"', '42'), 'utf8');
 
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });
@@ -190,14 +174,16 @@ describe('openParseCache', () => {
   it('does not throw when the cache file cannot be replaced', async () => {
     // A directory sitting where the cache file goes makes the rename fail; the
     // command it was speeding up must not care.
-    mkdirSync(CACHE_FILE, { recursive: true });
+    const cacheFile = await seedCache();
+    rmSync(cacheFile);
+    mkdirSync(cacheFile);
     const cache = openParseCache('claude');
     await cache.record(SOURCE, { days: days(10), keys: ['k1'] });
 
     expect(() => {
       cache.save();
     }).not.toThrow();
-    expect(existsSync(`${CACHE_FILE}.${String(process.pid)}.tmp`)).toBe(false);
+    expect(existsSync(`${cacheFile}.${String(process.pid)}.tmp`)).toBe(false);
   });
 
   it('forgets files that were not looked up, so deleted logs age out', async () => {
@@ -235,13 +221,36 @@ describe('openParseCache', () => {
   });
 });
 
-it('invalidates memory and disk cache entries after effective pricing changes', async () => {
+it('keeps a file per pricing key, the newest other key and a fresh unkeyed file', async () => {
   mkdirSync(TEST_HOME, { recursive: true });
   writeFileSync(SOURCE, 'line\n');
-  await seedCache();
+  const initialFile = await seedCache();
   expect(await openParseCache('claude').lookup(SOURCE)).not.toBeNull();
   pricing.fingerprint = 'new-rate';
   expect(await openParseCache('claude').lookup(SOURCE)).toBeNull();
+
+  const older = join(CACHE_DIR, 'claude-0123456789ab.json');
+  const legacy = join(CACHE_DIR, 'claude.json');
+  writeFileSync(older, '{}');
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  utimesSync(older, hourAgo, hourAgo);
+  writeFileSync(legacy, '{}');
+  await seedCache(20);
+  expect(readdirSync(CACHE_DIR).filter((file) => file.startsWith('claude'))).toHaveLength(3);
+  expect(existsSync(older)).toBe(false);
+  expect(existsSync(legacy)).toBe(true);
+
+  const weekAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+  utimesSync(legacy, weekAgo, weekAgo);
+  utimesSync(initialFile, hourAgo, hourAgo);
+  pricing.fingerprint = 'newest-rate'; // A process prunes once per cache file it saves.
+  await seedCache(30);
+  expect(existsSync(legacy)).toBe(false);
+  expect(existsSync(initialFile)).toBe(false);
+
+  pricing.fingerprint = 'new-rate';
+  const kept = await openParseCache('claude').lookup(SOURCE);
+  expect(kept?.days.get('2024-01-15')?.inputTokens).toBe(20);
   pricing.fingerprint = 'initial';
   rmSync(TEST_HOME, { recursive: true, force: true });
 });
@@ -258,7 +267,8 @@ it('rejects corrupted message contributions and rebuilds only the affected entry
   };
   await cache.record(SOURCE, { days: days(10), keys: ['k'], messages: [message] });
   cache.save();
-  const raw: unknown = JSON.parse(readFileSync(CACHE_FILE, 'utf8'));
+  const cacheFile = cacheFilePath();
+  const raw: unknown = JSON.parse(readFileSync(cacheFile, 'utf8'));
   const stored = raw as { entries: Record<string, unknown> };
   for (const bad of [
     null,
@@ -273,7 +283,7 @@ it('rejects corrupted message contributions and rebuilds only the affected entry
       days: { date: { inputTokens: 1, outputTokens: 2, byModel: { m: null } } },
     },
   ]) {
-    writeFileSync(CACHE_FILE, JSON.stringify({ ...stored, entries: { [SOURCE]: bad } }));
+    writeFileSync(cacheFile, JSON.stringify({ ...stored, entries: { [SOURCE]: bad } }));
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   }
   for (const bad of [
@@ -285,7 +295,7 @@ it('rejects corrupted message contributions and rebuilds only the affected entry
     { ...message, counts: { inputTokens: 1, outputTokens: 2, costUSD: null } },
   ]) {
     writeFileSync(
-      CACHE_FILE,
+      cacheFile,
       JSON.stringify({
         ...stored,
         entries: { [SOURCE]: { mtimeMs: 1, size: 1, keys: [], days: {}, messages: [bad] } },

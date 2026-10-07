@@ -1,10 +1,4 @@
-/**
- * Shape of `~/.config/aitrack/config.json`.
- *
- * These lived in `data/types.ts` next to the domain vocabulary, but the data
- * layer neither produces nor validates them — `config.ts` does. Keeping them
- * here stops the domain types from depending on a CLI concern.
- */
+/** Shape of `~/.config/aitrack/config.json`. */
 interface BudgetConfig {
   /** Estimated-cost ceiling for the calendar month, in USD. `usage thismonth` flags progress against it. */
   monthlyUSD?: number;

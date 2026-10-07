@@ -1,12 +1,12 @@
 import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
 
 import type { DayMap, ProviderData } from '../data/types.js';
-import type { RenderOptions } from '../display/renderOptions.js';
 import { tokenIntensityLevel } from './heatmap/intensity.js';
 import { resolveProviderLayout } from './heatmap/layout.js';
 import { buildDateGrid, MONTHS } from './heatmap/stats.js';
 import { getProviderTheme, PALETTE } from './heatmap/themes.js';
 import { buildProviderSectionViewModel } from './heatmap/viewModel.js';
+import type { RenderOptions } from './renderOptions.js';
 
 const CELL = 12;
 const GAP = 3;

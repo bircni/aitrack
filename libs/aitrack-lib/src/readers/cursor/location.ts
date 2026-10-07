@@ -4,12 +4,7 @@ import { join, resolve } from 'node:path';
 
 import { environmentValue } from '../../env.js';
 
-/**
- * Finding Cursor's state database across platforms.
- *
- * Split out of the old auth.ts, which also held SQLite access, JWT decoding and
- * an HTTP client — four reasons to change one file.
- */
+/** Finding Cursor's state database across platforms. */
 export const CURSOR_CONFIG_DIR_ENV = 'CURSOR_CONFIG_DIR';
 export const CURSOR_STATE_DB_PATH_ENV = 'CURSOR_STATE_DB_PATH';
 const CURSOR_STATE_DB_RELATIVE_PATH = join('User', 'globalStorage', 'state.vscdb');
