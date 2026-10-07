@@ -1,8 +1,7 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
 
-  import type { ProviderState, Settings, Spend } from '../shared/types.js';
-  import { api } from './api.js';
+  import type { ProviderState, QuotaProviderKey, Settings, Spend } from '../shared/types.js';
   import {
     formatCost,
     formatTokens,
@@ -23,19 +22,12 @@
     now: number;
     period: Period;
     onPatch: (patch: Partial<Settings>) => void;
+    onRefresh: () => void;
+    onOpenDashboard: (provider: QuotaProviderKey) => void;
   }
 
-  let { provider, settings, now, period, onPatch }: Props = $props();
+  let { provider, settings, now, period, onPatch, onRefresh, onOpenDashboard }: Props = $props();
   let open = $state(false);
-  let actionError = $state<string | undefined>();
-  async function act(action: () => Promise<void>): Promise<void> {
-    try {
-      await action();
-      actionError = undefined;
-    } catch {
-      actionError = 'Could not send the command. Try again.';
-    }
-  }
 
   const spend = $derived(periodSpend(provider.usage, period));
   const problem = $derived(
@@ -68,9 +60,6 @@
     {/if}
   </button>
 
-  {#if actionError}
-    <p class="banner" role="alert">{actionError}</p>
-  {/if}
   {#if provider.quotaError && provider.quota}
     <div class="state">Cached limits: {formatUpdated(provider.quota.fetchedAt, now)}</div>
   {/if}
@@ -78,9 +67,9 @@
     <div class="state">
       <span title={provider.quotaError.message}>{problem.text}</span>
       {#if problem.retry}
-        <button class="link" type="button" onclick={() => void act(() => api.refresh())}>Retry</button>
+        <button class="link" type="button" onclick={onRefresh}>Retry</button>
       {:else}
-        <button class="link" type="button" onclick={() => void act(() => api.openDashboard(provider.key))}
+        <button class="link" type="button" onclick={() => onOpenDashboard(provider.key)}
           >Open dashboard</button
         >
       {/if}

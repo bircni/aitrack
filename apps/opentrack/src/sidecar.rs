@@ -9,13 +9,14 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 
 /// Every request answers at once (refresh reports progress as events); this only unblocks the UI.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const MIN_RESTART_DELAY: Duration = Duration::from_secs(2);
 const MAX_RESTART_DELAY: Duration = Duration::from_secs(120);
 const HEALTHY_RUN: Duration = Duration::from_secs(60);
+const STOPPED: &str = "The background service stopped";
 
 type Reply = Result<Value, String>;
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Reply>>>>;
@@ -41,10 +42,14 @@ pub fn parse_line(line: &str) -> Option<Incoming> {
     Some(Incoming::Event { name, data })
 }
 
+/// None while the process (re)starts, then whether it could be started.
+type Status = Option<Result<(), String>>;
+
 /// The Node process that fetches limits and reads usage, restarted if it dies.
 #[derive(Default)]
 pub struct Sidecar {
     stdin: Arc<Mutex<Option<ChildStdin>>>,
+    status: watch::Sender<Status>,
     pending: Pending,
     next_id: AtomicU64,
 }
@@ -55,13 +60,15 @@ impl Sidecar {
     where
         F: Fn(&str, Value) + Send + Sync + 'static,
     {
-        let (supervised_stdin, supervised_pending) = (self.stdin.clone(), self.pending.clone());
+        let (supervised_stdin, status, supervised_pending) =
+            (self.stdin.clone(), self.status.clone(), self.pending.clone());
         let mut delay = MIN_RESTART_DELAY;
         thread::spawn(move || loop {
             let started = Instant::now();
             match start(&program, &data_dir) {
                 Ok(mut child) => {
                     *supervised_stdin.lock().unwrap() = child.stdin.take();
+                    status.send_replace(Some(Ok(())));
                     if let Some(stdout) = child.stdout.take() {
                         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                             match parse_line(&line) {
@@ -76,12 +83,15 @@ impl Sidecar {
                         }
                     }
                     let _ = child.wait();
+                    status.send_replace(None);
                     *supervised_stdin.lock().unwrap() = None;
                     for (_, sender) in supervised_pending.lock().unwrap().drain() {
-                        let _ = sender.send(Err("The background service stopped".into()));
+                        let _ = sender.send(Err(STOPPED.into()));
                     }
                 }
-                Err(error) => eprintln!("opentrack: could not start {}: {error}", program.display()),
+                Err(error) => {
+                    status.send_replace(Some(Err(format!("The background service could not start: {error}"))));
+                }
             }
             // One that dies at startup should not be relaunched every two seconds forever.
             if started.elapsed() > HEALTHY_RUN {
@@ -94,24 +104,30 @@ impl Sidecar {
 
     pub async fn request(&self, method: &str, params: Value) -> Reply {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let (sender, receiver) = oneshot::channel();
-        self.pending.lock().unwrap().insert(id, sender);
         let line = json!({ "id": id, "method": method, "params": params }).to_string();
-        let written = match self.stdin.lock().unwrap().as_mut() {
-            Some(stdin) => writeln!(stdin, "{line}").and_then(|()| stdin.flush()).is_ok(),
-            None => false,
-        };
-        if !written {
-            self.pending.lock().unwrap().remove(&id);
-            return Err("The background service is starting".into());
-        }
-        match tokio::time::timeout(REQUEST_TIMEOUT, receiver).await {
-            Ok(reply) => reply.unwrap_or_else(|_| Err("The background service stopped".into())),
-            Err(_) => {
-                self.pending.lock().unwrap().remove(&id);
-                Err("The background service did not respond".into())
+        let exchange = async {
+            // A request made while the process (re)starts, like the popup's first load, waits for it.
+            if let Ok(status) = self.status.subscribe().wait_for(Option::is_some).await {
+                if let Some(Err(error)) = &*status {
+                    return Err(error.clone());
+                }
             }
-        }
+            let (sender, receiver) = oneshot::channel();
+            self.pending.lock().unwrap().insert(id, sender);
+            let written = match self.stdin.lock().unwrap().as_mut() {
+                Some(stdin) => writeln!(stdin, "{line}").and_then(|()| stdin.flush()).is_ok(),
+                None => false,
+            };
+            if !written {
+                return Err(STOPPED.into());
+            }
+            receiver.await.unwrap_or_else(|_| Err(STOPPED.into()))
+        };
+        let reply = tokio::time::timeout(REQUEST_TIMEOUT, exchange)
+            .await
+            .unwrap_or_else(|_| Err("The background service did not respond".into()));
+        self.pending.lock().unwrap().remove(&id);
+        reply
     }
 }
 

@@ -1,13 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
-import type { AppState, OpentrackApi, Screen, Settings } from '../shared/types.js';
+import type { AppState, OpentrackApi, Screen, SettingErrors, Settings } from '../shared/types.js';
 
 interface Events {
   state: AppState;
   settings: Settings;
   screen: Screen;
-  'shortcut-error': string | null;
+  'setting-errors': SettingErrors;
   update: string;
 }
 
@@ -15,15 +15,12 @@ function subscribe<K extends keyof Events>(
   event: K,
   listener: (payload: Events[K]) => void,
 ): () => void {
+  // Caught here so a failed registration is no unhandled rejection even if never unsubscribed.
   const unlisten = listen<Events[K]>(event, ({ payload }) => {
     listener(payload);
-  });
+  }).catch(() => undefined);
   return () => {
-    void unlisten
-      .then((stop) => {
-        stop();
-      })
-      .catch(() => undefined);
+    void unlisten.then((stop) => stop?.());
   };
 }
 
@@ -42,8 +39,8 @@ export const api: OpentrackApi = {
   onState: (listener) => subscribe('state', listener),
   onSettings: (listener) => subscribe('settings', listener),
   onScreen: (listener) => subscribe('screen', listener),
-  shortcutError: () => invoke('shortcut_error'),
-  onShortcutError: (listener) => subscribe('shortcut-error', listener),
+  settingErrors: () => invoke('setting_errors'),
+  onSettingErrors: (listener) => subscribe('setting-errors', listener),
   appVersion: () => invoke('app_version'),
   checkForUpdate: () => invoke('check_update'),
   availableUpdate: () => invoke('available_update'),

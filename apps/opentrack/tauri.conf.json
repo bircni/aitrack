@@ -11,6 +11,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "opentrack",
         "width": 320,
         "height": 560,

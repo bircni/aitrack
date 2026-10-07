@@ -9,16 +9,16 @@ mod updater;
 use std::sync::Mutex;
 
 use base64::Engine as _;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, Theme, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, Theme, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_autostart::ManagerExt as _;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
-use crate::panel::{main_window, Panel};
+use crate::panel::{main_window, Panel, MAIN_WINDOW};
 use crate::position::Rect;
 use crate::sidecar::Sidecar;
 use crate::updater::Updates;
@@ -29,8 +29,8 @@ pub struct Shell {
     pub sidecar: Sidecar,
     pub last_state: Mutex<Option<Value>>,
     pub last_settings: Mutex<Option<Value>>,
-    /// Why the global shortcut in the settings could not be registered.
-    pub shortcut_error: Mutex<Option<String>>,
+    /// Why a setting the OS applies did not take, keyed like the settings.
+    pub setting_errors: Mutex<Map<String, Value>>,
 }
 
 fn toggle(app: &AppHandle, tray: Option<Rect>) {
@@ -39,9 +39,10 @@ fn toggle(app: &AppHandle, tray: Option<Rect>) {
     }
 }
 
-fn show(app: &AppHandle, screen: &str) {
-    if let Some(window) = main_window(app) {
-        app.state::<Panel>().show(&window, Some(screen));
+fn show(app: &AppHandle, screen: &'static str) {
+    let panel = app.state::<Panel>();
+    if let Some(window) = panel.window_or_defer(app, screen) {
+        panel.show(&window, Some(screen));
     }
 }
 
@@ -57,33 +58,35 @@ fn apply_settings(app: &AppHandle, settings: &Value) {
         let _ = window.set_theme(theme);
         app.state::<Panel>().set_floating(&window, text("windowMode") == "floating");
     }
+    let mut errors = Map::new();
     // A dev build registering itself to start at login would outlive the checkout.
     if !cfg!(debug_assertions) {
         let autostart = app.autolaunch();
-        let _ = if settings.get("launchAtLogin").and_then(Value::as_bool) == Some(true) {
+        let result = if settings.get("launchAtLogin").and_then(Value::as_bool) == Some(true) {
             autostart.enable()
         } else {
             autostart.disable()
         };
+        if let Err(error) = result {
+            errors.insert("launchAtLogin".into(), error.to_string().into());
+        }
     }
     let shortcuts = app.global_shortcut();
     let _ = shortcuts.unregister_all();
     let accelerator = text("globalShortcut");
-    let error = if accelerator.is_empty() {
-        None
-    } else {
+    if !accelerator.is_empty() {
+        let registered = shortcuts.on_shortcut(accelerator, |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                toggle(app, None);
+            }
+        });
         // Settings keep what was typed; the error tells the user why it does nothing.
-        shortcuts
-            .on_shortcut(accelerator, |app, _shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    toggle(app, None);
-                }
-            })
-            .err()
-            .map(|error| error.to_string())
-    };
-    let _ = app.emit("shortcut-error", &error);
-    *app.state::<Shell>().shortcut_error.lock().unwrap() = error;
+        if let Err(error) = registered {
+            errors.insert("globalShortcut".into(), error.to_string().into());
+        }
+    }
+    let _ = app.emit("setting-errors", &errors);
+    *app.state::<Shell>().setting_errors.lock().unwrap() = errors;
 }
 
 fn on_sidecar_event(app: &AppHandle, name: &str, data: Value) {
@@ -94,12 +97,13 @@ fn on_sidecar_event(app: &AppHandle, name: &str, data: Value) {
         }
         "settings" => {
             let _ = app.emit("settings", &data);
-            let shell = app.state::<Shell>();
-            let last_settings = &shell.last_settings;
             // A sidecar restart resends the same settings; the OS-side ones need no reapplying.
-            if last_settings.lock().unwrap().as_ref() != Some(&data) {
-                apply_settings(app, &data);
-                *last_settings.lock().unwrap() = Some(data);
+            let changed =
+                app.state::<Shell>().last_settings.lock().unwrap().replace(data.clone()).as_ref() != Some(&data);
+            if changed {
+                // After setup, so the window exists; the plugins also expect the main thread.
+                let main = app.clone();
+                let _ = app.run_on_main_thread(move || apply_settings(&main, &data));
             }
         }
         "alert" => {
@@ -192,7 +196,7 @@ fn main() {
             commands::save_settings,
             commands::open_dashboard,
             commands::fit_height,
-            commands::shortcut_error,
+            commands::setting_errors,
             commands::app_version,
             commands::check_update,
             commands::available_update,
@@ -208,26 +212,32 @@ fn main() {
                 sidecar: Sidecar::default(),
                 last_state: Mutex::new(None),
                 last_settings: Mutex::new(None),
-                shortcut_error: Mutex::new(None),
+                setting_errors: Mutex::default(),
             });
 
-            if let Some(window) = main_window(&handle) {
-                let blurred = window.clone();
-                window.on_window_event(move |event| {
-                    if let WindowEvent::Focused(false) = event {
-                        blurred.app_handle().state::<Panel>().on_blur(&blurred);
-                    }
-                });
-            }
             build_tray(&handle)?;
             updater::watch(handle.clone());
 
-            // Last: its first events need the Shell state and the tray.
+            // Before the window: on Windows, building it waits for WebView2, which the sidecar need not.
             let program = app.path().resource_dir()?.join("opentrack-sidecar.exe");
             let data_dir = app.path().app_data_dir()?;
+            let events = handle.clone();
             app.state::<Shell>()
                 .sidecar
-                .supervise(program, data_dir, move |name, data| on_sidecar_event(&handle, name, data));
+                .supervise(program, data_dir, move |name, data| on_sidecar_event(&events, name, data));
+
+            let config =
+                app.config().app.windows.iter().find(|window| window.label == MAIN_WINDOW).ok_or("no main window")?;
+            let window = WebviewWindowBuilder::from_config(&handle, config)?.build()?;
+            let blurred = window.clone();
+            window.on_window_event(move |event| {
+                if let WindowEvent::Focused(false) = event {
+                    blurred.app_handle().state::<Panel>().on_blur(&blurred);
+                }
+            });
+            if let Some(screen) = handle.state::<Panel>().take_deferred_show() {
+                show(&handle, screen);
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -92,6 +92,9 @@ export interface Settings {
 
 export type Screen = 'dashboard' | 'settings';
 
+/** Why a setting the OS applies did not take; empty when all did. */
+export type SettingErrors = Partial<Record<'launchAtLogin' | 'globalShortcut', string>>;
+
 /** What the renderer can ask of the desktop shell. */
 export interface OpentrackApi {
   getState: () => Promise<AppState>;
@@ -107,9 +110,8 @@ export interface OpentrackApi {
   onState: (listener: (state: AppState) => void) => () => void;
   onSettings: (listener: (settings: Settings) => void) => () => void;
   onScreen: (listener: (screen: Screen) => void) => () => void;
-  /** Why the global shortcut could not be registered, or null when it was (or none is set). */
-  shortcutError: () => Promise<string | null>;
-  onShortcutError: (listener: (error: string | null) => void) => () => void;
+  settingErrors: () => Promise<SettingErrors>;
+  onSettingErrors: (listener: (errors: SettingErrors) => void) => () => void;
   appVersion: () => Promise<string>;
   /** Asks GitHub now; a found version also arrives through `onUpdate`. */
   checkForUpdate: () => Promise<string | null>;

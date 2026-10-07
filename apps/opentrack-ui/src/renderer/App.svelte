@@ -2,7 +2,7 @@
   import { errorMessage } from 'aitrack-lib/errors';
   import { onMount } from 'svelte';
 
-  import type { AppState, Screen, Settings } from '../shared/types.js';
+  import type { AppState, QuotaProviderKey, Screen, Settings } from '../shared/types.js';
   import { api } from './api.js';
   import Dashboard from './Dashboard.svelte';
   import { formatUpdated, type Period } from './format.js';
@@ -69,6 +69,10 @@
 
   function sync(): void {
     void runCommand('Sync', () => api.sync());
+  }
+
+  function openDashboard(provider: QuotaProviderKey): void {
+    void runCommand('Open dashboard', () => api.openDashboard(provider));
   }
 
   // Success never returns here: the app restarts into the new version.
@@ -150,7 +154,7 @@
 <main class="pop">
   <div class="scroll">
     <div class="content" bind:this={content}>
-      {#if loadError}
+      {#if loadError && !(appState && settings)}
         <p class="banner" role="alert">
           Could not load dashboard: {loadError}
           <button class="link" type="button" onclick={() => void load()}>Retry</button>
@@ -216,6 +220,7 @@
             onPatch={patch}
             onRefresh={refresh}
             onSync={sync}
+            onOpenDashboard={openDashboard}
           />
         {/if}
       {:else}

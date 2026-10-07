@@ -172,9 +172,8 @@ export function problemLine(error: QuotaError, now: number, retryAt?: number): P
 
 /** "Updated just now" / "Updated 3m ago" for the footer. */
 export function formatUpdated(updatedAt: string | undefined, now: number): string {
-  if (updatedAt === undefined) return 'Updating…';
+  if (updatedAt === undefined) return 'Not updated yet';
   const age = now - Date.parse(updatedAt);
-  if (Number.isNaN(age)) return 'Updating…';
   // Floored, unlike a countdown: 61 s ago is "1m ago", not "2m".
   return age < 60_000
     ? 'Updated just now'

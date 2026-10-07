@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
@@ -63,8 +63,8 @@ pub fn fit_height(app: AppHandle, panel: State<'_, Panel>, height: f64) {
 }
 
 #[tauri::command]
-pub fn shortcut_error(shell: State<'_, Shell>) -> Option<String> {
-    shell.shortcut_error.lock().unwrap().clone()
+pub fn setting_errors(shell: State<'_, Shell>) -> Map<String, Value> {
+    shell.setting_errors.lock().unwrap().clone()
 }
 
 #[tauri::command]

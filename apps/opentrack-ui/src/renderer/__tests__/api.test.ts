@@ -1,8 +1,13 @@
+import { setTimeout as flush } from 'node:timers/promises';
+
 import { afterEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ invoke: vi.fn(), listen: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: mocks.invoke }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: mocks.listen }));
+vi.mock('@tauri-apps/api/event', () => ({
+  // A promise the spy does not track, since tracking would mark a rejection as handled.
+  listen: (...args: unknown[]) => (mocks.listen(...args) as Promise<unknown>).then((stop) => stop),
+}));
 import { DEFAULT_SETTINGS } from '../../sidecar/settings.js';
 import { api } from '../api.js';
 
@@ -16,7 +21,8 @@ it('delivers every shell command and preserves operation arguments and delivery 
   await api.saveSettings(DEFAULT_SETTINGS);
   await api.openDashboard('cursor');
   await api.quit();
-  await api.shortcutError();
+  await api.settingErrors();
+  expect(mocks.invoke).toHaveBeenCalledWith('setting_errors');
   await api.appVersion();
   await api.checkForUpdate();
   expect(mocks.invoke).toHaveBeenCalledWith('check_update');
@@ -41,7 +47,7 @@ it('delivers event payloads and releases asynchronous subscriptions safely', asy
     api.onState(callback),
     api.onSettings(callback),
     api.onScreen(callback),
-    api.onShortcutError(callback),
+    api.onSettingErrors(callback),
     api.onUpdate(callback),
   ];
   for (const call of mocks.listen.mock.calls) {
@@ -49,11 +55,13 @@ it('delivers event payloads and releases asynchronous subscriptions safely', asy
     handler({ payload: 'payload' });
   }
   expect(callback).toHaveBeenCalledTimes(5);
+  expect(mocks.listen).toHaveBeenCalledWith('setting-errors', expect.any(Function));
   for (const release of releases) release();
-  await Promise.resolve();
+  await flush();
   expect(stop).toHaveBeenCalledTimes(5);
   mocks.listen.mockRejectedValue(new Error('closed'));
-  api.onScreen(callback)();
-  await Promise.resolve();
-  await Promise.resolve();
+  const release = api.onScreen(callback);
+  await flush(); // Lets an unhandled rejection surface.
+  release();
+  await flush();
 });

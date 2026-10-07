@@ -17,8 +17,8 @@ const mocks = vi.hoisted(() => ({
     onState: vi.fn(),
     onSettings: vi.fn(),
     onScreen: vi.fn(),
-    shortcutError: vi.fn(),
-    onShortcutError: vi.fn(),
+    settingErrors: vi.fn(),
+    onSettingErrors: vi.fn(),
     quit: vi.fn(),
     openDashboard: vi.fn(),
     appVersion: vi.fn(),
@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../api.js', () => mocks);
 import App from '../App.svelte';
 import Dashboard from '../Dashboard.svelte';
+import LimitMeter from '../LimitMeter.svelte';
 import SettingsScreen from '../SettingsScreen.svelte';
 
 let target: HTMLDivElement;
@@ -59,6 +60,9 @@ function change(selector: string, value?: string): void {
   expect(input).not.toBeNull();
   if (input && value !== undefined) input.value = value;
   input?.dispatchEvent(new Event('change', { bubbles: true }));
+}
+function handlers() {
+  return { onRefresh: vi.fn(), onSync: vi.fn(), onOpenDashboard: vi.fn() };
 }
 beforeEach(() => {
   vi.resetAllMocks();
@@ -90,14 +94,14 @@ beforeEach(() => {
   mocks.api.getState.mockResolvedValue(state);
   mocks.api.getSettings.mockResolvedValue(structuredClone(DEFAULT_SETTINGS));
   mocks.api.saveSettings.mockImplementation((settings: Settings) => Promise.resolve(settings));
-  mocks.api.shortcutError.mockResolvedValue(null);
+  mocks.api.settingErrors.mockResolvedValue({});
   mocks.api.availableUpdate.mockResolvedValue(null);
   mocks.api.appVersion.mockResolvedValue('3.1.0');
   for (const name of [
     'onState',
     'onSettings',
     'onScreen',
-    'onShortcutError',
+    'onSettingErrors',
     'onUpdate',
   ] as const) {
     mocks.api[name].mockReturnValue(vi.fn());
@@ -145,8 +149,14 @@ describe('desktop commands and settings', () => {
     await settle();
     click('[aria-label="Keep open"]');
     await settle();
+    expect(mocks.api.saveSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({ windowMode: 'floating' }),
+    );
     click('[aria-label="Close with the tray again"]');
     await settle();
+    expect(mocks.api.saveSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({ windowMode: 'popup' }),
+    );
     mocks.api.refresh.mockRejectedValueOnce(new Error('refresh delivery'));
     click('[aria-label="Refresh"]');
     await settle();
@@ -165,7 +175,7 @@ describe('desktop commands and settings', () => {
   });
 
   it('retries failed startup and accepts pushed state and settings', async () => {
-    mocks.api.getState.mockRejectedValueOnce(new Error('offline'));
+    mocks.api.getState.mockRejectedValue(new Error('offline'));
     mounted.push(mount(App, { target }));
     await settle();
     expect(target.textContent).toContain('Loading');
@@ -175,8 +185,7 @@ describe('desktop commands and settings', () => {
     expect(target.textContent).toContain('Could not load dashboard: offline');
     click('.banner button');
     await settle();
-    expect(target.textContent).not.toContain('Could not load dashboard');
-    expect(target.textContent).not.toContain('Loading');
+    expect(mocks.api.getState).toHaveBeenCalledTimes(2);
     const onState = mocks.api.onState.mock.calls[0]?.[0] as Parameters<OpentrackApi['onState']>[0];
     onState({ ...state, refreshing: true });
     const onSettings = mocks.api.onSettings.mock.calls[0]?.[0] as Parameters<
@@ -184,6 +193,8 @@ describe('desktop commands and settings', () => {
     >[0];
     onSettings({ ...DEFAULT_SETTINGS, windowMode: 'floating' });
     await settle();
+    expect(target.textContent).not.toContain('Could not load dashboard');
+    expect(target.textContent).not.toContain('Loading');
     expect(target.textContent).toContain('Updating');
     onState({ ...state, syncing: true });
     await settle();
@@ -196,10 +207,13 @@ describe('desktop commands and settings', () => {
     expect(target.querySelector('h1')?.textContent).toBe('Settings');
   });
 
-  it('delivers provider reorder, toggles, display preferences and shortcut controls', async () => {
+  it('delivers provider reorder, toggles, display preferences and setting errors', async () => {
     const patch = vi.fn();
     const back = vi.fn();
-    mocks.api.shortcutError.mockResolvedValue('Shortcut unavailable');
+    mocks.api.settingErrors.mockResolvedValue({
+      globalShortcut: 'Shortcut unavailable',
+      launchAtLogin: 'Login item denied',
+    });
     mounted.push(
       mount(SettingsScreen, {
         target,
@@ -227,10 +241,19 @@ describe('desktop commands and settings', () => {
     expect(mocks.api.quit).toHaveBeenCalled();
     expect(patch).toHaveBeenCalledWith({ globalShortcut: 'Ctrl+Shift+U' });
     expect(target.textContent).toContain('Shortcut unavailable');
-    const callback = mocks.api.onShortcutError.mock.calls[0]?.[0] as (error: string | null) => void;
-    callback(null);
+    const login = target.querySelector('#set-login');
+    expect(login?.getAttribute('aria-invalid')).toBe('true');
+    expect(target.querySelector(`#${login?.getAttribute('aria-describedby')}`)?.textContent).toBe(
+      'Login item denied',
+    );
+    const callback = mocks.api.onSettingErrors.mock.calls[0]?.[0] as Parameters<
+      OpentrackApi['onSettingErrors']
+    >[0];
+    callback({});
     await settle();
     expect(target.textContent).not.toContain('Shortcut unavailable');
+    expect(target.textContent).not.toContain('Login item denied');
+    expect(login?.getAttribute('aria-invalid')).toBe('false');
   });
 });
 
@@ -289,6 +312,7 @@ it('shows partial costs and cached ages, exposes provider controls and operation
   };
   const patch = vi.fn();
   const period = vi.fn();
+  const refresh = vi.fn();
   mounted.push(
     mount(Dashboard, {
       target,
@@ -299,6 +323,8 @@ it('shows partial costs and cached ages, exposes provider controls and operation
         period: 'today',
         onPeriod: period,
         onPatch: patch,
+        ...handlers(),
+        onRefresh: refresh,
       },
     }),
   );
@@ -318,18 +344,14 @@ it('shows partial costs and cached ages, exposes provider controls and operation
   expect(patch).toHaveBeenCalledWith({ resetDisplay: 'relative' });
   for (const button of target.querySelectorAll<HTMLButtonElement>('.seg button')) button.click();
   expect(period).toHaveBeenCalledTimes(4);
-  mocks.api.refresh.mockRejectedValueOnce(new Error('closed'));
   click('.state button');
-  await settle();
-  expect(target.textContent).toContain('Could not send');
-  click('.state button');
-  await settle();
-  expect(target.textContent).not.toContain('Could not send');
+  expect(refresh).toHaveBeenCalledTimes(1);
 });
 
 it('renders unavailable and signed-out providers and all-time totals without a chart', async () => {
   const period = vi.fn<(value: string) => void>();
   const patch = vi.fn<(value: Partial<Settings>) => void>();
+  const openDashboard = vi.fn();
   const props = {
     appState: {
       ...state,
@@ -348,14 +370,15 @@ it('renders unavailable and signed-out providers and all-time totals without a c
     period: 'all' as const,
     onPeriod: period,
     onPatch: patch,
+    ...handlers(),
+    onOpenDashboard: openDashboard,
   };
   mounted.push(mount(Dashboard, { target, props }));
   await settle();
   expect(target.textContent).toContain('Checking limits');
   expect(target.querySelector('.spark')).toBeNull();
   click('.state button');
-  await settle();
-  expect(mocks.api.openDashboard).toHaveBeenCalledWith('cursor');
+  expect(openDashboard).toHaveBeenCalledWith('cursor');
   expect(target.querySelector<HTMLButtonElement>('.p-head')?.disabled).toBe(true);
 });
 
@@ -404,6 +427,7 @@ it('renders remaining quotas with and without reset metadata and delivers toggle
         period: 'all',
         onPeriod: () => {},
         onPatch: patch,
+        ...handlers(),
       },
     }),
   );
@@ -415,8 +439,8 @@ it('renders remaining quotas with and without reset metadata and delivers toggle
   expect(target.textContent).toContain('Unscheduled');
 });
 
-it('falls back to automatic tray selection when its provider is disabled and handles unavailable shortcut diagnostics', async () => {
-  mocks.api.shortcutError.mockRejectedValue(new Error('bridge unavailable'));
+it('falls back to automatic tray selection when its provider is disabled and handles unavailable setting errors', async () => {
+  mocks.api.settingErrors.mockRejectedValue(new Error('bridge unavailable'));
   const patch = vi.fn<(value: Partial<Settings>) => void>();
   mounted.push(
     mount(SettingsScreen, {
@@ -528,7 +552,6 @@ it('updates quota meters and settings controls when the sidecar pushes new value
   expect(target.querySelector<HTMLSelectElement>('#set-tray-provider')?.options).toHaveLength(1);
 });
 
-import LimitMeter from '../LimitMeter.svelte';
 it('shows a reset without projecting pace when the period duration is unknown', async () => {
   const now = Date.now();
   mounted.push(
@@ -592,28 +615,20 @@ it('applies saved preferences back to every settings control', async () => {
   expect(target.querySelector<HTMLSelectElement>('#set-tray-style')?.value).toBe('bars');
 });
 
-it('keeps provider toggles usable when label metadata is absent at runtime', async () => {
-  const settings = structuredClone(DEFAULT_SETTINGS);
-  const first = settings.providers[0];
-  if (!first) throw new Error('missing provider');
-  Reflect.deleteProperty(first, 'label');
-  const patch = vi.fn<(value: Partial<Settings>) => void>();
-  mounted.push(
-    mount(SettingsScreen, { target, props: { settings, onPatch: patch, onBack: () => {} } }),
-  );
-  await settle();
-  const toggle = target.querySelector<HTMLInputElement>('[aria-label="Show "]');
-  expect(toggle).not.toBeNull();
-  toggle?.dispatchEvent(new Event('change', { bubbles: true }));
-  expect(patch).toHaveBeenCalled();
-});
-
 it('retries failed operations separately from command delivery', async () => {
   mocks.api.getState.mockResolvedValue({
     ...state,
     usageError: 'read failed',
     pullError: 'pull failed',
     syncResult: { ok: false, message: 'remote failed' },
+    providers: [
+      {
+        key: 'cursor',
+        label: 'Cursor',
+        refreshing: false,
+        quotaError: { kind: 'noCredentials', message: 'signed out' },
+      },
+    ],
   });
   mounted.push(mount(App, { target }));
   await settle();
@@ -630,6 +645,11 @@ it('retries failed operations separately from command delivery', async () => {
   click('[role="alert"] button');
   await settle();
   expect(mocks.api.sync).toHaveBeenCalledTimes(2);
+  mocks.api.openDashboard.mockRejectedValueOnce(new Error('opener denied'));
+  click('.state button');
+  await settle();
+  expect(mocks.api.openDashboard).toHaveBeenCalledWith('cursor');
+  expect(target.textContent).toContain('Open dashboard could not be sent: opener denied');
 });
 
 it('offers a found update and retries a failed install', async () => {

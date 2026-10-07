@@ -2,7 +2,7 @@
   import { errorMessage } from 'aitrack-lib/errors';
   import { onMount } from 'svelte';
 
-  import type { QuotaProviderKey, Settings } from '../shared/types.js';
+  import type { QuotaProviderKey, SettingErrors, Settings } from '../shared/types.js';
   import { api } from './api.js';
   import Icon from './Icon.svelte';
   import ProviderIcon from './ProviderIcon.svelte';
@@ -27,7 +27,7 @@
   // The tray falls back to the most used provider when its choice is turned off.
   const enabled = $derived(settings.providers.filter((provider) => provider.enabled));
 
-  let shortcutError = $state<string | null>(null);
+  let errors = $state<SettingErrors>({});
   let version = $state<string | undefined>();
   let check = $state<UpdateCheck>({ status: 'idle' });
   const updateStatus = $derived.by(() => {
@@ -55,12 +55,12 @@
       (value) => (version = value),
       () => undefined,
     );
-    void api.shortcutError().then(
-      (error) => (shortcutError = error),
+    void api.settingErrors().then(
+      (value) => (errors = value),
       () => undefined,
     );
-    return api.onShortcutError((error) => {
-      shortcutError = error;
+    return api.onSettingErrors((value) => {
+      errors = value;
     });
   });
 
@@ -73,12 +73,22 @@
     onPatch({ providers });
   }
 
+  function describedBy(key: keyof SettingErrors): string | undefined {
+    return errors[key] === undefined ? undefined : `${key}-error`;
+  }
+
   function toggleProvider(key: QuotaProviderKey, enabled: boolean): void {
     onPatch({
       providers: settings.providers.map((entry) => (entry.key === key ? { ...entry, enabled } : entry)),
     });
   }
 </script>
+
+{#snippet rowLabel(label: string, key: keyof SettingErrors)}
+  <span class="row-text"
+    >{label}{#if errors[key]}<small id="{key}-error" class="row-error">{errors[key]}</small>{/if}</span
+  >
+{/snippet}
 
 <header class="s-head">
   <button class="icon" type="button" aria-label="Back" onclick={onBack}
@@ -233,26 +243,25 @@
     />
   </label>
   <label class="row" for="set-login">
-    <span>Start at login</span>
+    {@render rowLabel('Start at login', 'launchAtLogin')}
     <input
       id="set-login"
       class="switch"
       type="checkbox"
+      aria-invalid={errors.launchAtLogin !== undefined}
+      aria-describedby={describedBy('launchAtLogin')}
       checked={settings.launchAtLogin}
       onchange={(event) => onPatch({ launchAtLogin: event.currentTarget.checked })}
     />
   </label>
   <label class="row" for="set-shortcut">
-    <span class="row-text"
-      >Shortcut{#if shortcutError}<small id="shortcut-error" class="row-error">{shortcutError}</small
-        >{/if}</span
-    >
+    {@render rowLabel('Shortcut', 'globalShortcut')}
     <input
       id="set-shortcut"
       type="text"
       placeholder="Ctrl+Shift+U"
-      aria-invalid={shortcutError !== null}
-      aria-describedby={shortcutError === null ? undefined : 'shortcut-error'}
+      aria-invalid={errors.globalShortcut !== undefined}
+      aria-describedby={describedBy('globalShortcut')}
       value={settings.globalShortcut}
       onchange={(event) => onPatch({ globalShortcut: event.currentTarget.value })}
     />
