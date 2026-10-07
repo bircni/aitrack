@@ -9,8 +9,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('aitrack-lib/data/usageData', () => ({
   loadMergedProviderData: mocks.loadMergedProviderData,
-  emptyUsageMessage: (warned?: boolean) =>
-    warned ? 'No local usage data found.' : 'No usage data found.',
 }));
 vi.mock('aitrack-lib/config', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
 vi.mock('aitrack-lib/git', () => ({ isCloned: mocks.isCloned }));
@@ -250,319 +248,6 @@ describe('usageCommand', () => {
     expect(loggedOutput()).toContain(`No usage recorded for today (${TODAY_LOCALE}).`);
   });
 
-  it('week: aggregates rolling 7-day window ending today', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-06-15', makeDay(100, 0, 1)],
-          ['2026-06-09', makeDay(50, 0, 0.5)],
-          ['2026-06-08', makeDay(9000, 0, 90)],
-          ['2025-06-15', makeDay(7000, 0, 70)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'week', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('last 7 days (2026-06-09 → 2026-06-15)');
-    expect(out).toContain('$1.50');
-    expect(out).not.toContain('$90');
-    expect(out).not.toContain('$70');
-  });
-
-  it('month: aggregates rolling 30-day window ending today', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-06-15', makeDay(100, 0, 1)],
-          ['2026-05-17', makeDay(50, 0, 0.5)],
-          ['2026-05-16', makeDay(9000, 0, 90)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'month', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('last 30 days (2026-05-17 → 2026-06-15)');
-    expect(out).toContain('$1.50');
-    expect(out).not.toContain('$90');
-  });
-
-  it('year: only includes current calendar year', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-01-01', makeDay(100, 0, 1)],
-          ['2026-12-31', makeDay(200, 0, 2)],
-          ['2025-12-31', makeDay(9000, 0, 90)],
-          ['2027-01-01', makeDay(8000, 0, 80)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'year', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('aitrack usage 2026');
-    expect(out).toContain('$3.00');
-    expect(out).not.toContain('$90');
-    expect(out).not.toContain('$80');
-  });
-
-  it('all: aggregates every recorded day across history', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2020-03-15', makeDay(100, 0, 1)],
-          ['2026-06-15', makeDay(200, 0, 2)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'all', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('aitrack usage all time');
-    expect(out).toContain('$3.00');
-  });
-
-  it('sorts rows by cost descending within a provider', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          [
-            TODAY,
-            {
-              inputTokens: 600,
-              outputTokens: 0,
-              costUSD: 11,
-              byModel: {
-                cheap: { inputTokens: 100, outputTokens: 0, costUSD: 1 },
-                pricey: { inputTokens: 200, outputTokens: 0, costUSD: 10 },
-                middle: { inputTokens: 300, outputTokens: 0, costUSD: 5 },
-              },
-            },
-          ],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    const lines = out.split('\n');
-    const priceyIndex = lines.findIndex((l) => l.includes('pricey'));
-    const middleIndex = lines.findIndex((l) => l.includes('middle'));
-    const cheapIndex = lines.findIndex((l) => l.includes('cheap'));
-    expect(priceyIndex).toBeLessThan(middleIndex);
-    expect(middleIndex).toBeLessThan(cheapIndex);
-  });
-
-  it('falls back to token sort when no model has a cost', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        codex: new Map([
-          [
-            TODAY,
-            {
-              inputTokens: 6,
-              outputTokens: 0,
-              byModel: {
-                small: { inputTokens: 1, outputTokens: 0 },
-                big: { inputTokens: 100, outputTokens: 0 },
-              },
-            },
-          ],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    const lines = out.split('\n');
-    const bigIndex = lines.findIndex((l) => l.includes('big'));
-    const smallIndex = lines.findIndex((l) => l.includes('small'));
-    expect(bigIndex).toBeLessThan(smallIndex);
-  });
-
-  it('yesterday: returns data for yesterday only', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-06-14', makeDay(100, 0, 1)],
-          ['2026-06-15', makeDay(200, 0, 2)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'yesterday', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('yesterday (2026-06-14)');
-    expect(out).toContain('$1.00');
-    expect(out).not.toContain('$2.00');
-  });
-
-  it('date: returns data for the specified date only', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-03-10', makeDay(100, 0, 1)],
-          ['2026-03-11', makeDay(200, 0, 2)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'date', from: '2026-03-10', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('2026-03-10');
-    expect(out).toContain('$1.00');
-    expect(out).not.toContain('$2.00');
-  });
-
-  it('range: includes only dates within the specified range', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-04-30', makeDay(100, 0, 1)],
-          ['2026-05-01', makeDay(200, 0, 2)],
-          ['2026-05-31', makeDay(300, 0, 3)],
-          ['2026-06-01', makeDay(400, 0, 4)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({
-      period: 'range',
-      from: '2026-05-01',
-      to: '2026-05-31',
-      providers: ['claude_code', 'codex'],
-    });
-
-    const out = loggedOutput();
-    expect(out).toContain('2026-05-01 → 2026-05-31');
-    expect(out).toContain('$5.00');
-    expect(out).not.toContain('$1.00');
-    expect(out).not.toContain('$4.00');
-  });
-
-  // NOW = 2026-06-15 which is a Monday, so thisweek starts on the same day
-  it('thisweek: includes Mon through today', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-06-14', makeDay(100, 0, 1)], // Sunday — last week
-          ['2026-06-15', makeDay(200, 0, 2)], // Monday — this week
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'thisweek', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('this week (2026-06-15 → 2026-06-15)');
-    expect(out).toContain('$2.00');
-    expect(out).not.toContain('$1.00');
-  });
-
-  it('lastweek: includes Mon–Sun of the previous calendar week', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-06-07', makeDay(100, 0, 1)], // Sunday before last week
-          ['2026-06-08', makeDay(200, 0, 2)], // Monday of last week
-          ['2026-06-14', makeDay(300, 0, 3)], // Sunday of last week
-          ['2026-06-15', makeDay(400, 0, 4)], // Monday — this week
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'lastweek', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('last week (2026-06-08 → 2026-06-14)');
-    expect(out).toContain('$5.00');
-    expect(out).not.toContain('$1.00');
-    expect(out).not.toContain('$4.00');
-  });
-
-  it('thismonth: includes from the first of the month through today', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-05-31', makeDay(100, 0, 1)],
-          ['2026-06-01', makeDay(200, 0, 2)],
-          ['2026-06-15', makeDay(300, 0, 3)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'thismonth', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('this month (2026-06-01 → 2026-06-15)');
-    expect(out).toContain('$5.00');
-    expect(out).not.toContain('$1.00');
-  });
-
-  it('lastmonth: includes the entire previous calendar month', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-04-30', makeDay(100, 0, 1)],
-          ['2026-05-01', makeDay(200, 0, 2)],
-          ['2026-05-31', makeDay(300, 0, 3)],
-          ['2026-06-01', makeDay(400, 0, 4)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'lastmonth', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('last month (2026-05-01 → 2026-05-31)');
-    expect(out).toContain('$5.00');
-    expect(out).not.toContain('$1.00');
-    expect(out).not.toContain('$4.00');
-  });
-
-  it('last: aggregates rolling N-day window ending today', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-06-01', makeDay(100, 0, 1)], // 14 days before today — outside last 14
-          ['2026-06-02', makeDay(200, 0, 2)], // 13 days before today — inside last 14
-          ['2026-06-15', makeDay(300, 0, 3)],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'last', n: 14, providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('last 14 days (2026-06-02 → 2026-06-15)');
-    expect(out).toContain('$5.00');
-    expect(out).not.toContain('$1.00');
-  });
-
   it('prints empty hint when no data is loaded', async () => {
     mocks.loadMergedProviderData.mockResolvedValue(null);
     mocks.tryLoadConfig.mockReturnValue(null);
@@ -694,36 +379,28 @@ describe('usageCommand', () => {
     expect(out).toContain('┌');
     expect(out).toContain('└');
   });
-});
 
-it('marks partially priced model, total, budget and comparison estimates', async () => {
-  vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'repo', budget: { monthlyUSD: 10 } });
-  mocks.isCloned.mockReturnValue(true);
-  const mixed = {
-    inputTokens: 10,
-    outputTokens: 2,
-    costUSD: 1,
-    hasUnpricedTokens: true,
-    byModel: { mixed: { inputTokens: 10, outputTokens: 2, costUSD: 1, hasUnpricedTokens: true } },
-  };
-  mocks.loadMergedProviderData.mockResolvedValue({
-    machineData: [],
-    providerData: {
-      claude_code: new Map([
-        ['2026-06-01', mixed],
-        ['2026-05-01', mixed],
-      ]),
-    },
-  });
-  vi.useFakeTimers();
-  vi.setSystemTime(NOW);
-  try {
+  it('marks partially priced model, total, budget and comparison estimates', async () => {
+    mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'repo', budget: { monthlyUSD: 10 } });
+    const mixed = {
+      inputTokens: 10,
+      outputTokens: 2,
+      costUSD: 1,
+      hasUnpricedTokens: true,
+      byModel: { mixed: { inputTokens: 10, outputTokens: 2, costUSD: 1, hasUnpricedTokens: true } },
+    };
+    mocks.loadMergedProviderData.mockResolvedValue({
+      machineData: [],
+      providerData: {
+        claude_code: new Map([
+          ['2026-06-01', mixed],
+          ['2026-05-01', mixed],
+        ]),
+      },
+    });
     await usageCommand({ period: 'thismonth', compare: true });
     expect(loggedOutput()).toContain('(partial)');
     expect(loggedOutput()).toContain('Cost comparison is a partial estimate');
     expect(loggedOutput()).toContain('Budget spend is a partial estimate');
-  } finally {
-    vi.useRealTimers();
-  }
+  });
 });

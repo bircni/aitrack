@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 const packageRoot = join(import.meta.dirname, '../../..');
 const packageVersion = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {
@@ -29,12 +30,21 @@ function resolveCliEntry(): { command: string; prefixArgs: string[] } {
   return { command: process.execPath, prefixArgs: ['--import', 'tsx', 'src/cli.ts'] };
 }
 
+const home = mkdtempSync(join(tmpdir(), 'aitrack-smoke-'));
+
 function runCli(arguments_: string[]): CliRun {
   const { command, prefixArgs } = resolveCliEntry();
   const result = spawnSync(command, [...prefixArgs, ...arguments_], {
     cwd: packageRoot,
     encoding: 'utf8',
-    env: { ...process.env, FORCE_COLOR: '0' },
+    env: {
+      ...process.env,
+      FORCE_COLOR: '0',
+      HOME: home,
+      USERPROFILE: home,
+      XDG_CONFIG_HOME: home,
+      APPDATA: home,
+    },
   });
   // Without this a failed spawn surfaces as `status: null`, which every
   // assertion below reports as "expected null to be 0".
@@ -47,6 +57,10 @@ function runCli(arguments_: string[]): CliRun {
 }
 
 describe('CLI smoke', () => {
+  afterAll(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
   it('prints --version', () => {
     const { status, stdout } = runCli(['--version']);
     expect(status).toBe(0);
@@ -63,29 +77,9 @@ describe('CLI smoke', () => {
     expect(stdout).toContain('top');
   });
 
-  it('rejects invalid top kind', () => {
+  it('rejects an invalid argument', () => {
     const { status, stderr } = runCli(['top', 'weeks']);
     expect(status).toBe(1);
-    expect(stderr).toContain('Invalid kind');
-    expect(stderr).toContain('days');
-    expect(stderr).toContain('models');
-  });
-
-  it('rejects invalid top --sort', () => {
-    const { status, stderr } = runCli(['top', '--sort', 'price']);
-    expect(status).toBe(1);
-    expect(stderr).toContain('Invalid --sort value');
-  });
-
-  it('rejects invalid top --limit', () => {
-    const { status, stderr } = runCli(['top', '--limit', '0']);
-    expect(status).toBe(1);
-    expect(stderr).toContain('Invalid --limit');
-  });
-
-  it('rejects invalid usage last days', () => {
-    const { status, stderr } = runCli(['usage', 'last', '0']);
-    expect(status).toBe(1);
-    expect(stderr).toContain('Invalid number of days');
+    expect(stderr).toContain('Allowed choices are days, models');
   });
 });

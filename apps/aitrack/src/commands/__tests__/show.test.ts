@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   readCursorData: vi.fn(),
   renderToPng: vi.fn(),
   writeFileSync: vi.fn(),
-  spawn: vi.fn(() => ({ unref: vi.fn() })),
+  spawn: vi.fn(),
   hostname: vi.fn(),
 }));
 
@@ -39,6 +39,7 @@ vi.mock('aitrack-lib/display/renderPng', () => ({ renderToPng: mocks.renderToPng
 
 import type { MachineFile, ProviderData } from 'aitrack-lib/data/types';
 import type { RenderOptions } from 'aitrack-lib/display/renderOptions';
+import { machineTimezone } from 'aitrack-lib/timezone';
 
 import { showCommand } from '../show.js';
 
@@ -96,6 +97,10 @@ describe('showCommand', () => {
     mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
     mocks.readCursorData.mockResolvedValue(new Map());
     mocks.renderToPng.mockReturnValue(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    mocks.spawn.mockImplementation(() => {
+      const child = { on: vi.fn(() => child), unref: vi.fn() };
+      return child;
+    });
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
@@ -176,6 +181,12 @@ describe('showCommand', () => {
       [expect.stringContaining('out.png')],
       expect.objectContaining({ detached: true }),
     );
+    const child = mocks.spawn.mock.results.at(-1)?.value as { on: ReturnType<typeof vi.fn> };
+    const onError = child.on.mock.calls.find(([event]) => event === 'error')?.[1] as
+      | ((error: Error) => void)
+      | undefined;
+    onError?.(new Error('spawn xdg-open ENOENT'));
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('--no-open'));
   });
 
   it('backfills cost for old synced Claude JSON missing costUSD', async () => {
@@ -226,11 +237,14 @@ describe('showCommand', () => {
     expect(out).toContain('Claude Code');
   });
 
-  it('merges synced cost fields across machines and models', async () => {
+  it('merges synced cost fields across machines and notes their mixed calendars', async () => {
+    const otherZone =
+      machineTimezone() === 'Pacific/Kiritimati' ? 'Pacific/Pago_Pago' : 'Pacific/Kiritimati';
     mocks.listDataFiles.mockReturnValue(['/repo/data/a.json', '/repo/data/b.json']);
     mocks.readDataFile
       .mockReturnValueOnce({
         hostname: 'a',
+        timezone: machineTimezone(),
         lastUpdated: 'now',
         days: {
           '2024-01-01': {
@@ -243,6 +257,7 @@ describe('showCommand', () => {
       })
       .mockReturnValueOnce({
         hostname: 'b',
+        timezone: otherZone,
         lastUpdated: 'now',
         days: {
           '2024-01-01': {
@@ -260,5 +275,8 @@ describe('showCommand', () => {
     const day = providerData.claude_code?.get('2024-01-01');
     expect(day?.costUSD).toBeCloseTo(0.3);
     expect(day?.byModel.claude?.costUSD).toBeCloseTo(0.3);
+    expect(loggedOutput()).toContain(
+      `Heatmap days are each machine's local dates (${machineTimezone()}, ${otherZone}).`,
+    );
   });
 });

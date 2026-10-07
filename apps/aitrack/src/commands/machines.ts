@@ -70,11 +70,10 @@ interface MachinesOptions {
 }
 
 export async function machinesCommand(options: MachinesOptions = {}): Promise<void> {
-  const warnedNotConfigured = isUsageNotConfigured();
-  const machineData = warnedNotConfigured ? [] : await loadReportedMachines();
+  const machineData = await loadReportedMachines();
 
   if (machineData.length === 0) {
-    const message = usageEmptyMessage(warnedNotConfigured);
+    const message = usageEmptyMessage(isUsageNotConfigured());
     if (options.json) {
       printJsonCommand('machines', { machines: [], message });
     } else {

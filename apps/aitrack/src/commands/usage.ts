@@ -4,6 +4,7 @@ import {
   buildUsageComparison,
   buildUsageReport,
   emptyReportMessage,
+  emptyUsageTotals,
   type UsageComparisonMetric,
   type UsageComparisonReport,
   type UsageReport,
@@ -190,19 +191,10 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
 
   if (options.json) {
     const message = emptyReportMessage(report);
-    const emptyTotals = {
-      inputTokens: 0,
-      outputTokens: 0,
-      tokens: 0,
-      cachedInputTokens: 0,
-      hasCached: false,
-      costUSD: 0,
-      hasCost: false,
-    };
     printJsonCommand('usage', {
       windowLabel: report?.windowLabel ?? null,
       providers: report?.providers ?? [],
-      totals: report?.totals ?? emptyTotals,
+      totals: report?.totals ?? emptyUsageTotals(),
       rowCount: report?.rowCount ?? 0,
       ...(comparisonReport !== null && { comparison: comparisonReport.comparison }),
       ...(budget !== null && { budget }),

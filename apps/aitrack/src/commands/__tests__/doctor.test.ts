@@ -1,12 +1,8 @@
+import { stripVTControlCharacters } from 'node:util';
+
 import { loggedOutput } from '@aitrack/test-fixtures';
 import chalk from 'chalk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-/** Strip SGR color codes so a rendered line can be measured as the user sees it. */
-function stripAnsi(value: string): string {
-  // eslint-disable-next-line no-control-regex
-  return value.replaceAll(/\u001B\[\d+m/gu, '');
-}
 
 const mocks = vi.hoisted(() => ({
   spawnSync: vi.fn(),
@@ -22,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   getCodexPaths: vi.fn(),
   getCursorStateDatabasePath: vi.fn(),
   readCursorAuthState: vi.fn(),
-  syncPricingPack: vi.fn(() =>
+  syncPricingPack: vi.fn<typeof import('aitrack-lib/pricing/syncPack').syncPricingPack>(() =>
     Promise.resolve({
       updatedAt: '2026-09-29T00:00:00.000Z',
       refreshed: false,
@@ -47,8 +43,14 @@ vi.mock('aitrack-lib/git', () => ({
   readDataFile: mocks.readDataFile,
   LOCAL_REPO: '/repo',
 }));
-vi.mock('aitrack-lib/readers/claude', () => ({ getClaudePaths: mocks.getClaudePaths }));
-vi.mock('aitrack-lib/readers/codex', () => ({ getCodexPaths: mocks.getCodexPaths }));
+vi.mock('aitrack-lib/readers/claude', () => ({
+  getClaudePaths: mocks.getClaudePaths,
+  readClaudeData: vi.fn(),
+}));
+vi.mock('aitrack-lib/readers/codex', () => ({
+  getCodexPaths: mocks.getCodexPaths,
+  readCodexData: vi.fn(),
+}));
 vi.mock('aitrack-lib/readers/cursor/auth', () => ({
   getCursorStateDatabasePath: mocks.getCursorStateDatabasePath,
   readCursorAuthState: mocks.readCursorAuthState,
@@ -147,6 +149,7 @@ describe('doctorCommand', () => {
       updatedAt: '2026-09-29T00:00:00.000Z',
       refreshed: false,
       detail: 'refresh failed: HTTP 503 for https://example.test/manifest.json',
+      failed: true,
     });
 
     await doctorCommand();
@@ -197,7 +200,7 @@ describe('doctorCommand', () => {
 
       const rows = loggedOutput()
         .split('\n')
-        .map((line) => stripAnsi(line))
+        .map((line) => stripVTControlCharacters(line))
         .filter((line) => /^(OK|WARN|FAIL) /u.test(line));
 
       expect(rows.some((line) => line.startsWith('OK'))).toBe(true);
@@ -246,10 +249,12 @@ describe('doctorCommand', () => {
       stderr: 'drift detected',
     }));
     mocks.readCursorAuthState.mockRejectedValue(new Error('locked'));
+    mocks.readdir.mockRejectedValueOnce(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
 
     await doctorCommand({ pricingCheck: true });
 
     const out = loggedOutput();
+    expect(out).toMatch(/WARN\s+Claude Code source: EACCES/u);
     expect(out).toContain('Cursor source: locked');
     expect(out).toContain('Pricing drift: pnpm run pricing:check failed: drift detected');
   });
@@ -265,6 +270,26 @@ describe('doctorCommand', () => {
     expect(parsed.command).toBe('doctor');
     expect(parsed.checks.some((check) => check.label === 'Node.js')).toBe(true);
     expect(parsed.hasFailures).toBe(false);
+  });
+
+  it('reports repository and drift failures that provide no output and malformed checkout metadata', async () => {
+    mocks.readConfig.mockReturnValue({ status: 'missing' });
+    mocks.isCloned.mockReturnValue(true);
+    mocks.spawnSync.mockReturnValue({ status: 1 });
+    mocks.getClaudePaths.mockReturnValue([]);
+    mocks.getCodexPaths.mockReturnValue([]);
+    mocks.getCursorStateDatabasePath.mockReturnValue(null);
+    mocks.readFileSync.mockReturnValue('{');
+    await doctorCommand({ pricingCheck: true });
+    expect(loggedOutput()).toContain('git status failed in local repo');
+    expect(loggedOutput()).toContain('check remote access');
+    expect(loggedOutput()).toContain('not an aitrack source checkout');
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify({ name: 'aitrack-workspace', scripts: { 'pricing:check': 'check' } }),
+    );
+    await doctorCommand({ pricingCheck: true });
+    expect(loggedOutput()).toContain('pnpm run pricing:check did not pass');
+    process.exitCode = undefined;
   });
 
   describe('duplicateMachineCheck', () => {
@@ -291,25 +316,4 @@ describe('doctorCommand', () => {
       expect(duplicateMachineCheck().status).toBe('ok');
     });
   });
-});
-
-it('reports repository and drift failures that provide no output and malformed checkout metadata', async () => {
-  vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  mocks.readConfig.mockReturnValue({ status: 'missing' });
-  mocks.isCloned.mockReturnValue(true);
-  mocks.spawnSync.mockReturnValue({ status: 1 });
-  mocks.getClaudePaths.mockReturnValue([]);
-  mocks.getCodexPaths.mockReturnValue([]);
-  mocks.getCursorStateDatabasePath.mockReturnValue(null);
-  mocks.readFileSync.mockReturnValue('{');
-  await doctorCommand({ pricingCheck: true });
-  expect(loggedOutput()).toContain('git status failed in local repo');
-  expect(loggedOutput()).toContain('check remote access');
-  expect(loggedOutput()).toContain('not an aitrack source checkout');
-  mocks.readFileSync.mockReturnValue(
-    JSON.stringify({ scripts: { 'pricing:check': 'check' }, workspaces: [] }),
-  );
-  await doctorCommand({ pricingCheck: true });
-  expect(loggedOutput()).toContain('Pricing');
-  process.exitCode = undefined;
 });

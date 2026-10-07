@@ -16,6 +16,6 @@ import { buildUsageReport, loadConfig, readClaudeData } from 'aitrack-lib';
 import { readClaudeData } from 'aitrack-lib/readers/claude';
 ```
 
-Every module is reachable both from the package root and at its own subpath.
+The package root exports the common API; every module is also reachable at its own subpath.
 
 See [Contributing](../CONTRIBUTING.md) for the source layout and development workflow.

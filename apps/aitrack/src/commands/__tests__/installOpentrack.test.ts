@@ -95,6 +95,17 @@ describe('installOpentrackCommand', () => {
     expect(readdirSync(dir)).toEqual(['opentrack.app']);
   });
 
+  it('restores the previous app when the new one cannot be moved into place', async () => {
+    onMachine('darwin', 'arm64');
+    mkdirSync(join(dir, 'opentrack.app'));
+    writeFileSync(join(dir, 'opentrack.app', 'version'), '3.0.0');
+    mocks.spawnSync.mockReturnValue({ status: 0, stderr: '' }); // tar "succeeds" without extracting
+
+    await expect(installOpentrackCommand({ dir })).rejects.toThrow('ENOENT');
+    expect(readFileSync(join(dir, 'opentrack.app', 'version'), 'utf8')).toBe('3.0.0');
+    expect(readdirSync(dir)).toEqual(['opentrack.app']);
+  });
+
   it('installs nothing when the download does not match its signature', async () => {
     onMachine('darwin', 'arm64');
     mocks.verifyMinisign.mockReturnValue(false);
@@ -134,6 +145,7 @@ describe('installOpentrackCommand', () => {
 
     mocks.spawnSync.mockReturnValue({ status: 2 });
     await expect(installOpentrackCommand()).rejects.toThrow('exited with code 2');
+    await expect(installOpentrackCommand({ dir })).rejects.toThrow('--dir applies to macOS only');
   });
 
   it('explains machines and releases it cannot install on', async () => {

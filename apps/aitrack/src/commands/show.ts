@@ -6,34 +6,27 @@ import { resolveMachineId, tryLoadConfig } from 'aitrack-lib/config';
 import { isUsageNotConfigured, usageEmptyMessage } from 'aitrack-lib/data/emptyState';
 import { buildLocalMachineFile } from 'aitrack-lib/data/localData';
 import { loadMergedProviderData } from 'aitrack-lib/data/usageData';
+import { machineZones } from 'aitrack-lib/data/usageReport';
 import { renderToPng } from 'aitrack-lib/display/renderPng';
 import { renderTui } from 'aitrack-lib/display/tui';
 import { isCloned, writePendingMachineFile } from 'aitrack-lib/git';
 import { log } from 'aitrack-lib/output';
 import { warnAboutPricingFallbacks } from 'aitrack-lib/pricing/scan';
-import { machineTimezone } from 'aitrack-lib/timezone';
-
-function mixedCalendarNote(timezones: string[]): string | null {
-  const viewer = machineTimezone();
-  const others = [
-    ...new Set(
-      timezones.filter(
-        (timezone) => timezone !== '' && timezone !== 'unknown' && timezone !== viewer,
-      ),
-    ),
-  ];
-  if (others.length === 0) return null;
-  return `Heatmap days are each machine's local dates (${[viewer, ...others].join(', ')}).`;
-}
 
 function openFile(filePath: string): void {
-  if (process.platform === 'win32') {
-    spawn('explorer.exe', [filePath], { detached: true, stdio: 'ignore' }).unref();
-    return;
-  }
-
-  const opener = process.platform === 'darwin' ? 'open' : 'xdg-open';
-  spawn(opener, [filePath], { detached: true, stdio: 'ignore' }).unref();
+  const opener =
+    process.platform === 'win32'
+      ? 'explorer.exe'
+      : process.platform === 'darwin'
+        ? 'open'
+        : 'xdg-open';
+  spawn(opener, [filePath], { detached: true, stdio: 'ignore' })
+    .on('error', (error) => {
+      log.warn(
+        `Could not run ${opener} (${error.message}). Open the file manually or pass --no-open.`,
+      );
+    })
+    .unref();
 }
 
 export interface ShowOptions {
@@ -49,7 +42,7 @@ export interface ShowOptions {
 
 export async function showCommand(options: ShowOptions = {}): Promise<void> {
   const config = tryLoadConfig();
-  const localMachine = await buildLocalMachineFile(resolveMachineId(config ?? { repoUrl: '' }));
+  const localMachine = await buildLocalMachineFile(resolveMachineId(config));
   // Staging exists so a later `init` can adopt usage recorded before the repo
   // was set up. Once configured and cloned, sync writes into the repo directly.
   if (!config || !isCloned()) {
@@ -68,10 +61,10 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
   }
 
   warnAboutPricingFallbacks(loaded.providerData);
-  const calendarNote = mixedCalendarNote(
-    loaded.zonedSources?.map((source) => source.timezone) ?? [],
-  );
-  if (calendarNote) log.info(calendarNote);
+  const zones = machineZones(loaded.zonedSources);
+  if (zones.length > 0) {
+    log.info(`Heatmap days are each machine's local dates (${zones.join(', ')}).`);
+  }
 
   if (options.tui) {
     const output = renderTui(loaded.providerData, {

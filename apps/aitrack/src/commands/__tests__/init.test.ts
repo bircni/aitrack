@@ -1,10 +1,12 @@
 import { join } from 'node:path';
 
+import type { Config } from 'aitrack-lib/configTypes';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   prompts: vi.fn(),
-  loadConfig: vi.fn(),
+  readConfig: vi.fn(),
+  cloneOriginUrl: vi.fn(),
   saveConfig: vi.fn(),
   isCloned: vi.fn(),
   cloneRepo: vi.fn(),
@@ -18,14 +20,16 @@ vi.mock('os', () => ({ hostname: () => 'test-host' }));
 vi.mock('prompts', () => ({ default: mocks.prompts }));
 vi.mock('fs', () => ({ mkdirSync: mocks.mkdirSync }));
 vi.mock('aitrack-lib/config', () => ({
-  loadConfig: mocks.loadConfig,
+  readConfig: mocks.readConfig,
+  describeInvalidConfig: (reason: string) => `Config at /config.json is ${reason}.`,
   localMachineId: () => 'test-host',
-  resolveMachineId: (config: { machineId?: string }) => config.machineId ?? 'test-host',
+  resolveMachineId: (config: { machineId?: string } | null) => config?.machineId ?? 'test-host',
   saveConfig: mocks.saveConfig,
 }));
 vi.mock('aitrack-lib/git', () => ({
   LOCAL_REPO: '/home/test/.config/aitrack/repo',
   isCloned: mocks.isCloned,
+  cloneOriginUrl: mocks.cloneOriginUrl,
   cloneRepo: mocks.cloneRepo,
   removeLocalClone: mocks.removeLocalClone,
   adoptPendingDataFiles: mocks.adoptPendingDataFiles,
@@ -34,14 +38,17 @@ vi.mock('aitrack-lib/git', () => ({
 
 import { initCommand } from '../init.js';
 
+function okConfig(config: Config): void {
+  mocks.readConfig.mockReturnValue({ status: 'ok', config });
+}
+
 describe('initCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.migrateMachineDataFiles.mockReset();
-    mocks.loadConfig.mockImplementation(() => {
-      throw new Error('missing');
-    });
+    mocks.readConfig.mockReturnValue({ status: 'missing' });
     mocks.isCloned.mockReturnValue(false);
+    mocks.cloneOriginUrl.mockReturnValue('same-url');
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
   });
 
@@ -68,7 +75,7 @@ describe('initCommand', () => {
   });
 
   it('aborts when an existing config is not overwritten', async () => {
-    mocks.loadConfig.mockReturnValue({ repoUrl: 'old' });
+    okConfig({ repoUrl: 'old' });
     mocks.prompts.mockResolvedValueOnce({ overwrite: false });
 
     await initCommand();
@@ -79,7 +86,7 @@ describe('initCommand', () => {
   });
 
   it('keeps existing source and budget settings when re-running init', async () => {
-    mocks.loadConfig.mockReturnValue({
+    okConfig({
       repoUrl: 'same-url',
       machineId: 'my-pc',
       claudeProjectsDir: '/custom/claude',
@@ -104,7 +111,7 @@ describe('initCommand', () => {
   });
 
   it('overwrites an existing config and skips cloning when the URL is unchanged', async () => {
-    mocks.loadConfig.mockReturnValue({ repoUrl: 'same-url', machineId: 'my-pc' });
+    okConfig({ repoUrl: 'same-url', machineId: 'my-pc' });
     mocks.isCloned.mockReturnValue(true);
     mocks.prompts
       .mockResolvedValueOnce({ overwrite: true })
@@ -121,7 +128,7 @@ describe('initCommand', () => {
   });
 
   it('adopts pending data when machineId was configured before the first clone', async () => {
-    mocks.loadConfig.mockReturnValue({ repoUrl: '', machineId: 'work-laptop' });
+    okConfig({ repoUrl: '', machineId: 'work-laptop' });
     mocks.isCloned.mockReturnValue(false);
     mocks.adoptPendingDataFiles.mockReturnValue(1);
     mocks.prompts
@@ -143,7 +150,7 @@ describe('initCommand', () => {
   });
 
   it('migrates a later machineId change without re-adopting staged duplicates', async () => {
-    mocks.loadConfig.mockReturnValue({ repoUrl: 'same-url', machineId: 'old-pc' });
+    okConfig({ repoUrl: 'same-url', machineId: 'old-pc' });
     mocks.isCloned.mockReturnValue(true);
     mocks.prompts
       .mockResolvedValueOnce({ overwrite: true })
@@ -173,7 +180,7 @@ describe('initCommand', () => {
   });
 
   it('does not save a new machineId when its data destination conflicts', async () => {
-    mocks.loadConfig.mockReturnValue({ repoUrl: 'same-url', machineId: 'old-pc' });
+    okConfig({ repoUrl: 'same-url', machineId: 'old-pc' });
     mocks.isCloned.mockReturnValue(true);
     mocks.migrateMachineDataFiles.mockImplementation(() => {
       throw new Error('already exists');
@@ -189,7 +196,7 @@ describe('initCommand', () => {
   });
 
   it('re-clones when the repo URL changes and the user confirms', async () => {
-    mocks.loadConfig.mockReturnValue({ repoUrl: 'old-url', machineId: 'my-pc' });
+    okConfig({ repoUrl: 'old-url', machineId: 'my-pc' });
     mocks.isCloned.mockReturnValue(true);
     mocks.prompts
       .mockResolvedValueOnce({ overwrite: true })
@@ -205,7 +212,7 @@ describe('initCommand', () => {
   });
 
   it('aborts when the repo URL changes and the user declines re-clone', async () => {
-    mocks.loadConfig.mockReturnValue({ repoUrl: 'old-url' });
+    okConfig({ repoUrl: 'old-url' });
     mocks.isCloned.mockReturnValue(true);
     mocks.prompts
       .mockResolvedValueOnce({ overwrite: true })
@@ -227,26 +234,61 @@ describe('initCommand', () => {
     expect(mocks.cloneRepo).not.toHaveBeenCalled();
     expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
-});
 
-it('validates interactive URL and machine names and reports adopted pending files', async () => {
-  mocks.prompts
-    .mockReset()
-    .mockResolvedValueOnce({ repoUrl: 'repo' })
-    .mockResolvedValueOnce({ machineId: 'box' });
-  mocks.loadConfig.mockImplementation(() => {
-    throw new Error('missing');
+  it('asks before overwriting an invalid config', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.readConfig.mockReturnValue({ status: 'invalid', reason: 'not valid JSON' });
+    mocks.prompts.mockResolvedValueOnce({ overwrite: false });
+
+    await initCommand();
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('is not valid JSON'));
+    expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
-  mocks.isCloned.mockReturnValue(false);
-  mocks.adoptPendingDataFiles.mockReturnValue(2);
-  await initCommand();
-  const url = mocks.prompts.mock.calls[0]?.[0] as { validate: (value: string) => string | boolean };
-  const machine = mocks.prompts.mock.calls[1]?.[0] as {
-    validate: (value: string) => string | boolean;
-  };
-  expect(url.validate('  ')).toBe('URL is required');
-  expect(url.validate('repo')).toBe(true);
-  expect(machine.validate('box')).toBe(true);
-  expect(machine.validate('../escape')).toContain('Machine');
-  expect(console.log).toHaveBeenCalledWith('Adopted 2 pending data file(s) into the repo.');
+
+  it('compares a new URL with the clone remote when no config is readable', async () => {
+    mocks.isCloned.mockReturnValue(true);
+    mocks.cloneOriginUrl.mockReturnValue('old-url');
+    mocks.prompts
+      .mockResolvedValueOnce({ repoUrl: 'new-url' })
+      .mockResolvedValueOnce({ reclone: false });
+
+    await initCommand();
+
+    expect(mocks.prompts).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'reclone' }));
+    expect(mocks.cloneRepo).not.toHaveBeenCalled();
+  });
+
+  it('keeps a clone whose origin URL cannot be read', async () => {
+    mocks.isCloned.mockReturnValue(true);
+    mocks.cloneOriginUrl.mockReturnValue(null);
+    mocks.prompts
+      .mockResolvedValueOnce({ repoUrl: 'new-url' })
+      .mockResolvedValueOnce({ machineId: 'my-pc' });
+
+    await initCommand();
+
+    expect(mocks.removeLocalClone).not.toHaveBeenCalled();
+    expect(mocks.cloneRepo).not.toHaveBeenCalled();
+  });
+
+  it('validates interactive URL and machine names and reports adopted pending files', async () => {
+    mocks.prompts
+      .mockReset()
+      .mockResolvedValueOnce({ repoUrl: 'repo' })
+      .mockResolvedValueOnce({ machineId: 'box' });
+    mocks.adoptPendingDataFiles.mockReturnValue(2);
+    await initCommand();
+    const url = mocks.prompts.mock.calls[0]?.[0] as {
+      validate: (value: string) => string | boolean;
+    };
+    const machine = mocks.prompts.mock.calls[1]?.[0] as {
+      validate: (value: string) => string | boolean;
+    };
+    expect(url.validate('  ')).toBe('URL is required');
+    expect(url.validate('repo')).toBe(true);
+    expect(machine.validate('box')).toBe(true);
+    expect(machine.validate('../escape')).toContain('Machine');
+    expect(console.log).toHaveBeenCalledWith('Adopted 2 pending data file(s) into the repo.');
+  });
 });

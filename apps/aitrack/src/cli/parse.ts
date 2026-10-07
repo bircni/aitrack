@@ -1,6 +1,8 @@
 import { isDayKey } from 'aitrack-lib/constants';
 import {
+  invalidDateMessage,
   isUsagePeriod,
+  parsePositiveInteger,
   USAGE_PERIOD_DEFINITIONS,
   usagePeriodDefinition,
 } from 'aitrack-lib/data/usagePeriods';
@@ -8,69 +10,25 @@ import type { UsageReportOptions } from 'aitrack-lib/data/usageReport';
 import { normalizeProviderKey, providerKeys } from 'aitrack-lib/providers/index';
 import { InvalidArgumentError } from 'commander';
 
-import type { TopKind, TopSort } from '../commands/top.js';
-
-export function isValidDateString(date: string): boolean {
-  return isDayKey(date);
-}
-
-export function invalidDateMessage(date: string): string {
-  return `Invalid date: "${date}". Expected YYYY-MM-DD.`;
-}
-
 /** Commander option parser: a bare YYYY-MM-DD date, or a friendly rejection. */
 export function parseDateOption(value: string): string {
-  if (!isValidDateString(value)) {
+  if (!isDayKey(value)) {
     throw new InvalidArgumentError(invalidDateMessage(value));
   }
   return value;
 }
 
-export function parseIntArgument(value: string): number {
-  if (!/^-?\d+$/u.test(value)) {
-    throw new InvalidArgumentError(`Expected an integer, got: ${value}`);
-  }
-  const n = Number(value);
-  if (!Number.isSafeInteger(n)) {
-    throw new InvalidArgumentError(`Expected a safe integer, got: ${value}`);
-  }
-  return n;
-}
-
 export function parsePositiveIntArgument(value: string): number {
-  const n = parseIntArgument(value);
-  if (n < 1) {
-    throw new InvalidArgumentError(`Expected a positive integer, got: ${value}`);
-  }
+  const n = parsePositiveInteger(value);
+  if (n === null) throw new InvalidArgumentError(`Expected a positive integer, got: ${value}`);
   return n;
 }
 
-export function parsePositiveInt(value: string): number | undefined {
-  if (!/^\d+$/u.test(value)) return undefined;
-  const n = Number(value);
-  if (!Number.isSafeInteger(n) || n < 1) return undefined;
-  return n;
-}
-
-export function parseTopKind(kind: string | undefined): TopKind {
-  if (kind !== undefined && kind !== 'days' && kind !== 'models') {
-    throw new Error(`Invalid kind: "${kind}". Expected "days" or "models".`);
-  }
-  return kind === 'models' ? 'models' : 'days';
-}
-
-export function parseTopSort(sort: string): TopSort {
-  if (sort !== 'tokens' && sort !== 'cost') {
-    throw new Error(`Invalid --sort value: "${sort}". Expected "tokens" or "cost".`);
-  }
-  return sort;
-}
-
-export function parseTopLimit(limit: number): number {
-  if (!Number.isSafeInteger(limit) || limit < 1) {
-    throw new Error(`Invalid --limit: "${String(limit)}". Expected a positive integer.`);
-  }
-  return limit;
+/** Day keys are four-digit years. */
+export function parseYearArgument(value: string): number {
+  const year = parsePositiveIntArgument(value);
+  if (year > 9999) throw new InvalidArgumentError(`Expected a year up to 9999, got: ${value}`);
+  return year;
 }
 
 function invalidUsagePeriodMessage(period: string): string {

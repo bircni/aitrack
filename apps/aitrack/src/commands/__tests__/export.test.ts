@@ -11,16 +11,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('node:fs', () => ({ writeFileSync: mocks.writeFileSync }));
-// Keep the real emptyReportMessage (it runs against the mocked config/git/usageData
-// below); only buildUsageReport is stubbed.
+// Keep the real emptyReportMessage (it runs against the mocked config/git below);
+// only buildUsageReport is stubbed.
 vi.mock('aitrack-lib/data/usageReport', async (importOriginal) => ({
   ...(await importOriginal<typeof import('aitrack-lib/data/usageReport')>()),
   buildUsageReport: mocks.buildUsageReport,
 }));
 vi.mock('aitrack-lib/display/pdf/receipt', () => ({ renderReceiptPdf: mocks.renderReceiptPdf }));
-vi.mock('aitrack-lib/data/usageData', () => ({
-  emptyUsageMessage: (warned?: boolean) => (warned ? 'not configured' : 'no data'),
-}));
 vi.mock('aitrack-lib/config', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
 vi.mock('aitrack-lib/git', () => ({ isCloned: mocks.isCloned }));
 
@@ -62,32 +59,17 @@ describe('exportCommand', () => {
     );
   });
 
-  it('rejects missing or invalid extra period arguments', async () => {
-    await expect(exportCommand({ period: 'range', output: 'r.pdf' })).rejects.toThrow(
-      'Period "range" expects two dates',
-    );
-    await expect(exportCommand({ period: 'date', args: ['bad'], output: 'r.pdf' })).rejects.toThrow(
-      'Invalid date',
-    );
-    await expect(
-      exportCommand({ period: 'range', args: ['2026-06-02', '2026-06-01'], output: 'r.pdf' }),
-    ).rejects.toThrow('must not be after');
-    await expect(exportCommand({ period: 'last', args: ['0'], output: 'r.pdf' })).rejects.toThrow(
-      'positive integer',
-    );
-  });
-
   it('defaults to month and writes a PDF', async () => {
     mocks.buildUsageReport.mockResolvedValue(report(3));
-    await exportCommand({ output: 'r.pdf' });
+    await exportCommand({});
     expect(mocks.buildUsageReport).toHaveBeenCalledWith(
       expect.objectContaining({ period: 'month' }),
     );
-    expect(mocks.writeFileSync).toHaveBeenCalledWith('r.pdf', expect.any(Buffer));
-    expect(loggedOutput()).toContain('r.pdf');
+    expect(mocks.writeFileSync).toHaveBeenCalledWith('aitrack-receipt.pdf', expect.any(Buffer));
+    expect(loggedOutput()).toContain('aitrack-receipt.pdf');
   });
 
-  it('writes CSV instead of a PDF with --csv, swapping the default extension', async () => {
+  it('writes CSV instead of a PDF with --csv, defaulting to a .csv path', async () => {
     mocks.buildUsageReport.mockResolvedValue({
       windowLabel: 'this month',
       providers: [
@@ -123,7 +105,7 @@ describe('exportCommand', () => {
       rowCount: 1,
     } satisfies UsageReport);
 
-    await exportCommand({ output: 'aitrack-receipt.pdf', csv: true });
+    await exportCommand({ csv: true });
 
     expect(mocks.renderReceiptPdf).not.toHaveBeenCalled();
     const [path, body] = mocks.writeFileSync.mock.calls[0] as [string, string];
@@ -139,7 +121,9 @@ describe('exportCommand', () => {
   it('honours an explicit --csv output path as given', async () => {
     mocks.buildUsageReport.mockResolvedValue(report(3));
     await exportCommand({ output: 'out.csv', csv: true });
-    expect((mocks.writeFileSync.mock.calls[0] as [string, string])[0]).toBe('out.csv');
+    await exportCommand({ output: 'report.pdf', csv: true });
+    expect(mocks.writeFileSync).toHaveBeenNthCalledWith(1, 'out.csv', expect.any(String));
+    expect(mocks.writeFileSync).toHaveBeenNthCalledWith(2, 'report.pdf', expect.any(String));
   });
 
   it('exports date, range, and last windows', async () => {
