@@ -8,10 +8,15 @@ import { isRecord } from 'aitrack-lib/data/guards';
 import { INIT_HINT } from 'aitrack-lib/data/messages';
 import type { MachineFile } from 'aitrack-lib/data/types';
 import { pad } from 'aitrack-lib/display/format';
+import { errorMessage } from 'aitrack-lib/errors';
 import { isCloned, listDataFiles, LOCAL_REPO, readDataFile } from 'aitrack-lib/git';
 import { log } from 'aitrack-lib/output';
-import { type CheckResult, type CheckStatus } from 'aitrack-lib/providers/index';
-import { getProvider, PROVIDERS } from 'aitrack-lib/providers/index';
+import {
+  type CheckResult,
+  type CheckStatus,
+  type Provider,
+  PROVIDERS,
+} from 'aitrack-lib/providers/index';
 import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
@@ -21,14 +26,7 @@ interface DoctorOptions {
   json?: boolean;
 }
 
-/**
- * Status text and its color, kept apart so the column can be padded on the
- * plain text.
- *
- * Padding the colored string instead measured the ANSI escapes as content, so
- * `padEnd` was a no-op on a TTY and the columns only lined up when color was
- * disabled. `display/terminalTable.ts` already pads before styling.
- */
+/** Kept apart from the color so the column is padded on the plain text. */
 const STATUS_STYLE: Record<CheckStatus, { text: string; color: (value: string) => string }> = {
   ok: { text: 'OK', color: (value) => chalk.green(value) },
   warn: { text: 'WARN', color: (value) => chalk.yellow(value) },
@@ -113,32 +111,15 @@ async function pricingCacheCheck(): Promise<CheckResult> {
   const { currentModelPricing } = await import('aitrack-lib/pricing/store');
   const result = await syncPricingPack();
   const pricing = currentModelPricing();
-  const refreshFailed = result.detail.startsWith('refresh failed:');
   return {
-    status: refreshFailed ? 'warn' : 'ok',
+    status: result.failed ? 'warn' : 'ok',
     label: 'Pricing cache',
     detail: `${String(pricing.claudeModelCount())} Claude, ${String(pricing.codexModelCount())} Codex, ${String(pricing.cursorModelCount())} Cursor — ${result.detail} (updatedAt ${result.updatedAt})`,
   };
 }
 
-function pricingCheck(options: DoctorOptions): CheckResult {
-  if (!options.pricingCheck) {
-    const claudeCount = getProvider('claude_code')?.pricing.modelCount ?? 0;
-    const codexCount = getProvider('codex')?.pricing.modelCount ?? 0;
-    const cursorCount = getProvider('cursor')?.pricing.modelCount ?? 0;
-    return {
-      status: 'ok',
-      label: 'Pricing tables',
-      detail: `${String(claudeCount)} Claude, ${String(codexCount)} Codex, and ${String(
-        cursorCount,
-      )} Cursor model entries bundled; run doctor --pricing-check for drift check`,
-    };
-  }
-
-  // The drift check shells out to `pnpm run pricing:check`, which only exists
-  // in a source checkout. A published install has neither the script nor
-  // necessarily pnpm, and any unrelated project's package.json would previously
-  // get this far and fail with a confusing pnpm error.
+function pricingCheck(): CheckResult {
+  // The script exists only in a source checkout; elsewhere pnpm would fail confusingly.
   if (!isAitrackCheckout(process.cwd())) {
     return {
       status: 'warn',
@@ -188,11 +169,6 @@ export function duplicateMachineCheck(): CheckResult {
   };
 }
 
-/**
- * Report the config, distinguishing a file that is absent from one that is
- * present but broken — which used to look identical here, so a corrupt config
- * was diagnosed as "no config found" and the advice was to re-run init.
- */
 function configCheck(loaded: ConfigLoad): CheckResult {
   if (loaded.status === 'ok') {
     return {
@@ -215,6 +191,19 @@ function configCheck(loaded: ConfigLoad): CheckResult {
   };
 }
 
+async function providerCheck(provider: Provider): Promise<CheckResult> {
+  try {
+    return await provider.doctorCheck();
+  } catch (error) {
+    // An unreadable source folder (EACCES) is one bad row, not a crashed doctor.
+    return {
+      status: 'warn',
+      label: `${provider.descriptor.label} source`,
+      detail: errorMessage(error),
+    };
+  }
+}
+
 async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
   const loadedConfig = readConfig();
   const checks: CheckResult[] = [];
@@ -231,13 +220,14 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
     }),
   );
   checks.push(configCheck(loadedConfig));
+  const isRepoCloned = isCloned();
   checks.push({
-    status: isCloned() ? 'ok' : 'warn',
+    status: isRepoCloned ? 'ok' : 'warn',
     label: 'Local repo',
-    detail: isCloned() ? LOCAL_REPO : 'not cloned; local preview still works',
+    detail: isRepoCloned ? LOCAL_REPO : 'not cloned; local preview still works',
   });
 
-  if (isCloned()) {
+  if (isRepoCloned) {
     checks.push(duplicateMachineCheck());
     checks.push(
       commandCheck('Repo health', 'git', ['status', '--short'], {
@@ -261,12 +251,9 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
     );
   }
 
-  // One probe per provider — each hits the filesystem or Cursor's database.
-  checks.push(
-    ...(await Promise.all(PROVIDERS.map((provider) => Promise.resolve(provider.doctorCheck())))),
-  );
+  checks.push(...(await Promise.all(PROVIDERS.map((provider) => providerCheck(provider)))));
   checks.push(await pricingCacheCheck());
-  checks.push(pricingCheck(options));
+  if (options.pricingCheck) checks.push(pricingCheck());
 
   return checks;
 }

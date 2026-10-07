@@ -110,6 +110,9 @@ export async function installOpentrackCommand(
   options: InstallOpentrackOptions = {},
 ): Promise<void> {
   const target = updaterTarget();
+  if (process.platform === 'win32' && options.dir !== undefined) {
+    throw new Error('--dir applies to macOS only; the Windows installer chooses its own folder.');
+  }
   const release = await latestRelease(target);
   log.info(`Downloading opentrack ${release.version}...`);
   const file = await download(release.url);

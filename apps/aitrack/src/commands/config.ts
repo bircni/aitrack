@@ -1,4 +1,4 @@
-import { resolveMachineId, saveConfig, tryLoadConfig } from 'aitrack-lib/config';
+import { invalidConfigMessage, readConfig, resolveMachineId, saveConfig } from 'aitrack-lib/config';
 import type { Config } from 'aitrack-lib/configTypes';
 import { NO_CONFIG_MESSAGE, REPO_URL_UNSET_MESSAGE } from 'aitrack-lib/data/messages';
 import { migrateMachineDataFiles } from 'aitrack-lib/git';
@@ -57,10 +57,8 @@ export interface ConfigCommandOptions {
   value?: string;
 }
 
-// Async so any validation error surfaces as a rejected promise that the CLI's
-// runAsync() wrapper can catch (a sync throw would escape it).
 export async function configCommand(options: ConfigCommandOptions): Promise<void> {
-  await Promise.resolve();
+  await Promise.resolve(); // Async to fit runAsync.
   switch (options.action) {
     case 'list': {
       listConfig();
@@ -81,8 +79,15 @@ export async function configCommand(options: ConfigCommandOptions): Promise<void
   }
 }
 
+/** Null when there is no config; an invalid one throws, so nothing here overwrites it. */
+function existingConfig(): Config | null {
+  const loaded = readConfig();
+  if (loaded.status === 'invalid') throw new Error(invalidConfigMessage(loaded.reason));
+  return loaded.status === 'ok' ? loaded.config : null;
+}
+
 function listConfig(): void {
-  const config = tryLoadConfig();
+  const config = existingConfig();
   if (!config) {
     log.info(NO_CONFIG_MESSAGE);
     return;
@@ -99,8 +104,7 @@ function getConfig(key: string | undefined): void {
   if (key === undefined || !isConfigKey(key)) {
     throw unknownKeyError(key ?? '');
   }
-  const config = tryLoadConfig();
-  const value = configValue(config, key);
+  const value = configValue(existingConfig(), key);
   if (value === undefined) {
     log.info('');
     return;
@@ -115,7 +119,7 @@ function setConfig(key: string | undefined, value: string | undefined): void {
   if (value === undefined) {
     throw new Error(`A value is required: aitrack config set ${key} <value>`);
   }
-  const existing = tryLoadConfig();
+  const existing = existingConfig();
   const normalizedValue =
     key === 'machineId'
       ? normalizeMachineId(value)
@@ -123,7 +127,7 @@ function setConfig(key: string | undefined, value: string | undefined): void {
         ? parseMonthlyBudget(value)
         : value;
   if (key === 'machineId') {
-    const previousMachineId = resolveMachineId(existing ?? { repoUrl: '' });
+    const previousMachineId = resolveMachineId(existing);
     migrateMachineDataFiles(previousMachineId, normalizeMachineId(value));
   }
   const base: Config = existing ?? { repoUrl: '' };

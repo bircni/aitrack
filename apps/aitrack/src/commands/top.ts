@@ -28,7 +28,6 @@ import chalk from 'chalk';
 import { printJsonCommand } from '../cli/json.js';
 
 export type TopKind = 'days' | 'models';
-export type { TopSort } from 'aitrack-lib/data/topUsage';
 
 export interface TopOptions {
   kind: TopKind;

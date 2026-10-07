@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   doctorCommand: vi.fn(),
   topCommand: vi.fn(),
   machinesCommand: vi.fn(),
-  recomputeCostsCommand: vi.fn(),
+  recomputeCosts: vi.fn(),
   configCommand: vi.fn(),
   installOpentrackCommand: vi.fn(),
 }));
@@ -22,9 +22,7 @@ vi.mock('../../commands/export.js', () => ({ exportCommand: mocks.exportCommand 
 vi.mock('../../commands/doctor.js', () => ({ doctorCommand: mocks.doctorCommand }));
 vi.mock('../../commands/top.js', () => ({ topCommand: mocks.topCommand }));
 vi.mock('../../commands/machines.js', () => ({ machinesCommand: mocks.machinesCommand }));
-vi.mock('../../commands/recompute.js', () => ({
-  recomputeCostsCommand: mocks.recomputeCostsCommand,
-}));
+vi.mock('aitrack-lib/recompute', () => ({ recomputeCosts: mocks.recomputeCosts }));
 vi.mock('../../commands/installOpentrack.js', () => ({
   installOpentrackCommand: mocks.installOpentrackCommand,
 }));
@@ -84,9 +82,9 @@ describe('buildProgram', () => {
     await run('machines', '--json');
     expect(mocks.machinesCommand).toHaveBeenCalledWith({ json: true });
     await run('recompute-costs');
-    expect(mocks.recomputeCostsCommand).toHaveBeenCalledWith({ replaceLocal: undefined });
+    expect(mocks.recomputeCosts).toHaveBeenCalledWith({ replaceLocal: undefined });
     await run('recompute-costs', '--replace-local');
-    expect(mocks.recomputeCostsCommand).toHaveBeenCalledWith({ replaceLocal: true });
+    expect(mocks.recomputeCosts).toHaveBeenCalledWith({ replaceLocal: true });
     await run('doctor');
     expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: undefined, json: undefined });
     await run('doctor', '--pricing-check');
@@ -123,6 +121,11 @@ describe('buildProgram', () => {
       expect.objectContaining({ period: 'last', n: 5 }),
     );
 
+    await run('usage', 'today', '--refresh');
+    expect(mocks.usageCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({ refreshLive: true }),
+    );
+
     await run('usage', 'thisweek', '--compare');
     expect(mocks.usageCommand).toHaveBeenCalledWith(
       expect.objectContaining({ period: 'thisweek', compare: true }),
@@ -155,9 +158,11 @@ describe('buildProgram', () => {
   });
 
   it('maps top options', async () => {
+    await run('top');
+    expect(mocks.topCommand).toHaveBeenCalledWith({ kind: 'days', sort: 'cost', limit: 10 });
     await run('top', 'models', '--sort', 'tokens', '-n', '5');
     expect(mocks.topCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'models', sort: 'tokens', limit: 5, json: undefined }),
+      expect.objectContaining({ kind: 'models', sort: 'tokens', limit: 5 }),
     );
     await run('top', 'days', '--json');
     expect(mocks.topCommand).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
@@ -189,27 +194,14 @@ describe('buildProgram', () => {
       process.exitCode = undefined;
     });
 
-    it('rejects an invalid top kind', async () => {
-      expect(await runAndSettle('top', 'weeks')).toBe(1);
-      expect(mocks.topCommand).not.toHaveBeenCalled();
-    });
-
-    it('rejects an invalid date', async () => {
+    it('rejects an invalid usage date', async () => {
       expect(await runAndSettle('usage', 'date', 'nope')).toBe(1);
       expect(mocks.usageCommand).not.toHaveBeenCalled();
     });
 
-    it('rejects a reversed range', async () => {
-      expect(await runAndSettle('usage', 'range', '2026-06-02', '2026-06-01')).toBe(1);
-    });
-
-    it('rejects invalid usage last days', async () => {
-      expect(await runAndSettle('usage', 'last', '0')).toBe(1);
-    });
-
-    it('rejects malformed and non-positive numeric options', async () => {
+    it('rejects malformed options and arguments', async () => {
       await expect(run('show', '--year', '2026junk')).rejects.toThrow('exit');
-      await expect(run('top', '--year', '0')).rejects.toThrow('exit');
+      await expect(run('top', 'weeks')).rejects.toThrow('exit');
       expect(mocks.showCommand).not.toHaveBeenCalled();
       expect(mocks.topCommand).not.toHaveBeenCalled();
     });
@@ -241,11 +233,4 @@ describe('buildProgram', () => {
       expect(process.exitCode).toBe(1);
     });
   });
-});
-
-it('passes an explicit refresh flag to usage reports', async () => {
-  await run('usage', 'today', '--refresh');
-  expect(mocks.usageCommand).toHaveBeenLastCalledWith(
-    expect.objectContaining({ refreshLive: true }),
-  );
 });

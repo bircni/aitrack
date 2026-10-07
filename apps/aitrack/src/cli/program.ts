@@ -1,6 +1,7 @@
 import { errorMessage } from 'aitrack-lib/errors';
 import { log } from 'aitrack-lib/output';
-import { Command } from 'commander';
+import { recomputeCosts } from 'aitrack-lib/recompute';
+import { Argument, Command, Option } from 'commander';
 
 import { CONFIG_KEYS, configCommand } from '../commands/config.js';
 import { doctorCommand } from '../commands/doctor.js';
@@ -8,19 +9,15 @@ import type { ExportOptions } from '../commands/export.js';
 import { initCommand } from '../commands/init.js';
 import { installOpentrackCommand } from '../commands/installOpentrack.js';
 import { machinesCommand } from '../commands/machines.js';
-import { recomputeCostsCommand } from '../commands/recompute.js';
 import type { ShowOptions } from '../commands/show.js';
 import { syncCommand } from '../commands/sync.js';
-import { topCommand } from '../commands/top.js';
+import { topCommand, type TopKind, type TopOptions } from '../commands/top.js';
 import { cliVersion } from '../version.js';
 import {
   parseDateOption,
-  parseIntArgument,
   parsePositiveIntArgument,
   parseProviders,
-  parseTopKind,
-  parseTopLimit,
-  parseTopSort,
+  parseYearArgument,
 } from './parse.js';
 import {
   PROVIDERS_DESC,
@@ -30,14 +27,8 @@ import {
   registerUsageCommands,
 } from './usageCommands.js';
 
-/**
- * Run an async command handler, printing a friendly error and exiting with a
- * non-zero status if it rejects. Centralises the catch/exit boilerplate shared
- * by every CLI action.
- */
+/** Prints a rejection (or a synchronous throw) and sets a failing exit code. */
 export function runAsync(function_: () => Promise<void>): void {
-  // `exitCode` rather than `exit`: it lets buffered stdout flush before Node
-  // leaves, which `process.exit` can truncate.
   try {
     function_().catch(fail);
   } catch (error) {
@@ -47,38 +38,7 @@ export function runAsync(function_: () => Promise<void>): void {
 
 function fail(error: unknown): void {
   log.error(errorMessage(error));
-  process.exitCode = 1;
-}
-
-interface TopCliOptions {
-  limit: number;
-  sort: string;
-  providers?: string[];
-  year?: number;
-  since?: string;
-  until?: string;
-  refresh?: boolean;
-  json?: boolean;
-}
-
-/**
- * Parsing happens inside the async body so a bad argument travels through
- * `runAsync` like every other failure, instead of duplicating its catch-and-exit.
- */
-function runTop(kind: string | undefined, options: TopCliOptions): void {
-  runAsync(() =>
-    topCommand({
-      kind: parseTopKind(kind),
-      limit: parseTopLimit(options.limit),
-      sort: parseTopSort(options.sort),
-      providers: options.providers,
-      year: options.year,
-      since: options.since,
-      until: options.until,
-      refresh: options.refresh,
-      json: options.json,
-    }),
-  );
+  process.exitCode = 1; // Not process.exit, which can truncate buffered stdout.
 }
 
 export function buildProgram(): Command {
@@ -114,14 +74,12 @@ export function buildProgram(): Command {
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
     .option('--no-open', 'do not auto-open the generated PNG (useful for scripts / CI)')
-    .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
+    .option('--year <year>', 'only include days from this calendar year', parseYearArgument)
     .option(REFRESH_FLAG, REFRESH_DESC)
     .option('--tui', 'render a stats table in the terminal instead of a PNG')
     .action((options: ShowOptions) => {
       runAsync(async () => {
-        // Loaded on demand so `@napi-rs/canvas` (a native binding) stays off
-        // the startup path of every other command.
-        const { showCommand } = await import('../commands/show.js');
+        const { showCommand } = await import('../commands/show.js'); // Keeps the native canvas binding off other commands' startup.
         await showCommand(options);
       });
     });
@@ -134,28 +92,29 @@ export function buildProgram(): Command {
   program
     .command('export [period] [args...]')
     .description('Export an itemized usage receipt for a period (default: month) as PDF or CSV')
-    .option('-o, --output <path>', 'output path (.pdf, or .csv with --csv)', 'aitrack-receipt.pdf')
+    .option('-o, --output <path>', 'output path (default: aitrack-receipt.pdf, or .csv with --csv)')
     .option('--csv', 'write a spreadsheet-friendly CSV instead of the PDF receipt')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option(REFRESH_FLAG, REFRESH_DESC)
     .action((period: string | undefined, args: string[], options: ExportOptions) => {
       runAsync(async () => {
-        // Loaded on demand so `pdfkit` stays off the startup path of every
-        // other command.
-        const { exportCommand } = await import('../commands/export.js');
+        const { exportCommand } = await import('../commands/export.js'); // Keeps pdfkit off other commands' startup.
         await exportCommand({ ...options, period, args });
       });
     });
 
   program
-    .command('top [kind]')
+    .command('top')
     .description(
-      'Show top items by tokens or cost. kind: "days" (default) or "models". Uses already-local synced machine data.',
+      'Show top days or models by tokens or cost. Uses already-local synced machine data.',
     )
-    .option('-n, --limit <n>', 'number of items to show', parseIntArgument, 10)
-    .option('--sort <field>', 'sort by "tokens" or "cost"', 'cost')
+    .addArgument(new Argument('[kind]', 'what to rank').choices(['days', 'models']).default('days'))
+    .option('-n, --limit <n>', 'number of items to show', parsePositiveIntArgument, 10)
+    .addOption(
+      new Option('--sort <field>', 'sort field').choices(['tokens', 'cost']).default('cost'),
+    )
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
-    .option('--year <year>', 'only include days from this calendar year', parsePositiveIntArgument)
+    .option('--year <year>', 'only include days from this calendar year', parseYearArgument)
     .option(
       '--since <date>',
       'only include days on or after this date (YYYY-MM-DD)',
@@ -168,8 +127,8 @@ export function buildProgram(): Command {
     )
     .option(REFRESH_FLAG, REFRESH_DESC)
     .option('--json', 'print machine-readable JSON')
-    .action((kind: string | undefined, options: TopCliOptions) => {
-      runTop(kind, options);
+    .action((kind: TopKind, options: Omit<TopOptions, 'kind'>) => {
+      runAsync(() => topCommand({ ...options, kind }));
     });
 
   program
@@ -192,7 +151,7 @@ export function buildProgram(): Command {
       'Rebuild this machine from the local logs, dropping synced days the logs no longer cover',
     )
     .action((options: { replaceLocal?: boolean }) => {
-      runAsync(() => recomputeCostsCommand({ replaceLocal: options.replaceLocal }));
+      runAsync(() => recomputeCosts({ replaceLocal: options.replaceLocal }));
     });
 
   program

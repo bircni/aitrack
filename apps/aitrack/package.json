@@ -34,9 +34,8 @@
     "aitrack": "./dist/cli.js"
   },
   "files": [
-    "dist",
-    "README.md",
-    "!dist/**/*.test.js"
+    "dist/**/*.js",
+    "README.md"
   ],
   "type": "module",
   "publishConfig": {

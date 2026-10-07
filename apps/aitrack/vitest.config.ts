@@ -14,12 +14,7 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       // `cli.ts` is a two-line shebang entry point; the smoke tests cover it
       // end to end, which coverage of an out-of-process run cannot see.
-      exclude: [
-        'src/**/__tests__/**',
-        'src/cli.ts',
-        // The workspace library has its own test target and coverage gate.
-        'aitrack-lib/src/**',
-      ],
+      exclude: ['src/**/__tests__/**', 'src/cli.ts'],
       thresholds: {
         perFile: { lines: 80, statements: 80, functions: 80, branches: 80 },
         lines: 90,

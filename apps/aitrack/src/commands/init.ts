@@ -1,9 +1,16 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { loadConfig, localMachineId, resolveMachineId, saveConfig } from 'aitrack-lib/config';
+import {
+  describeInvalidConfig,
+  localMachineId,
+  readConfig,
+  resolveMachineId,
+  saveConfig,
+} from 'aitrack-lib/config';
 import {
   adoptPendingDataFiles,
+  cloneOriginUrl,
   cloneRepo,
   isCloned,
   LOCAL_REPO,
@@ -62,22 +69,19 @@ async function promptMachineId(initial: string): Promise<string | undefined> {
 }
 
 export async function initCommand(): Promise<void> {
-  let existing = null;
-  try {
-    existing = loadConfig();
-  } catch {
-    /* not yet configured */
-  }
+  const loaded = readConfig();
+  const existing = loaded.status === 'ok' ? loaded.config : null;
 
-  if (existing) {
-    log.info(`Current config: repo=${existing.repoUrl}`);
+  if (loaded.status !== 'missing') {
+    if (loaded.status === 'invalid') log.warn(describeInvalidConfig(loaded.reason));
+    else log.info(`Current config: repo=${loaded.config.repoUrl}`);
     const overwrite = await promptOverwrite();
     if (!overwrite) {
       log.info('Aborted.');
       return;
     }
   }
-  const previousMachineId = resolveMachineId(existing ?? { repoUrl: '' });
+  const previousMachineId = resolveMachineId(existing);
 
   log.info('First, create an empty GitHub repository (or any git remote) for storing data.');
   log.info('Example: https://github.com/new — name it something like "aitrack-data".');
@@ -89,10 +93,11 @@ export async function initCommand(): Promise<void> {
     return;
   }
 
-  const isUrlChanged = existing !== null && existing.repoUrl !== repoUrl;
   const wasCloned = isCloned();
+  const originUrl = wasCloned ? cloneOriginUrl() : null;
+  const isUrlChanged = originUrl !== null && originUrl !== repoUrl; // Unknown origin keeps the clone.
 
-  if (wasCloned && isUrlChanged) {
+  if (isUrlChanged) {
     const reclone = await promptReclone();
     if (!reclone) {
       log.info('Aborted.');

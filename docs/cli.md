@@ -66,7 +66,7 @@ npx aitrack sync
 npx aitrack show
 ```
 
-`init` asks for your repo's remote URL (SSH or HTTPS — whatever you normally use) and a stable machine name, then clones the repo to `~/.config/aitrack/repo/`. The machine name defaults to the short hostname (the part before the first dot) and becomes `data/{machineId}.json`. `show` always reads **fresh local** Claude/Codex data, so you never need to `sync` first just to preview.
+`init` asks for your repo's remote URL (SSH or HTTPS — whatever you normally use) and a stable machine name, then clones the repo to `~/.config/aitrack/repo/`. An existing clone whose `origin` differs from the URL you enter is replaced only after you confirm. A config file that cannot be read is reported, and `init` asks before overwriting it; `config list`, `get` and `set` refuse to run on it. The machine name defaults to the short hostname (the part before the first dot) and becomes `data/{machineId}.json`. `show` always reads **fresh local** Claude/Codex data, so you never need to `sync` first just to preview.
 
 ### Multiple machines
 
@@ -100,7 +100,7 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 **JSON output:** add `--json` to `usage`, `top`, `machines`, or `doctor` for scripting.
 
-**`export` flags:** `-o <path>` (output path) and `--csv` (write a spreadsheet-friendly CSV — raw token counts, one row per provider+model plus a `TOTAL` row — instead of the PDF receipt; the default `-o` extension switches to `.csv`).
+**`export` flags:** `-o <path>` (output path, default `aitrack-receipt.pdf`) and `--csv` (write a spreadsheet-friendly CSV — raw token counts, one row per provider+model plus a `TOTAL` row — instead of the PDF receipt; the default path becomes `aitrack-receipt.csv`, an explicit `-o` is used as given).
 
 Relative windows (`today`, `thisweek`, and the other windows anchored on today) are evaluated in each machine's recorded timezone. `date` and `range` use the stored date keys as written. A heatmap still draws those keys on one grid; `show` says so when the machines are not in the same zone.
 
@@ -109,9 +109,9 @@ cost, and per-model movement with the equivalent previous period. Calendar-to-da
 the same elapsed days—for example, `aitrack usage thisweek --compare` compares this week so far with
 the same weekdays last week. Comparison data is also included with `--json`.
 
-**`top` flags:** `-n, --limit <n>`, `--sort tokens|cost` (default `cost`), `--year <year>`, and `--since <YYYY-MM-DD>` / `--until <YYYY-MM-DD>` for an explicit inclusive date range.
+**`top` flags:** `[days|models]` (default `days`), `-n, --limit <n>` (default 10), `--sort tokens|cost` (default `cost`), `--year <year>`, and `--since <YYYY-MM-DD>` / `--until <YYYY-MM-DD>` for an explicit inclusive date range.
 
-**`doctor` flags:** `--pricing-check` runs the pricing drift script when you are in a source checkout.
+**`doctor` flags:** `--pricing-check` also runs the pricing drift script when you are in a source checkout. Without it, doctor still reports the pricing cache: model counts, refresh outcome and the rates' `updatedAt`.
 
 ---
 
@@ -120,12 +120,14 @@ the same weekdays last week. Comparison data is also included with `--json`.
 ```text
 ~/.config/aitrack/
 ├── config.json          # remote, machine, and source-root settings
-├── cache/               # parsed-transcript cache, rebuildable at any time
-│   ├── claude.json
-│   └── codex.json
+├── cache/               # parse and Cursor caches, rebuildable at any time
+│   ├── claude-<key>.json
+│   ├── codex-<key>.json
+│   └── cursor.json
 ├── pending/
 │   └── data/            # staged machine JSON before init
 │       └── my-pc.json
+├── pricing/             # downloaded rate pack, refreshed at most daily
 └── repo/                # local clone of your data repo
     └── data/
         ├── my-pc.json
@@ -136,8 +138,9 @@ the same weekdays last week. Comparison data is also included with `--json`.
 - **`show` (PNG or `--tui`) always reads fresh local Claude/Codex JSONL** on the current machine and merges in other machines' synced files. No `sync` needed to preview.
 - Before `init`, local usage is staged in `~/.config/aitrack/pending/data/` and adopted by the next `init`.
 - **Cursor** is loaded only on the current machine when selected: aitrack reads `cursorAuth/accessToken` from Cursor's local `state.vscdb`, then calls the CSV usage export at `CURSOR_WEB_BASE_URL` (`https://cursor.com` by default). The endpoint is required to use HTTPS and contain no embedded credentials. Any configured HTTPS origin receives the Cursor token, so override it only with an endpoint you trust. The token is **never** written to your repo. Use `--providers` without `cursor` (for example, `--providers claude,codex`) to skip both the credential read and request.
+- **Pricing** starts from the rate tables bundled with aitrack. `sync`, `doctor` and `recompute-costs` overlay them with a rate pack downloaded from `https://raw.githubusercontent.com/bircni/aitrack/pricing/` (`AITRACK_PRICING_URL` for a mirror) into `~/.config/aitrack/pricing/`, at most once a day, without sending usage data or credentials. A failed download keeps the current rates and is retried after 30 minutes. Set `AITRACK_NO_PRICING_REFRESH=1` to skip it.
 - **Heatmap intensity** anchors on the 90th-percentile day rather than the absolute max, so one huge day doesn't flatten the rest of the year.
-- **Parsed transcripts are cached** per file in `~/.config/aitrack/cache/`, keyed by path, size, and modification time, and invalidated when the app version, timezone or effective pricing fingerprint changes. Claude caches retain per-message contributions and aggregated unkeyed usage so overlapping transcripts can be deduplicated without reopening files. Derived-cache upgrades rebuild from logs; synced machine files need no schema migration and existing stored historical costs retain their meaning. Deleting the directory only costs one slower run. Set `AITRACK_NO_CACHE=1` to bypass it entirely.
+- **Parsed transcripts are cached** per file in `~/.config/aitrack/cache/`, keyed by path, size, and modification time, and invalidated when the timezone changes. Each app version and pricing fingerprint gets its own `claude-<key>.json` / `codex-<key>.json`, so the CLI and the desktop app do not invalidate each other; on save, only the newest other key is kept. Claude caches retain per-message contributions and aggregated unkeyed usage so overlapping transcripts can be deduplicated without reopening files. Derived-cache upgrades rebuild from logs; synced machine files need no schema migration and existing stored historical costs retain their meaning. Deleting the directory only costs one slower run. Set `AITRACK_NO_CACHE=1` to bypass it entirely.
 - **Machine files carry a `schemaVersion` and the producing machine's `timezone`.** Day keys are still that machine's local calendar day (unchanged from 1.x); the timezone is recorded so data merged across machines in different zones can be understood later. These fields are metadata — nothing in a report reads them — so they are tolerated rather than required: a file written by aitrack 1.x (or by a machine still running it) is read normally and upgraded in memory, silently, and the header lands on disk the next time that machine's usage actually changes. A file written by a _newer_ aitrack than the one reading it is skipped with a clear message so the rest of the fleet still loads.
 
 ### Cost handling

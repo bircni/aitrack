@@ -76,6 +76,7 @@ function readMachineFile(filePath: string): MachineFile {
 describe('integration', { timeout: 60_000 }, () => {
   beforeEach(() => {
     mkdirSync(TEST_HOME, { recursive: true });
+    vi.stubEnv('AITRACK_NO_PRICING_REFRESH', '1'); // sync would otherwise fetch the live pack
     process.env.XDG_CONFIG_HOME = TEST_HOME; // points claude reader at TEST_HOME/claude/projects
     delete process.env.CODEX_HOME; // prevent reading real codex data
 
@@ -85,6 +86,7 @@ describe('integration', { timeout: 60_000 }, () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     delete process.env.XDG_CONFIG_HOME;
     rmSync(TEST_HOME, { recursive: true, force: true });
   });
