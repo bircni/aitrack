@@ -1,17 +1,25 @@
 import { shiftDate } from 'aitrack-lib/data/calendar';
 import { toLocalDateString } from 'aitrack-lib/data/dayMap';
-import type { LoadedUsageData } from 'aitrack-lib/data/usageData';
+import {
+  type LoadedUsageData,
+  providerDataForWindows,
+  type ZonedUsageSource,
+} from 'aitrack-lib/data/usageData';
 import { buildUsageReportsFromLoaded, type UsageReport } from 'aitrack-lib/data/usageReport';
 import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 
-import type { DailyUsage, PeriodUsage, ProviderUsage, QuotaProviderKey } from '../shared/types.js';
+import type { DailyUsage, MachineUsage, PeriodUsage, ProviderUsages } from '../shared/types.js';
 import { EMPTY_PERIOD } from '../shared/types.js';
 
 const TREND_DAYS = 30;
+const EVERY_DAY = { start: '0000-01-01', end: '9999-12-31' };
 
 export interface UsageSummary {
-  providers: Partial<Record<QuotaProviderKey, ProviderUsage>>;
+  providers: ProviderUsages;
   machineCount: number;
+  machines?: MachineUsage[];
+  /** Providers read live from the account (Cursor), which no machine's logs hold. */
+  account?: ProviderUsages;
 }
 
 function periodFor(report: UsageReport | undefined, key: string): PeriodUsage {
@@ -37,15 +45,7 @@ function trailingDates(today: Date, days: number): string[] {
   return Array.from({ length: days }, (_, index) => shiftDate(last, index - (days - 1)));
 }
 
-/**
- * Today / yesterday / rolling 7 and 30 days / all-time per provider, plus a
- * daily series for the chart.
- *
- * The windows go through the same report builder as `aitrack usage`, so the
- * numbers here always match the CLI's.
- */
-export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date()): UsageSummary {
-  if (!loaded) return { providers: {}, machineCount: 1 };
+function providerUsages(loaded: LoadedUsageData, now: Date): ProviderUsages {
   const [today, yesterday, week, month, all] = buildUsageReportsFromLoaded(
     loaded,
     [
@@ -59,7 +59,7 @@ export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date())
   );
   const dates = trailingDates(now, TREND_DAYS);
 
-  const providers: UsageSummary['providers'] = {};
+  const providers: ProviderUsages = {};
   for (const key of QUOTA_PROVIDERS) {
     const days = loaded.providerData[key];
     if (!days) continue;
@@ -76,8 +76,45 @@ export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date())
       daily,
     };
   }
+  return providers;
+}
+
+/** Just these machines' days, plus the live providers when asked; priced like the whole. */
+function sliceLoaded(
+  loaded: LoadedUsageData,
+  zonedSources: ZonedUsageSource[],
+  live: boolean,
+): LoadedUsageData {
+  const part: LoadedUsageData = {
+    providerData: {},
+    machineData: [],
+    zonedSources,
+    ...(live && loaded.liveProviderData && { liveProviderData: loaded.liveProviderData }),
+  };
+  return { ...part, providerData: providerDataForWindows(part, () => EVERY_DAY) };
+}
+
+/**
+ * Today / yesterday / rolling 7 and 30 days / all-time per provider, plus a
+ * daily series for the chart, in total and per machine.
+ *
+ * The windows go through the same report builder as `aitrack usage`, so the
+ * numbers here always match the CLI's.
+ */
+export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date()): UsageSummary {
+  if (!loaded) return { providers: {}, machineCount: 1 };
+  const machines = (loaded.zonedSources ?? []).map((source): MachineUsage => ({
+    name: source.hostname,
+    timezone: source.timezone,
+    lastUpdated: source.lastUpdated,
+    current: source.current,
+    providers: providerUsages(sliceLoaded(loaded, [source], false), now),
+  }));
+  const live = Object.keys(loaded.liveProviderData ?? {}).length > 0;
   return {
-    providers,
+    providers: providerUsages(loaded, now),
     machineCount: Math.max(1, loaded.zonedSources?.length ?? loaded.machineData.length),
+    machines,
+    ...(live && { account: providerUsages(sliceLoaded(loaded, [], true), now) }),
   };
 }

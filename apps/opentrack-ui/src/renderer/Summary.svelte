@@ -20,9 +20,10 @@
     machineCount: number;
     period: Period;
     onPeriod: (period: Period) => void;
+    onMachines?: () => void;
   }
 
-  let { providers, machineCount, period, onPeriod }: Props = $props();
+  let { providers, machineCount, period, onPeriod, onMachines }: Props = $props();
 
   const usages = $derived(providers.map((provider) => provider.usage));
   const spend = $derived(totalSpend(usages, period));
@@ -58,7 +59,10 @@
         <span class="sub">Partial estimate</span>
       {/if}
       <div class="sub">
-        {formatTokens(spend.tokens)} tokens{#if machineCount > 1}&nbsp;· {machineCount} machines{/if}
+        {formatTokens(spend.tokens)} tokens{#if machineCount > 1}&nbsp;·
+          {#if onMachines}<button class="link sub-link" type="button" onclick={onMachines}
+              >{machineCount} machines</button
+            >{:else}{machineCount} machines{/if}{/if}
       </div>
     </div>
     {#if curve}

@@ -95,7 +95,12 @@ export interface PersistedMachine {
 
 /** One machine's days, still keyed by that machine's own calendar. */
 export interface ZonedUsageSource {
+  hostname: string;
   timezone: string;
+  /** Empty for a machine only read from the local logs. */
+  lastUpdated: string;
+  /** The machine this process runs on. */
+  current: boolean;
   days: MachineFile['days'];
 }
 
@@ -230,7 +235,13 @@ export async function loadMergedProviderData(
   for (const machine of reportMachines) {
     const days = filterDaysByProviders(machine.days, providerFilter);
     overlayDays(providerData, days);
-    zonedSources.push({ timezone: machine.timezone, days });
+    zonedSources.push({
+      hostname: machine.hostname,
+      timezone: machine.timezone,
+      lastUpdated: machine.lastUpdated,
+      current: machine.hostname === machineId,
+      days,
+    });
   }
 
   const liveProviderData: ProviderData = {};

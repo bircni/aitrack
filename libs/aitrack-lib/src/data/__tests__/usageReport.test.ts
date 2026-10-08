@@ -10,7 +10,7 @@ vi.mock('../usageData.js', async (importOriginal) => {
   return { ...actual, loadMergedProviderData: mocks.loadMergedProviderData };
 });
 
-import type { LoadedUsageData } from '../usageData.js';
+import type { LoadedUsageData, ZonedUsageSource } from '../usageData.js';
 import {
   buildUsageComparison,
   buildUsageReport,
@@ -20,6 +20,10 @@ import {
 
 const NOW = new Date('2026-06-15T10:00:00');
 const TODAY = '2026-06-15';
+
+function zoned(timezone: string, days: ZonedUsageSource['days']): ZonedUsageSource {
+  return { hostname: timezone, timezone, lastUpdated: '', current: false, days };
+}
 
 function claudeDay(inputTokens: number) {
   return {
@@ -196,14 +200,11 @@ describe('buildUsageReport', () => {
         providerData: {},
         machineData: [],
         zonedSources: [
-          { timezone: 'UTC', days: { '2026-06-15': claudeDay(10) } },
-          {
-            timezone: 'America/Los_Angeles',
-            days: {
-              '2026-06-14': claudeDay(7),
-              '2026-06-15': claudeDay(100),
-            },
-          },
+          zoned('UTC', { '2026-06-15': claudeDay(10) }),
+          zoned('America/Los_Angeles', {
+            '2026-06-14': claudeDay(7),
+            '2026-06-15': claudeDay(100),
+          }),
         ],
       });
 
@@ -218,14 +219,11 @@ describe('buildUsageReport', () => {
         providerData: {},
         machineData: [],
         zonedSources: [
-          { timezone: 'UTC', days: { '2026-06-15': claudeDay(10) } },
-          {
-            timezone: 'America/Los_Angeles',
-            days: {
-              '2026-06-14': claudeDay(7),
-              '2026-06-15': claudeDay(100),
-            },
-          },
+          zoned('UTC', { '2026-06-15': claudeDay(10) }),
+          zoned('America/Los_Angeles', {
+            '2026-06-14': claudeDay(7),
+            '2026-06-15': claudeDay(100),
+          }),
         ],
       });
 
@@ -244,11 +242,8 @@ describe('buildUsageReport', () => {
           providerData: {},
           machineData: [],
           zonedSources: [
-            { timezone: 'UTC', days: { '2026-06-15': claudeDay(10), '2026-06-01': claudeDay(3) } },
-            {
-              timezone: otherZone,
-              days: { '2026-06-14': claudeDay(7), '2026-06-15': claudeDay(100) },
-            },
+            zoned('UTC', { '2026-06-15': claudeDay(10), '2026-06-01': claudeDay(3) }),
+            zoned(otherZone, { '2026-06-14': claudeDay(7), '2026-06-15': claudeDay(100) }),
           ],
         };
 

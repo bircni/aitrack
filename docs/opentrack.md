@@ -13,6 +13,11 @@ reads — including other machines synced through your aitrack data repo.
 - **Usage** — today, yesterday, the last 7 / 30 days and all-time per provider, a daily trend
   and a per-model breakdown. Numbers come from the same report builder as `aitrack usage`, so
   they match the CLI.
+- **Machines** — with a synced data repo, a tab next to Providers splits the same spend per
+  machine: its share of the period, a 30-day activity strip on one scale for every machine, the
+  machine's local time when its timezone differs, and when it last synced. A machine that has not
+  synced for three days is marked stale. This machine always shows its live logs. Cursor usage
+  comes from your Cursor account, not from any machine, so it is listed separately.
 - **Tray icon** — the opentrack "O" filled like a pie, coloured by pace. It follows the most used
   provider and limit by default; Settings picks a provider and session or weekly instead. Choose
   **Bars** for a rounded progress bar per available limit (session, weekly and model limits),
