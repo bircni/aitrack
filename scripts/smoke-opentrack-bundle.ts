@@ -82,5 +82,6 @@ try {
   );
 } finally {
   for (const clean of cleanup) clean();
-  rmSync(temporary, { recursive: true, force: true });
+  // Windows can keep the exited sidecar's image locked for a moment.
+  rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }
