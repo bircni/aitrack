@@ -50,7 +50,7 @@ Description: |-
   A tray dashboard for Claude Code, Codex and Cursor: live session and weekly limits with reset
   times and pacing, plus token usage and estimated cost, including other machines synced through
   an aitrack data repo.
-Moniker: ${PRODUCT}
+Moniker: aitrack-opentrack
 Tags:
 - ai
 - claude-code
