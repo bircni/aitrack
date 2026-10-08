@@ -16,7 +16,7 @@
   },
   "type": "module",
   "dependencies": {
-    "@tauri-apps/api": "2.12.0"
+    "@tauri-apps/api": "2.12.1"
   },
   "devDependencies": {
     "@aitrack/test-fixtures": "workspace:*",
