@@ -42,4 +42,8 @@ it('writes the winget-pkgs manifests for a release installer', () => {
   expect(installerManifest).toContain(
     'InstallerSha256: 9C0D294C05FC1D88D698034609BB81C0C69196327594E4C69D2915C80FD9850C',
   );
+  // winget-pkgs already has opentrack.opentrack, an unrelated head tracker.
+  expect(readFileSync(join(manifests, 'bircni.opentrack.locale.en-US.yaml'), 'utf8')).toContain(
+    'Moniker: aitrack-opentrack\n',
+  );
 });
