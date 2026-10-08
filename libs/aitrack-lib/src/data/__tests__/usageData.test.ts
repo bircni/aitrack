@@ -367,6 +367,16 @@ describe('loadMergedProviderData', () => {
     // Replaced, not summed: 20 rather than the persisted 10 + fresh 20.
     expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
     expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['work-host', 'host']);
+    expect(
+      loaded?.zonedSources?.map(({ hostname, lastUpdated, current }) => ({
+        hostname,
+        lastUpdated,
+        current,
+      })),
+    ).toEqual([
+      { hostname: 'work-host', lastUpdated: 'synced', current: false },
+      { hostname: 'host', lastUpdated: 'synced', current: true },
+    ]);
   });
 
   it('falls back to persisted current-machine data when the local read is empty', async () => {

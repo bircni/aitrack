@@ -2,7 +2,13 @@
   import { errorMessage } from 'aitrack-lib/errors';
   import { onMount } from 'svelte';
 
-  import type { AppState, QuotaProviderKey, Screen, Settings } from '../shared/types.js';
+  import type {
+    AppState,
+    DashboardView,
+    QuotaProviderKey,
+    Screen,
+    Settings,
+  } from '../shared/types.js';
   import { api } from './api.js';
   import Dashboard from './Dashboard.svelte';
   import { formatUpdated, type Period } from './format.js';
@@ -12,7 +18,9 @@
   let appState = $state.raw<AppState | undefined>(); // Replaced whole on every push, never mutated.
   let settings = $state<Settings | undefined>();
   let screen = $state<Screen>('dashboard');
-  let period = $state<Period>('today'); // Here so a visit to Settings keeps it.
+  // Here so a visit to Settings keeps them.
+  let period = $state<Period>('today');
+  let view = $state<DashboardView>('providers');
   let now = $state(Date.now());
   let content = $state<HTMLElement | undefined>();
   let footer = $state<HTMLElement | undefined>();
@@ -216,7 +224,9 @@
             {settings}
             {now}
             {period}
+            {view}
             onPeriod={(next) => (period = next)}
+            onView={(next) => (view = next)}
             onPatch={patch}
             onRefresh={refresh}
             onSync={sync}

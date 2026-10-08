@@ -2,7 +2,13 @@
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AppState, OpentrackApi, Settings } from '../../shared/types.js';
+import type {
+  AppState,
+  OpentrackApi,
+  PeriodUsage,
+  ProviderUsage,
+  Settings,
+} from '../../shared/types.js';
 import { EMPTY_PERIOD } from '../../shared/types.js';
 import { DEFAULT_SETTINGS } from '../../sidecar/settings.js';
 
@@ -380,6 +386,126 @@ it('renders unavailable and signed-out providers and all-time totals without a c
   click('.state button');
   expect(openDashboard).toHaveBeenCalledWith('cursor');
   expect(target.querySelector<HTMLButtonElement>('.p-head')?.disabled).toBe(true);
+});
+
+function spent(tokens: number, costUSD: number, model: string): PeriodUsage {
+  const hasCost = costUSD > 0;
+  return { tokens, costUSD, hasCost, models: [{ model, tokens, costUSD, hasCost }] };
+}
+function usage(period: PeriodUsage, daily = [{ date: '2026-06-01', costUSD: 0 }]): ProviderUsage {
+  return {
+    today: period,
+    yesterday: EMPTY_PERIOD,
+    last7Days: period,
+    last30Days: period,
+    allTime: period,
+    daily,
+  };
+}
+it('compares machines by share, activity and freshness, with account-wide usage apart', async () => {
+  const now = Date.parse('2026-06-01T12:00:00Z');
+  const appState: AppState = {
+    ...state,
+    machineCount: 3,
+    providers: [
+      { key: 'claude_code', label: 'Claude Code', refreshing: false },
+      { key: 'cursor', label: 'Cursor', refreshing: false },
+    ],
+    machines: [
+      {
+        name: 'laptop',
+        timezone: 'UTC',
+        lastUpdated: '',
+        current: true,
+        providers: {
+          claude_code: usage(spent(100, 1, 'sonnet'), [
+            { date: '2026-05-31', costUSD: 4 },
+            { date: '2026-06-01', costUSD: 1 },
+          ]),
+        },
+      },
+      {
+        name: 'desk',
+        timezone: 'Asia/Tokyo',
+        lastUpdated: new Date(now - 10 * 86_400_000).toISOString(),
+        current: false,
+        providers: { claude_code: usage(spent(300, 3, 'opus')), codex: usage(spent(9, 9, 'gpt')) },
+      },
+      { name: 'idle', timezone: 'UTC', lastUpdated: '', current: false, providers: {} },
+    ],
+    accountUsage: { cursor: usage(spent(50, 0, 'auto')) },
+  };
+  const view = vi.fn();
+  const props = {
+    appState,
+    settings: DEFAULT_SETTINGS,
+    now,
+    period: 'today' as const,
+    view: 'providers' as const,
+    onPeriod: vi.fn(),
+    onView: view,
+    onPatch: vi.fn(),
+    ...handlers(),
+  };
+  const tabs = mount(Dashboard, { target, props });
+  await settle();
+  expect(target.querySelector('.machines')).toBeNull();
+  click('.sub-link');
+  for (const tab of target.querySelectorAll<HTMLButtonElement>('[role="tab"]')) tab.click();
+  expect(view.mock.calls).toEqual([['machines'], ['providers'], ['machines']]);
+
+  await unmount(tabs);
+  const machinesView = mount(Dashboard, { target, props: { ...props, view: 'machines' } });
+  await settle();
+  const names = [...target.querySelectorAll('.m-name')].map((name) => name.textContent.trim());
+  // By spend; Codex is turned off, so desk's $9 of it does not count.
+  expect(names).toEqual(['desk', 'laptop This machine', 'Cursor account', 'idle']);
+  expect([...target.querySelectorAll('.m-percent')].map((cell) => cell.textContent)).toEqual([
+    '75%',
+    '25%',
+  ]);
+  expect(target.textContent).toContain('Live · not synced yet');
+  expect(target.textContent).toContain('Synced 10d 0h ago');
+  expect(target.querySelectorAll('.m-dot.stale')).toHaveLength(2);
+  expect(target.textContent).toContain('there');
+  expect(target.textContent).toContain('Account-wide');
+  expect(
+    [...target.querySelectorAll<HTMLElement>('.m-cell')].map((cell) => cell.dataset.level),
+  ).toContain('4');
+  const heads = target.querySelectorAll<HTMLButtonElement>('.m-head');
+  heads[0]?.click();
+  await settle();
+  expect(target.querySelector('.details')?.textContent).toContain('opus');
+  heads[3]?.click();
+  await settle();
+  expect(target.textContent).toContain('No usage · Today');
+  heads[3]?.click();
+  await unmount(machinesView);
+
+  // Unpriced, so shares follow tokens; Cursor is off, so its account row stays out.
+  const here = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const lone = { name: 'solo', timezone: here, lastUpdated: '', current: true, providers: {} };
+  for (const providers of [{ claude_code: usage(spent(30, 0, 'x')) }, {}]) {
+    const view = mount(Dashboard, {
+      target,
+      props: {
+        ...props,
+        view: 'machines',
+        appState: {
+          ...appState,
+          providers: [{ key: 'claude_code', label: 'Claude Code', refreshing: false }],
+          machines: [{ ...lone, providers }],
+        },
+      },
+    });
+    await settle();
+    click('.m-head');
+    await settle();
+    expect(target.textContent).not.toContain('there');
+    expect(target.textContent).not.toContain('Cursor account');
+    expect(target.textContent).toContain('aitrack init');
+    await unmount(view);
+  }
 });
 
 it('renders remaining quotas with and without reset metadata and delivers toggles', async () => {

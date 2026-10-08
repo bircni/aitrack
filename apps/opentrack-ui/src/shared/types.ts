@@ -39,6 +39,18 @@ export interface ProviderUsage {
   daily: DailyUsage[];
 }
 
+export type ProviderUsages = Partial<Record<QuotaProviderKey, ProviderUsage>>;
+
+export interface MachineUsage {
+  name: string;
+  timezone: string;
+  /** Empty until the machine first syncs. */
+  lastUpdated: string;
+  /** The machine opentrack runs on. */
+  current: boolean;
+  providers: ProviderUsages;
+}
+
 export interface ProviderState {
   key: QuotaProviderKey;
   label: string;
@@ -55,6 +67,9 @@ export interface AppState {
   refreshing: boolean;
   /** Machines contributing to the usage totals, this one included. */
   machineCount: number;
+  machines?: MachineUsage[];
+  /** Usage read from a provider account (Cursor) rather than from any machine. */
+  accountUsage?: ProviderUsages;
   usageError?: string;
   pullError?: string;
   usageUpdatedAt?: string;
@@ -91,6 +106,8 @@ export interface Settings {
 }
 
 export type Screen = 'dashboard' | 'settings';
+
+export type DashboardView = 'providers' | 'machines';
 
 /** Why a setting the OS applies did not take; empty when all did. */
 export type SettingErrors = Partial<Record<'launchAtLogin' | 'globalShortcut', string>>;

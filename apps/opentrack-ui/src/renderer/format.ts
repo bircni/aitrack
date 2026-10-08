@@ -4,6 +4,7 @@ import { clampPercent, type PaceProjection } from 'aitrack-lib/quota/pacing';
 import { formatWhen } from '../shared/pace.js';
 import type {
   DailyUsage,
+  MachineUsage,
   PeriodUsage,
   ProviderUsage,
   QuotaError,
@@ -209,4 +210,45 @@ export function sparkline(
     area: `${line} L${last.x.toFixed(1)} ${baseline} L${pad.toFixed(1)} ${baseline} Z`,
     end: last,
   };
+}
+
+const STALE_SYNC_MS = 3 * 86_400_000;
+
+/** How current a machine's numbers are: this one reads its logs live, others are as of their last sync. */
+export function syncStatus(
+  machine: Pick<MachineUsage, 'lastUpdated' | 'current'>,
+  now: number,
+): { text: string; stale: boolean } {
+  const at = Date.parse(machine.lastUpdated);
+  if (Number.isNaN(at)) {
+    return machine.current
+      ? { text: 'Live · not synced yet', stale: false }
+      : { text: 'Never synced', stale: true };
+  }
+  const age = Math.max(0, now - at);
+  const ago = age < 60_000 ? 'just now' : `${formatDuration(age)} ago`;
+  return machine.current
+    ? { text: `Live · synced ${ago}`, stale: false }
+    : { text: `Synced ${ago}`, stale: age > STALE_SYNC_MS };
+}
+
+/** "07:42" on that machine's clock, or nothing when it shares this one's zone. */
+export function zoneClock(timezone: string, now: number): string | undefined {
+  try {
+    const here = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (timezone === '' || timezone === here) return undefined;
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(now);
+  } catch {
+    return undefined; // Not an IANA zone, e.g. a file from a machine that recorded none.
+  }
+}
+
+/** 0 for an idle day, then 1–4 by quartile of `max`, like the aitrack heatmap. */
+export function heatLevel(value: number, max: number): number {
+  if (value <= 0 || max <= 0) return 0;
+  return Math.min(4, Math.ceil((value / max) * 4));
 }

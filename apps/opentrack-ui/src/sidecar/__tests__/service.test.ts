@@ -356,13 +356,27 @@ describe('QuotaService', () => {
       loadCachedState({
         format: CACHE_FORMAT,
         quotas: { claude_code: {}, codex: snapshot.ok ? snapshot.snapshot : undefined, x: {} },
-        usage: { providers: { claude_code: { today: {} } } },
+        usage: {
+          providers: { claude_code: { today: {} } },
+          machines: [
+            { name: 'old' },
+            { name: 'work', timezone: 'UTC', lastUpdated: '', current: false, providers: [] },
+          ],
+          account: { cursor: { today: {} } },
+        },
         fired: { a: '2026-06-01T12:00:00.000Z', b: 123 },
         rateLimitedUntil: { cursor: 'soon', codex: START },
       }),
     ).toEqual({
       quotas: { codex: snapshot.ok ? snapshot.snapshot : undefined },
-      usage: { providers: {}, machineCount: 1 },
+      usage: {
+        providers: {},
+        machineCount: 1,
+        machines: [
+          { name: 'work', timezone: 'UTC', lastUpdated: '', current: false, providers: {} },
+        ],
+        account: {},
+      },
       fired: { a: '2026-06-01T12:00:00.000Z' },
       rateLimitedUntil: { codex: START },
     });

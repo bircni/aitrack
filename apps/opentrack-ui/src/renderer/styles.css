@@ -732,3 +732,221 @@ p {
 button {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Providers / Machines */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 12px 10px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--raised);
+}
+
+.tabs button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--ink-2);
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tabs button[aria-selected='true'] {
+  color: var(--ink);
+  background: var(--card);
+  box-shadow:
+    0 0 0 1px var(--edge),
+    0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.tab-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--track);
+  color: var(--ink-2);
+  font-size: 10.5px;
+  line-height: 16px;
+}
+
+.sub-link {
+  color: inherit;
+  font-weight: 600;
+}
+
+.machine {
+  display: grid;
+  gap: 10px;
+  margin: 0 12px 10px;
+  padding: 14px;
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+
+.m-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: -4px -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+}
+
+.m-head:hover {
+  background: var(--raised);
+}
+
+.m-mark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--ink-2);
+  place-items: center;
+}
+
+.machine.current .m-mark {
+  background: color-mix(in srgb, var(--focus) 12%, var(--card));
+  color: var(--focus);
+}
+
+.m-identity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.m-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-badge {
+  padding: 0 5px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--focus) 12%, var(--card));
+  color: var(--focus);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
+.m-meta {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.m-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--provider-codex);
+}
+
+.m-dot.stale {
+  background: var(--warn);
+}
+
+.m-cost {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.m-share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.m-bar {
+  display: flex;
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--track);
+}
+
+.m-part {
+  height: 100%;
+  background: var(--provider-codex);
+}
+
+.m-part--claude_code {
+  background: var(--provider-claude);
+}
+
+.m-part--cursor {
+  background: var(--provider-cursor);
+}
+
+.m-percent {
+  min-width: 30px;
+  color: var(--ink-2);
+  font-size: 11px;
+  text-align: right;
+}
+
+.m-strip {
+  display: grid;
+  grid-template-columns: repeat(30, 1fr);
+  gap: 2px;
+}
+
+.m-cell {
+  height: 8px;
+  border-radius: 2px;
+  background: var(--track);
+}
+
+.m-cell[data-level='1'] {
+  background: color-mix(in srgb, var(--meter) 25%, var(--track));
+}
+
+.m-cell[data-level='2'] {
+  background: color-mix(in srgb, var(--meter) 50%, var(--track));
+}
+
+.m-cell[data-level='3'] {
+  background: color-mix(in srgb, var(--meter) 75%, var(--track));
+}
+
+.m-cell[data-level='4'] {
+  background: var(--meter);
+}
+
+.m-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.machines .empty code {
+  font-size: 11px;
+}

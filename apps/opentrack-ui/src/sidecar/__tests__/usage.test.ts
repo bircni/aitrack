@@ -1,4 +1,4 @@
-import { EXTREME_TIME_ZONES, makeDay, useTimeZone } from '@aitrack/test-fixtures';
+import { EXTREME_TIME_ZONES, makeDay, makeProviderDay, useTimeZone } from '@aitrack/test-fixtures';
 import type { DayEntry } from 'aitrack-lib/data/types';
 import { describe, expect, it } from 'vitest';
 
@@ -56,13 +56,57 @@ describe('summarizeUsage', () => {
           },
         ],
         zonedSources: [
-          { timezone: 'UTC', days: {} },
-          { timezone: 'UTC', days: {} },
+          { hostname: 'remote', timezone: 'UTC', lastUpdated: '', current: false, days: {} },
+          { hostname: 'here', timezone: 'UTC', lastUpdated: '', current: true, days: {} },
         ],
       },
       new Date(2026, 5, 15, 12),
     );
     expect(summary.machineCount).toBe(2);
+  });
+
+  it('splits usage per machine and keeps live providers apart as account usage', () => {
+    const now = new Date(2026, 5, 15, 12);
+    const cursorDay = makeDay(5, 5, 0.5, 'auto');
+    const summary = summarizeUsage(
+      {
+        providerData: {},
+        machineData: [],
+        zonedSources: [
+          {
+            hostname: 'desk',
+            timezone: 'UTC',
+            lastUpdated: '2026-06-15T08:00:00Z',
+            current: false,
+            days: {
+              '2026-06-15': { claude_code: makeProviderDay(100, 50, 1.5, 'claude-sonnet-4-6') },
+            },
+          },
+          {
+            hostname: 'laptop',
+            timezone: 'UTC',
+            lastUpdated: '',
+            current: true,
+            days: { '2026-06-14': { codex: makeProviderDay(10, 10, 0.2, 'gpt-5') } },
+          },
+        ],
+        liveProviderData: { cursor: new Map([['2026-06-15', cursorDay]]) },
+      },
+      now,
+    );
+    const [desk, laptop] = summary.machines ?? [];
+    expect(desk).toMatchObject({
+      name: 'desk',
+      current: false,
+      lastUpdated: '2026-06-15T08:00:00Z',
+    });
+    expect(desk?.providers.claude_code?.today).toMatchObject({ tokens: 150, costUSD: 1.5 });
+    expect(desk?.providers.codex).toBeUndefined();
+    expect(laptop).toMatchObject({ name: 'laptop', current: true });
+    expect(laptop?.providers.codex?.yesterday).toMatchObject({ tokens: 20, costUSD: 0.2 });
+    expect(laptop?.providers.codex?.daily.at(-2)).toEqual({ date: '2026-06-14', costUSD: 0.2 });
+    expect(Object.keys(summary.account ?? {})).toEqual(['cursor']);
+    expect(summary.account?.cursor?.today).toMatchObject({ tokens: 10, costUSD: 0.5 });
   });
 });
 

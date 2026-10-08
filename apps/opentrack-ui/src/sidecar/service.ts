@@ -7,6 +7,7 @@ import type { QuotaErrorKind, QuotaFormat, QuotaResult } from 'aitrack-lib/quota
 
 import type {
   AppState,
+  MachineUsage,
   PeriodUsage,
   ProviderState,
   ProviderUsage,
@@ -99,6 +100,25 @@ function readProviderUsage(value: unknown): ProviderUsage | undefined {
   };
 }
 
+function readMachineUsage(value: unknown): MachineUsage | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.name !== 'string' ||
+    typeof value.timezone !== 'string' ||
+    typeof value.lastUpdated !== 'string' ||
+    typeof value.current !== 'boolean'
+  ) {
+    return undefined;
+  }
+  return {
+    name: value.name,
+    timezone: value.timezone,
+    lastUpdated: value.lastUpdated,
+    current: value.current,
+    providers: providerMap(value.providers, readProviderUsage),
+  };
+}
+
 function isWindow(value: unknown): value is QuotaWindow {
   return (
     isRecord(value) &&
@@ -158,6 +178,14 @@ function normalizeCachedState(input: unknown): CachedState {
     usage: usage && {
       providers: providerMap(usage.providers, readProviderUsage),
       machineCount: isFiniteNumber(usage.machineCount) ? usage.machineCount : 1,
+      ...(Array.isArray(usage.machines) && {
+        machines: usage.machines
+          .map((machine) => readMachineUsage(machine))
+          .filter((machine) => machine !== undefined),
+      }),
+      ...(isRecord(usage.account) && {
+        account: providerMap(usage.account, readProviderUsage),
+      }),
     },
     fired: Object.fromEntries(
       Object.entries(isRecord(raw.fired) ? raw.fired : {}).filter(
@@ -277,6 +305,8 @@ export class QuotaService {
       providers,
       refreshing: this.usageRun !== undefined || providers.some((provider) => provider.refreshing),
       machineCount: this.cache.usage?.machineCount ?? 1,
+      machines: this.cache.usage?.machines,
+      accountUsage: this.cache.usage?.account,
       usageError: this.usageError,
       updatedAt: this.cache.updatedAt,
       usageUpdatedAt: this.cache.usageUpdatedAt,

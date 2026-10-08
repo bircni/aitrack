@@ -11,13 +11,16 @@ import {
   formatLimitValue,
   formatReset,
   formatUpdated,
+  heatLevel,
   paceLabel,
   periodSpend,
   spendLabel,
   problemLine,
   sparkline,
   splitAmount,
+  syncStatus,
   totalSpend,
+  zoneClock,
 } from '../format.js';
 
 const NOW = new Date(2026, 5, 1, 12).getTime();
@@ -188,5 +191,50 @@ describe('limits', () => {
     expect(formatUpdated(new Date(NOW - 3 * 60_000).toISOString(), NOW)).toBe('Updated 3m ago');
     expect(formatUpdated(undefined, NOW)).toBe('Not updated yet');
     expect(formatUpdated(new Date(NOW - 61_000).toISOString(), NOW)).toBe('Updated 1m ago');
+  });
+});
+
+describe('machines', () => {
+  useTimeZone('UTC');
+
+  it('says how current a machine is and flags one that stopped syncing', () => {
+    const synced = (ms: number) => new Date(NOW - ms).toISOString();
+    expect(syncStatus({ current: true, lastUpdated: '' }, NOW)).toEqual({
+      text: 'Live · not synced yet',
+      stale: false,
+    });
+    expect(syncStatus({ current: false, lastUpdated: '' }, NOW)).toEqual({
+      text: 'Never synced',
+      stale: true,
+    });
+    expect(syncStatus({ current: true, lastUpdated: synced(5 * 86_400_000) }, NOW)).toEqual({
+      text: 'Live · synced 5d 0h ago',
+      stale: false,
+    });
+    expect(syncStatus({ current: false, lastUpdated: synced(2 * HOUR) }, NOW)).toEqual({
+      text: 'Synced 2h ago',
+      stale: false,
+    });
+    expect(syncStatus({ current: false, lastUpdated: synced(1000) }, NOW).text).toBe(
+      'Synced just now',
+    );
+    expect(syncStatus({ current: false, lastUpdated: synced(4 * 86_400_000) }, NOW).stale).toBe(
+      true,
+    );
+  });
+
+  it("shows another zone's clock only", () => {
+    const at = Date.parse('2026-06-01T12:00:00Z');
+    expect(zoneClock('UTC', at)).toBeUndefined();
+    expect(zoneClock('', at)).toBeUndefined();
+    expect(zoneClock('Not/AZone', at)).toBeUndefined();
+    expect(zoneClock('Asia/Tokyo', at)).toMatch(/(?:21|09).00/u);
+  });
+
+  it('buckets daily spend into heat levels', () => {
+    expect([0, 1, 2.5, 5, 7.6, 10].map((value) => heatLevel(value, 10))).toEqual([
+      0, 1, 1, 2, 4, 4,
+    ]);
+    expect(heatLevel(1, 0)).toBe(0);
   });
 });

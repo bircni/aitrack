@@ -3,6 +3,8 @@
     | 'back'
     | 'chevron-down'
     | 'chevron-up'
+    | 'cloud'
+    | 'laptop'
     | 'pin'
     | 'pin-filled'
     | 'refresh'
@@ -35,6 +37,10 @@
     <path d="m6 9 6 6 6-6" />
   {:else if name === 'chevron-up'}
     <path d="m6 15 6-6 6 6" />
+  {:else if name === 'laptop'}
+    <rect x="4.5" y="5" width="15" height="10.5" rx="1.5" /><path d="M2.5 19h19" />
+  {:else if name === 'cloud'}
+    <path d="M7 18a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5Z" />
   {:else if name === 'refresh'}
     <path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 4v7h-7" />
   {:else if name === 'sync'}
