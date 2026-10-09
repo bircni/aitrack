@@ -2,7 +2,8 @@ name: Publish pricing pack branch
 
 # Orphan `pricing` branch = live rate pack for installed CLIs.
 # Daily rebuild pulls LiteLLM + models.dev, merges Claude/Codex IO into the
-# published supplement, and force-pushes. Apps cache under ~/.config/aitrack/pricing/.
+# published supplement, and commits on top of the branch history when rates changed.
+# Apps cache under ~/.config/aitrack/pricing/.
 # No pack is bundled in the npm package — only tables/*.json ship as offline baseline.
 
 on:
@@ -52,9 +53,11 @@ jobs:
         run: |
           set -euo pipefail
           PACK=artifacts/pricing-pack
+          remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           workdir=$(mktemp -d)
-          cp "$PACK"/manifest.json "$PACK"/supplement.json "$PACK"/litellm.json "$PACK"/models_dev.json "$workdir"/
-          cat > "$workdir/README.md" <<'EOF'
+          fresh=$(mktemp -d)
+          cp "$PACK"/manifest.json "$PACK"/supplement.json "$PACK"/litellm.json "$PACK"/models_dev.json "$fresh"/
+          cat > "$fresh/README.md" <<'EOF'
           # aitrack pricing pack
 
           Live rates for installed `aitrack` CLIs. Rebuilt daily from LiteLLM + models.dev
@@ -72,10 +75,36 @@ jobs:
           EOF
 
           cd "$workdir"
-          git init -q
-          git checkout -q -b pricing
+          if git clone -q --depth=1 --branch pricing "$remote" .; then
+            # Timestamps and hashes change every run, so compare rates only.
+            same=$(python3 - "$workdir" "$fresh" <<'PY'
+          import json, sys
+          old, new = sys.argv[1:]
+          drop = ("updatedAt", "retrievedAt", "hashes")
+          def load(d, f):
+              if f == "README.md":
+                  return open(f"{d}/{f}").read()
+              return {k: v for k, v in json.load(open(f"{d}/{f}")).items() if k not in drop}
+          files = ["README.md", "manifest.json", "supplement.json", "litellm.json", "models_dev.json"]
+          print(all(load(old, f) == load(new, f) for f in files))
+          PY
+            )
+          else
+            git init -q
+            git checkout -q -b pricing
+            git remote add origin "$remote"
+            same=False
+          fi
+
+          # Pushes to main still publish: a table bump needs a newer stamp than the bundled rates.
+          if [ "$same" = True ] && [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            echo "Pricing pack unchanged, nothing to publish"
+            exit 0
+          fi
+
+          cp "$fresh"/* .
           git add -A
           stamp=$(python3 -c 'import json; print(json.load(open("manifest.json"))["updatedAt"])')
           git commit -q -m "pricing pack ${stamp}"
-          git push -q --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:pricing
+          git push -q origin HEAD:pricing
           echo "Published pricing branch @ ${stamp}"
