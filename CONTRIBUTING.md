@@ -102,7 +102,7 @@ Editable sources of truth for first-party rates (also the offline CLI baseline):
 - `libs/aitrack-lib/src/pricing/tables/codex.json`
 - `libs/aitrack-lib/src/pricing/tables/cursor.json`
 
-No pricing pack is shipped in the npm package. CI builds `artifacts/pricing-pack/` and publishes it to the orphan `pricing` branch daily; installs refresh into `~/.config/aitrack/pricing/`.
+No pricing pack is shipped in the npm package. CI builds `artifacts/pricing-pack/` and publishes it to the orphan `pricing` branch daily, adding a commit when rates changed; installs refresh into `~/.config/aitrack/pricing/`.
 
 ```bash
 pnpm run pricing:update            # fetch catalogs → artifacts/pricing-pack/
