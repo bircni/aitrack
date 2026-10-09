@@ -1,0 +1,1161 @@
+{
+  "retrievedAt": "2026-10-09T13:14:47.916Z",
+  "models": {
+    "anthropic/claude-fable-5": {
+      "i": 10,
+      "o": 50,
+      "cw": 12.5,
+      "cr": 1
+    },
+    "anthropic/claude-fable-5-1": {
+      "i": 10,
+      "o": 50,
+      "cw": 12.5,
+      "cr": 0.25
+    },
+    "anthropic/claude-haiku-4-5": {
+      "i": 1,
+      "o": 5,
+      "cw": 1.25,
+      "cr": 0.1
+    },
+    "anthropic/claude-haiku-4-5-20251001": {
+      "i": 1,
+      "o": 5,
+      "cw": 1.25,
+      "cr": 0.1
+    },
+    "anthropic/claude-haiku-5-5": {
+      "i": 0.1,
+      "o": 0.5,
+      "cw": 0.125,
+      "cr": 0.01
+    },
+    "anthropic/claude-opus-4-5": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "anthropic/claude-opus-4-5-20251101": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "anthropic/claude-opus-4-6": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "anthropic/claude-opus-4-7": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "anthropic/claude-opus-4-8": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "anthropic/claude-opus-5": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "anthropic/claude-opus-5-5": {
+      "i": 4,
+      "o": 20,
+      "cw": 5,
+      "cr": 0.2
+    },
+    "anthropic/claude-sonnet-4-5": {
+      "i": 3,
+      "o": 15,
+      "cw": 3.75,
+      "cr": 0.3
+    },
+    "anthropic/claude-sonnet-4-5-20250929": {
+      "i": 3,
+      "o": 15,
+      "cw": 3.75,
+      "cr": 0.3
+    },
+    "anthropic/claude-sonnet-4-6": {
+      "i": 3,
+      "o": 15,
+      "cw": 3.75,
+      "cr": 0.3
+    },
+    "anthropic/claude-sonnet-5": {
+      "i": 2,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 0.2
+    },
+    "anthropic/claude-sonnet-5-5": {
+      "i": 2,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 0.1
+    },
+    "google-vertex/claude-fable-5-1@default": {
+      "i": 10,
+      "o": 50,
+      "cw": 12.5,
+      "cr": 0.25
+    },
+    "google-vertex/claude-fable-5@default": {
+      "i": 10,
+      "o": 50,
+      "cw": 12.5,
+      "cr": 1
+    },
+    "google-vertex/claude-haiku-4-5@20251001": {
+      "i": 1,
+      "o": 5,
+      "cw": 1.25,
+      "cr": 0.1
+    },
+    "google-vertex/claude-haiku-5-5@default": {
+      "i": 0.1,
+      "o": 0.5,
+      "cw": 0.125,
+      "cr": 0.01
+    },
+    "google-vertex/claude-opus-4-1@20250805": {
+      "i": 15,
+      "o": 75,
+      "cw": 18.75,
+      "cr": 1.5
+    },
+    "google-vertex/claude-opus-4-5@20251101": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "google-vertex/claude-opus-4-6@default": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "google-vertex/claude-opus-4-7@default": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "google-vertex/claude-opus-4-8@default": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "google-vertex/claude-opus-4@20250514": {
+      "i": 15,
+      "o": 75,
+      "cw": 18.75,
+      "cr": 1.5
+    },
+    "google-vertex/claude-opus-5-5@default": {
+      "i": 4,
+      "o": 20,
+      "cw": 5,
+      "cr": 0.2
+    },
+    "google-vertex/claude-opus-5@default": {
+      "i": 5,
+      "o": 25,
+      "cw": 6.25,
+      "cr": 0.5
+    },
+    "google-vertex/claude-sonnet-4-5@20250929": {
+      "i": 3,
+      "o": 15,
+      "cw": 3.75,
+      "cr": 0.3
+    },
+    "google-vertex/claude-sonnet-4-6@default": {
+      "i": 3,
+      "o": 15,
+      "cw": 3.75,
+      "cr": 0.3
+    },
+    "google-vertex/claude-sonnet-4@20250514": {
+      "i": 3,
+      "o": 15,
+      "cw": 3.75,
+      "cr": 0.3
+    },
+    "google-vertex/claude-sonnet-5-5@default": {
+      "i": 2,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 0.1
+    },
+    "google-vertex/claude-sonnet-5@default": {
+      "i": 2,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 0.2
+    },
+    "google-vertex/codestral-2": {
+      "i": 0.3,
+      "o": 0.9,
+      "cw": 0.3,
+      "cr": 0.03,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/deepseek-ai/deepseek-v3.1-maas": {
+      "i": 0.6,
+      "o": 1.7,
+      "cw": 0.6,
+      "cr": 0.06,
+      "cwe": false
+    },
+    "google-vertex/deepseek-ai/deepseek-v3.2-maas": {
+      "i": 0.56,
+      "o": 1.68,
+      "cw": 0.56,
+      "cr": 0.056,
+      "cwe": false
+    },
+    "google-vertex/gemini-2.5-flash": {
+      "i": 0.3,
+      "o": 2.5,
+      "cw": 0.3,
+      "cr": 0.03,
+      "cwe": false
+    },
+    "google-vertex/gemini-2.5-flash-image": {
+      "i": 0.3,
+      "o": 30,
+      "cw": 0.3,
+      "cr": 0.03,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/gemini-2.5-flash-lite": {
+      "i": 0.1,
+      "o": 0.4,
+      "cw": 0.1,
+      "cr": 0.01,
+      "cwe": false
+    },
+    "google-vertex/gemini-2.5-flash-tts": {
+      "i": 0.5,
+      "o": 10,
+      "cw": 0.5,
+      "cr": 0.05,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/gemini-2.5-pro": {
+      "i": 1.25,
+      "o": 10,
+      "cw": 1.25,
+      "cr": 0.125,
+      "cwe": false
+    },
+    "google-vertex/gemini-2.5-pro-tts": {
+      "i": 1,
+      "o": 20,
+      "cw": 1,
+      "cr": 0.1,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/gemini-3-flash-preview": {
+      "i": 0.5,
+      "o": 3,
+      "cw": 0.5,
+      "cr": 0.05,
+      "cwe": false
+    },
+    "google-vertex/gemini-3-pro-image": {
+      "i": 2,
+      "o": 120,
+      "cw": 2,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.1-flash-image": {
+      "i": 0.5,
+      "o": 60,
+      "cw": 0.5,
+      "cr": 0.05,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.1-flash-lite": {
+      "i": 0.25,
+      "o": 1.5,
+      "cw": 0.25,
+      "cr": 0.025,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.1-flash-lite-image": {
+      "i": 0.25,
+      "o": 30,
+      "cw": 0.25,
+      "cr": 0.025,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.1-pro-preview": {
+      "i": 2,
+      "o": 12,
+      "cw": 2,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.1-pro-preview-customtools": {
+      "i": 2,
+      "o": 12,
+      "cw": 2,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.5-flash": {
+      "i": 1.5,
+      "o": 9,
+      "cw": 1.5,
+      "cr": 0.15,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.5-flash-lite": {
+      "i": 0.3,
+      "o": 2.5,
+      "cw": 0.3,
+      "cr": 0.03,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.6-flash": {
+      "i": 0.75,
+      "o": 3.75,
+      "cw": 0.75,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.7-flash": {
+      "i": 0.75,
+      "o": 3.75,
+      "cw": 0.75,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "google-vertex/gemini-3.8-flash": {
+      "i": 0.75,
+      "o": 3.75,
+      "cw": 0.75,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "google-vertex/gemini-embedding-001": {
+      "i": 0.15,
+      "o": 0,
+      "cw": 0.15,
+      "cr": 0.015,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/gemini-nano-banana-2.1": {
+      "i": 1.5,
+      "o": 30,
+      "cw": 1.5,
+      "cr": 0.15,
+      "cwe": false
+    },
+    "google-vertex/google/gemma-4-26b-a4b-it-maas": {
+      "i": 0.15,
+      "o": 0.6,
+      "cw": 0.15,
+      "cr": 0.015,
+      "cwe": false
+    },
+    "google-vertex/meta/llama-3.3-70b-instruct-maas": {
+      "i": 0.72,
+      "o": 0.72,
+      "cw": 0.72,
+      "cr": 0.072,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/meta/llama-4-maverick-17b-128e-instruct-maas": {
+      "i": 0.35,
+      "o": 1.15,
+      "cw": 0.35,
+      "cr": 0.034999999999999996,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/meta/llama-4-scout-17b-16e-instruct-maas": {
+      "i": 0.25,
+      "o": 0.7,
+      "cw": 0.25,
+      "cr": 0.025,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/mistral-medium-3": {
+      "i": 0.4,
+      "o": 2,
+      "cw": 0.4,
+      "cr": 0.04000000000000001,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/mistral-small-2503": {
+      "i": 0.1,
+      "o": 0.3,
+      "cw": 0.1,
+      "cr": 0.010000000000000002,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/moonshotai/kimi-k2-thinking-maas": {
+      "i": 0.6,
+      "o": 2.5,
+      "cw": 0.6,
+      "cr": 0.06,
+      "cwe": false
+    },
+    "google-vertex/openai/gpt-oss-120b-maas": {
+      "i": 0.09,
+      "o": 0.36,
+      "cw": 0.09,
+      "cr": 0.009,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/openai/gpt-oss-20b-maas": {
+      "i": 0.07,
+      "o": 0.25,
+      "cw": 0.07,
+      "cr": 0.007,
+      "cwe": false
+    },
+    "google-vertex/qwen/qwen3-235b-a22b-instruct-2507-maas": {
+      "i": 0.22,
+      "o": 0.88,
+      "cw": 0.22,
+      "cr": 0.022000000000000002,
+      "cre": false,
+      "cwe": false
+    },
+    "google-vertex/xai/grok-4.1-fast-non-reasoning": {
+      "i": 0.2,
+      "o": 0.5,
+      "cw": 0.2,
+      "cr": 0.05,
+      "cwe": false
+    },
+    "google-vertex/xai/grok-4.1-fast-reasoning": {
+      "i": 0.2,
+      "o": 0.5,
+      "cw": 0.2,
+      "cr": 0.05,
+      "cwe": false
+    },
+    "google-vertex/xai/grok-4.20-non-reasoning": {
+      "i": 1.25,
+      "o": 2.5,
+      "cw": 1.25,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google-vertex/xai/grok-4.20-reasoning": {
+      "i": 1.25,
+      "o": 2.5,
+      "cw": 1.25,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google-vertex/xai/grok-4.3": {
+      "i": 1.25,
+      "o": 2.5,
+      "cw": 1.25,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google-vertex/xai/grok-4.6": {
+      "i": 2,
+      "o": 6,
+      "cw": 2,
+      "cr": 0.5,
+      "cwe": false
+    },
+    "google-vertex/xai/grok-4.7": {
+      "i": 2,
+      "o": 6,
+      "cw": 2,
+      "cr": 0.5,
+      "cwe": false
+    },
+    "google-vertex/zai-org/glm-4.7-maas": {
+      "i": 0.6,
+      "o": 2.2,
+      "cw": 0.6,
+      "cr": 0.06,
+      "cwe": false
+    },
+    "google-vertex/zai-org/glm-5-maas": {
+      "i": 1,
+      "o": 3.2,
+      "cw": 1,
+      "cr": 0.1,
+      "cwe": false
+    },
+    "google-vertex/zai-org/glm-5.2-maas": {
+      "i": 1.4,
+      "o": 4.4,
+      "cw": 1.4,
+      "cr": 0.14,
+      "cwe": false
+    },
+    "google/deep-research-max-preview-04-2026": {
+      "i": 2,
+      "o": 12,
+      "cw": 2,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google/deep-research-preview-04-2026": {
+      "i": 2,
+      "o": 12,
+      "cw": 2,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google/gemini-2.5-computer-use-preview-10-2025": {
+      "i": 1.25,
+      "o": 10,
+      "cw": 1.25,
+      "cr": 0.125,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-2.5-flash": {
+      "i": 0.3,
+      "o": 2.5,
+      "cw": 0.3,
+      "cr": 0.03,
+      "cwe": false
+    },
+    "google/gemini-2.5-flash-image": {
+      "i": 0.3,
+      "o": 30,
+      "cw": 0.3,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "google/gemini-2.5-flash-lite": {
+      "i": 0.1,
+      "o": 0.4,
+      "cw": 0.1,
+      "cr": 0.01,
+      "cwe": false
+    },
+    "google/gemini-2.5-flash-preview-tts": {
+      "i": 0.5,
+      "o": 10,
+      "cw": 0.5,
+      "cr": 0.05,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-2.5-pro": {
+      "i": 1.25,
+      "o": 10,
+      "cw": 1.25,
+      "cr": 0.125,
+      "cwe": false
+    },
+    "google/gemini-2.5-pro-preview-tts": {
+      "i": 1,
+      "o": 20,
+      "cw": 1,
+      "cr": 0.1,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-3-flash-preview": {
+      "i": 0.5,
+      "o": 3,
+      "cw": 0.5,
+      "cr": 0.05,
+      "cwe": false
+    },
+    "google/gemini-3-pro-image": {
+      "i": 2,
+      "o": 120,
+      "cw": 2,
+      "cr": 0.2,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-3-pro-image-preview": {
+      "i": 2,
+      "o": 120,
+      "cw": 2,
+      "cr": 0.2,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-3.1-flash-image": {
+      "i": 0.5,
+      "o": 60,
+      "cw": 0.5,
+      "cr": 0.05,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-3.1-flash-image-preview": {
+      "i": 0.5,
+      "o": 60,
+      "cw": 0.5,
+      "cr": 0.05,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-3.1-flash-lite": {
+      "i": 0.25,
+      "o": 1.5,
+      "cw": 0.25,
+      "cr": 0.025,
+      "cwe": false
+    },
+    "google/gemini-3.1-flash-lite-image": {
+      "i": 0.25,
+      "o": 30,
+      "cw": 0.25,
+      "cr": 0.025,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-3.1-flash-lite-preview": {
+      "i": 0.25,
+      "o": 1.5,
+      "cw": 0.25,
+      "cr": 0.025,
+      "cwe": false
+    },
+    "google/gemini-3.1-flash-live-preview": {
+      "i": 0.75,
+      "o": 4.5,
+      "cw": 0.75,
+      "cr": 0.07500000000000001,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-3.1-flash-tts-preview": {
+      "i": 1,
+      "o": 20,
+      "cw": 1,
+      "cr": 0.1,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-3.1-pro-preview": {
+      "i": 2,
+      "o": 12,
+      "cw": 2,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google/gemini-3.1-pro-preview-customtools": {
+      "i": 2,
+      "o": 12,
+      "cw": 2,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "google/gemini-3.5-flash": {
+      "i": 1.5,
+      "o": 9,
+      "cw": 1.5,
+      "cr": 0.15,
+      "cwe": false
+    },
+    "google/gemini-3.5-flash-lite": {
+      "i": 0.3,
+      "o": 2.5,
+      "cw": 0.3,
+      "cr": 0.03,
+      "cwe": false
+    },
+    "google/gemini-3.5-live-translate-preview": {
+      "i": 3.5,
+      "o": 21,
+      "cw": 3.5,
+      "cr": 0.35000000000000003,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-3.6-flash": {
+      "i": 0.75,
+      "o": 3.75,
+      "cw": 0.75,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "google/gemini-3.7-flash": {
+      "i": 0.75,
+      "o": 3.75,
+      "cw": 0.75,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "google/gemini-3.8-flash": {
+      "i": 0.75,
+      "o": 3.75,
+      "cw": 0.75,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "google/gemini-embedding-001": {
+      "i": 0.15,
+      "o": 0,
+      "cw": 0.15,
+      "cr": 0.015,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-embedding-2": {
+      "i": 0.2,
+      "o": 0,
+      "cw": 0.2,
+      "cr": 0.020000000000000004,
+      "cre": false,
+      "cwe": false
+    },
+    "google/gemini-flash-latest": {
+      "i": 0.75,
+      "o": 3.75,
+      "cw": 0.75,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "google/gemini-flash-lite-latest": {
+      "i": 0.3,
+      "o": 2.5,
+      "cw": 0.3,
+      "cr": 0.03,
+      "cwe": false
+    },
+    "google/gemini-omni-flash-preview": {
+      "i": 1.5,
+      "o": 17.5,
+      "cw": 1.5,
+      "cr": 0.15000000000000002,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/gpt-3.5-turbo": {
+      "i": 0.5,
+      "o": 1.5,
+      "cw": 0.5,
+      "cr": 0,
+      "cwe": false
+    },
+    "openai/gpt-4": {
+      "i": 30,
+      "o": 60,
+      "cw": 30,
+      "cr": 3,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/gpt-4-turbo": {
+      "i": 10,
+      "o": 30,
+      "cw": 10,
+      "cr": 1,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/gpt-4.1": {
+      "i": 2,
+      "o": 8,
+      "cw": 2,
+      "cr": 0.5,
+      "cwe": false
+    },
+    "openai/gpt-4.1-mini": {
+      "i": 0.4,
+      "o": 1.6,
+      "cw": 0.4,
+      "cr": 0.1,
+      "cwe": false
+    },
+    "openai/gpt-4.1-nano": {
+      "i": 0.1,
+      "o": 0.4,
+      "cw": 0.1,
+      "cr": 0.025,
+      "cwe": false
+    },
+    "openai/gpt-4o": {
+      "i": 2.5,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 1.25,
+      "cwe": false
+    },
+    "openai/gpt-4o-2024-05-13": {
+      "i": 5,
+      "o": 15,
+      "cw": 5,
+      "cr": 0.5,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/gpt-4o-2024-08-06": {
+      "i": 2.5,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 1.25,
+      "cwe": false
+    },
+    "openai/gpt-4o-2024-11-20": {
+      "i": 2.5,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 1.25,
+      "cwe": false
+    },
+    "openai/gpt-4o-mini": {
+      "i": 0.15,
+      "o": 0.6,
+      "cw": 0.15,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "openai/gpt-5": {
+      "i": 1.25,
+      "o": 10,
+      "cw": 1.25,
+      "cr": 0.125,
+      "cwe": false
+    },
+    "openai/gpt-5-mini": {
+      "i": 0.25,
+      "o": 2,
+      "cw": 0.25,
+      "cr": 0.025,
+      "cwe": false
+    },
+    "openai/gpt-5-nano": {
+      "i": 0.05,
+      "o": 0.4,
+      "cw": 0.05,
+      "cr": 0.005,
+      "cwe": false
+    },
+    "openai/gpt-5-pro": {
+      "i": 15,
+      "o": 120,
+      "cw": 15,
+      "cr": 1.5,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/gpt-5.1": {
+      "i": 1.25,
+      "o": 10,
+      "cw": 1.25,
+      "cr": 0.125,
+      "cwe": false
+    },
+    "openai/gpt-5.2": {
+      "i": 1.75,
+      "o": 14,
+      "cw": 1.75,
+      "cr": 0.175,
+      "cwe": false
+    },
+    "openai/gpt-5.2-chat-latest": {
+      "i": 1.75,
+      "o": 14,
+      "cw": 1.75,
+      "cr": 0.175,
+      "cwe": false
+    },
+    "openai/gpt-5.2-pro": {
+      "i": 21,
+      "o": 168,
+      "cw": 21,
+      "cr": 2.1,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/gpt-5.3-chat-latest": {
+      "i": 1.75,
+      "o": 14,
+      "cw": 1.75,
+      "cr": 0.175,
+      "cwe": false
+    },
+    "openai/gpt-5.3-codex": {
+      "i": 1.75,
+      "o": 14,
+      "cw": 1.75,
+      "cr": 0.175,
+      "cwe": false
+    },
+    "openai/gpt-5.3-codex-spark": {
+      "i": 1.75,
+      "o": 14,
+      "cw": 1.75,
+      "cr": 0.175,
+      "cwe": false
+    },
+    "openai/gpt-5.4": {
+      "i": 2.5,
+      "o": 15,
+      "cw": 2.5,
+      "cr": 0.25,
+      "cwe": false
+    },
+    "openai/gpt-5.4-mini": {
+      "i": 0.75,
+      "o": 4.5,
+      "cw": 0.75,
+      "cr": 0.075,
+      "cwe": false
+    },
+    "openai/gpt-5.4-nano": {
+      "i": 0.2,
+      "o": 1.25,
+      "cw": 0.2,
+      "cr": 0.02,
+      "cwe": false
+    },
+    "openai/gpt-5.4-pro": {
+      "i": 30,
+      "o": 180,
+      "cw": 30,
+      "cr": 3,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/gpt-5.5": {
+      "i": 5,
+      "o": 30,
+      "cw": 5,
+      "cr": 0.5,
+      "cwe": false
+    },
+    "openai/gpt-5.5-pro": {
+      "i": 30,
+      "o": 180,
+      "cw": 30,
+      "cr": 3,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/gpt-5.6": {
+      "i": 4,
+      "o": 20,
+      "cw": 5,
+      "cr": 0.4
+    },
+    "openai/gpt-5.6-luna": {
+      "i": 0.2,
+      "o": 1.2,
+      "cw": 0.25,
+      "cr": 0.02
+    },
+    "openai/gpt-5.6-sol": {
+      "i": 4,
+      "o": 20,
+      "cw": 5,
+      "cr": 0.4
+    },
+    "openai/gpt-5.6-terra": {
+      "i": 2,
+      "o": 12,
+      "cw": 2.5,
+      "cr": 0.2
+    },
+    "openai/gpt-6-astra": {
+      "i": 10,
+      "o": 50,
+      "cw": 12.5,
+      "cr": 1
+    },
+    "openai/gpt-6-luna": {
+      "i": 0.1,
+      "o": 0.5,
+      "cw": 0.125,
+      "cr": 0.01
+    },
+    "openai/gpt-6-sol": {
+      "i": 2,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 0.2
+    },
+    "openai/gpt-6.1-sol": {
+      "i": 2,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 0.1
+    },
+    "openai/gpt-daybreak-blue-latest": {
+      "i": 4,
+      "o": 20,
+      "cw": 5,
+      "cr": 0.4
+    },
+    "openai/gpt-daybreak-red-latest": {
+      "i": 12.5,
+      "o": 75,
+      "cw": 15.625,
+      "cr": 1.25
+    },
+    "openai/gpt-image-2": {
+      "i": 5,
+      "o": 30,
+      "cw": 5,
+      "cr": 1.25,
+      "cwe": false
+    },
+    "openai/gpt-realtime-2.1": {
+      "i": 4,
+      "o": 24,
+      "cw": 4,
+      "cr": 0.4,
+      "cwe": false
+    },
+    "openai/o1": {
+      "i": 15,
+      "o": 60,
+      "cw": 15,
+      "cr": 7.5,
+      "cwe": false
+    },
+    "openai/o1-pro": {
+      "i": 150,
+      "o": 600,
+      "cw": 150,
+      "cr": 15,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/o3": {
+      "i": 2,
+      "o": 8,
+      "cw": 2,
+      "cr": 0.5,
+      "cwe": false
+    },
+    "openai/o3-mini": {
+      "i": 1.1,
+      "o": 4.4,
+      "cw": 1.1,
+      "cr": 0.55,
+      "cwe": false
+    },
+    "openai/o3-pro": {
+      "i": 20,
+      "o": 80,
+      "cw": 20,
+      "cr": 2,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/o4-mini": {
+      "i": 1.1,
+      "o": 4.4,
+      "cw": 1.1,
+      "cr": 0.275,
+      "cwe": false
+    },
+    "openai/text-embedding-3-large": {
+      "i": 0.13,
+      "o": 0,
+      "cw": 0.13,
+      "cr": 0.013000000000000001,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/text-embedding-3-small": {
+      "i": 0.02,
+      "o": 0,
+      "cw": 0.02,
+      "cr": 0.002,
+      "cre": false,
+      "cwe": false
+    },
+    "openai/text-embedding-ada-002": {
+      "i": 0.1,
+      "o": 0,
+      "cw": 0.1,
+      "cr": 0.010000000000000002,
+      "cre": false,
+      "cwe": false
+    },
+    "xai/grok-4.20-0309-non-reasoning": {
+      "i": 1.25,
+      "o": 2.5,
+      "cw": 1.25,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "xai/grok-4.20-0309-reasoning": {
+      "i": 1.25,
+      "o": 2.5,
+      "cw": 1.25,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "xai/grok-4.20-multi-agent-0309": {
+      "i": 1.25,
+      "o": 2.5,
+      "cw": 1.25,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "xai/grok-4.3": {
+      "i": 1.25,
+      "o": 2.5,
+      "cw": 1.25,
+      "cr": 0.2,
+      "cwe": false
+    },
+    "xai/grok-4.5": {
+      "i": 2,
+      "o": 6,
+      "cw": 2,
+      "cr": 0.3,
+      "cwe": false
+    },
+    "xai/grok-4.6": {
+      "i": 2,
+      "o": 6,
+      "cw": 2,
+      "cr": 0.5,
+      "cwe": false
+    },
+    "xai/grok-4.7": {
+      "i": 2,
+      "o": 6,
+      "cw": 2,
+      "cr": 0.5,
+      "cwe": false
+    },
+    "xai/grok-build-0.1": {
+      "i": 1,
+      "o": 2,
+      "cw": 1,
+      "cr": 0.2,
+      "cwe": false
+    }
+  }
+}
