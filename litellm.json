@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-10-09T15:19:32.250Z",
+  "retrievedAt": "2026-10-10T12:30:00.986Z",
   "models": {
     "claude-fable-5": {
       "i": 10,
@@ -110,21 +110,13 @@
       "i": 3,
       "o": 15,
       "cw": 3.75,
-      "cr": 0.3,
-      "ia": 6,
-      "oa": 22.5,
-      "cwa": 7.5,
-      "cra": 0.6
+      "cr": 0.3
     },
     "claude-sonnet-4-5-20250929": {
       "i": 3,
       "o": 15,
       "cw": 3.75,
-      "cr": 0.3,
-      "ia": 6,
-      "oa": 22.5,
-      "cwa": 7.5,
-      "cra": 0.6
+      "cr": 0.3
     },
     "claude-sonnet-4-5-20250929-v1:0": {
       "i": 3,
@@ -898,6 +890,13 @@
       "o": 2.4,
       "cw": 0.6,
       "cr": 0.06,
+      "cwe": false
+    },
+    "gpt-rosalind-discovery": {
+      "i": 5,
+      "o": 25,
+      "cw": 5,
+      "cr": 0.5,
       "cwe": false
     },
     "gpt-rosalind-research": {
