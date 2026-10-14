@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v3.2.0] - 2026-10-14
+
+
+
+### Bug Fixes
+
+- **opentrack:** Fit the window to the full content height
+- **aitrack-lib:** Fix calendar edge cases, share the parse cache safely and trim the library
+- **aitrack:** Refuse to overwrite an invalid config and simplify argument parsing
+- **opentrack:** Start faster on Windows and report start-at-login failures
+- **opentrack:** Give the winget package a moniker that the head tracker doesn't share (#114)
+
+### Build
+
+- **opentrack:** Prepare the winget package
+- **deps:** Update dependencies (#109)
+
+### CI
+
+- Run native checks in parallel and skip Rust on Linux
+- Build releases without the remote cache and keep the signing key out of the JS build
+- Retry removing the bundle smoke directory on Windows
+- Bump the actions group across 1 directory with 2 updates (#111)
+- Keep history on the pricing branch (#116)
+- Bump the actions group across 1 directory with 3 updates (#118)
+
+### Documentation
+
+- List every request that leaves the machine
+
+### Features
+
+- **opentrack:** Show the version and update status in settings
+- **opentrack:** Show usage per machine (#115)
+
 ## [v3.1.0] - 2026-10-06
 
 
