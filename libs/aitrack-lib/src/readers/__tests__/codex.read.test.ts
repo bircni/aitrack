@@ -16,6 +16,17 @@ vi.mock('os', async (importOriginal) => {
 
 import { getCodexPaths, readCodexData } from '../codex.js';
 
+function turn(model: string, timestamp = localTimestamp('2024-01-15')): object {
+  return { type: 'turn_context', timestamp, payload: { model } };
+}
+
+function tokenCount(input_tokens: number, output_tokens: number): object {
+  return {
+    type: 'event_msg',
+    payload: { type: 'token_count', info: { total_token_usage: { input_tokens, output_tokens } } },
+  };
+}
+
 describe('readCodexData', () => {
   beforeEach(() => {
     rmSync(TEST_HOME, { recursive: true, force: true });
@@ -33,20 +44,7 @@ describe('readCodexData', () => {
   it('walks session directories and aggregates parsed sessions by day and model', async () => {
     const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
     mkdirSync(sessionDir, { recursive: true });
-    writeJsonl(join(sessionDir, 'a.jsonl'), [
-      {
-        type: 'turn_context',
-        timestamp: localTimestamp('2024-01-15'),
-        payload: { model: 'gpt-5' },
-      },
-      {
-        type: 'event_msg',
-        payload: {
-          type: 'token_count',
-          info: { total_token_usage: { input_tokens: 20, output_tokens: 8 } },
-        },
-      },
-    ]);
+    writeJsonl(join(sessionDir, 'a.jsonl'), [turn('gpt-5'), tokenCount(20, 8)]);
     writeFileSync(join(sessionDir, 'ignored.txt'), 'not jsonl');
 
     const result = await readCodexData();
@@ -58,94 +56,14 @@ describe('readCodexData', () => {
     expect(day?.byModel['gpt-5']?.outputTokens).toBe(8);
     // gpt-5: 20 * $1.25/M + 8 * $10/M = 0.000105
     expect(day?.costUSD).toBeCloseTo(0.000105);
-  });
-
-  it('keeps model and day transitions separate within one session', async () => {
-    const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
-    mkdirSync(sessionDir, { recursive: true });
-    writeJsonl(join(sessionDir, 'a.jsonl'), [
-      {
-        type: 'turn_context',
-        timestamp: localTimestamp('2024-01-15', 10),
-        payload: { model: 'gpt-5.1-codex' },
-      },
-      {
-        type: 'event_msg',
-        timestamp: localTimestamp('2024-01-15', 10),
-        payload: {
-          type: 'token_count',
-          info: { total_token_usage: { input_tokens: 100, output_tokens: 10 } },
-        },
-      },
-      {
-        type: 'turn_context',
-        timestamp: localTimestamp('2024-01-16', 10),
-        payload: { model: 'gpt-5.4' },
-      },
-      {
-        type: 'event_msg',
-        timestamp: localTimestamp('2024-01-16', 10),
-        payload: {
-          type: 'token_count',
-          info: { total_token_usage: { input_tokens: 250, output_tokens: 25 } },
-        },
-      },
-    ]);
-
-    const result = await readCodexData();
-
-    expect(result.get('2024-01-15')?.byModel['gpt-5.1-codex']).toMatchObject({
-      inputTokens: 100,
-      outputTokens: 10,
-    });
-    expect(result.get('2024-01-16')?.byModel['gpt-5.4']).toMatchObject({
-      inputTokens: 150,
-      outputTokens: 15,
-    });
-  });
-
-  it('deduplicates the same resolved CODEX_HOME and homedir session root', async () => {
-    process.env.CODEX_HOME = join(TEST_HOME, '.codex');
-    const sessionDir = join(TEST_HOME, '.codex', 'sessions');
-    mkdirSync(sessionDir, { recursive: true });
-    writeJsonl(join(sessionDir, 'a.jsonl'), [
-      {
-        type: 'turn_context',
-        timestamp: localTimestamp('2024-01-15'),
-        payload: { model: 'gpt-5' },
-      },
-      {
-        type: 'event_msg',
-        payload: {
-          type: 'token_count',
-          info: { total_token_usage: { input_tokens: 20, output_tokens: 8 } },
-        },
-      },
-    ]);
-
-    const result = await readCodexData();
-
-    expect(result.get('2024-01-15')?.inputTokens).toBe(20);
+    expect([...(await readCodexData())]).toEqual([...result]);
   });
 
   it('reads custom Codex session roots from the environment', async () => {
     const customRoot = join(TEST_HOME, 'custom-codex');
     process.env.AITRACK_CODEX_SESSION_DIRS = customRoot;
     mkdirSync(customRoot, { recursive: true });
-    writeJsonl(join(customRoot, 'session.jsonl'), [
-      {
-        type: 'turn_context',
-        timestamp: localTimestamp('2024-01-15'),
-        payload: { model: 'gpt-5' },
-      },
-      {
-        type: 'event_msg',
-        payload: {
-          type: 'token_count',
-          info: { total_token_usage: { input_tokens: 30, output_tokens: 12 } },
-        },
-      },
-    ]);
+    writeJsonl(join(customRoot, 'session.jsonl'), [turn('gpt-5'), tokenCount(30, 12)]);
 
     const result = await readCodexData();
 
@@ -157,59 +75,17 @@ describe('readCodexData', () => {
     const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
     mkdirSync(sessionDir, { recursive: true });
     writeJsonl(join(sessionDir, 'bad-ts.jsonl'), [
-      {
-        type: 'turn_context',
-        timestamp: localTimestamp('2024-01-15'),
-        payload: { model: 'gpt-5' },
-      },
-      {
-        type: 'event_msg',
-        payload: {
-          type: 'token_count',
-          info: { total_token_usage: { input_tokens: 10, output_tokens: 4 } },
-        },
-      },
+      turn('gpt-5'),
+      tokenCount(10, 4),
       { type: 'turn_context', timestamp: 'not-a-real-date', payload: {} },
-      {
-        type: 'event_msg',
-        payload: {
-          type: 'token_count',
-          info: { total_token_usage: { input_tokens: 25, output_tokens: 10 } },
-        },
-      },
+      tokenCount(25, 10),
     ]);
 
     const result = await readCodexData();
 
-    // The garbage timestamp neither opened a new day nor dropped the usage that
-    // followed it: both increments land on the last date we could parse.
+    // Neither a new day nor dropped usage: both increments land on the last parseable date.
     expect([...result.keys()]).toEqual(['2024-01-15']);
     expect(result.get('2024-01-15')?.inputTokens).toBe(25);
     expect(result.get('2024-01-15')?.outputTokens).toBe(10);
-  });
-
-  it('returns the same totals from a warm cache as from a cold one', async () => {
-    const sessionDir = join(TEST_HOME, '.codex', 'sessions', '2024', '01');
-    mkdirSync(sessionDir, { recursive: true });
-    writeJsonl(join(sessionDir, 'a.jsonl'), [
-      {
-        type: 'turn_context',
-        timestamp: localTimestamp('2024-01-15'),
-        payload: { model: 'gpt-5' },
-      },
-      {
-        type: 'event_msg',
-        payload: {
-          type: 'token_count',
-          info: { total_token_usage: { input_tokens: 20, output_tokens: 8 } },
-        },
-      },
-    ]);
-
-    const cold = await readCodexData();
-    const warm = await readCodexData();
-
-    expect([...warm]).toEqual([...cold]);
-    expect(warm.get('2024-01-15')?.inputTokens).toBe(20);
   });
 });

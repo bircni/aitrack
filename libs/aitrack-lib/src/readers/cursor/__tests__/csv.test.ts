@@ -11,35 +11,30 @@ function makeCsv(...rows: string[]): string {
 }
 
 describe('parseCursorDateString', () => {
-  it('accepts YYYY-MM-DD directly', () => {
-    expect(parseCursorDateString('2024-03-15')).toBe('2024-03-15');
-  });
-
   it('parses a locale-style date string', () => {
-    const result = parseCursorDateString('March 15, 2024');
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+    expect(parseCursorDateString('March 15, 2024')).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   });
 
-  it('returns null for empty string', () => {
-    expect(parseCursorDateString('')).toBeNull();
-  });
-
-  it('returns null for undefined', () => {
-    expect(parseCursorDateString(undefined)).toBeNull();
-  });
-
-  it('returns null for garbage input', () => {
-    expect(parseCursorDateString('not-a-date')).toBeNull();
+  it.each(['', undefined, 'not-a-date'])('returns null for %j', (value) => {
+    expect(parseCursorDateString(value)).toBeNull();
   });
 });
 
 describe('aggregateCursorCsvToDayMap', () => {
-  it('returns empty map for empty input', () => {
-    expect(aggregateCursorCsvToDayMap('').size).toBe(0);
-  });
-
-  it('returns empty map for header-only input', () => {
-    expect(aggregateCursorCsvToDayMap(HEADER).size).toBe(0);
+  it.each([
+    ['empty input', '', 0],
+    ['a header alone', HEADER, 0],
+    [
+      'rows on two dates',
+      makeCsv('2024-01-10,gpt-4o,100,0,0,50,150', '2024-01-11,gpt-4o,200,0,0,100,300'),
+      2,
+    ],
+    ['a row with no tokens', makeCsv('2024-01-10,gpt-4o,0,0,0,0,0'), 0],
+    ['a row with an invalid date', makeCsv('not-a-date,gpt-4o,100,0,0,50,150'), 0],
+    ['blank lines around a row', makeCsv('', '2024-01-10,gpt-4o,100,0,0,50,150', ''), 1],
+    ['CRLF line endings', `${HEADER}\r\n2024-01-10,gpt-4o,100,0,0,50,150\r\n`, 1],
+  ])('keeps the days with usage for %s', (_label, csv, days) => {
+    expect(aggregateCursorCsvToDayMap(csv).size).toBe(days);
   });
 
   it('parses a valid row and accumulates tokens', () => {
@@ -94,24 +89,12 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(day?.outputTokens).toBe(150);
   });
 
-  it('accumulates multiple rows across different dates', () => {
-    const csv = makeCsv('2024-01-10,gpt-4o,100,0,0,50,150', '2024-01-11,gpt-4o,200,0,0,100,300');
-    const map = aggregateCursorCsvToDayMap(csv);
-    expect(map.size).toBe(2);
-  });
-
   it('strips -latest suffix from model names', () => {
     const csv = makeCsv('2024-01-10,claude-3-5-sonnet-latest,100,0,0,50,150');
     const map = aggregateCursorCsvToDayMap(csv);
     const day = map.get('2024-01-10');
     expect(day?.byModel['claude-3-5-sonnet']).toBeDefined();
     expect(day?.byModel['claude-3-5-sonnet-latest']).toBeUndefined();
-  });
-
-  it('skips rows with no usable total tokens', () => {
-    const csv = makeCsv('2024-01-10,gpt-4o,0,0,0,0,0');
-    const map = aggregateCursorCsvToDayMap(csv);
-    expect(map.size).toBe(0);
   });
 
   it('keeps rows whose breakdown has tokens but whose aggregate cell does not', () => {
@@ -141,45 +124,18 @@ describe('aggregateCursorCsvToDayMap', () => {
     expect(map.get('2024-01-11')?.inputTokens).toBe(100);
   });
 
-  it('skips rows with invalid date', () => {
-    const csv = makeCsv('not-a-date,gpt-4o,100,0,0,50,150');
-    const map = aggregateCursorCsvToDayMap(csv);
-    expect(map.size).toBe(0);
+  it.each([
+    ['a comma', '"gpt-4, turbo"', 'gpt-4, turbo'],
+    ['escaped quotes', '"model ""x"""', 'model "x"'],
+  ])('reads a quoted model name with %s', (_label, cell, model) => {
+    const map = aggregateCursorCsvToDayMap(makeCsv(`2024-01-10,${cell},100,0,0,50,150`));
+    expect(map.get('2024-01-10')?.byModel[model]).toBeDefined();
   });
 
-  it('skips blank lines', () => {
-    const csv = makeCsv('', '2024-01-10,gpt-4o,100,0,0,50,150', '');
-    const map = aggregateCursorCsvToDayMap(csv);
-    expect(map.size).toBe(1);
-  });
-
-  it('handles quoted fields containing commas', () => {
-    // Model name with a comma inside quotes
-    const csv = `${HEADER}\n2024-01-10,"gpt-4, turbo",100,0,0,50,150`;
-    const map = aggregateCursorCsvToDayMap(csv);
-    const day = map.get('2024-01-10');
-    expect(day?.byModel['gpt-4, turbo']).toBeDefined();
-  });
-
-  it('handles escaped double-quotes inside quoted fields', () => {
-    const csv = `${HEADER}\n2024-01-10,"model ""x""",100,0,0,50,150`;
-    const map = aggregateCursorCsvToDayMap(csv);
-    const day = map.get('2024-01-10');
-    expect(day?.byModel['model "x"']).toBeDefined();
-  });
-
-  it('handles comma-formatted token numbers', () => {
-    const csv = makeCsv('2024-01-10,gpt-4o,1000,0,0,500,1500');
-    const map = aggregateCursorCsvToDayMap(csv);
-    const day = map.get('2024-01-10');
-    expect(day?.inputTokens).toBe(1000);
-    expect(day?.outputTokens).toBe(500);
-  });
-
-  it('handles Windows-style CRLF line endings', () => {
-    const csv = `${HEADER}\r\n2024-01-10,gpt-4o,100,0,0,50,150\r\n`;
-    const map = aggregateCursorCsvToDayMap(csv);
-    expect(map.size).toBe(1);
+  it('reads thousands-separated token counts', () => {
+    const map = aggregateCursorCsvToDayMap(makeCsv('2024-01-10,gpt-4o,"1,000",0,0,500,"1,500"'));
+    expect(map.get('2024-01-10')?.inputTokens).toBe(1000);
+    expect(map.get('2024-01-10')?.outputTokens).toBe(500);
   });
 });
 

@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 
 import { describe, expect, it } from 'vitest';
 
-import { decodeJwtPayload } from '../jwt.js';
+import { cursorAccountId, decodeJwtPayload } from '../jwt.js';
 
 function token(payload: unknown, { urlSafe = false } = {}): string {
   let encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64').replace(/=+$/u, '');
@@ -34,4 +34,13 @@ describe('decodeJwtPayload', () => {
   it('returns a payload with no subject when the token omits one', () => {
     expect(decodeJwtPayload(token({ iss: 'cursor' }))?.sub).toBeUndefined();
   });
+});
+
+it('hashes the account identity so it survives token rotation', () => {
+  expect(cursorAccountId(token({ sub: 'a', nonce: '1' }))).toBe(
+    cursorAccountId(token({ sub: 'a', nonce: '2' })),
+  );
+  expect(cursorAccountId(token({ sub: 'a' }))).not.toBe(cursorAccountId(token({ sub: 'b' })));
+  expect(cursorAccountId('token')).toMatch(/^[a-f0-9]{64}$/u);
+  expect(cursorAccountId('other')).not.toBe(cursorAccountId('token'));
 });

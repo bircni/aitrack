@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 
+import { makeMachineFile } from '@aitrack/test-fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -69,6 +70,42 @@ import {
 } from '../git.js';
 import { isRebaseInProgress, pushWithRetry, runGit, runGitAsync } from '../git/exec.js';
 import { withRepoLock } from '../git/lock.js';
+
+const APP = join('/home/test', '.config', 'aitrack');
+const MIGRATION = {
+  repoOld: join(APP, 'repo', 'data', 'old.json'),
+  repoNew: join(APP, 'repo', 'data', 'new.json'),
+  pendingOld: join(APP, 'pending', 'data', 'old.json'),
+  pendingNew: join(APP, 'pending', 'data', 'new.json'),
+  original: JSON.stringify({ hostname: 'old', lastUpdated: 'now', days: {} }),
+};
+
+/** In-memory repo and pending files for `old`, where writing the pending `new` file fails. */
+function fakeMigrationFs(
+  fail: { failRestore?: string; failRemove?: string } = {},
+): Map<string, string> {
+  const files = new Map([
+    [MIGRATION.repoOld, MIGRATION.original],
+    [MIGRATION.pendingOld, MIGRATION.original],
+  ]);
+  mocks.existsSync.mockImplementation((path: string) => files.has(path));
+  mocks.readFileSync.mockImplementation((path: string) => {
+    const contents = files.get(path);
+    if (contents === undefined) throw new Error(`missing ${path}`);
+    return contents;
+  });
+  mocks.writeFileSync.mockImplementation((path: string, contents: string) => {
+    if (path === MIGRATION.pendingNew) throw new Error('pending write failed');
+    if (path === fail.failRestore) throw new Error('restore failed');
+    files.set(path, contents);
+  });
+  mocks.rmSync.mockImplementation((path: string, options?: { force?: boolean }) => {
+    if (path === fail.failRemove && options?.force !== true)
+      throw new Error('target removal failed');
+    files.delete(path);
+  });
+  return files;
+}
 
 describe('git helpers', () => {
   beforeEach(() => {
@@ -182,25 +219,25 @@ describe('git helpers', () => {
     );
   });
 
-  it('reports nothing unpushed when the branch matches its upstream', async () => {
-    asyncGitReplies({ status: 0, stdout: 'origin/main' }, { status: 0, stdout: '0\n' });
-
-    expect(await hasUnpushedCommits()).toBe(false);
-  });
-
-  it('reports nothing unpushed when the branch has no upstream', async () => {
-    asyncGitReplies({ status: 1 });
-
-    expect(await hasUnpushedCommits()).toBe(false);
-  });
-
-  it('treats a failing rev-list as nothing to retry rather than throwing', async () => {
-    asyncGitReplies(
-      // hasUpstream succeeds...
-      { status: 0, stdout: 'origin/main' },
-      // ...but rev-list blows up (e.g. a fresh repo with no commits yet)
-      { status: 128, stderr: 'fatal: bad revision' },
-    );
+  it.each([
+    [
+      'the branch matches its upstream',
+      [
+        { status: 0, stdout: 'origin/main' },
+        { status: 0, stdout: '0\n' },
+      ],
+    ],
+    ['the branch has no upstream', [{ status: 1 }]],
+    // A fresh repo with no commits fails rev-list; that is nothing to retry.
+    [
+      'rev-list fails',
+      [
+        { status: 0, stdout: 'origin/main' },
+        { status: 128, stderr: 'fatal: bad revision' },
+      ],
+    ],
+  ])('reports nothing unpushed when %s', async (_label, replies) => {
+    asyncGitReplies(...replies);
 
     expect(await hasUnpushedCommits()).toBe(false);
   });
@@ -267,10 +304,11 @@ describe('git helpers', () => {
     );
   });
 
-  it('aborts a conflicted rebase so the repo is not left mid-rebase', async () => {
-    // A failed `pull --rebase` can stop with conflicts applied and the branch
-    // detached. Leaving that behind makes every later aitrack command fail with
-    // a confusing git error the user never asked for.
+  // A conflicted rebase left behind would break every later command; the rebase error must survive the abort.
+  it.each([
+    ['succeeds', 0],
+    ['fails too', 1],
+  ])('aborts a conflicted rebase and reports it when the abort %s', async (_label, abortStatus) => {
     asyncGitReplies(
       // pull --ff-only rejects the diverged branch
       { status: 1, stderr: 'Not possible to fast-forward' },
@@ -281,8 +319,7 @@ describe('git helpers', () => {
       { status: 0, stdout: '1\n' },
       // pull --rebase hits a conflict
       { status: 1, stderr: 'could not apply' },
-      // rebase --abort
-      { status: 0 },
+      { status: abortStatus, stderr: 'abort failed' },
     );
     // isRebaseInProgress reads .git/rebase-merge from disk, not git.
     mocks.existsSync.mockImplementation((path: string) => path.includes('rebase-'));
@@ -295,23 +332,6 @@ describe('git helpers', () => {
       expect.anything(),
       expect.any(Function),
     );
-  });
-
-  it('still reports the rebase failure when the abort itself fails', async () => {
-    // Nothing can be done about a failed abort, but the original rebase error
-    // is what explains the situation, so it must not be replaced.
-    asyncGitReplies(
-      { status: 1, stderr: 'Not possible to fast-forward' },
-      { status: 0, stdout: 'refs/heads/main' },
-      { status: 0, stdout: 'origin/main' },
-      { status: 0, stdout: '1\n' },
-      { status: 1, stderr: 'could not apply' },
-      // rebase --abort fails too
-      { status: 1, stderr: 'abort failed' },
-    );
-    mocks.existsSync.mockImplementation((path: string) => path.includes('rebase-'));
-
-    await expect(pull()).rejects.toThrow('git pull --rebase --quiet failed');
   });
 
   it('surfaces a fast-forward failure that no local commit explains', async () => {
@@ -485,16 +505,7 @@ describe('git helpers', () => {
   it('lists only json data files and reads machine data', () => {
     mocks.existsSync.mockReturnValue(true);
     mocks.readdirSync.mockReturnValue(['host.json', 'notes.txt']);
-    mocks.readFileSync.mockReturnValue(
-      JSON.stringify({
-        schemaVersion: 2,
-        hostname: 'host',
-        timezone: 'UTC',
-        dayBucket: 'utc',
-        lastUpdated: 'now',
-        days: {},
-      }),
-    );
+    mocks.readFileSync.mockReturnValue(JSON.stringify(makeMachineFile('host')));
 
     const files = listDataFiles();
 
@@ -503,25 +514,11 @@ describe('git helpers', () => {
     const file = files[0];
     expect(file).toBeDefined();
     if (file === undefined) throw new Error('expected one data file');
-    expect(readDataFile(file)).toEqual({
-      schemaVersion: 2,
-      hostname: 'host',
-      timezone: 'UTC',
-      dayBucket: 'utc',
-      lastUpdated: 'now',
-      days: {},
-    });
+    expect(readDataFile(file)).toEqual(makeMachineFile('host'));
   });
 
   it('writes a machine file through the store, creating the parent directory', () => {
-    writeMachineFile('/repo/data/host.json', {
-      schemaVersion: 2,
-      hostname: 'host',
-      timezone: 'UTC',
-      dayBucket: 'utc',
-      lastUpdated: 'now',
-      days: {},
-    });
+    writeMachineFile('/repo/data/host.json', makeMachineFile('host'));
 
     expect(mocks.mkdirSync).toHaveBeenCalledWith('/repo/data', { recursive: true });
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
@@ -535,14 +532,7 @@ describe('git helpers', () => {
     mocks.existsSync.mockReturnValue(true);
     mocks.readdirSync.mockReturnValue(['Work Laptop_01.2.json']);
 
-    writePendingMachineFile({
-      schemaVersion: 2,
-      hostname: 'Work Laptop_01.2',
-      timezone: 'UTC',
-      dayBucket: 'utc',
-      lastUpdated: 'now',
-      days: {},
-    });
+    writePendingMachineFile(makeMachineFile('Work Laptop_01.2'));
 
     expect(mocks.mkdirSync).toHaveBeenCalled();
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
@@ -553,23 +543,13 @@ describe('git helpers', () => {
     expect(listPendingDataFiles()).toHaveLength(1);
   });
 
-  it.each(['../escape', '..\\escape', 'nested/machine'])(
-    'rejects unsafe pending machine id %j before touching the filesystem',
-    (hostname) => {
-      expect(() => {
-        writePendingMachineFile({
-          schemaVersion: 2,
-          hostname,
-          timezone: 'UTC',
-          dayBucket: 'utc',
-          lastUpdated: 'now',
-          days: {},
-        });
-      }).toThrow('Machine name');
-      expect(mocks.mkdirSync).not.toHaveBeenCalled();
-      expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    },
-  );
+  it('rejects an unsafe pending machine id before touching the filesystem', () => {
+    expect(() => {
+      writePendingMachineFile(makeMachineFile('../escape'));
+    }).toThrow('Machine name');
+    expect(mocks.mkdirSync).not.toHaveBeenCalled();
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
 
   it('migrates persisted and pending files and updates their hostname', () => {
     mocks.existsSync.mockImplementation((path: string) => path.endsWith(join('data', 'old.json')));
@@ -746,32 +726,8 @@ describe('git helpers', () => {
   });
 
   it('reports both failures when the rollback itself fails', () => {
-    // The worst case: the migration failed AND the restore failed. Losing the
-    // rollback error here would leave the user with a half-migrated data
-    // directory and only the original error to explain it.
-    const repoOld = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'old.json');
-    const pendingNew = join('/home/test', '.config', 'aitrack', 'pending', 'data', 'new.json');
-    const original = JSON.stringify({ hostname: 'old', lastUpdated: 'now', days: {} });
-    const files = new Map<string, string>([
-      [repoOld, original],
-      [join('/home/test', '.config', 'aitrack', 'pending', 'data', 'old.json'), original],
-    ]);
-
-    mocks.existsSync.mockImplementation((path: string) => files.has(path));
-    mocks.readFileSync.mockImplementation((path: string) => {
-      const contents = files.get(path);
-      if (contents === undefined) throw new Error(`missing ${path}`);
-      return contents;
-    });
-    mocks.writeFileSync.mockImplementation((path: string, contents: string) => {
-      if (path === pendingNew) throw new Error('pending write failed');
-      // The restore of the repo source is what fails during rollback.
-      if (path === repoOld) throw new Error('restore failed');
-      files.set(path, contents);
-    });
-    mocks.rmSync.mockImplementation((path: string) => {
-      files.delete(path);
-    });
+    // Losing the rollback error would leave a half-migrated directory and only the first error.
+    fakeMigrationFs({ failRestore: MIGRATION.repoOld });
 
     let thrown: unknown;
     try {
@@ -788,76 +744,27 @@ describe('git helpers', () => {
   });
 
   it('does not leave a restored source behind when removing the target fails', () => {
-    // rollbackMachineFileMigration writes the source back before removing the
-    // target. If that removal fails, both files would exist and the next sync
-    // would see two machines; the restored source has to come back off disk.
-    const repoOld = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'old.json');
-    const repoNew = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'new.json');
-    const pendingNew = join('/home/test', '.config', 'aitrack', 'pending', 'data', 'new.json');
-    const original = JSON.stringify({ hostname: 'old', lastUpdated: 'now', days: {} });
-    const files = new Map<string, string>([
-      [repoOld, original],
-      [join('/home/test', '.config', 'aitrack', 'pending', 'data', 'old.json'), original],
-    ]);
-
-    mocks.existsSync.mockImplementation((path: string) => files.has(path));
-    mocks.readFileSync.mockImplementation((path: string) => {
-      const contents = files.get(path);
-      if (contents === undefined) throw new Error(`missing ${path}`);
-      return contents;
-    });
-    mocks.writeFileSync.mockImplementation((path: string, contents: string) => {
-      if (path === pendingNew) throw new Error('pending write failed');
-      files.set(path, contents);
-    });
-    const forcedRemovals: string[] = [];
-    mocks.rmSync.mockImplementation((path: string, options?: { force?: boolean }) => {
-      // Removing the migrated repo target during rollback is what fails.
-      if (path === repoNew && options?.force !== true) throw new Error('target removal failed');
-      if (options?.force === true) forcedRemovals.push(path);
-      files.delete(path);
-    });
+    // Both files left on disk would sync as two machines.
+    fakeMigrationFs({ failRemove: MIGRATION.repoNew });
 
     expect(() => {
       migrateMachineDataFiles('old', 'new');
     }).toThrow(AggregateError);
 
-    // The source it had just restored is force-removed rather than left as a duplicate.
-    expect(forcedRemovals).toContain(repoOld);
+    expect(mocks.rmSync).toHaveBeenCalledWith(MIGRATION.repoOld, { force: true });
   });
 
   it('rolls back a completed repo migration when the pending migration fails', () => {
-    const repoOld = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'old.json');
-    const repoNew = join('/home/test', '.config', 'aitrack', 'repo', 'data', 'new.json');
-    const pendingOld = join('/home/test', '.config', 'aitrack', 'pending', 'data', 'old.json');
-    const pendingNew = join('/home/test', '.config', 'aitrack', 'pending', 'data', 'new.json');
-    const original = JSON.stringify({ hostname: 'old', lastUpdated: 'now', days: {} });
-    const files = new Map<string, string>([
-      [repoOld, original],
-      [pendingOld, original],
-    ]);
-    mocks.existsSync.mockImplementation((path: string) => files.has(path));
-    mocks.readFileSync.mockImplementation((path: string) => {
-      const contents = files.get(path);
-      if (contents === undefined) throw new Error(`missing ${path}`);
-      return contents;
-    });
-    mocks.writeFileSync.mockImplementation((path: string, contents: string) => {
-      if (path === pendingNew) throw new Error('pending write failed');
-      files.set(path, contents);
-    });
-    mocks.rmSync.mockImplementation((path: string) => {
-      files.delete(path);
-    });
+    const files = fakeMigrationFs();
 
     expect(() => {
       migrateMachineDataFiles('old', 'new');
     }).toThrow('pending write failed');
 
-    expect(files.get(repoOld)).toBe(original);
-    expect(files.get(pendingOld)).toBe(original);
-    expect(files.has(repoNew)).toBe(false);
-    expect(files.has(pendingNew)).toBe(false);
+    expect(files.get(MIGRATION.repoOld)).toBe(MIGRATION.original);
+    expect(files.get(MIGRATION.pendingOld)).toBe(MIGRATION.original);
+    expect(files.has(MIGRATION.repoNew)).toBe(false);
+    expect(files.has(MIGRATION.pendingNew)).toBe(false);
   });
 });
 

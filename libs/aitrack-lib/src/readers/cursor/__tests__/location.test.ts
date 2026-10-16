@@ -74,10 +74,11 @@ describe('getCursorStateDatabasePath', () => {
     );
   });
 
-  it('takes the first of several configured directories that exists', () => {
-    makeDatabase('second', 'User', 'globalStorage', 'state.vscdb');
-    process.env.CURSOR_CONFIG_DIR = `${join(directory, 'missing')}, ${join(directory, 'second')}`;
-    expect(getCursorStateDatabasePath()).toContain(join('second', 'User'));
+  it('takes the first configured entry that exists, including a database file', () => {
+    const path = makeDatabase('custom.vscdb');
+    const missing = join(directory, 'missing');
+    process.env.CURSOR_CONFIG_DIR = `${missing}, ${missing}, ${path}`;
+    expect(getCursorStateDatabasePath()).toBe(path);
   });
 
   it('returns null when nothing exists', () => {

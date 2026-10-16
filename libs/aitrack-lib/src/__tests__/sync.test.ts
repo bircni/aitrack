@@ -86,23 +86,15 @@ vi.mock('../pricing/syncPack.js', () => ({
   ),
 }));
 
-import { loggedOutput } from '@aitrack/test-fixtures';
+import { loggedOutput, makeDay, makeMachineFile, makeProviderDay } from '@aitrack/test-fixtures';
 
 import type { DayMap } from '../data/types.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import { syncPricingPack } from '../pricing/syncPack.js';
 import { syncData } from '../sync.js';
 
-/** Header fields a file already on the current schema carries. */
-const SCHEMA_FIELDS = { schemaVersion: 2, timezone: 'UTC', dayBucket: 'local' } as const;
-
 function dayMap(inputTokens: number, outputTokens: number, model = 'model'): DayMap {
-  return new Map([
-    [
-      '2024-01-01',
-      { inputTokens, outputTokens, byModel: { [model]: { inputTokens, outputTokens } } },
-    ],
-  ]);
+  return new Map([['2024-01-01', makeDay(inputTokens, outputTokens, undefined, model)]]);
 }
 
 describe('syncData', () => {
@@ -270,19 +262,11 @@ describe('syncData', () => {
   });
 
   it('does not commit unrelated data changes when the matching current target is clean', async () => {
-    const existing = {
-      ...SCHEMA_FIELDS,
-      hostname: 'host',
-      lastUpdated: 'old',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 30, outputTokens: 15 } },
-            totals: { inputTokens: 30, outputTokens: 15 },
-          },
-        },
-      },
-    };
+    const existing = makeMachineFile(
+      'host',
+      { '2024-01-01': { claude_code: makeProviderDay(30, 15, undefined, 'claude') } },
+      { dayBucket: 'local', lastUpdated: 'old' },
+    );
     mocks.readClaudeData.mockResolvedValue(dayMap(30, 15, 'claude'));
     mocks.readFileSync.mockReturnValue(JSON.stringify(existing));
 
@@ -297,19 +281,11 @@ describe('syncData', () => {
   it('retries a commit whose earlier push failed even though the tree is clean', async () => {
     // Previous run committed but could not push (offline). The data is
     // unchanged since, so nothing in the working tree signals the gap.
-    const existing = {
-      ...SCHEMA_FIELDS,
-      hostname: 'host',
-      lastUpdated: 'old',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 30, outputTokens: 15 } },
-            totals: { inputTokens: 30, outputTokens: 15 },
-          },
-        },
-      },
-    };
+    const existing = makeMachineFile(
+      'host',
+      { '2024-01-01': { claude_code: makeProviderDay(30, 15, undefined, 'claude') } },
+      { dayBucket: 'local', lastUpdated: 'old' },
+    );
     mocks.readClaudeData.mockResolvedValue(dayMap(30, 15, 'claude'));
     mocks.readFileSync.mockReturnValue(JSON.stringify(existing));
     mocks.hasMachineDataChanges.mockReturnValue(false);
@@ -323,19 +299,11 @@ describe('syncData', () => {
   });
 
   it('pushes a pending machine rename even when usage data already matches', async () => {
-    const existing = {
-      ...SCHEMA_FIELDS,
-      hostname: 'new-host',
-      lastUpdated: 'old',
-      days: {
-        '2024-01-01': {
-          codex: {
-            byModel: { 'gpt-5': { inputTokens: 20, outputTokens: 10 } },
-            totals: { inputTokens: 20, outputTokens: 10 },
-          },
-        },
-      },
-    };
+    const existing = makeMachineFile(
+      'new-host',
+      { '2024-01-01': { codex: makeProviderDay(20, 10, undefined, 'gpt-5') } },
+      { dayBucket: 'local', lastUpdated: 'old' },
+    );
     mocks.loadConfig.mockReturnValue({
       repoUrl: 'git@example.com:me/data.git',
       machineId: 'new-host',

@@ -29,18 +29,16 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
+function sha256(body = ''): string {
+  return createHash('sha256').update(body).digest('hex');
+}
+
 function updateHashes(files: Record<string, string>): void {
   const manifest = JSON.parse(files['manifest.json'] ?? '') as PricingManifest;
   manifest.hashes = {
-    supplement: createHash('sha256')
-      .update(files['supplement.json'] ?? '')
-      .digest('hex'),
-    litellm: createHash('sha256')
-      .update(files['litellm.json'] ?? '')
-      .digest('hex'),
-    modelsDev: createHash('sha256')
-      .update(files['models_dev.json'] ?? '')
-      .digest('hex'),
+    supplement: sha256(files['supplement.json']),
+    litellm: sha256(files['litellm.json']),
+    modelsDev: sha256(files['models_dev.json']),
   };
   files['manifest.json'] = JSON.stringify(manifest);
 }
@@ -70,19 +68,10 @@ async function fixture(modify?: (supplement: PricingSupplement) => void) {
     schemaVersion: 1,
     updatedAt: supplement.updatedAt,
     files: { supplement: 'supplement.json', litellm: 'litellm.json', modelsDev: 'models_dev.json' },
-    hashes: {
-      supplement: createHash('sha256')
-        .update(files['supplement.json'] ?? '')
-        .digest('hex'),
-      litellm: createHash('sha256')
-        .update(files['litellm.json'] ?? '')
-        .digest('hex'),
-      modelsDev: createHash('sha256')
-        .update(files['models_dev.json'] ?? '')
-        .digest('hex'),
-    },
+    hashes: { supplement: '', litellm: '', modelsDev: '' },
   };
   files['manifest.json'] = JSON.stringify(manifest);
+  updateHashes(files);
   const fetchMock = vi.fn((input: RequestInfo | URL, options?: RequestInit) => {
     const name =
       (typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)

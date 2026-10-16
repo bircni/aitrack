@@ -1,3 +1,4 @@
+import { makeMachineFile, makeProviderDay } from '@aitrack/test-fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -25,7 +26,7 @@ vi.mock(import('../localData.js'), async (importOriginal) => ({
   buildLocalMachineFile: mocks.buildLocalMachineFile,
 }));
 
-import type { DayEntry, MachineFile, ProviderDay } from '../types.js';
+import type { DayEntry, ProviderDay } from '../types.js';
 import {
   loadMergedProviderData,
   loadPersistedMachines,
@@ -36,12 +37,6 @@ import {
 
 function emptyDay(): DayEntry {
   return { inputTokens: 0, outputTokens: 0, byModel: {} };
-}
-
-const SCHEMA_FIELDS = { schemaVersion: 2, timezone: 'UTC', dayBucket: 'utc' } as const;
-
-function emptyLocalMachine(host = 'host'): MachineFile {
-  return { ...SCHEMA_FIELDS, hostname: host, lastUpdated: 'now', days: {} };
 }
 
 describe('mergeProviderDay', () => {
@@ -169,24 +164,15 @@ describe('loadMergedProviderData', () => {
     mocks.resolveMachineId.mockReturnValue('host');
     mocks.tryLoadConfig.mockReturnValue(null);
     mocks.isCloned.mockReturnValue(false);
-    mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
+    mocks.buildLocalMachineFile.mockResolvedValue(makeMachineFile('host'));
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
   });
 
   it('renders local-only when config is missing', async () => {
-    mocks.buildLocalMachineFile.mockResolvedValue({
-      hostname: 'host',
-      lastUpdated: 'now',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 10, outputTokens: 5 } },
-            totals: { inputTokens: 10, outputTokens: 5 },
-          },
-        },
-      },
-    });
+    mocks.buildLocalMachineFile.mockResolvedValue(
+      makeMachineFile('host', { '2024-01-01': { claude_code: makeProviderDay(10, 5) } }),
+    );
 
     const loaded = await loadMergedProviderData({
       providers: ['claude_code', 'codex'],
@@ -200,307 +186,167 @@ describe('loadMergedProviderData', () => {
 
   it('loadPersistedMachines lists synced files without reading the local logs', () => {
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'other',
-      lastUpdated: 'now',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 10, outputTokens: 5 } },
-            totals: { inputTokens: 10, outputTokens: 5 },
-          },
-        },
-      },
-    });
+    mocks.readDataFile.mockReturnValue(
+      makeMachineFile('other', { '2024-01-01': { claude_code: makeProviderDay(10, 5) } }),
+    );
 
     expect(loadPersistedMachines().map((entry) => entry.machine.hostname)).toEqual(['other']);
     expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
   });
 
-  it('skips the local log read and reads synced files only once syncedReady resolves', async () => {
-    mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
-    mocks.isCloned.mockReturnValue(true);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'other',
-      lastUpdated: 'now',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 10, outputTokens: 5 } },
-            totals: { inputTokens: 10, outputTokens: 5 },
-          },
-        },
-      },
-    });
-    const events: string[] = [];
-    mocks.listDataFiles.mockImplementationOnce(() => {
-      events.push('read');
-      return ['/repo/data/other.json'];
-    });
-    const syncedReady = new Promise((resolve) => {
-      setImmediate(() => {
-        events.push('ready');
-        resolve(undefined);
+  describe('when configured and cloned', () => {
+    beforeEach(() => {
+      mocks.tryLoadConfig.mockReturnValue({
+        repoUrl: 'git@example.com:me/data.git',
+        machineId: 'host',
       });
+      mocks.isCloned.mockReturnValue(true);
     });
 
-    const loaded = await loadMergedProviderData({
-      providers: ['claude_code'],
-      localMachine: null,
-      syncedReady,
+    it('skips the local log read and reads synced files only once syncedReady resolves', async () => {
+      mocks.readDataFile.mockReturnValue(
+        makeMachineFile('other', { '2024-01-01': { claude_code: makeProviderDay(10, 5) } }),
+      );
+      const events: string[] = [];
+      mocks.listDataFiles.mockImplementationOnce(() => {
+        events.push('read');
+        return ['/repo/data/other.json'];
+      });
+      const syncedReady = new Promise((resolve) => {
+        setImmediate(() => {
+          events.push('ready');
+          resolve(undefined);
+        });
+      });
+
+      const loaded = await loadMergedProviderData({
+        providers: ['claude_code'],
+        localMachine: null,
+        syncedReady,
+      });
+
+      expect(events).toEqual(['ready', 'read']);
+      expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
+      expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['other']);
     });
 
-    expect(events).toEqual(['ready', 'read']);
-    expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
-    expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['other']);
-  });
-
-  it('merges git data from other machines and overlays fresh local read', async () => {
-    mocks.tryLoadConfig.mockReturnValue({
-      repoUrl: 'git@example.com:me/data.git',
-      machineId: 'host',
-    });
-    mocks.resolveMachineId.mockReturnValue('host');
-    mocks.isCloned.mockReturnValue(true);
-    mocks.listDataFiles.mockReturnValue(['/repo/data/other.json', '/repo/data/host.json']);
-    mocks.readDataFile.mockImplementation((filePath: string) =>
-      filePath.endsWith('/other.json')
-        ? {
-            hostname: 'other',
-            lastUpdated: 'synced-other',
-            days: {
-              '2024-01-01': {
-                claude_code: {
-                  byModel: { claude: { inputTokens: 100, outputTokens: 50 } },
-                  totals: { inputTokens: 100, outputTokens: 50 },
-                },
+    it('merges git data from other machines and overlays fresh local read', async () => {
+      mocks.listDataFiles.mockReturnValue(['/repo/data/other.json', '/repo/data/host.json']);
+      mocks.readDataFile.mockImplementation((filePath: string) =>
+        filePath.endsWith('/other.json')
+          ? makeMachineFile(
+              'other',
+              { '2024-01-01': { claude_code: makeProviderDay(100, 50) } },
+              { lastUpdated: 'synced-other' },
+            )
+          : makeMachineFile(
+              'host',
+              {
+                '2024-01-02': { codex: makeProviderDay(9, 1) },
+                '2024-01-03': { codex: makeProviderDay(7, 1) },
               },
+              { lastUpdated: 'synced-host' },
+            ),
+      );
+      mocks.buildLocalMachineFile.mockResolvedValue(
+        makeMachineFile('host', {
+          '2024-01-02': { codex: makeProviderDay(20, 10) },
+        }),
+      );
+
+      const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
+
+      expect(mocks.readDataFile).toHaveBeenCalledTimes(2);
+      expect(mocks.readDataFile.mock.calls[0]?.[0]).toBe('/repo/data/other.json');
+      expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(100);
+      // Fresh local data replaces the persisted copy of the same day...
+      expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
+      // ...but a persisted day the local logs no longer reach is kept.
+      expect(loaded?.providerData.codex?.get('2024-01-03')?.inputTokens).toBe(7);
+      expect(loaded?.machineData).toHaveLength(2);
+      expect(loaded?.machineData.map((machine) => machine.lastUpdated)).toEqual([
+        'synced-other',
+        'synced-host',
+      ]);
+    });
+
+    it('uses exact basenames when replacing the persisted current machine', async () => {
+      mocks.listDataFiles.mockReturnValue(['/repo/data/work-host.json', '/repo/data/host.json']);
+      mocks.readDataFile.mockImplementation((filePath: string) => {
+        const other = filePath.endsWith('/work-host.json');
+        return makeMachineFile(
+          other ? 'work-host' : 'host',
+          {
+            [other ? '2024-01-01' : '2024-01-02']: {
+              codex: makeProviderDay(10, 5),
             },
-          }
-        : {
-            hostname: 'host',
-            lastUpdated: 'synced-host',
-            days: {
-              '2024-01-02': {
-                codex: {
-                  byModel: { stale: { inputTokens: 9, outputTokens: 1 } },
-                  totals: { inputTokens: 9, outputTokens: 1 },
-                },
-              },
-              '2024-01-03': {
-                codex: {
-                  byModel: { archived: { inputTokens: 7, outputTokens: 1 } },
-                  totals: { inputTokens: 7, outputTokens: 1 },
-                },
-              },
-            },
           },
-    );
-    mocks.buildLocalMachineFile.mockResolvedValue({
-      hostname: 'host',
-      lastUpdated: 'now',
-      days: {
-        '2024-01-02': {
-          codex: {
-            byModel: { gpt: { inputTokens: 20, outputTokens: 10 } },
-            totals: { inputTokens: 20, outputTokens: 10 },
-          },
-        },
-      },
+          { lastUpdated: 'synced' },
+        );
+      });
+      // Same date the current machine already has persisted: replace, not add.
+      mocks.buildLocalMachineFile.mockResolvedValue(
+        makeMachineFile('host', {
+          '2024-01-02': { codex: makeProviderDay(20, 10) },
+        }),
+      );
+
+      const loaded = await loadMergedProviderData({ providers: ['codex'] });
+
+      // work-host.json is a different machine, so its day is untouched.
+      expect(loaded?.providerData.codex?.get('2024-01-01')?.inputTokens).toBe(10);
+      // Replaced, not summed: 20 rather than the persisted 10 + fresh 20.
+      expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
+      expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['work-host', 'host']);
+      expect(
+        loaded?.zonedSources?.map(({ hostname, lastUpdated, current }) => ({
+          hostname,
+          lastUpdated,
+          current,
+        })),
+      ).toEqual([
+        { hostname: 'work-host', lastUpdated: 'synced', current: false },
+        { hostname: 'host', lastUpdated: 'synced', current: true },
+      ]);
     });
 
-    const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
+    it('falls back to persisted current-machine data when the local read is empty', async () => {
+      mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
+      mocks.readDataFile.mockReturnValue(
+        makeMachineFile(
+          'host',
+          { '2024-01-01': { claude_code: makeProviderDay(30, 10) } },
+          { lastUpdated: 'last-sync' },
+        ),
+      );
 
-    expect(mocks.readDataFile).toHaveBeenCalledTimes(2);
-    expect(mocks.readDataFile.mock.calls[0]?.[0]).toBe('/repo/data/other.json');
-    expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(100);
-    // Fresh local data replaces the persisted copy of the same day...
-    expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
-    // ...but a persisted day the local logs no longer reach is kept.
-    expect(loaded?.providerData.codex?.get('2024-01-03')?.inputTokens).toBe(7);
-    expect(loaded?.machineData).toHaveLength(2);
-    expect(loaded?.machineData.map((machine) => machine.lastUpdated)).toEqual([
-      'synced-other',
-      'synced-host',
-    ]);
-  });
+      const loaded = await loadMergedProviderData({ providers: ['claude_code'] });
 
-  it('uses exact basenames when replacing the persisted current machine', async () => {
-    mocks.tryLoadConfig.mockReturnValue({
-      repoUrl: 'git@example.com:me/data.git',
-      machineId: 'host',
-    });
-    mocks.resolveMachineId.mockReturnValue('host');
-    mocks.isCloned.mockReturnValue(true);
-    mocks.listDataFiles.mockReturnValue(['/repo/data/work-host.json', '/repo/data/host.json']);
-    mocks.readDataFile.mockImplementation((filePath: string) => ({
-      hostname: filePath.endsWith('/work-host.json') ? 'work-host' : 'host',
-      lastUpdated: 'synced',
-      days: {
-        [filePath.endsWith('/work-host.json') ? '2024-01-01' : '2024-01-02']: {
-          codex: {
-            byModel: { gpt: { inputTokens: 10, outputTokens: 5 } },
-            totals: { inputTokens: 10, outputTokens: 5 },
-          },
-        },
-      },
-    }));
-    mocks.buildLocalMachineFile.mockResolvedValue({
-      hostname: 'host',
-      lastUpdated: 'fresh',
-      days: {
-        // Same date the current machine already has persisted, so the fresh
-        // read must replace it rather than add to it.
-        '2024-01-02': {
-          codex: {
-            byModel: { gpt: { inputTokens: 20, outputTokens: 10 } },
-            totals: { inputTokens: 20, outputTokens: 10 },
-          },
-        },
-      },
+      expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(30);
+      expect(loaded?.machineData).toEqual([
+        expect.objectContaining({ hostname: 'host', lastUpdated: 'last-sync' }),
+      ]);
     });
 
-    const loaded = await loadMergedProviderData({ providers: ['codex'] });
+    it('keeps the persisted boundary day when the local logs were pruned below it', async () => {
+      mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
+      mocks.readDataFile.mockReturnValue(
+        makeMachineFile('host', {
+          '2024-01-02': { claude_code: makeProviderDay(900_000, 100_000) },
+        }),
+      );
+      // The day's transcripts have since been trimmed below what was synced.
+      mocks.buildLocalMachineFile.mockResolvedValue(
+        makeMachineFile('host', {
+          '2024-01-02': { claude_code: makeProviderDay(180_000, 20_000) },
+        }),
+      );
 
-    // work-host.json is a different machine, so its day is untouched.
-    expect(loaded?.providerData.codex?.get('2024-01-01')?.inputTokens).toBe(10);
-    // Replaced, not summed: 20 rather than the persisted 10 + fresh 20.
-    expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
-    expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['work-host', 'host']);
-    expect(
-      loaded?.zonedSources?.map(({ hostname, lastUpdated, current }) => ({
-        hostname,
-        lastUpdated,
-        current,
-      })),
-    ).toEqual([
-      { hostname: 'work-host', lastUpdated: 'synced', current: false },
-      { hostname: 'host', lastUpdated: 'synced', current: true },
-    ]);
-  });
+      const loaded = await loadMergedProviderData({ providers: ['claude_code'] });
 
-  it('falls back to persisted current-machine data when the local read is empty', async () => {
-    mocks.tryLoadConfig.mockReturnValue({
-      repoUrl: 'git@example.com:me/data.git',
-      machineId: 'host',
+      // Display has to agree with sync, which keeps the larger persisted day.
+      expect(loaded?.providerData.claude_code?.get('2024-01-02')?.inputTokens).toBe(900_000);
     });
-    mocks.resolveMachineId.mockReturnValue('host');
-    mocks.isCloned.mockReturnValue(true);
-    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'host',
-      lastUpdated: 'last-sync',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 30, outputTokens: 10 } },
-            totals: { inputTokens: 30, outputTokens: 10 },
-          },
-        },
-      },
-    });
-    mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
-
-    const loaded = await loadMergedProviderData({ providers: ['claude_code'] });
-
-    expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(30);
-    expect(loaded?.machineData).toEqual([
-      expect.objectContaining({ hostname: 'host', lastUpdated: 'last-sync' }),
-    ]);
-  });
-
-  it('keeps persisted days the pruned local logs no longer cover', async () => {
-    mocks.tryLoadConfig.mockReturnValue({
-      repoUrl: 'git@example.com:me/data.git',
-      machineId: 'host',
-    });
-    mocks.resolveMachineId.mockReturnValue('host');
-    mocks.isCloned.mockReturnValue(true);
-    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'host',
-      lastUpdated: 'last-sync',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 30, outputTokens: 10 } },
-            totals: { inputTokens: 30, outputTokens: 10 },
-          },
-        },
-        '2024-01-02': {
-          codex: {
-            byModel: { stale: { inputTokens: 900, outputTokens: 100 } },
-            totals: { inputTokens: 900, outputTokens: 100 },
-          },
-        },
-      },
-    });
-    mocks.buildLocalMachineFile.mockResolvedValue({
-      hostname: 'host',
-      lastUpdated: 'fresh',
-      days: {
-        '2024-01-03': {
-          codex: {
-            byModel: { fresh: { inputTokens: 20, outputTokens: 10 } },
-            totals: { inputTokens: 20, outputTokens: 10 },
-          },
-        },
-      },
-    });
-
-    const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
-
-    expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(30);
-    // The local codex logs have been pruned back to 2024-01-03, so the synced
-    // file is the only remaining record of 2024-01-02 and must survive.
-    expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(900);
-    expect(loaded?.providerData.codex?.get('2024-01-03')?.inputTokens).toBe(20);
-    expect(loaded?.machineData).toHaveLength(1);
-    expect(loaded?.machineData[0]).toMatchObject({ hostname: 'host', lastUpdated: 'last-sync' });
-    expect(loaded?.machineData[0]?.days).toHaveProperty('2024-01-01');
-    expect(loaded?.machineData[0]?.days).toHaveProperty('2024-01-02');
-  });
-
-  it('keeps the persisted boundary day when the local logs were pruned below it', async () => {
-    mocks.tryLoadConfig.mockReturnValue({
-      repoUrl: 'git@example.com:me/data.git',
-      machineId: 'host',
-    });
-    mocks.resolveMachineId.mockReturnValue('host');
-    mocks.isCloned.mockReturnValue(true);
-    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'host',
-      lastUpdated: 'last-sync',
-      days: {
-        '2024-01-02': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 900_000, outputTokens: 100_000 } },
-            totals: { inputTokens: 900_000, outputTokens: 100_000 },
-          },
-        },
-      },
-    });
-    // Transcripts for that day have since been trimmed, so the logs only still
-    // show part of what was synced from them.
-    mocks.buildLocalMachineFile.mockResolvedValue({
-      hostname: 'host',
-      lastUpdated: 'fresh',
-      days: {
-        '2024-01-02': {
-          claude_code: {
-            byModel: { claude: { inputTokens: 180_000, outputTokens: 20_000 } },
-            totals: { inputTokens: 180_000, outputTokens: 20_000 },
-          },
-        },
-      },
-    });
-
-    const loaded = await loadMergedProviderData({ providers: ['claude_code'] });
-
-    // sync keeps the larger persisted record (mergePersistedDays); the display
-    // has to agree or the day renders below what the synced file holds.
-    expect(loaded?.providerData.claude_code?.get('2024-01-02')?.inputTokens).toBe(900_000);
   });
 });
 
@@ -517,32 +363,18 @@ describe('loadReportedMachines', () => {
   });
 
   it('overlays this machine with the local logs and keeps the sync timestamp', async () => {
-    mocks.readDataFile.mockReturnValue({
-      ...SCHEMA_FIELDS,
-      hostname: 'host',
-      lastUpdated: 'last-sync',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { m: { inputTokens: 10, outputTokens: 0 } },
-            totals: { inputTokens: 10, outputTokens: 0 },
-          },
-        },
-      },
-    });
-    mocks.buildLocalMachineFile.mockResolvedValue({
-      ...SCHEMA_FIELDS,
-      hostname: 'host',
-      lastUpdated: 'fresh',
-      days: {
-        '2024-01-02': {
-          claude_code: {
-            byModel: { m: { inputTokens: 40, outputTokens: 0 } },
-            totals: { inputTokens: 40, outputTokens: 0 },
-          },
-        },
-      },
-    });
+    mocks.readDataFile.mockReturnValue(
+      makeMachineFile(
+        'host',
+        { '2024-01-01': { claude_code: makeProviderDay(10, 0) } },
+        { lastUpdated: 'last-sync' },
+      ),
+    );
+    mocks.buildLocalMachineFile.mockResolvedValue(
+      makeMachineFile('host', {
+        '2024-01-02': { claude_code: makeProviderDay(40, 0) },
+      }),
+    );
 
     const machines = await loadReportedMachines();
 
@@ -553,19 +385,11 @@ describe('loadReportedMachines', () => {
 
   it('includes local-only usage as not yet synced', async () => {
     mocks.listDataFiles.mockReturnValue([]);
-    mocks.buildLocalMachineFile.mockResolvedValue({
-      ...SCHEMA_FIELDS,
-      hostname: 'host',
-      lastUpdated: 'fresh',
-      days: {
-        '2024-01-02': {
-          claude_code: {
-            byModel: { m: { inputTokens: 40, outputTokens: 0 } },
-            totals: { inputTokens: 40, outputTokens: 0 },
-          },
-        },
-      },
-    });
+    mocks.buildLocalMachineFile.mockResolvedValue(
+      makeMachineFile('host', {
+        '2024-01-02': { claude_code: makeProviderDay(40, 0) },
+      }),
+    );
 
     const machines = await loadReportedMachines();
 

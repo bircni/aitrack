@@ -1,32 +1,10 @@
+import { makeMachineFile as machine, makeProviderDay } from '@aitrack/test-fixtures';
 import { describe, expect, it } from 'vitest';
 
 import { findDuplicateMachineDays } from '../duplicateMachines.js';
-import type { MachineFile } from '../types.js';
 
-function machine(hostname: string, days: MachineFile['days']): MachineFile {
-  return {
-    schemaVersion: 2,
-    hostname,
-    timezone: 'UTC',
-    dayBucket: 'utc',
-    lastUpdated: '2026-01-16T00:00:00.000Z',
-    days,
-  };
-}
-
-const day = {
-  claude_code: {
-    byModel: { 'claude-sonnet-5': { inputTokens: 10, outputTokens: 5 } },
-    totals: { inputTokens: 10, outputTokens: 5 },
-  },
-};
-
-const otherDay = {
-  claude_code: {
-    byModel: { 'claude-sonnet-5': { inputTokens: 99, outputTokens: 1 } },
-    totals: { inputTokens: 99, outputTokens: 1 },
-  },
-};
+const day = { claude_code: makeProviderDay(10, 5) };
+const otherDay = { claude_code: makeProviderDay(99, 1) };
 
 describe('findDuplicateMachineDays', () => {
   it('finds a day recorded identically under two machines', () => {
