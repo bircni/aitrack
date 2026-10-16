@@ -21,26 +21,10 @@ import { machineIdValidationError, normalizeMachineId } from 'aitrack-lib/machin
 import { log } from 'aitrack-lib/output';
 import prompts from 'prompts';
 
-async function promptOverwrite(): Promise<boolean | undefined> {
-  const answers = await prompts<'overwrite'>({
-    type: 'confirm',
-    name: 'overwrite',
-    message: 'Config already exists. Overwrite?',
-    initial: false,
-  });
-  const overwrite: unknown = answers.overwrite;
-  return typeof overwrite === 'boolean' ? overwrite : undefined;
-}
-
-async function promptReclone(): Promise<boolean | undefined> {
-  const answers = await prompts<'reclone'>({
-    type: 'confirm',
-    name: 'reclone',
-    message: 'Repo URL changed. Remove local clone and re-clone from the new URL?',
-    initial: false,
-  });
-  const reclone: unknown = answers.reclone;
-  return typeof reclone === 'boolean' ? reclone : undefined;
+async function promptConfirm(name: string, message: string): Promise<boolean | undefined> {
+  const answers = await prompts({ type: 'confirm', name, message, initial: false });
+  const answer: unknown = answers[name];
+  return typeof answer === 'boolean' ? answer : undefined;
 }
 
 async function promptRepoUrl(): Promise<string | undefined> {
@@ -75,7 +59,7 @@ export async function initCommand(): Promise<void> {
   if (loaded.status !== 'missing') {
     if (loaded.status === 'invalid') log.warn(describeInvalidConfig(loaded.reason));
     else log.info(`Current config: repo=${loaded.config.repoUrl}`);
-    const overwrite = await promptOverwrite();
+    const overwrite = await promptConfirm('overwrite', 'Config already exists. Overwrite?');
     if (!overwrite) {
       log.info('Aborted.');
       return;
@@ -98,7 +82,10 @@ export async function initCommand(): Promise<void> {
   const isUrlChanged = originUrl !== null && originUrl !== repoUrl; // Unknown origin keeps the clone.
 
   if (isUrlChanged) {
-    const reclone = await promptReclone();
+    const reclone = await promptConfirm(
+      'reclone',
+      'Repo URL changed. Remove local clone and re-clone from the new URL?',
+    );
     if (!reclone) {
       log.info('Aborted.');
       return;
@@ -107,8 +94,6 @@ export async function initCommand(): Promise<void> {
     removeLocalClone();
   }
 
-  // Every path below this point ends with a clone present: either one was
-  // already there and is being kept, or one is made here.
   if (wasCloned && !isUrlChanged) {
     log.info(`Repo already cloned at ${LOCAL_REPO}. Skipping clone.`);
   } else {

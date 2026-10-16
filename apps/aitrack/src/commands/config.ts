@@ -6,7 +6,6 @@ import { normalizeMachineId } from 'aitrack-lib/machineId';
 import { log } from 'aitrack-lib/output';
 import chalk from 'chalk';
 
-/** Configuration keys that can be read/written via the CLI. */
 export const CONFIG_KEYS = [
   'repoUrl',
   'machineId',
@@ -57,8 +56,7 @@ export interface ConfigCommandOptions {
   value?: string;
 }
 
-export async function configCommand(options: ConfigCommandOptions): Promise<void> {
-  await Promise.resolve(); // Async to fit runAsync.
+export function configCommand(options: ConfigCommandOptions): void {
   switch (options.action) {
     case 'list': {
       listConfig();
@@ -120,23 +118,19 @@ function setConfig(key: string | undefined, value: string | undefined): void {
     throw new Error(`A value is required: aitrack config set ${key} <value>`);
   }
   const existing = existingConfig();
-  const normalizedValue =
-    key === 'machineId'
-      ? normalizeMachineId(value)
-      : key === 'budget.monthly'
-        ? parseMonthlyBudget(value)
-        : value;
-  if (key === 'machineId') {
-    const previousMachineId = resolveMachineId(existing);
-    migrateMachineDataFiles(previousMachineId, normalizeMachineId(value));
-  }
   const base: Config = existing ?? { repoUrl: '' };
-  const next: Config =
-    key === 'budget.monthly'
-      ? { ...base, budget: { ...base.budget, monthlyUSD: normalizedValue as number } }
-      : { ...base, [key]: normalizedValue };
+  let next: Config;
+  if (key === 'budget.monthly') {
+    next = { ...base, budget: { ...base.budget, monthlyUSD: parseMonthlyBudget(value) } };
+  } else if (key === 'machineId') {
+    const machineId = normalizeMachineId(value);
+    migrateMachineDataFiles(resolveMachineId(existing), machineId);
+    next = { ...base, machineId };
+  } else {
+    next = { ...base, [key]: value };
+  }
   saveConfig(next);
-  log.info(`Set ${key} = ${String(normalizedValue)}`);
+  log.info(`Set ${key} = ${String(configValue(next, key))}`);
   if (next.repoUrl.length === 0) {
     log.warn(chalk.yellow(REPO_URL_UNSET_MESSAGE));
   }

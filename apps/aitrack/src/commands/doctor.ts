@@ -141,10 +141,6 @@ function pricingCheck(): CheckResult {
       };
 }
 
-// One physical machine synced under two identities (e.g. after a hostname or
-// machineId change that left the old data file behind) gets counted twice in
-// every aggregate. The tell is the same day carrying a byte-identical payload
-// under more than one machine file — real distinct machines never collide.
 export function duplicateMachineCheck(): CheckResult {
   const machines = listDataFiles()
     .map((filePath) => readDataFile(filePath))

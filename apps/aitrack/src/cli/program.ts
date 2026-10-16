@@ -27,10 +27,10 @@ import {
   registerUsageCommands,
 } from './usageCommands.js';
 
-/** Prints a rejection (or a synchronous throw) and sets a failing exit code. */
-export function runAsync(function_: () => Promise<void>): void {
+/** Prints a thrown or rejected failure and sets a failing exit code. */
+export function runAsync(function_: () => void | Promise<void>): void {
   try {
-    function_().catch(fail);
+    Promise.resolve(function_()).catch(fail);
   } catch (error) {
     fail(error);
   }
@@ -179,21 +179,27 @@ export function buildProgram(): Command {
     .command('list')
     .description('Print the current configuration')
     .action(() => {
-      runAsync(() => configCommand({ action: 'list' }));
+      runAsync(() => {
+        configCommand({ action: 'list' });
+      });
     });
 
   config
     .command('get <key>')
     .description('Print a single configuration value')
     .action((key: string) => {
-      runAsync(() => configCommand({ action: 'get', key }));
+      runAsync(() => {
+        configCommand({ action: 'get', key });
+      });
     });
 
   config
     .command('set <key> <value>')
     .description(`Set a configuration value (keys: ${CONFIG_KEYS.join(', ')})`)
     .action((key: string, value: string) => {
-      runAsync(() => configCommand({ action: 'set', key, value }));
+      runAsync(() => {
+        configCommand({ action: 'set', key, value });
+      });
     });
 
   return program;

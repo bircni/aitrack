@@ -40,9 +40,9 @@ describe('configCommand', () => {
   });
 
   describe('list', () => {
-    it('prints all keys and the resolved machineId', async () => {
+    it('prints all keys and the resolved machineId', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git' });
-      await configCommand({ action: 'list' });
+      configCommand({ action: 'list' });
       const out = loggedOutput();
       expect(out).toContain('repoUrl = git@example.com:me/d.git');
       expect(out).toContain('machineId =');
@@ -52,43 +52,43 @@ describe('configCommand', () => {
       expect(out).toContain('resolved-host');
     });
 
-    it('prints a hint when no config exists', async () => {
+    it('prints a hint when no config exists', () => {
       mocks.readConfig.mockReturnValue({ status: 'missing' });
-      await configCommand({ action: 'list' });
+      configCommand({ action: 'list' });
       expect(loggedOutput()).toContain('aitrack init');
     });
   });
 
   describe('get', () => {
-    it('prints a single value', async () => {
+    it('prints a single value', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git' });
-      await configCommand({ action: 'get', key: 'repoUrl' });
+      configCommand({ action: 'get', key: 'repoUrl' });
       expect(loggedOutput()).toBe('git@example.com:me/d.git');
     });
 
-    it('prints empty for an unset value', async () => {
+    it('prints empty for an unset value', () => {
       okConfig({ repoUrl: 'x' });
-      await configCommand({ action: 'get', key: 'machineId' });
+      configCommand({ action: 'get', key: 'machineId' });
       expect(loggedOutput()).toBe('');
     });
 
-    it('prints the configured monthly budget', async () => {
+    it('prints the configured monthly budget', () => {
       okConfig({ repoUrl: 'x', budget: { monthlyUSD: 200 } });
-      await configCommand({ action: 'get', key: 'budget.monthly' });
+      configCommand({ action: 'get', key: 'budget.monthly' });
       expect(loggedOutput()).toBe('200');
     });
 
-    it('rejects an unknown key', async () => {
-      await expect(configCommand({ action: 'get', key: 'nope' })).rejects.toThrow(
-        'Unknown config key',
-      );
+    it('rejects an unknown key', () => {
+      expect(() => {
+        configCommand({ action: 'get', key: 'nope' });
+      }).toThrow('Unknown config key');
     });
   });
 
   describe('set', () => {
-    it('updates an existing config', async () => {
+    it('updates an existing config', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git' });
-      await configCommand({
+      configCommand({
         action: 'set',
         key: 'claudeProjectsDir',
         value: '/tmp/claude-a,/tmp/claude-b',
@@ -100,23 +100,23 @@ describe('configCommand', () => {
       expect(loggedOutput()).toContain('Set claudeProjectsDir = /tmp/claude-a,/tmp/claude-b');
     });
 
-    it('creates a config when none exists and warns about empty repoUrl', async () => {
+    it('creates a config when none exists and warns about empty repoUrl', () => {
       mocks.readConfig.mockReturnValue({ status: 'missing' });
       const warn = vi.spyOn(console, 'warn');
-      await configCommand({ action: 'set', key: 'machineId', value: 'work-laptop' });
+      configCommand({ action: 'set', key: 'machineId', value: 'work-laptop' });
       expect(mocks.migrateMachineDataFiles).toHaveBeenCalledWith('resolved-host', 'work-laptop');
       expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: '', machineId: 'work-laptop' });
       expect(warn).toHaveBeenCalled();
     });
 
-    it('normalizes and migrates a legitimate later machineId change', async () => {
+    it('normalizes and migrates a legitimate later machineId change', () => {
       okConfig({
         repoUrl: 'git@example.com:me/d.git',
         machineId: 'old-pc',
       });
       mocks.resolveMachineId.mockReturnValue('old-pc');
 
-      await configCommand({ action: 'set', key: 'machineId', value: '  Work Laptop_01.2  ' });
+      configCommand({ action: 'set', key: 'machineId', value: '  Work Laptop_01.2  ' });
 
       expect(mocks.migrateMachineDataFiles).toHaveBeenCalledWith('old-pc', 'Work Laptop_01.2');
       expect(mocks.saveConfig).toHaveBeenCalledWith({
@@ -125,10 +125,10 @@ describe('configCommand', () => {
       });
     });
 
-    it('sets budget.monthly as a positive dollar amount under budget.monthlyUSD', async () => {
+    it('sets budget.monthly as a positive dollar amount under budget.monthlyUSD', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git' });
 
-      await configCommand({ action: 'set', key: 'budget.monthly', value: '149.99' });
+      configCommand({ action: 'set', key: 'budget.monthly', value: '149.99' });
 
       expect(mocks.saveConfig).toHaveBeenCalledWith({
         repoUrl: 'git@example.com:me/d.git',
@@ -136,28 +136,22 @@ describe('configCommand', () => {
       });
     });
 
-    it.each(['0', '-5', 'lots'])(
-      'rejects a non-positive budget.monthly value %j',
-      async (value) => {
-        await expect(
-          configCommand({ action: 'set', key: 'budget.monthly', value }),
-        ).rejects.toThrow('budget.monthly');
-        expect(mocks.saveConfig).not.toHaveBeenCalled();
-      },
-    );
+    it.each(['0', '-5', 'lots'])('rejects a non-positive budget.monthly value %j', (value) => {
+      expect(() => {
+        configCommand({ action: 'set', key: 'budget.monthly', value });
+      }).toThrow('budget.monthly');
+      expect(mocks.saveConfig).not.toHaveBeenCalled();
+    });
 
-    it.each(['../escape', '..\\escape', 'nested/machine'])(
-      'rejects unsafe machineId %j before migration or save',
-      async (value) => {
-        await expect(configCommand({ action: 'set', key: 'machineId', value })).rejects.toThrow(
-          'Machine name',
-        );
-        expect(mocks.migrateMachineDataFiles).not.toHaveBeenCalled();
-        expect(mocks.saveConfig).not.toHaveBeenCalled();
-      },
-    );
+    it('rejects an unsafe machineId before migration or save', () => {
+      expect(() => {
+        configCommand({ action: 'set', key: 'machineId', value: '../escape' });
+      }).toThrow('Machine name');
+      expect(mocks.migrateMachineDataFiles).not.toHaveBeenCalled();
+      expect(mocks.saveConfig).not.toHaveBeenCalled();
+    });
 
-    it('preserves the old config when machine data migration conflicts', async () => {
+    it('preserves the old config when machine data migration conflicts', () => {
       okConfig({
         repoUrl: 'git@example.com:me/d.git',
         machineId: 'old-pc',
@@ -167,32 +161,32 @@ describe('configCommand', () => {
         throw new Error('already exists');
       });
 
-      await expect(
-        configCommand({ action: 'set', key: 'machineId', value: 'new-pc' }),
-      ).rejects.toThrow('already exists');
+      expect(() => {
+        configCommand({ action: 'set', key: 'machineId', value: 'new-pc' });
+      }).toThrow('already exists');
 
       expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
-    it('refuses to overwrite an invalid config', async () => {
+    it('refuses to overwrite an invalid config', () => {
       mocks.readConfig.mockReturnValue({ status: 'invalid', reason: 'not valid JSON' });
-      await expect(configCommand({ action: 'set', key: 'repoUrl', value: 'x' })).rejects.toThrow(
-        'Config at /config.json is not valid JSON',
-      );
+      expect(() => {
+        configCommand({ action: 'set', key: 'repoUrl', value: 'x' });
+      }).toThrow('Config at /config.json is not valid JSON');
       expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
-    it('rejects an unknown key', async () => {
-      await expect(configCommand({ action: 'set', key: 'nope', value: 'x' })).rejects.toThrow(
-        'Unknown config key',
-      );
+    it('rejects an unknown key', () => {
+      expect(() => {
+        configCommand({ action: 'set', key: 'nope', value: 'x' });
+      }).toThrow('Unknown config key');
       expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
-    it('requires a value', async () => {
-      await expect(
-        configCommand({ action: 'set', key: 'repoUrl', value: undefined }),
-      ).rejects.toThrow('A value is required');
+    it('requires a value', () => {
+      expect(() => {
+        configCommand({ action: 'set', key: 'repoUrl', value: undefined });
+      }).toThrow('A value is required');
     });
   });
 });

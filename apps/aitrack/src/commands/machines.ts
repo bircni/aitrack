@@ -36,7 +36,7 @@ function summarizeMachine(file: MachineFile): MachineSummary {
   const dayKeys: string[] = [];
 
   for (const [date, dayProviders] of Object.entries(file.days)) {
-    let isDayHasTokens = false;
+    let dayHasTokens = false;
     for (const [providerKey, pData] of Object.entries(dayProviders)) {
       providers.add(providerKey);
       inputTokens += pData.totals.inputTokens;
@@ -45,9 +45,9 @@ function summarizeMachine(file: MachineFile): MachineSummary {
         costUSD += pData.totals.costUSD;
         hasCost = true;
       }
-      if (pData.totals.inputTokens + pData.totals.outputTokens > 0) isDayHasTokens = true;
+      if (pData.totals.inputTokens + pData.totals.outputTokens > 0) dayHasTokens = true;
     }
-    if (isDayHasTokens) dayKeys.push(date);
+    if (dayHasTokens) dayKeys.push(date);
   }
   dayKeys.sort((a, b) => a.localeCompare(b));
   return {

@@ -13,9 +13,7 @@ export interface ExportOptions {
   args?: string[];
   output?: string;
   providers?: string[];
-  /** Emit CSV instead of the PDF receipt. */
   csv?: boolean;
-  /** Re-fetch live provider data (Cursor) instead of serving the local cache. */
   refresh?: boolean;
 }
 

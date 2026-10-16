@@ -1,4 +1,3 @@
-import type { AggregateModelsFilter } from 'aitrack-lib/data/aggregate';
 import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
 import {
   type DayEntryAccumulator,
@@ -34,7 +33,6 @@ export interface TopOptions {
   limit: number;
   sort: TopSort;
   providers?: string[];
-  /** Re-fetch live provider data (Cursor) instead of serving the local cache. */
   refresh?: boolean;
   year?: number;
   /** Inclusive lower bound, YYYY-MM-DD. */
@@ -42,13 +40,6 @@ export interface TopOptions {
   /** Inclusive upper bound, YYYY-MM-DD. */
   until?: string;
   json?: boolean;
-}
-
-function dateFilter(options: TopOptions): AggregateModelsFilter | undefined {
-  if (options.year === undefined && options.since === undefined && options.until === undefined) {
-    return undefined;
-  }
-  return { year: options.year, start: options.since, end: options.until };
 }
 
 function windowSuffix({ year, since, until }: TopOptions): string {
@@ -73,7 +64,6 @@ interface TopJsonItem {
   [key: string]: unknown;
 }
 
-/** The two tables differ only in these two headings. */
 function topColumns(labelHeader: string, subHeader: string): Array<TerminalTableColumn<Row>> {
   return [
     { header: '#', align: 'right', cell: (r) => r.rank },
@@ -164,7 +154,7 @@ export async function topCommand(options: TopOptions): Promise<void> {
 
   warnAboutPricingFallbacks(loaded.providerData);
 
-  const filter = dateFilter(options);
+  const filter = { year: options.year, start: options.since, end: options.until };
   const suffix = windowSuffix(options);
 
   if (options.kind === 'days') {
