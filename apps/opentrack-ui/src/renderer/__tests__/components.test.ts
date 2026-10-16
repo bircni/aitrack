@@ -70,6 +70,26 @@ function change(selector: string, value?: string): void {
 function handlers() {
   return { onRefresh: vi.fn(), onSync: vi.fn(), onOpenDashboard: vi.fn() };
 }
+function listener<K extends 'onState' | 'onSettings' | 'onScreen' | 'onSettingErrors' | 'onUpdate'>(
+  name: K,
+): Parameters<OpentrackApi[K]>[0] {
+  return mocks.api[name].mock.calls[0]?.[0] as Parameters<OpentrackApi[K]>[0];
+}
+function spent(tokens: number, costUSD: number, model: string): PeriodUsage {
+  const hasCost = costUSD > 0;
+  return { tokens, costUSD, hasCost, models: [{ model, tokens, costUSD, hasCost }] };
+}
+function usage(period: PeriodUsage, daily = [{ date: '2026-06-01', costUSD: 0 }]): ProviderUsage {
+  return {
+    today: period,
+    yesterday: EMPTY_PERIOD,
+    last7Days: period,
+    last30Days: period,
+    allTime: period,
+    daily,
+  };
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   Element.prototype.animate = () => ({}) as Animation;
@@ -137,10 +157,9 @@ describe('desktop commands and settings', () => {
     await settle();
     change('#set-display', 'left');
     await settle();
+    expect(target.querySelector<HTMLSelectElement>('#set-display')?.value).toBe('left');
     expect(mocks.api.saveSettings).toHaveBeenCalledTimes(1);
-    const externalSettings = mocks.api.onSettings.mock.calls[0]?.[0] as Parameters<
-      OpentrackApi['onSettings']
-    >[0];
+    const externalSettings = listener('onSettings');
     externalSettings(DEFAULT_SETTINGS);
     rejectSave?.(new Error('bridge disconnected'));
     await settle();
@@ -192,11 +211,9 @@ describe('desktop commands and settings', () => {
     click('.banner button');
     await settle();
     expect(mocks.api.getState).toHaveBeenCalledTimes(2);
-    const onState = mocks.api.onState.mock.calls[0]?.[0] as Parameters<OpentrackApi['onState']>[0];
+    const onState = listener('onState');
     onState({ ...state, refreshing: true });
-    const onSettings = mocks.api.onSettings.mock.calls[0]?.[0] as Parameters<
-      OpentrackApi['onSettings']
-    >[0];
+    const onSettings = listener('onSettings');
     onSettings({ ...DEFAULT_SETTINGS, windowMode: 'floating' });
     await settle();
     expect(target.textContent).not.toContain('Could not load dashboard');
@@ -205,9 +222,7 @@ describe('desktop commands and settings', () => {
     onState({ ...state, syncing: true });
     await settle();
     expect(target.textContent).toContain('Syncing');
-    const onScreen = mocks.api.onScreen.mock.calls[0]?.[0] as Parameters<
-      OpentrackApi['onScreen']
-    >[0];
+    const onScreen = listener('onScreen');
     onScreen('settings');
     await settle();
     expect(target.querySelector('h1')?.textContent).toBe('Settings');
@@ -252,9 +267,7 @@ describe('desktop commands and settings', () => {
     expect(target.querySelector(`#${login?.getAttribute('aria-describedby')}`)?.textContent).toBe(
       'Login item denied',
     );
-    const callback = mocks.api.onSettingErrors.mock.calls[0]?.[0] as Parameters<
-      OpentrackApi['onSettingErrors']
-    >[0];
+    const callback = listener('onSettingErrors');
     callback({});
     await settle();
     expect(target.textContent).not.toContain('Shortcut unavailable');
@@ -302,17 +315,10 @@ it('shows partial costs and cached ages, exposes provider controls and operation
             },
           ],
         },
-        usage: {
-          today: partial,
-          yesterday: EMPTY_PERIOD,
-          last7Days: partial,
-          last30Days: partial,
-          allTime: partial,
-          daily: [
-            { date: '2026-06-01', costUSD: 2 },
-            { date: '2026-05-31', costUSD: 1 },
-          ],
-        },
+        usage: usage(partial, [
+          { date: '2026-06-01', costUSD: 2 },
+          { date: '2026-05-31', costUSD: 1 },
+        ]),
       },
     ],
   };
@@ -354,54 +360,6 @@ it('shows partial costs and cached ages, exposes provider controls and operation
   expect(refresh).toHaveBeenCalledTimes(1);
 });
 
-it('renders unavailable and signed-out providers and all-time totals without a chart', async () => {
-  const period = vi.fn<(value: string) => void>();
-  const patch = vi.fn<(value: Partial<Settings>) => void>();
-  const openDashboard = vi.fn();
-  const props = {
-    appState: {
-      ...state,
-      providers: [
-        {
-          key: 'cursor' as const,
-          label: 'Cursor',
-          refreshing: false,
-          quotaError: { kind: 'noCredentials' as const, message: 'signed out' },
-        },
-        { key: 'codex' as const, label: 'Codex', refreshing: false },
-      ],
-    },
-    settings: { ...DEFAULT_SETTINGS, display: 'left' as const, resetDisplay: 'relative' as const },
-    now: Date.now(),
-    period: 'all' as const,
-    onPeriod: period,
-    onPatch: patch,
-    ...handlers(),
-    onOpenDashboard: openDashboard,
-  };
-  mounted.push(mount(Dashboard, { target, props }));
-  await settle();
-  expect(target.textContent).toContain('Checking limits');
-  expect(target.querySelector('.spark')).toBeNull();
-  click('.state button');
-  expect(openDashboard).toHaveBeenCalledWith('cursor');
-  expect(target.querySelector<HTMLButtonElement>('.p-head')?.disabled).toBe(true);
-});
-
-function spent(tokens: number, costUSD: number, model: string): PeriodUsage {
-  const hasCost = costUSD > 0;
-  return { tokens, costUSD, hasCost, models: [{ model, tokens, costUSD, hasCost }] };
-}
-function usage(period: PeriodUsage, daily = [{ date: '2026-06-01', costUSD: 0 }]): ProviderUsage {
-  return {
-    today: period,
-    yesterday: EMPTY_PERIOD,
-    last7Days: period,
-    last30Days: period,
-    allTime: period,
-    daily,
-  };
-}
 it('compares machines by share, activity and freshness, with account-wide usage apart', async () => {
   const now = Date.parse('2026-06-01T12:00:00Z');
   const appState: AppState = {
@@ -450,6 +408,8 @@ it('compares machines by share, activity and freshness, with account-wide usage 
   const tabs = mount(Dashboard, { target, props });
   await settle();
   expect(target.querySelector('.machines')).toBeNull();
+  expect(target.textContent).toContain('Checking limits');
+  expect(target.querySelector<HTMLButtonElement>('.p-head')?.disabled).toBe(true);
   click('.sub-link');
   for (const tab of target.querySelectorAll<HTMLButtonElement>('[role="tab"]')) tab.click();
   expect(view.mock.calls).toEqual([['machines'], ['providers'], ['machines']]);
@@ -537,14 +497,7 @@ it('renders remaining quotas with and without reset metadata and delivers toggle
                   { id: 'unknown', label: 'Unscheduled', usedPercent: 0, format: 'percent' },
                 ],
               },
-              usage: {
-                today: EMPTY_PERIOD,
-                yesterday: EMPTY_PERIOD,
-                last7Days: EMPTY_PERIOD,
-                last30Days: EMPTY_PERIOD,
-                allTime: EMPTY_PERIOD,
-                daily: [],
-              },
+              usage: usage(EMPTY_PERIOD, []),
             },
           ],
         },
@@ -563,6 +516,7 @@ it('renders remaining quotas with and without reset metadata and delivers toggle
   expect(patch).toHaveBeenCalledWith({ display: 'used' });
   expect(patch).toHaveBeenCalledWith({ resetDisplay: 'absolute' });
   expect(target.textContent).toContain('Unscheduled');
+  expect(target.querySelector('.spark')).toBeNull();
 });
 
 it('falls back to automatic tray selection when its provider is disabled and handles unavailable setting errors', async () => {
@@ -624,10 +578,8 @@ it('updates quota meters and settings controls when the sidecar pushes new value
   mocks.api.getState.mockResolvedValue({ ...state, providers: [provider] });
   mounted.push(mount(App, { target }));
   await settle();
-  const onState = mocks.api.onState.mock.calls[0]?.[0] as Parameters<OpentrackApi['onState']>[0];
-  const onSettings = mocks.api.onSettings.mock.calls[0]?.[0] as Parameters<
-    OpentrackApi['onSettings']
-  >[0];
+  const onState = listener('onState');
+  const onSettings = listener('onSettings');
   onSettings({ ...DEFAULT_SETTINGS, display: 'left', resetDisplay: 'relative' });
   await settle();
   expect(target.querySelector('[role="meter"]')?.getAttribute('aria-valuenow')).toBe('60');
@@ -722,25 +674,6 @@ it('guards provider moves at list boundaries even if a disabled control receives
   expect(patch).not.toHaveBeenCalled();
 });
 
-it('applies saved preferences back to every settings control', async () => {
-  mounted.push(mount(App, { target }));
-  await settle();
-  click('[aria-label="Settings"]');
-  await settle();
-  for (const selector of ['#set-reset', '#set-tray-provider', '#set-tray-style']) {
-    const select = target.querySelector<HTMLSelectElement>(selector);
-    change(selector, select?.options[1]?.value);
-    await settle();
-  }
-  for (const input of target.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) {
-    input.checked = !input.checked;
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    await settle();
-  }
-  expect(mocks.api.saveSettings).toHaveBeenCalled();
-  expect(target.querySelector<HTMLSelectElement>('#set-tray-style')?.value).toBe('bars');
-});
-
 it('retries failed operations separately from command delivery', async () => {
   mocks.api.getState.mockResolvedValue({
     ...state,
@@ -782,7 +715,7 @@ it('offers a found update and retries a failed install', async () => {
   mounted.push(mount(App, { target }));
   await settle();
   expect(target.textContent).not.toContain('is available');
-  const onUpdate = mocks.api.onUpdate.mock.calls[0]?.[0] as Parameters<OpentrackApi['onUpdate']>[0];
+  const onUpdate = listener('onUpdate');
   onUpdate('3.1.0');
   await settle();
   expect(target.textContent).toContain('opentrack 3.1.0 is available.');
@@ -825,7 +758,7 @@ it('shows the version and checks for and installs updates from settings', async 
   button('Check now')?.click();
   await settle();
   expect(target.textContent).toContain('Up to date');
-  const onUpdate = mocks.api.onUpdate.mock.calls[0]?.[0] as Parameters<OpentrackApi['onUpdate']>[0];
+  const onUpdate = listener('onUpdate');
   onUpdate('3.2.0');
   await settle();
   expect(target.textContent).toContain('3.2.0 is available');

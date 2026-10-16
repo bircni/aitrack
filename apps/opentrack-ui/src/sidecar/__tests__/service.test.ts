@@ -175,21 +175,6 @@ describe('QuotaService', () => {
     expect(h.calls).toEqual(['cursor']);
   });
 
-  it('keeps the last quota when a refresh fails', async () => {
-    let fail = false;
-    const h = harness({
-      claude_code: () =>
-        fail ? { ok: false, error: { kind: 'network', message: 'offline' } } : ok('claude_code'),
-    });
-    await h.service.refresh();
-    fail = true;
-    h.advance(REFRESH_INTERVAL_MS);
-    await h.service.refresh();
-    const [claude] = h.service.state().providers;
-    expect(claude?.quota).toBeDefined();
-    expect(claude?.quotaError?.message).toBe('offline');
-  });
-
   it('alerts once per reset and only when enabled', async () => {
     const h = harness({ claude_code: () => ok('claude_code', 95, START) });
     await h.service.refresh();
@@ -346,19 +331,6 @@ describe('QuotaService', () => {
     finishReload?.();
     await syncing;
     expect(service.state()).toMatchObject({ syncing: false, refreshing: false });
-  });
-
-  it('starts from the cached state', () => {
-    const cached = ok('codex');
-    const { service } = harness(
-      {},
-      {},
-      {
-        quotas: { codex: cached.ok ? cached.snapshot : undefined },
-        fired: {},
-      },
-    );
-    expect(service.state().providers[1]?.quota?.provider).toBe('codex');
   });
 
   it('drops malformed parts of a hand-edited cache', () => {
@@ -522,10 +494,13 @@ describe('QuotaService', () => {
     expect(h.service.state().providers[0]?.quota?.fetchedAt).toBe(
       initial.providers[0]?.quota?.fetchedAt,
     );
+    expect(h.service.state().providers[0]?.quotaError?.message).toBe('offline');
     const cached = persist.mock.calls.at(-1)?.[0];
     if (!cached) throw new Error('expected persisted cache');
     expect(cached.usageUpdatedAt).toBe(initial.usageUpdatedAt);
-    expect(harness({}, {}, cached).service.state().usageUpdatedAt).toBe(initial.usageUpdatedAt);
+    const restarted = harness({}, {}, cached).service.state();
+    expect(restarted.usageUpdatedAt).toBe(initial.usageUpdatedAt);
+    expect(restarted.providers[0]?.quota?.provider).toBe('claude_code');
   });
 
   it('retains both warnings when a pull and the following local read fail', async () => {
