@@ -1,40 +1,26 @@
-import type { MachineFile } from 'aitrack-lib/data/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { handleRequest, parseRequest } from '../protocol.js';
-import { QuotaService } from '../service.js';
+import type { AppState } from '../../shared/types.js';
+import { type HandlerContext, handleRequest, parseRequest } from '../protocol.js';
 import { DEFAULT_SETTINGS } from '../settings.js';
 
 function context() {
   const saved: unknown[] = [];
-  const sync = vi.fn(() =>
-    Promise.resolve({ message: 'synced', machine: { hostname: 'host' } as MachineFile }),
-  );
-  const service = new QuotaService(
-    {
-      fetchQuota: (provider) =>
-        Promise.resolve({ ok: false, error: { kind: 'noCredentials', message: `no ${provider}` } }),
-      loadUsage: () => Promise.resolve({ summary: { providers: {}, machineCount: 1 } }),
-      now: () => 0,
-      onState: () => undefined,
-      onAlert: () => undefined,
-      persist: () => undefined,
-      sync,
-    },
-    DEFAULT_SETTINGS,
-  );
-  return {
-    saved,
-    sync,
-    handler: {
-      service,
-      settings: () => DEFAULT_SETTINGS,
-      saveSettings: (settings: typeof DEFAULT_SETTINGS) => {
-        saved.push(settings);
-        return Promise.resolve(settings);
-      },
+  const state: AppState = { providers: [], refreshing: false, machineCount: 1, syncing: false };
+  const service = {
+    state: () => state,
+    refresh: vi.fn(() => Promise.resolve()),
+    sync: vi.fn(() => Promise.resolve()),
+  };
+  const handler: HandlerContext = {
+    service,
+    settings: () => DEFAULT_SETTINGS,
+    saveSettings: (settings) => {
+      saved.push(settings);
+      return Promise.resolve(settings);
     },
   };
+  return { saved, service, state, handler };
 }
 
 describe('sidecar protocol', () => {
@@ -50,20 +36,17 @@ describe('sidecar protocol', () => {
   });
 
   it('answers every method with its id', async () => {
-    const { handler, saved, sync } = context();
-    const state = await handleRequest({ id: 1, method: 'getState' }, handler);
-    expect(state).toMatchObject({
+    const { handler, saved, service, state } = context();
+    expect(await handleRequest({ id: 1, method: 'getState' }, handler)).toEqual({
       id: 1,
-      result: { providers: [{ key: 'claude_code' }, { key: 'codex' }, { key: 'cursor' }] },
+      result: state,
     });
 
     expect(await handleRequest({ id: 2, method: 'refresh' }, handler)).toEqual({
       id: 2,
       result: null,
     });
-    await vi.waitFor(() => {
-      expect(handler.service.state().providers[0]?.quotaError?.kind).toBe('noCredentials');
-    });
+    expect(service.refresh).toHaveBeenCalledWith(true);
 
     expect(await handleRequest({ id: 3, method: 'getSettings' }, handler)).toEqual({
       id: 3,
@@ -76,10 +59,7 @@ describe('sidecar protocol', () => {
       id: 5,
       result: null,
     });
-    await vi.waitFor(() => {
-      expect(sync).toHaveBeenCalledOnce();
-      expect(handler.service.state().syncResult).toEqual({ ok: true, message: 'synced' });
-    });
+    expect(service.sync).toHaveBeenCalledOnce();
   });
 
   it('turns failures into error responses', async () => {
