@@ -15,6 +15,9 @@ overrides:
   # nx pins smol-toml to an exact 1.6.1, which is vulnerable to a denial of
   # service on malformed TOML. Drop this once nx ships >=1.7.1 itself.
   'nx>smol-toml': '^1.9.0'
+  # nx 23.3 resolves undici 7.29.0, which has DoS and TLS advisories fixed in
+  # 7.29.1. Keep the 8.x line that jsdom uses untouched.
+  'undici@>=7.0.0 <7.29.1': '^7.29.1'
 
 # Versions every package shares. `catalog:` in a package.json resolves to the
 # entry here, so the toolchain is bumped in one place instead of three — and
