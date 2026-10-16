@@ -103,6 +103,56 @@ describe('claude pricing', () => {
     expect(priced('CLAUDE-OPUS-3').inputPerMillion).toBe(15);
   });
 
+  it.each([
+    ['claude-opus-4-7', 30],
+    ['claude-opus-4-6', 30],
+    ['claude-opus-4-1', 90],
+    ['claude-sonnet-4-6', 18],
+    ['claude-haiku-4-5-20251001', 6],
+    ['claude-3-5-haiku-20241022', 4.8],
+  ])('prices 1M input and 1M output on %s at $%s', (model, expected) => {
+    expect(
+      estimateClaudeCostUSD(model, { input_tokens: 1_000_000, output_tokens: 1_000_000 }),
+    ).toBe(expected);
+  });
+
+  it('uses cache-specific pricing and leaves an unmatched model unpriced', () => {
+    expect(
+      estimateClaudeCostUSD('claude-sonnet-4-6', {
+        input_tokens: 1_000_000,
+        cache_read_input_tokens: 1_000_000,
+        cache_creation_input_tokens: 1_000_000,
+        output_tokens: 1_000_000,
+      }),
+    ).toBe(22.05);
+    expect(
+      estimateClaudeCostUSD('unknown', {
+        input_tokens: 1_000_000,
+        cache_read_input_tokens: 1_000_000,
+        cache_creation_input_tokens: 1_000_000,
+        output_tokens: 1_000_000,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('reprices from stored cache breakdown without inflating cache reads', () => {
+    const cost = estimateClaudeCostFromStoredCounts('claude-opus-4-7', {
+      inputTokens: 1_100_000,
+      outputTokens: 100_000,
+      rawInputTokens: 100_000,
+      cachedInputTokens: 1_000_000,
+      cacheCreationInputTokens: 0,
+    });
+    // 100k*$5/M + 1M*$0.5/M + 100k*$25/M = 0.5 + 0.5 + 2.5 = 3.5
+    expect(cost).toBeCloseTo(3.5, 5);
+    expect(
+      estimateClaudeCostFromStoredCounts('claude-opus-4-7', {
+        inputTokens: 1_100_000,
+        outputTokens: 100_000,
+      }),
+    ).toBeUndefined();
+  });
+
   it('bills a 1-hour cache write at twice the input rate', () => {
     // Sonnet 4.6 input is $3/M, so 1M 1-hour writes are $6. The 5-minute rate
     // for the same tokens would be $3.75.

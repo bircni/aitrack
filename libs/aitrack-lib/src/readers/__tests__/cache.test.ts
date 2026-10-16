@@ -61,6 +61,10 @@ async function seedCache(inputTokens = 10): Promise<string> {
   return cacheFilePath();
 }
 
+function rewrite(file: string, search: string, replacement: string): void {
+  writeFileSync(file, readFileSync(file, 'utf8').replace(search, replacement));
+}
+
 describe('openParseCache', () => {
   beforeEach(() => {
     rmSync(TEST_HOME, { recursive: true, force: true });
@@ -87,60 +91,53 @@ describe('openParseCache', () => {
     expect(hit?.days.get('2024-01-15')?.inputTokens).toBe(10);
   });
 
-  it('misses once the file size changes', async () => {
-    await seedCache();
-    writeFileSync(SOURCE, 'line\nline2\n');
-
-    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
-  });
-
-  it('misses once the file mtime changes without a size change', async () => {
-    await seedCache();
-    const later = new Date(Date.now() + 60_000);
-    utimesSync(SOURCE, later, later);
-
-    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
-  });
-
-  it('misses when the file is gone', async () => {
-    await seedCache();
-    rmSync(SOURCE);
-
-    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
-  });
-
-  it('drops a cache written in a different timezone', async () => {
-    const cacheFile = await seedCache();
-    const stored: unknown = JSON.parse(readFileSync(cacheFile, 'utf8'));
-    writeFileSync(
-      cacheFile,
-      JSON.stringify({ ...(stored as object), timezone: 'Not/A-Zone' }),
-      'utf8',
-    );
-
-    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
-  });
-
-  it('ignores a corrupt cache file instead of throwing', async () => {
-    writeFileSync(await seedCache(), '{not json', 'utf8');
-
-    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
-  });
-
-  it('ignores an entry whose day totals are not finite numbers', async () => {
-    const cacheFile = await seedCache();
-    writeFileSync(
-      cacheFile,
-      readFileSync(cacheFile, 'utf8').replace('"inputTokens":10', '"inputTokens":null'),
-      'utf8',
-    );
-
-    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
-  });
-
-  it('ignores an entry whose dedup keys are not all strings', async () => {
-    const cacheFile = await seedCache();
-    writeFileSync(cacheFile, readFileSync(cacheFile, 'utf8').replace('"k1"', '42'), 'utf8');
+  it.each<[string, (cacheFile: string) => void]>([
+    [
+      'the file size changes',
+      () => {
+        writeFileSync(SOURCE, 'line\nline2\n');
+      },
+    ],
+    [
+      'the file mtime changes without a size change',
+      () => {
+        const later = new Date(Date.now() + 60_000);
+        utimesSync(SOURCE, later, later);
+      },
+    ],
+    [
+      'the file is gone',
+      () => {
+        rmSync(SOURCE);
+      },
+    ],
+    [
+      'the cache was written in another timezone',
+      (cacheFile) => {
+        const stored: unknown = JSON.parse(readFileSync(cacheFile, 'utf8'));
+        writeFileSync(cacheFile, JSON.stringify({ ...(stored as object), timezone: 'Not/A-Zone' }));
+      },
+    ],
+    [
+      'the cache file is corrupt',
+      (cacheFile) => {
+        writeFileSync(cacheFile, '{not json');
+      },
+    ],
+    [
+      'an entry has non-finite day totals',
+      (cacheFile) => {
+        rewrite(cacheFile, '"inputTokens":10', '"inputTokens":null');
+      },
+    ],
+    [
+      'an entry has non-string dedup keys',
+      (cacheFile) => {
+        rewrite(cacheFile, '"k1"', '42');
+      },
+    ],
+  ])('misses when %s', async (_label, mutate) => {
+    mutate(await seedCache());
 
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });

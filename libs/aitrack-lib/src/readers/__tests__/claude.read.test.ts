@@ -88,22 +88,7 @@ describe('readClaudeData', () => {
     expect(result.get('2024-01-15')?.inputTokens).toBe(10);
   });
 
-  it('deduplicates messages across multiple discovered roots', async () => {
-    const roots = [
-      join(TEST_HOME, '.config', 'claude', 'projects', 'project'),
-      join(TEST_HOME, '.claude', 'projects', 'project'),
-    ];
-    for (const root of roots) {
-      mkdirSync(root, { recursive: true });
-      writeJsonl(join(root, 'history.jsonl'), [assistantLine('same', 10, 5)]);
-    }
-
-    const result = await readClaudeData();
-
-    expect(result.get('2024-01-15')?.inputTokens).toBe(10);
-  });
-
-  it('still deduplicates across files when both are served from the parse cache', async () => {
+  it('deduplicates messages across roots, cold and from the parse cache', async () => {
     const roots = [
       join(TEST_HOME, '.config', 'claude', 'projects', 'project'),
       join(TEST_HOME, '.claude', 'projects', 'project'),
@@ -118,22 +103,8 @@ describe('readClaudeData', () => {
     const warm = await readClaudeData();
 
     expect(cold.get('2024-01-15')?.inputTokens).toBe(10);
-    expect(warm.get('2024-01-15')?.inputTokens).toBe(10);
-    expect(createReadStream).not.toHaveBeenCalled();
-  });
-
-  it('returns the same totals from a warm cache as from a cold one', async () => {
-    process.env.XDG_CONFIG_HOME = TEST_HOME;
-    const projectDir = join(TEST_HOME, 'claude', 'projects', 'project');
-    mkdirSync(projectDir, { recursive: true });
-    writeJsonl(join(projectDir, 'a.jsonl'), [assistantLine('a', 10, 5)]);
-    writeJsonl(join(projectDir, 'b.jsonl'), [assistantLine('b', 20, 8)]);
-
-    const cold = await readClaudeData();
-    vi.mocked(createReadStream).mockClear();
-    const warm = await readClaudeData();
-
     expect([...warm]).toEqual([...cold]);
+    expect(createReadStream).not.toHaveBeenCalled();
   });
 
   it('picks up an appended message once the file changes', async () => {

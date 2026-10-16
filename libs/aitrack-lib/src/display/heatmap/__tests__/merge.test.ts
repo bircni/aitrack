@@ -1,26 +1,11 @@
+import { makeDay } from '@aitrack/test-fixtures';
 import { describe, expect, it } from 'vitest';
 
-import type { DayEntry } from '../../../data/types.js';
 import { mergeAllProviderDayMaps } from '../merge.js';
-
-function makeDay(input: number, output: number, costUSD?: number): DayEntry {
-  return {
-    inputTokens: input,
-    outputTokens: output,
-    ...(costUSD !== undefined && { costUSD }),
-    byModel: {
-      'test-model': {
-        inputTokens: input,
-        outputTokens: output,
-        ...(costUSD !== undefined && { costUSD }),
-      },
-    },
-  };
-}
 
 describe('mergeAllProviderDayMaps', () => {
   it('sums days and models across providers', () => {
-    const claudeMap = new Map([['2024-01-15', makeDay(100, 50, 0.2)]]);
+    const claudeMap = new Map([['2024-01-15', makeDay(100, 50, 0.2, 'test-model')]]);
     const codexMap = new Map([
       [
         '2024-01-15',

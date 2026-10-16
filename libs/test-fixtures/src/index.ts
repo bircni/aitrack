@@ -5,7 +5,12 @@ import { afterAll, beforeAll, vi } from 'vitest';
 interface FixtureTokenCounts {
   inputTokens: number;
   outputTokens: number;
+  rawInputTokens?: number;
+  cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheCreation1hInputTokens?: number;
   costUSD?: number;
+  hasUnpricedTokens?: boolean;
 }
 
 interface FixtureDayEntry extends FixtureTokenCounts {
@@ -15,6 +20,15 @@ interface FixtureDayEntry extends FixtureTokenCounts {
 interface FixtureProviderDay {
   byModel: Record<string, FixtureTokenCounts>;
   totals: FixtureTokenCounts;
+}
+
+interface FixtureMachineFile {
+  schemaVersion: number;
+  hostname: string;
+  timezone: string;
+  dayBucket: 'utc' | 'local';
+  lastUpdated: string;
+  days: Record<string, Record<string, FixtureProviderDay>>;
 }
 
 /** Write a JSONL file, one object per line. */
@@ -80,6 +94,23 @@ export function makeProviderDay(
     ...(costUSD !== undefined && { costUSD }),
   };
   return { byModel: { [model]: { ...counts } }, totals: { ...counts } };
+}
+
+/** A current-schema machine file, for tests where the header is not the point. */
+export function makeMachineFile(
+  hostname: string,
+  days: FixtureMachineFile['days'] = {},
+  overrides: Partial<FixtureMachineFile> = {},
+): FixtureMachineFile {
+  return {
+    schemaVersion: 2,
+    hostname,
+    timezone: 'UTC',
+    dayBucket: 'utc',
+    lastUpdated: 'now',
+    days,
+    ...overrides,
+  };
 }
 
 /**

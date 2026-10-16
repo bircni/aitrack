@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -129,44 +129,23 @@ describe('parseSessionFile', () => {
     expect(result[0]).toMatchObject({ inputTokens: 50, outputTokens: 25 });
   });
 
-  it('returns null for a session with no token events', async () => {
-    const file = join(tmpDir, 's.jsonl');
-    writeJsonl(file, [
-      {
-        type: 'turn_context',
-        timestamp: localTimestamp('2024-01-15'),
-        payload: { model: 'gpt-4o' },
-      },
-      { type: 'user_message', content: 'hello' },
-    ]);
-
-    expect(await parseSessionFile(file)).toEqual([]);
-  });
-
-  it('returns null for an empty file', async () => {
-    const file = join(tmpDir, 'empty.jsonl');
-    writeFileSync(file, '');
-    expect(await parseSessionFile(file)).toEqual([]);
-  });
-
-  it('uses the timestamp of the first entry as the session date', async () => {
-    const file = join(tmpDir, 's.jsonl');
-    const firstDate = localTimestamp('2024-06-01');
-    const expected = '2024-06-01';
-
-    writeJsonl(file, [
-      { type: 'turn_context', timestamp: firstDate, payload: { model: 'gpt-4o' } },
-      {
-        type: 'event_msg',
-        payload: {
-          type: 'token_count',
-          info: { total_token_usage: { input_tokens: 10, output_tokens: 5 } },
+  it.each([
+    [
+      'has no token events',
+      [
+        {
+          type: 'turn_context',
+          timestamp: localTimestamp('2024-01-15'),
+          payload: { model: 'gpt-4o' },
         },
-      },
-    ]);
-
-    const result = await parseSessionFile(file);
-    expect(result[0]).toMatchObject({ dateStr: expected });
+        { type: 'user_message', content: 'hello' },
+      ],
+    ],
+    ['is empty', []],
+  ])('returns no sessions when the file %s', async (_label, lines) => {
+    const file = join(tmpDir, 's.jsonl');
+    writeJsonl(file, lines);
+    expect(await parseSessionFile(file)).toEqual([]);
   });
 
   it('splits cumulative usage by the active model and local day', async () => {

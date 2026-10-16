@@ -1,3 +1,4 @@
+import { makeDay } from '@aitrack/test-fixtures';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createFallbackCollector } from '../fallback.js';
@@ -71,6 +72,7 @@ it('ignores live and unknown providers during family fallback scans', () => {
           },
         ],
       ]),
+      custom: new Map([['2026-01-01', makeDay(1, 0, undefined, 'claude-opus-9-9')]]),
     },
     fallbacks,
   );

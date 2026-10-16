@@ -32,7 +32,10 @@ function resetCursorEnvironment(): void {
   delete process.env.CURSOR_WEB_BASE_URL;
 }
 
-function createStateDatabase(path: string, rows: Record<string, string | Buffer> = {}): void {
+function createStateDatabase(
+  path: string,
+  rows: Record<string, string | Buffer | number> = {},
+): void {
   mkdirSync(join(path, '..'), { recursive: true });
   const database = new DatabaseSync(path);
   database.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB)');
@@ -68,9 +71,17 @@ describe('readCursorData', () => {
     expect(console.warn).not.toHaveBeenCalled();
   });
 
-  it('returns an empty map when the state database has no access token', async () => {
+  it.each([
+    ['missing', undefined],
+    ['blank', '   '],
+    ['a blank blob', Buffer.from('  ')],
+    ['not text', 42],
+  ])('returns an empty map when the access token is %s', async (_label, accessToken) => {
     const databasePath = join(tmpDir, 'state.vscdb');
-    createStateDatabase(databasePath, { 'cursorAuth/refreshToken': 'refresh' });
+    createStateDatabase(databasePath, {
+      'cursorAuth/refreshToken': 'refresh',
+      ...(accessToken !== undefined && { 'cursorAuth/accessToken': accessToken }),
+    });
     process.env.CURSOR_STATE_DB_PATH = databasePath;
 
     await expect(readCursorData()).resolves.toEqual(new Map());

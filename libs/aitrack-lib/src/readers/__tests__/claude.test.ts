@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { localTimestamp, writeJsonl } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { estimateClaudeCostFromStoredCounts, estimateClaudeCostUSD } from '../../pricing/claude.js';
 import { mergeClaudeParsed, parseClaudeFile } from '../claude.js';
 
 let tmpDir: string;
@@ -147,85 +146,6 @@ describe('parseClaudeFile', () => {
     expect(day?.inputTokens).toBe(1_000_100);
     // 100 * $3.75/M + 1M * $6/M + 1 output token * $15/M
     expect(day?.costUSD).toBeCloseTo(6.000375);
-  });
-
-  it('estimates Claude API-equivalent costs by exact model id', () => {
-    // Opus 4.5+ all at $5/$25 (not the old $15/$75)
-    expect(
-      estimateClaudeCostUSD('claude-opus-4-7', {
-        input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBe(30);
-    expect(
-      estimateClaudeCostUSD('claude-opus-4-6', {
-        input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBe(30);
-    // Opus 4.1 still on the old pricing
-    expect(
-      estimateClaudeCostUSD('claude-opus-4-1', {
-        input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBe(90);
-    expect(
-      estimateClaudeCostUSD('claude-sonnet-4-6', {
-        input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBe(18);
-    // Date-suffixed Haiku 4.5 should match the dateless entry
-    expect(
-      estimateClaudeCostUSD('claude-haiku-4-5-20251001', {
-        input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBe(6);
-    expect(
-      estimateClaudeCostUSD('claude-3-5-haiku-20241022', {
-        input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBe(4.8);
-  });
-
-  it('uses cache-specific pricing and leaves an unmatched model unpriced', () => {
-    expect(
-      estimateClaudeCostUSD('claude-sonnet-4-6', {
-        input_tokens: 1_000_000,
-        cache_read_input_tokens: 1_000_000,
-        cache_creation_input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBe(22.05);
-    expect(
-      estimateClaudeCostUSD('unknown', {
-        input_tokens: 1_000_000,
-        cache_read_input_tokens: 1_000_000,
-        cache_creation_input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('reprices from stored cache breakdown without inflating cache reads', () => {
-    const cost = estimateClaudeCostFromStoredCounts('claude-opus-4-7', {
-      inputTokens: 1_100_000,
-      outputTokens: 100_000,
-      rawInputTokens: 100_000,
-      cachedInputTokens: 1_000_000,
-      cacheCreationInputTokens: 0,
-    });
-    // 100k*$5/M + 1M*$0.5/M + 100k*$25/M = 0.5 + 0.5 + 2.5 = 3.5
-    expect(cost).toBeCloseTo(3.5, 5);
-    expect(
-      estimateClaudeCostFromStoredCounts('claude-opus-4-7', {
-        inputTokens: 1_100_000,
-        outputTokens: 100_000,
-      }),
-    ).toBeUndefined();
   });
 
   it('skips non-assistant entries', async () => {

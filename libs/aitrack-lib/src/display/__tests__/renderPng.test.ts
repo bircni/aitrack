@@ -61,32 +61,8 @@ describe('renderToPng', () => {
     expect(buffer.length).toBeGreaterThan(0);
   });
 
-  it('defaults to one section per provider for multiple providers', () => {
-    const claudeMap = new Map([['2024-01-15', makeDay(100, 50)]]);
-    const codexMap = new Map([['2024-01-16', makeDay(200, 100)]]);
-    const buffer = renderToPng({ claude_code: claudeMap, codex: codexMap }, {});
-    expect(buffer).toBeInstanceOf(Buffer);
-  });
-
   it('handles empty provider data without crashing', () => {
     expect(() => renderToPng({}, {})).not.toThrow();
-  });
-
-  it('merges into one section when all is true', () => {
-    const claudeMap = new Map([['2024-01-15', makeDay(100, 50)]]);
-    const codexMap = new Map([['2024-01-16', makeDay(200, 100)]]);
-    const buffer = renderToPng({ claude_code: claudeMap, codex: codexMap }, { all: true });
-    expect(buffer[0]).toBe(0x89);
-    expect(buffer[1]).toBe(0x50);
-  });
-
-  it('renders with a year filter', () => {
-    const dayMap = new Map([
-      ['2024-06-01', makeDay(100, 50)],
-      ['2025-06-01', makeDay(200, 100)],
-    ]);
-    const buffer = renderToPng({ claude_code: dayMap }, { year: 2024 });
-    expect(buffer[0]).toBe(0x89);
   });
 
   it('renders long model names without crashing (token amount moves to its own line)', () => {

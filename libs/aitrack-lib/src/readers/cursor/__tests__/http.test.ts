@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchCursorUsageCsv } from '../http.js';
-import { cursorAccountId } from '../jwt.js';
 
-function jwt(sub: string, nonce = ''): string {
-  return `header.${Buffer.from(JSON.stringify({ sub, nonce })).toString('base64url')}.signature`;
+function jwt(sub: string): string {
+  return `header.${Buffer.from(JSON.stringify({ sub })).toString('base64url')}.signature`;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe('Cursor credential attempts', () => {
   it('remembers the exact subject-cookie variant and never repeats identical headers', async () => {
@@ -39,10 +41,25 @@ describe('Cursor credential attempts', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('hashes identity without persisting credentials and tolerates token rotation', () => {
-    expect(cursorAccountId(jwt('a', '1'))).toBe(cursorAccountId(jwt('a', '2')));
-    expect(cursorAccountId(jwt('a'))).not.toBe(cursorAccountId(jwt('b')));
-    expect(cursorAccountId('token')).toMatch(/^[a-f0-9]{64}$/u);
-    expect(cursorAccountId('other')).not.toBe(cursorAccountId('token'));
+  it.each([
+    ['http://cursor.test', 'must use HTTPS'],
+    ['https://user:password@cursor.test', 'must not contain embedded credentials'],
+    ['not a URL', 'must be a valid HTTPS URL'],
+  ])('rejects the unsafe export endpoint %s before sending credentials', async (url, error) => {
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    vi.stubEnv('CURSOR_WEB_BASE_URL', url);
+    await expect(fetchCursorUsageCsv('secret-token')).rejects.toThrow(error);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('summarises every rejected credential shape', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(new Response('denied', { status: 401, statusText: 'Unauthorized' })),
+      ),
+    );
+    await expect(fetchCursorUsageCsv('bad-token')).rejects.toThrow('bearer: 401 Unauthorized');
   });
 });

@@ -1,4 +1,4 @@
-import { loggedOutput } from '@aitrack/test-fixtures';
+import { loggedOutput, makeMachineFile, makeProviderDay } from '@aitrack/test-fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -59,21 +59,15 @@ import type { FallbackCollector } from '../pricing/fallback.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { recomputeCosts } from '../recompute.js';
 
-const SCHEMA_FIELDS = { schemaVersion: 2, timezone: 'UTC', dayBucket: 'utc' } as const;
-
-const machineJson = {
-  ...SCHEMA_FIELDS,
-  hostname: 'host',
-  lastUpdated: 'old',
-  days: {
+const machineJson = makeMachineFile(
+  'host',
+  {
     '2024-01-01': {
-      claude_code: {
-        byModel: { 'claude-sonnet-4-6': { inputTokens: 1_000_000, outputTokens: 100_000 } },
-        totals: { inputTokens: 1_000_000, outputTokens: 100_000 },
-      },
+      claude_code: makeProviderDay(1_000_000, 100_000, undefined, 'claude-sonnet-4-6'),
     },
   },
-};
+  { lastUpdated: 'old' },
+);
 
 describe('recomputeCosts', () => {
   beforeEach(() => {
@@ -367,12 +361,7 @@ describe('recomputeCosts', () => {
       },
     });
     mocks.readFileSync.mockReturnValue(
-      JSON.stringify({
-        ...SCHEMA_FIELDS,
-        hostname: 'host',
-        lastUpdated: 'old',
-        days: day(derived),
-      }),
+      JSON.stringify(makeMachineFile('host', day(derived), { lastUpdated: 'old' })),
     );
     mocks.buildMachineData.mockReturnValue({
       hostname: 'host',
