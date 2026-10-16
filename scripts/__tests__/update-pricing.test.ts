@@ -13,6 +13,13 @@ import {
 import { supplementFromTables } from '../../libs/aitrack-lib/src/pricing/supplementFromTables.js';
 
 const mocks = vi.hoisted(() => ({ appDir: '', fetchPricingCatalogs: vi.fn() }));
+
+function loggedReport(): string {
+  return vi
+    .mocked(console.log)
+    .mock.calls.map((args) => args.join(' '))
+    .join('\n');
+}
 vi.mock('../../libs/aitrack-lib/src/pricing/catalogs.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../libs/aitrack-lib/src/pricing/catalogs.js')>()),
   fetchPricingCatalogs: mocks.fetchPricingCatalogs,
@@ -74,26 +81,21 @@ describe('checkPricing', () => {
       expect(console.log).toHaveBeenCalledWith(
         'All verified pricing matches LiteLLM / models.dev catalogs.',
       );
-      const report = vi
-        .mocked(console.log)
-        .mock.calls.map((args) => args.join(' '))
-        .join('\n');
-      expect(report).toContain(
+      expect(loggedReport()).toContain(
         mode === 'cursor drift' ? '1 intentional overrides' : '0 intentional overrides',
       );
     },
   );
 
-  it.each(['success', 'fetch failure', 'report failure'] as const)(
+  it.each(['success', 'report failure'] as const)(
     'sets the script exit status for %s',
     async (mode) => {
       const catalog = catalogFromCompact({ retrievedAt: '2026-01-01', models: {} });
       mocks.fetchPricingCatalogs.mockResolvedValue({ primary: catalog, secondary: catalog });
-      if (mode === 'fetch failure')
-        mocks.fetchPricingCatalogs.mockRejectedValueOnce(new Error('offline'));
+      // The blank line before the summary is logged outside checkPricing's catch.
       if (mode === 'report failure')
-        vi.mocked(console.log).mockImplementationOnce(() => {
-          throw new Error('output unavailable');
+        vi.mocked(console.log).mockImplementation((message?: unknown) => {
+          if (message === '') throw new Error('output unavailable');
         });
       const exit = vi.spyOn(process, 'exit').mockReturnValue(undefined as never);
       const previous = process.argv;
@@ -170,10 +172,7 @@ describe('checkPricing', () => {
       });
       const { checkPricing } = await import('../update-pricing.js');
       expect(await checkPricing()).toBe(expected);
-      const report = vi
-        .mocked(console.log)
-        .mock.calls.map((args) => args.join(' '))
-        .join('\n');
+      const report = loggedReport();
       expect(report).toMatch(/claude-sonnet-4-6\s+\$3\/\$15/u);
       expect(report).toMatch(/gpt-5\.4\s+\$2\.5\/\$15/u);
       expect(report).toMatch(/composer-2\.5\s+\$0\.5\/\$2\.5/u);

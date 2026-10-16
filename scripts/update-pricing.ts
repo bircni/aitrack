@@ -35,37 +35,22 @@ function reportFinding(finding: PricingFinding): void {
   }
 }
 
-function checkClaude(catalogs: PricingCatalogs, supplement: PricingSupplement): PricingComparison {
-  console.log('\n── Claude (LiteLLM anthropic/* + models.dev) ──');
-  const findings = comparePricingTable({
-    table: supplement.claude.models,
-    providers: ['anthropic'],
-    primary: catalogs.primary,
-    secondary: catalogs.secondary,
-  });
+function checkTable(
+  heading: string,
+  options: Parameters<typeof comparePricingTable>[0],
+): PricingComparison {
+  console.log(`\n── ${heading} ──`);
+  const findings = comparePricingTable(options);
   for (const finding of findings) reportFinding(finding);
   return tallyPricingFindings(findings);
 }
 
-function checkCodex(catalogs: PricingCatalogs, supplement: PricingSupplement): PricingComparison {
-  console.log('\n── Codex current (LiteLLM openai/* + models.dev) ──');
-  const findings = comparePricingTable({
-    table: supplement.codex.current,
-    providers: ['openai'],
-    primary: catalogs.primary,
-    secondary: catalogs.secondary,
-  });
-  for (const finding of findings) reportFinding(finding);
-  return tallyPricingFindings(findings);
-}
-
-function checkCursor(catalogs: PricingCatalogs, supplement: PricingSupplement): PricingComparison {
+function checkCursor(catalogs: PricingCatalogs, supplement: PricingSupplement): void {
   console.log('\n── Cursor natives (supplement is authoritative; catalogs are informational) ──');
   const findings = comparePricingTable({
     table: supplement.cursor.models,
     providers: ['cursor', 'xai', 'google', 'openai', 'anthropic'],
-    primary: catalogs.primary,
-    secondary: catalogs.secondary,
+    ...catalogs,
   });
   let ok = 0;
   let infoDrift = 0;
@@ -86,7 +71,6 @@ function checkCursor(catalogs: PricingCatalogs, supplement: PricingSupplement): 
   console.log(
     `  (${String(ok)} match catalogs, ${String(infoDrift)} intentional overrides, ${String(supplementOnly)} supplement-only)`,
   );
-  return { drift: 0, unverified: 0 };
 }
 
 export async function checkPricing(): Promise<number> {
@@ -100,11 +84,19 @@ export async function checkPricing(): Promise<number> {
     return 1;
   }
 
-  const claude = checkClaude(catalogs, supplement);
-  const codex = checkCodex(catalogs, supplement);
-  const cursor = checkCursor(catalogs, supplement);
+  const claude = checkTable('Claude (LiteLLM anthropic/* + models.dev)', {
+    table: supplement.claude.models,
+    providers: ['anthropic'],
+    ...catalogs,
+  });
+  const codex = checkTable('Codex current (LiteLLM openai/* + models.dev)', {
+    table: supplement.codex.current,
+    providers: ['openai'],
+    ...catalogs,
+  });
+  checkCursor(catalogs, supplement);
 
-  const totalDrift = claude.drift + codex.drift + cursor.drift;
+  const totalDrift = claude.drift + codex.drift;
   const totalUnverified = claude.unverified + codex.unverified;
 
   console.log('');

@@ -26,52 +26,21 @@ afterEach(() => {
 });
 
 describe('GitHub release notes', () => {
-  it('extracts only the requested changelog release section', () => {
+  it.each([
+    ['## [v2.0.0] - 2026-07-24', '## [v1.9.0] - 2026-07-01'],
+    [
+      '## [v2.0.0](https://example.com/compare/v1.9.0..v2.0.0) - 2026-07-24',
+      '## [v1.9.0](https://example.com/compare/v1.8.0..v1.9.0) - 2026-07-01',
+    ],
+  ])('extracts only the requested release section under %s', (heading, previous) => {
     const result = extract(
       'v2.0.0',
-      `# Changelog
-
-## [v2.0.0] - 2026-07-24
-
-### Features
-
-- Add release publishing
-
-## [v1.9.0] - 2026-07-01
-
-### Features
-
-- Older feature
-`,
+      `# Changelog\n\n${heading}\n\n### Features\n\n- Add release publishing\n\n${previous}\n\n- Older feature\n`,
     );
 
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
     expect(result.stdout).toBe('### Features\n\n- Add release publishing\n');
-    expect(result.stdout).not.toContain('Older feature');
-  });
-
-  it('matches a compare-link heading emitted by git-cliff', () => {
-    const result = extract(
-      'v2.0.0',
-      `# Changelog
-
-## [v2.0.0](https://example.com/compare/v1.9.0..v2.0.0) - 2026-07-24
-
-### Features
-
-- Add release publishing
-
-## [v1.9.0](https://example.com/compare/v1.8.0..v1.9.0) - 2026-07-01
-
-- Older feature
-`,
-    );
-
-    expect(result.status).toBe(0);
-    expect(result.stderr).toBe('');
-    expect(result.stdout).toBe('### Features\n\n- Add release publishing\n');
-    expect(result.stdout).not.toContain('Older feature');
   });
 
   it('excludes git-cliff trailers below the final section', () => {
