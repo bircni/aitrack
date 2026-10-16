@@ -203,6 +203,17 @@ describe('QuotaService', () => {
     expect(quiet.alerts).toEqual([]);
   });
 
+  it('alerts for the next window on the first refresh after the last one reset', async () => {
+    let now = START;
+    const h = harness({ claude_code: () => ok('claude_code', 95, now) });
+    await h.service.refresh();
+    const pastResetAndGrace = 3_600_000 + 6 * 60_000;
+    now += pastResetAndGrace;
+    h.advance(pastResetAndGrace);
+    await h.service.refresh();
+    expect(h.alerts).toHaveLength(2);
+  });
+
   it('reports usage failures, skips disabled providers and reloads usage only when the enabled set changes', async () => {
     const h = harness();
     h.failUsage();
