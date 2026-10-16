@@ -1,12 +1,4 @@
-/*
- * Calendar arithmetic on YYYY-MM-DD strings.
- *
- * Every helper here takes and returns local calendar date strings; none reads a
- * clock. They go through UTC purely because it has no DST discontinuities — the
- * strings are local dates and are never re-interpreted against a wall clock.
- * Reading local fields (today.getMonth()) while building with Date.UTC is what
- * makes this kind of code drift by a day, so the two are kept apart.
- */
+// Local YYYY-MM-DD strings in and out, never a clock; UTC only because it has no DST jumps.
 
 function parseDateString(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);

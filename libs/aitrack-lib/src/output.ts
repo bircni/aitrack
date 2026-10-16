@@ -1,8 +1,4 @@
-/**
- * The single place aitrack writes human-readable output. `log` is what the CLI
- * prints through; `createLogger({ quiet: true })` drops progress for embedders.
- * Wraps `console.*` rather than `process.stdout` to keep its stdout/stderr split.
- */
+/** Wraps `console.*` rather than `process.stdout` to keep its stdout/stderr split. */
 export interface Logger {
   /** Progress and results. Suppressed when quiet. */
   info: (message: string) => void;

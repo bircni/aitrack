@@ -13,6 +13,7 @@ import {
   type ZonedUsageSource,
 } from './usageData.js';
 import {
+  ALL_TIME,
   computePreviousUsageWindow,
   computeUsageWindow,
   periodAnchorsOnToday,
@@ -184,7 +185,7 @@ function windowedProviderData(
   // Already clipped per zone, so the label window must not clip again.
   return {
     providerData,
-    window: { start: '0000-01-01', end: '9999-12-31', label: labelWindow.label },
+    window: { ...ALL_TIME, label: labelWindow.label },
   };
 }
 
@@ -202,7 +203,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
     const rows: UsageReportRow[] = [];
     let subtotalTokens = 0;
     let subtotalCostUSD = 0;
-    let isSubtotalHasCost = false;
+    let subtotalHasCost = false;
     let hasUnpricedTokens = false;
 
     for (const [model, agg] of byModel) {
@@ -228,7 +229,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
       }
       if (agg.hasCost) {
         subtotalCostUSD += agg.costUSD;
-        isSubtotalHasCost = true;
+        subtotalHasCost = true;
         totals.costUSD += agg.costUSD;
         totals.hasCost = true;
       }
@@ -244,7 +245,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
       rows,
       subtotalTokens,
       subtotalCostUSD,
-      subtotalHasCost: isSubtotalHasCost,
+      subtotalHasCost,
       ...(hasUnpricedTokens && { hasUnpricedTokens: true }),
     });
   }
@@ -318,15 +319,7 @@ function compareUsageReports(current: UsageReport, previous: UsageReport): Usage
   };
 }
 
-/**
- * Load merged provider data and build a structured per-provider / per-model
- * usage report for a time window. Returns null when no provider data is
- * available at all (caller should show the "not configured" hint); a report
- * with rowCount === 0 means data exists but nothing falls in the window.
- *
- * Shared by the `usage` (terminal table) and `export` (PDF receipt) commands so
- * both render from a single source of truth.
- */
+/** Null when there is no provider data; rowCount 0 when the window is empty. */
 export async function buildUsageReport(
   options: UsageReportOptions,
   now = new Date(),
@@ -385,9 +378,12 @@ export function buildUsageReportsFromLoaded(
   const span = {
     start: windowed.reduce(
       (min, { window }) => (window.start < min ? window.start : min),
-      '9999-12-31',
+      ALL_TIME.end,
     ),
-    end: windowed.reduce((max, { window }) => (window.end > max ? window.end : max), '0000-01-01'),
+    end: windowed.reduce(
+      (max, { window }) => (window.end > max ? window.end : max),
+      ALL_TIME.start,
+    ),
   };
   const providerData = providerDataForWindows(loaded, () => span);
   return windowed.map(({ options, window }) =>
@@ -417,12 +413,6 @@ export async function buildUsageComparison(
   return { current, previous, comparison: compareUsageReports(current, previous) };
 }
 
-/**
- * Message to print when a report has nothing to render, or null when it does.
- * Distinguishes "no data at all / not configured" (report is null) from "data
- * exists but the window is empty" (rowCount === 0). Shared by the `usage` and
- * `export` commands so both report empty states identically.
- */
 export function emptyReportMessage(report: UsageReport | null): string | null {
   if (!report) return usageEmptyMessage(isUsageNotConfigured());
   if (report.rowCount === 0) return usageEmptyWindowMessage(report.windowLabel);

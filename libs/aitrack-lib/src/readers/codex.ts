@@ -43,19 +43,18 @@ interface CodexEntry {
   };
 }
 
-interface SessionResult {
-  dateStr: string;
-  model: string;
+interface SessionUsage {
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
 }
 
-function tokenUsageValues(usage: TokenUsage): {
-  inputTokens: number;
-  outputTokens: number;
-  cachedInputTokens: number;
-} {
+interface SessionResult extends SessionUsage {
+  dateStr: string;
+  model: string;
+}
+
+function tokenUsageValues(usage: TokenUsage): SessionUsage {
   return {
     inputTokens: usage.input_tokens ?? 0,
     outputTokens: usage.output_tokens ?? 0,
@@ -67,7 +66,7 @@ function addSessionUsage(
   results: Map<string, SessionResult>,
   dateStr: string,
   model: string,
-  usage: { inputTokens: number; outputTokens: number; cachedInputTokens: number },
+  usage: SessionUsage,
 ): void {
   if (usage.inputTokens === 0 && usage.outputTokens === 0) return;
   const key = `${dateStr}\0${model}`;
@@ -106,8 +105,7 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult[
     const info = entry.payload.info;
     if (!info) continue;
 
-    let usage: { inputTokens: number; outputTokens: number; cachedInputTokens: number } | null =
-      null;
+    let usage: SessionUsage | null = null;
     if (info.total_token_usage) {
       const current = info.total_token_usage;
       const currentInput = current.input_tokens ?? 0;

@@ -2,27 +2,17 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 
 import type { Config } from './configTypes.js';
-import { isOptionalString, isRecord } from './data/guards.js';
+import { isFiniteNumber, isOptionalString, isRecord } from './data/guards.js';
 import { INIT_HINT, NO_CONFIG_MESSAGE } from './data/messages.js';
 import { errorMessage, isMissingPathError } from './errors.js';
 import { normalizeMachineId } from './machineId.js';
 import { APP_DIR, CONFIG_PATH } from './paths.js';
 
-function validateBudget(value: unknown): Config['budget'] | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) return undefined;
-  const budget: NonNullable<Config['budget']> = {};
-  if (value.monthlyUSD !== undefined) {
-    if (
-      typeof value.monthlyUSD !== 'number' ||
-      !Number.isFinite(value.monthlyUSD) ||
-      value.monthlyUSD <= 0
-    ) {
-      return undefined;
-    }
-    budget.monthlyUSD = value.monthlyUSD;
-  }
-  return budget;
+function validateBudget(value: unknown): NonNullable<Config['budget']> | null {
+  if (!isRecord(value)) return null;
+  const { monthlyUSD } = value;
+  if (monthlyUSD === undefined) return {};
+  return isFiniteNumber(monthlyUSD) && monthlyUSD > 0 ? { monthlyUSD } : null;
 }
 
 function validateConfig(parsed: unknown): Config | null {
@@ -46,8 +36,8 @@ function validateConfig(parsed: unknown): Config | null {
     }
   }
 
-  const budget = validateBudget(parsed.budget);
-  if (parsed.budget !== undefined && budget === undefined) return null;
+  const budget = parsed.budget === undefined ? undefined : validateBudget(parsed.budget);
+  if (budget === null) return null;
 
   return {
     repoUrl,

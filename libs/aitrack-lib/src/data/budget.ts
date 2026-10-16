@@ -1,9 +1,3 @@
-/**
- * Comparing month-to-date spend against a configured monthly budget.
- *
- * Pure: the `usage` command feeds it the calendar-month total and the
- * `budget.monthly` config value, and renders whatever comes back.
- */
 export type BudgetLevel = 'ok' | 'warn' | 'over';
 
 export interface BudgetStatus {

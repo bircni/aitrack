@@ -6,12 +6,6 @@ import { machineDataFilename, normalizeMachineId } from '../machineId.js';
 import { DATA_DIR, PENDING_DATA_DIR } from '../paths.js';
 import { machineFilePath, serializeMachineFile } from './machineFiles.js';
 
-/**
- * Renaming a machine's files when its id changes.
- *
- * A transaction with rollback: each file is written before its source is
- * removed, and a failure part-way restores what was already moved.
- */
 interface MachineFileMigration {
   source: string;
   target: string;
@@ -68,7 +62,7 @@ function rollbackMachineFileMigration(plan: MachineFileMigration): void {
   }
 }
 
-/** Rename this machine's persisted and pending files without overwriting another machine. */
+/** Rename this machine's files without overwriting another machine; rolls back on a part-way failure. */
 export function migrateMachineDataFiles(previousId: string, nextId: string): void {
   const previousMachineId = normalizeMachineId(previousId);
   const nextMachineId = normalizeMachineId(nextId);

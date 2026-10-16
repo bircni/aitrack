@@ -12,11 +12,10 @@ import {
   stringValue,
   titleCase,
 } from './http.js';
+import { SESSION_SECONDS, WEEK_SECONDS } from './pacing.js';
 import type { QuotaSnapshot, QuotaValue, QuotaWindow } from './types.js';
 
 const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
-const SESSION_SECONDS = 5 * 60 * 60;
-const WEEK_SECONDS = 7 * 24 * 60 * 60;
 const ACCOUNT_CLAIM = 'https://api.openai.com/auth';
 
 export interface CodexCredentials {

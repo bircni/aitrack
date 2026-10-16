@@ -17,42 +17,30 @@ export function toLocalDateString(ts: string | Date): string {
   return `${String(y)}-${m}-${day}`;
 }
 
-/**
- * Day key for a timestamp, or null when it cannot be parsed.
- *
- * toLocalDateString on an unparseable value yields the string "NaN-NaN-NaN",
- * which is a perfectly usable Map key: it would be written to the synced
- * machine file, counted in all-time totals, and skipped by every year or
- * window filter. Readers use this instead so bad input is dropped at the edge.
- */
+/** Null when unparseable; toLocalDateString would give a "NaN-NaN-NaN" key that gets synced and counted. */
 export function tryLocalDateString(ts: string | Date): string | null {
   const d = typeof ts === 'string' ? new Date(ts) : ts;
   return Number.isNaN(d.getTime()) ? null : toLocalDateString(d);
 }
 
-/** Accumulate the optional cache/raw token breakdown fields. */
-function mergeTokenBreakdown(dst: TokenCounts, source: TokenCounts): void {
-  if (source.rawInputTokens !== undefined) {
-    dst.rawInputTokens = (dst.rawInputTokens ?? 0) + source.rawInputTokens;
-  }
-  if (source.cachedInputTokens !== undefined) {
-    dst.cachedInputTokens = (dst.cachedInputTokens ?? 0) + source.cachedInputTokens;
-  }
-  if (source.cacheCreationInputTokens !== undefined) {
-    dst.cacheCreationInputTokens =
-      (dst.cacheCreationInputTokens ?? 0) + source.cacheCreationInputTokens;
-  }
-  if (source.cacheCreation1hInputTokens !== undefined) {
-    dst.cacheCreation1hInputTokens =
-      (dst.cacheCreation1hInputTokens ?? 0) + source.cacheCreation1hInputTokens;
-  }
-}
-
-/** Add source token fields onto dest (input, output, breakdown, cost). */
 export function addTokenCounts(dest: TokenCounts, source: TokenCounts): void {
   dest.inputTokens += source.inputTokens;
   dest.outputTokens += source.outputTokens;
-  mergeTokenBreakdown(dest, source);
+  // Unrolled rather than looped over TOKEN_BREAKDOWN_FIELDS: this runs once per message.
+  if (source.rawInputTokens !== undefined) {
+    dest.rawInputTokens = (dest.rawInputTokens ?? 0) + source.rawInputTokens;
+  }
+  if (source.cachedInputTokens !== undefined) {
+    dest.cachedInputTokens = (dest.cachedInputTokens ?? 0) + source.cachedInputTokens;
+  }
+  if (source.cacheCreationInputTokens !== undefined) {
+    dest.cacheCreationInputTokens =
+      (dest.cacheCreationInputTokens ?? 0) + source.cacheCreationInputTokens;
+  }
+  if (source.cacheCreation1hInputTokens !== undefined) {
+    dest.cacheCreation1hInputTokens =
+      (dest.cacheCreation1hInputTokens ?? 0) + source.cacheCreation1hInputTokens;
+  }
   if (source.hasUnpricedTokens) dest.hasUnpricedTokens = true;
   if (source.costUSD !== undefined) {
     dest.costUSD = (dest.costUSD ?? 0) + source.costUSD;

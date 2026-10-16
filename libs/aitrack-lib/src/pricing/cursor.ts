@@ -1,27 +1,12 @@
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
-import { lookupClaudePricing } from './claude.js';
+import type { TokenCounts } from '../data/types.js';
+import { claudeRates, lookupClaudePricing } from './claude.js';
 import { lookupCodexPricing } from './codex.js';
-import { costFromRates, type FullModelRates, scaleRates } from './rates.js';
+import { costFromRates, type FullModelRates, scaleRates, tokenRateBuckets } from './rates.js';
 import { currentModelPricing } from './store.js';
+import type { CodexPricing } from './types.js';
 
-function claudeToCursorRates(pricing: {
-  inputPerMillion: number;
-  outputPerMillion: number;
-  cacheReadPerMillion: number;
-  cacheCreatePerMillion: number;
-}): FullModelRates {
-  return {
-    inputPerMillion: pricing.inputPerMillion,
-    outputPerMillion: pricing.outputPerMillion,
-    cacheReadPerMillion: pricing.cacheReadPerMillion,
-    cacheWritePerMillion: pricing.cacheCreatePerMillion,
-  };
-}
-
-function codexToCursorRates(pricing: {
-  inputPerMillion: number;
-  outputPerMillion: number;
-}): FullModelRates {
+function codexToCursorRates(pricing: CodexPricing): FullModelRates {
   return {
     inputPerMillion: pricing.inputPerMillion,
     outputPerMillion: pricing.outputPerMillion,
@@ -35,7 +20,7 @@ function lookupExactCursorRates(model: string, usageDate?: string): FullModelRat
   const cursor = pricing.lookupCursorNative(model);
   if (cursor) return cursor;
   const claude = lookupClaudePricing(model, usageDate);
-  if (claude) return claudeToCursorRates(claude);
+  if (claude) return claudeRates(claude);
   const codex = lookupCodexPricing(model, usageDate);
   if (codex) return codexToCursorRates(codex);
   // Do not fall through to public catalogs here: Cursor CSV slugs that aren't
@@ -60,19 +45,9 @@ export function resolveCursorRates(model: string, usageDate?: string): FullModel
 
 export function estimateCursorCostUSD(
   model: string,
-  counts: {
-    inputTokens: number;
-    outputTokens: number;
-    rawInputTokens?: number;
-    cachedInputTokens?: number;
-    cacheCreationInputTokens?: number;
-  },
+  counts: TokenCounts,
   usageDate?: string,
 ): number | undefined {
   const rates = resolveCursorRates(model, usageDate);
-  if (!rates) return undefined;
-  const cacheRead = counts.cachedInputTokens ?? 0;
-  const cacheWrite = counts.cacheCreationInputTokens ?? 0;
-  const raw = counts.rawInputTokens ?? Math.max(0, counts.inputTokens - cacheRead - cacheWrite);
-  return costFromRates(rates, { raw, output: counts.outputTokens, cacheRead, cacheWrite });
+  return rates && costFromRates(rates, tokenRateBuckets(counts));
 }

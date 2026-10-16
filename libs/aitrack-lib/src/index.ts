@@ -1,11 +1,4 @@
-/**
- * The public surface of aitrack-lib.
- *
- * Everything here is also reachable at its own subpath (`aitrack-lib/data/types`
- * and so on), which is what the `aitrack` CLI imports — a command that needs one
- * module should not pull the renderers in with it. This barrel exists for
- * consumers who just want "the library" and do not care where a symbol lives.
- */
+// Every module is also its own subpath, so a command needing one module skips the renderers.
 
 // Configuration and identity
 export type { Config } from './configTypes.js';

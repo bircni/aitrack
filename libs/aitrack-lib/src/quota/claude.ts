@@ -13,14 +13,12 @@ import {
   stringValue,
   titleCase,
 } from './http.js';
-import { clampPercent } from './pacing.js';
+import { clampPercent, SESSION_SECONDS, WEEK_SECONDS } from './pacing.js';
 import type { QuotaSnapshot, QuotaValue, QuotaWindow } from './types.js';
 
 const CLAUDE_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const KEYCHAIN_SERVICE = 'Claude Code-credentials';
 const KEYCHAIN_TIMEOUT_MS = 5000; // An access prompt nobody answers would otherwise hang the fetch.
-const SESSION_SECONDS = 5 * 60 * 60;
-const WEEK_SECONDS = 7 * 24 * 60 * 60;
 
 export interface ClaudeCredentials {
   accessToken: string;

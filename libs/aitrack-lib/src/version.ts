@@ -3,16 +3,7 @@ import { join } from 'node:path';
 
 import { isRecord } from './data/guards.js';
 
-/**
- * The `version` field of the package.json one directory above `directory`.
- *
- * Falls back to "0.0.0" when the file is missing or malformed — `--version`
- * printing a placeholder is better than the CLI refusing to start, and the
- * parse cache treats an unknown version as "always stale", which is safe.
- *
- * Both packages need this and neither can read the other's package.json, so
- * the reader is shared and each package points it at its own install root.
- */
+/** Version one level above `directory`; "0.0.0" if unreadable, which the parse cache treats as stale. */
 export function readPackageVersion(directory: string): string {
   const packagePath = join(directory, '../package.json');
   try {
@@ -20,9 +11,7 @@ export function readPackageVersion(directory: string): string {
     if (isRecord(parsed) && typeof parsed.version === 'string' && parsed.version.length > 0) {
       return parsed.version;
     }
-  } catch {
-    // fall through to the placeholder below
-  }
+  } catch {}
   return '0.0.0';
 }
 
@@ -31,12 +20,7 @@ declare const __AITRACK_LIB_VERSION__: string | undefined;
 
 let resolved: string | undefined;
 
-/**
- * The running aitrack-lib version.
- *
- * Used as a cache key: a parse cache written by a different version of this
- * library is discarded rather than trusted.
- */
+/** Keys the parse caches, so one written by another version is discarded. */
 export function packageVersion(): string {
   resolved ??=
     typeof __AITRACK_LIB_VERSION__ === 'string'

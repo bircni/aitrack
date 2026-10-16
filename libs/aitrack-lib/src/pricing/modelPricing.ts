@@ -4,7 +4,7 @@ import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
 import { isRecord } from '../data/guards.js';
 import { type ClaudeFamily } from '../data/modelId.js';
 import { findPricingCatalogRates, type PricingCatalogs } from './catalogs.js';
-import { catalogFromCompact, type PricingCatalog } from './codecs.js';
+import { catalogFromCompact, type ModelRates, type PricingCatalog } from './codecs.js';
 import type { PricingSupplement } from './packMeta.js';
 import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
 import { compilePattern } from './validation.js';
@@ -38,9 +38,7 @@ function pickOverride<P>(
   return undefined;
 }
 
-/**
- * First-party rates and overrides, with catalog gap filling for Claude and Codex.
- */
+/** First-party rates and overrides, with catalog gap filling for Claude and Codex. */
 export class ModelPricing {
   readonly updatedAt: string;
   readonly fingerprint: string;
@@ -48,6 +46,11 @@ export class ModelPricing {
   private readonly catalogs: PricingCatalogs;
   private readonly aliases: CompiledAlias[];
   private readonly codexFamilyFallback: Array<{ match: RegExp; pricing: CodexPricing }>;
+  // Readers price per message, so a model missing from the tables would rescan the catalogs each time.
+  private readonly catalogLookups = {
+    anthropic: new Map<string, ModelRates | undefined>(),
+    openai: new Map<string, ModelRates | undefined>(),
+  };
 
   constructor(supplement: PricingSupplement, primary: PricingCatalog, secondary: PricingCatalog) {
     this.fingerprint = createHash('sha256')
@@ -139,9 +142,17 @@ export class ModelPricing {
     return Object.keys(this.supplement.cursor.models).length;
   }
 
+  private catalogRates(modelId: string, provider: 'anthropic' | 'openai'): ModelRates | undefined {
+    const lookups = this.catalogLookups[provider];
+    if (!lookups.has(modelId)) {
+      lookups.set(modelId, findPricingCatalogRates(this.catalogs, modelId, [provider]));
+    }
+    return lookups.get(modelId);
+  }
+
   /** Gap-fill Claude rates from catalogs when the supplement has no row. */
   lookupCatalogClaude(modelId: string): ClaudePricing | undefined {
-    const rates = findPricingCatalogRates(this.catalogs, modelId, ['anthropic']);
+    const rates = this.catalogRates(modelId, 'anthropic');
     if (!rates) return undefined;
     return {
       inputPerMillion: rates.inputPerMillion,
@@ -157,7 +168,7 @@ export class ModelPricing {
 
   /** Gap-fill Codex rates from catalogs when the supplement has no row. */
   lookupCatalogCodex(modelId: string): CodexPricing | undefined {
-    const rates = findPricingCatalogRates(this.catalogs, modelId, ['openai']);
+    const rates = this.catalogRates(modelId, 'openai');
     if (!rates) return undefined;
     return {
       inputPerMillion: rates.inputPerMillion,

@@ -57,13 +57,7 @@ function prettyModelStem(model: string): string {
   return cleaned;
 }
 
-// "claude-haiku-4-5-20251001" -> "Haiku 4.5"; "claude-sonnet-4-20250514" ->
-// "Sonnet 4"; "claude-3-7-sonnet-20250219" -> "Sonnet 3.7";
-// "claude-fable-5-1-thinking-high" -> "Fable 5.1";
-// "gpt-5.1-codex" -> "GPT-5.1 Codex"
-//
-// Pass `{ effort: true }` in tables that list each slug as its own row so
-// `claude-opus-4-8-thinking-medium` stays distinct from `-high`.
+/** "claude-haiku-4-5-20251001" → "Haiku 4.5"; `effort` keeps `-thinking-medium` rows distinct from `-high`. */
 export function displayModelName(model: string, options?: { effort?: boolean }): string {
   const base = prettyModelStem(model);
   if (!options?.effort) return base;

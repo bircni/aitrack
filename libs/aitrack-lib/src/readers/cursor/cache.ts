@@ -1,21 +1,14 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { writeFileAtomic } from '../../atomicWrite.js';
 import { isFiniteNumber, isRecord } from '../../data/guards.js';
 import { environmentValue } from '../../env.js';
 import { CACHE_DIR } from '../../paths.js';
 import { machineTimezone } from '../../timezone.js';
 import { packageVersion } from '../../version.js';
 
-/**
- * Cursor usage is fetched live on every command that shows it. Caching the raw
- * CSV export lets `show` / `usage` / `top` reuse a recent pull
- * instead of making a network round-trip (and trying the whole credential-shape
- * sequence) every single run.
- *
- * The raw CSV is stored rather than the aggregated DayMap so `csv.ts` stays the
- * one parser and a parser change re-aggregates from cache without the network.
- */
+// Caches the raw CSV, not the DayMap, so csv.ts stays the only parser.
 const CACHE_FORMAT = 2;
 const CACHE_FILE = 'cursor.json';
 
@@ -80,7 +73,7 @@ export function readCursorCache(): CursorCacheEntry | null {
 
 /** Age of a cache entry in seconds, or Infinity when its timestamp is unparseable. */
 export function cursorCacheAgeSeconds(
-  entry: Pick<CursorCacheEntry, 'fetchedAt' | 'csv'>,
+  entry: Pick<CursorCacheEntry, 'fetchedAt'>,
   now = Date.now(),
 ): number {
   const fetchedAtMs = Date.parse(entry.fetchedAt);
@@ -88,8 +81,7 @@ export function cursorCacheAgeSeconds(
   return (now - fetchedAtMs) / 1000;
 }
 
-/** Persist a freshly fetched CSV export. A write failure is swallowed — the
- * cache only ever speeds a command up. */
+/** A write failure is swallowed: the cache only ever speeds a command up. */
 export function writeCursorCache(entry: CursorCacheEntry): void {
   if (environmentValue('AITRACK_NO_CACHE')) return;
 
@@ -102,13 +94,7 @@ export function writeCursorCache(entry: CursorCacheEntry): void {
     csv: entry.csv,
     ...(entry.workingAuthShape !== undefined && { workingAuthShape: entry.workingAuthShape }),
   });
-  const target = cachePath();
-  const temporaryPath = `${target}.${String(process.pid)}.tmp`;
   try {
-    mkdirSync(CACHE_DIR, { recursive: true });
-    writeFileSync(temporaryPath, payload, 'utf8');
-    renameSync(temporaryPath, target);
-  } catch {
-    rmSync(temporaryPath, { force: true });
-  }
+    writeFileAtomic(cachePath(), payload);
+  } catch {}
 }

@@ -1,12 +1,4 @@
-/**
- * The provider registry.
- *
- * Everything aitrack knows about a provider — its descriptor, heatmap colours,
- * pricing, how to read it, and its `doctor` check — lives in one module per
- * provider. Adding a provider is a new `src/providers/<name>.ts` plus one line
- * in the `PROVIDERS` array below; the reader, sync, pricing, recompute and
- * doctor paths all iterate this list rather than naming providers.
- */
+// Adding a provider is one module plus one PROVIDERS entry; every path iterates this list.
 import type { ProviderData } from '../data/types.js';
 import { claudeCodeProvider } from './claudeCode.js';
 import { codexProvider } from './codex.js';
@@ -81,11 +73,7 @@ export function costColumnLabel(providerKey: string, uppercase = false): string 
 }
 
 export function activeProviderKeys(providerData: ProviderData): string[] {
-  const active: string[] = PROVIDER_ORDER.filter((k) => (providerData[k]?.size ?? 0) > 0);
-  for (const [k, data] of Object.entries(providerData)) {
-    if (!active.includes(k) && data.size > 0) active.push(k);
-  }
-  return active;
+  return orderedProviderKeys(providerData).filter((k) => (providerData[k]?.size ?? 0) > 0);
 }
 
 export function orderedProviderKeys(providerData: ProviderData): string[] {

@@ -1,11 +1,5 @@
 import type { UsageReport, UsageReportTotals } from '../../data/usageReport.js';
 
-/**
- * The same window/provider/model breakdown the PDF receipt shows, as CSV — raw
- * integer token counts and a plain dollar figure so it drops straight into a
- * spreadsheet. One row per provider+model, then a TOTAL row; the cost cell is
- * left blank (not `0`) for providers with no known pricing.
- */
 const HEADER = [
   'provider',
   'model',
@@ -50,7 +44,7 @@ export function renderUsageReportCsv(report: UsageReport): string {
           row.hasCached ? row.cachedInputTokens : '',
           row.outputTokens,
           row.tokens,
-          row.hasCost ? row.costUSD.toFixed(4) : '',
+          row.hasCost ? row.costUSD.toFixed(4) : '', // Blank, not 0, when unpriced.
           pricingStatus(row),
         ]),
       );

@@ -4,21 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { backup, DatabaseSync } from 'node:sqlite';
 
+import { stringValue } from '../../data/guards.js';
+
 export interface CursorAuthState {
   accessToken?: string;
   refreshToken?: string;
 }
 
 function normalizeCursorDatabaseValue(value: unknown): string | undefined {
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed === '' ? undefined : trimmed;
-  }
-  if (value instanceof Uint8Array) {
-    const trimmed = Buffer.from(value).toString('utf8').trim();
-    return trimmed === '' ? undefined : trimmed;
-  }
-  return undefined;
+  return stringValue(value instanceof Uint8Array ? Buffer.from(value).toString('utf8') : value);
 }
 
 function readCursorAuthStateFromDatabase(databasePath: string): CursorAuthState {

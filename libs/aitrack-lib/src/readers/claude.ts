@@ -3,9 +3,9 @@ import { join } from 'node:path';
 import { tryLoadConfig } from '../config.js';
 import { addModelUsage, getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
 import { stripModelAliasSuffix } from '../data/modelId.js';
-import type { DayMap } from '../data/types.js';
+import type { DayMap, TokenCounts } from '../data/types.js';
 import { environmentValue } from '../env.js';
-import { claudeCacheWriteTokens, estimateClaudeCostUSD } from '../pricing/claude.js';
+import { claudeUsageCounts, estimateClaudeCostFromStoredCounts } from '../pricing/claude.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedMessage, CachedParse } from './cache.js';
 import { streamJsonlObjects } from './jsonl.js';
@@ -40,20 +40,8 @@ interface ClaudeEntry {
   };
 }
 
-interface CountedMessage {
-  dateString: string;
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  rawInputTokens: number;
-  cachedInputTokens: number;
-  cacheCreationInputTokens: number;
-  cacheCreation1hInputTokens: number;
-  costUSD?: number;
-}
-
 /** Prefer more output, then more input. A later record wins a tie. */
-function isRicherUsage(next: CountedMessage, current: CountedMessage): boolean {
+function isRicherUsage(next: TokenCounts, current: TokenCounts): boolean {
   if (next.outputTokens !== current.outputTokens) return next.outputTokens > current.outputTokens;
   if (next.inputTokens !== current.inputTokens) return next.inputTokens > current.inputTokens;
   return true;
@@ -65,7 +53,7 @@ export async function parseClaudeFile(
   fallbacks?: FallbackCollector,
 ): Promise<CachedParse> {
   const result: DayMap = new Map();
-  const chosen = new Map<string, CountedMessage>();
+  const chosen = new Map<string, CachedMessage>();
   const unkeyed: DayMap = new Map();
 
   for await (const parsed of streamJsonlObjects(filePath)) {
@@ -80,46 +68,28 @@ export async function parseClaudeFile(
     const dateString = tryLocalDateString(ts);
     if (dateString === null) continue;
 
-    const writes = claudeCacheWriteTokens(usage);
-    const inputTokens =
-      (usage.input_tokens ?? 0) +
-      (usage.cache_read_input_tokens ?? 0) +
-      writes.fiveMinute +
-      writes.oneHour;
-    const outputTokens = usage.output_tokens ?? 0;
-    if (inputTokens === 0 && outputTokens === 0) continue;
+    const counts = claudeUsageCounts(usage);
+    if (counts.inputTokens === 0 && counts.outputTokens === 0) continue;
 
     const model = stripModelAliasSuffix(entry.message?.model ?? 'unknown');
-    const costUSD = estimateClaudeCostUSD(model, usage, dateString, fallbacks);
-    const counted: CountedMessage = {
-      dateString,
-      model,
-      inputTokens,
-      outputTokens,
-      rawInputTokens: usage.input_tokens ?? 0,
-      cachedInputTokens: usage.cache_read_input_tokens ?? 0,
-      cacheCreationInputTokens: writes.fiveMinute,
-      cacheCreation1hInputTokens: writes.oneHour,
-      ...(costUSD !== undefined && { costUSD }),
-    };
+    const costUSD = estimateClaudeCostFromStoredCounts(model, counts, dateString, fallbacks);
+    if (costUSD !== undefined) counts.costUSD = costUSD;
 
     // No id to dedupe on: count the row. A known id keeps the fullest record
     // in this file (a later correction replaces a partial stream entry).
     const key = `${entry.message?.id ?? ''}:${entry.requestId ?? ''}`;
     if (key === ':') {
-      addCachedMessage(unkeyed, cachedMessage(counted));
+      addCachedMessage(unkeyed, { date: dateString, model, counts });
       continue;
     }
     const existing = chosen.get(key);
-    if (!existing || isRicherUsage(counted, existing)) chosen.set(key, counted);
+    if (!existing || isRicherUsage(counts, existing.counts)) {
+      chosen.set(key, { key, date: dateString, model, counts });
+    }
   }
 
-  const messages: CachedMessage[] = [];
-  for (const [key, counted] of chosen) {
-    const message = cachedMessage(counted, key);
-    messages.push(message);
-    addCachedMessage(result, message);
-  }
+  const messages = [...chosen.values()];
+  for (const message of messages) addCachedMessage(result, message);
   mergeDayMaps(result, unkeyed);
   for (const [date, day] of unkeyed) {
     for (const [model, counts] of Object.entries(day.byModel))
@@ -127,25 +97,6 @@ export async function parseClaudeFile(
   }
 
   return { days: result, keys: [...chosen.keys()], messages };
-}
-
-function cachedMessage(counted: CountedMessage, key?: string): CachedMessage {
-  return {
-    key,
-    date: counted.dateString,
-    model: counted.model,
-    counts: {
-      inputTokens: counted.inputTokens,
-      outputTokens: counted.outputTokens,
-      rawInputTokens: counted.rawInputTokens,
-      cachedInputTokens: counted.cachedInputTokens,
-      cacheCreationInputTokens: counted.cacheCreationInputTokens,
-      ...(counted.cacheCreation1hInputTokens > 0 && {
-        cacheCreation1hInputTokens: counted.cacheCreation1hInputTokens,
-      }),
-      ...(counted.costUSD !== undefined && { costUSD: counted.costUSD }),
-    },
-  };
 }
 
 function addCachedMessage(result: DayMap, message: CachedMessage): void {

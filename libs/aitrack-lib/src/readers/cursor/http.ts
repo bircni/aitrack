@@ -2,12 +2,6 @@ import { environmentValue } from '../../env.js';
 import { parseRetryAfter, QuotaFailure } from '../../quota/http.js';
 import { decodeJwtPayload } from './jwt.js';
 
-/**
- * Talking to Cursor's usage-export endpoint.
- *
- * Cursor accepts several credential shapes and which one works has changed
- * over time, so authentication failures try the next distinct variant.
- */
 const CURSOR_WEB_BASE_URL_ENV = 'CURSOR_WEB_BASE_URL';
 const CURSOR_SESSION_COOKIE_NAME = 'WorkosCursorSessionToken';
 /** Per-attempt limit so a stalled export cannot hang a report command. */
@@ -88,6 +82,7 @@ export interface CursorCsvResponse {
   shape: string;
 }
 
+/** Cursor's accepted credential shape has changed over time, so auth failures try the next one. */
 export async function fetchCursorUsageCsv(
   accessToken: string,
   preferShape?: string,

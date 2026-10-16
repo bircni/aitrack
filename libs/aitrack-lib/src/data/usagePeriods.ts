@@ -36,6 +36,12 @@ export interface UsageWindow {
   label: string;
 }
 
+/** Bounds every day key falls within. */
+export const ALL_TIME: Readonly<Pick<UsageWindow, 'start' | 'end'>> = {
+  start: '0000-01-01',
+  end: '9999-12-31',
+};
+
 /** What a period's window function may look at; the period is already dispatched on. */
 export interface UsageWindowInput extends UsagePeriodArgs {
   /** Today as a local calendar date, read once per call. */
@@ -287,7 +293,7 @@ export const USAGE_PERIOD_DEFINITIONS = [
     previous: () => {
       throw new Error('All-time usage does not have a comparable previous period.');
     },
-    window: () => ({ start: '0000-01-01', end: '9999-12-31', label: 'all time' }),
+    window: () => ({ ...ALL_TIME, label: 'all time' }),
   },
 ] as const satisfies readonly UsagePeriodDefinition[];
 
@@ -302,12 +308,6 @@ export function usagePeriodDefinition(period: UsagePeriod): UsagePeriodDefinitio
   }
   return definition;
 }
-
-/**
- * Calendar arithmetic lives in `./calendar.ts`; this module only turns periods
- * into windows. `todayString()` is the one place either module reads the clock —
- * every window is derived from date strings after that.
- */
 
 /** Today as a local calendar date — the only place this module reads the clock. */
 export function todayString(): string {
@@ -337,12 +337,6 @@ export function computePreviousUsageWindow(
   );
 }
 
-/**
- * Resolve a period to its window.
- *
- * Each period carries window, previous-window, and arg-parse functions, so
- * adding one is a single registry entry.
- */
 export function computeUsageWindow(
   options: UsageWindowOptions,
   today = todayString(),
@@ -362,10 +356,7 @@ export function periodAnchorsOnToday(period: UsagePeriod): boolean {
   return period !== 'date' && period !== 'range' && period !== 'all';
 }
 
-/**
- * Fails to compile if a `UsagePeriod` has no registry entry, or an entry names
- * a period the union does not declare — the two can no longer drift apart.
- */
+// Fails to compile if the union and the registry drift apart.
 type RegisteredPeriod = (typeof USAGE_PERIOD_DEFINITIONS)[number]['period'];
 type AssertSame<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 const _everyPeriodIsRegistered: AssertSame<UsagePeriod, RegisteredPeriod> = true;

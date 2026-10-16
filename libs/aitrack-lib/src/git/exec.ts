@@ -135,6 +135,11 @@ export function isRebaseInProgress(): boolean {
   );
 }
 
+/** Best effort: the failure that led here is the one worth reporting. */
+export async function abortRebaseIfInProgress(): Promise<void> {
+  if (isRebaseInProgress()) await runGitAsync(['rebase', '--abort']).catch(() => undefined);
+}
+
 async function rebaseForPushRetry(
   conflict: RetryConflict | undefined,
   branch: string | null,
@@ -157,13 +162,7 @@ async function rebaseForPushRetry(
       await runGitAsync(['-c', 'core.editor=true', 'rebase', '--continue']);
       return;
     }
-    if (isRebaseInProgress()) {
-      try {
-        await runGitAsync(['rebase', '--abort']);
-      } catch {
-        // Preserve the original retry failure below.
-      }
-    }
+    await abortRebaseIfInProgress();
     throw new Error(
       `Concurrent sync detected, but the local commit could not be replayed safely. ${errorMessage(error)}`,
       { cause: error },

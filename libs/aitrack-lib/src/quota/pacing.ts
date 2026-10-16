@@ -15,6 +15,9 @@ export interface PaceProjection {
   runOutAt: number | null;
 }
 
+export const SESSION_SECONDS = 5 * 60 * 60;
+export const WEEK_SECONDS = 7 * 24 * 60 * 60;
+
 const LEVEL: PaceProjection = {
   severity: 'level',
   projectedUsedPercent: null,

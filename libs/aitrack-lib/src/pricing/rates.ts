@@ -1,3 +1,5 @@
+import type { TokenCounts } from '../data/types.js';
+
 /** Per-million-token rates for the four buckets Cursor (and Claude) bill separately. */
 export interface FullModelRates {
   inputPerMillion: number;
@@ -11,6 +13,21 @@ export interface TokenRateBuckets {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+}
+
+/** Raw input is inferred from the total when a stored row has no explicit split. */
+export function tokenRateBuckets(counts: TokenCounts): TokenRateBuckets {
+  const cacheRead = counts.cachedInputTokens ?? 0;
+  const cacheWrite = counts.cacheCreationInputTokens ?? 0;
+  const oneHourWrites = counts.cacheCreation1hInputTokens ?? 0;
+  return {
+    raw:
+      counts.rawInputTokens ??
+      Math.max(0, counts.inputTokens - cacheRead - cacheWrite - oneHourWrites),
+    output: counts.outputTokens,
+    cacheRead,
+    cacheWrite,
+  };
 }
 
 /** Weighted sum used by every list-price estimator. */

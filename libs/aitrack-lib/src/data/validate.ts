@@ -1,4 +1,4 @@
-import { isDayKey } from '../constants.js';
+import { isDayKey, OPTIONAL_TOKEN_NUMBER_FIELDS, TOKEN_BREAKDOWN_FIELDS } from '../constants.js';
 import { errorMessage } from '../errors.js';
 import { applyMigrations } from '../store/migrations/index.js';
 import { UNKNOWN_TIMEZONE } from '../timezone.js';
@@ -35,13 +35,7 @@ function checkTokenCounts(value: unknown, path: string): Checked<TokenCounts> {
   if (!isRecord(value)) return invalid(`${path} must be an object`);
   if (!isFiniteNumber(value.inputTokens)) return invalid(`${path}.inputTokens must be a number`);
   if (!isFiniteNumber(value.outputTokens)) return invalid(`${path}.outputTokens must be a number`);
-  for (const field of [
-    'cachedInputTokens',
-    'cacheCreationInputTokens',
-    'cacheCreation1hInputTokens',
-    'rawInputTokens',
-    'costUSD',
-  ] as const) {
+  for (const field of OPTIONAL_TOKEN_NUMBER_FIELDS) {
     const present = value[field];
     if (present !== undefined && !isFiniteNumber(present)) {
       return invalid(`${path}.${field} must be a number`);
@@ -54,6 +48,10 @@ function checkTokenCounts(value: unknown, path: string): Checked<TokenCounts> {
 
   // The original object keeps the round trip byte-identical; every field was checked above.
   return { ok: true, value: value as unknown as TokenCounts };
+}
+
+export function isTokenCounts(value: unknown): value is TokenCounts {
+  return checkTokenCounts(value, '').ok;
 }
 
 /** Float comparison with a relative epsilon, used for cost totals. */
@@ -87,17 +85,7 @@ function checkProviderDay(
     modelCounts.push(checked.value);
   }
 
-  for (const field of ['inputTokens', 'outputTokens'] as const) {
-    if (totals[field] !== sumField(modelCounts, field)) {
-      return invalid(`${path}.totals.${field} must equal the sum of byModel.${field}`);
-    }
-  }
-  for (const field of [
-    'rawInputTokens',
-    'cachedInputTokens',
-    'cacheCreationInputTokens',
-    'cacheCreation1hInputTokens',
-  ] as const) {
+  for (const field of ['inputTokens', 'outputTokens', ...TOKEN_BREAKDOWN_FIELDS] as const) {
     if (totals[field] !== undefined && totals[field] !== sumField(modelCounts, field)) {
       return invalid(`${path}.totals.${field} must equal the sum of byModel.${field}`);
     }
