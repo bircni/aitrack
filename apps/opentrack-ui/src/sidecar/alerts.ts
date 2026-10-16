@@ -4,7 +4,7 @@ import { formatWhen } from '../shared/pace.js';
 import type { QuotaSnapshot } from '../shared/types.js';
 
 export interface Alert {
-  /** Stable per window, so each alert fires once until its reset is pruned. */
+  /** Stable per window, so each alert fires once until its window resets. */
   key: string;
   resetsAt: string;
   title: string;
@@ -17,7 +17,10 @@ export type FiredAlerts = Record<string, string>;
 const ALMOST_OUT_LEFT_PERCENT = 10;
 const RESET_GRACE_MS = 5 * 60_000; // The old window can still be reported just after its reset.
 
-/** Alerts newly due for a snapshot. */
+function isLive(resetsAt: string | undefined, now: number): boolean {
+  return resetsAt !== undefined && Date.parse(resetsAt) + RESET_GRACE_MS > now;
+}
+
 export function dueAlerts(
   label: string,
   snapshot: QuotaSnapshot,
@@ -34,7 +37,7 @@ export function dueAlerts(
     const name = `${label} ${window.label.toLowerCase()}`;
     if (left <= ALMOST_OUT_LEFT_PERCENT) {
       const key = `${scope}:almostOut`;
-      if (!(key in fired)) {
+      if (!isLive(fired[key], now)) {
         alerts.push({
           key,
           resetsAt,
@@ -46,7 +49,7 @@ export function dueAlerts(
     }
     const pace = projectPace(window, now);
     const key = `${scope}:willRunOut`;
-    if (pace.severity === 'runningOut' && pace.runOutAt !== null && !(key in fired)) {
+    if (pace.severity === 'runningOut' && pace.runOutAt !== null && !isLive(fired[key], now)) {
       alerts.push({
         key,
         resetsAt,
@@ -58,9 +61,6 @@ export function dueAlerts(
   return alerts;
 }
 
-/** Forget alerts whose window has reset. */
 export function pruneFired(fired: FiredAlerts, now: number): FiredAlerts {
-  return Object.fromEntries(
-    Object.entries(fired).filter(([, resetsAt]) => Date.parse(resetsAt) + RESET_GRACE_MS > now),
-  );
+  return Object.fromEntries(Object.entries(fired).filter(([, resetsAt]) => isLive(resetsAt, now)));
 }
