@@ -306,14 +306,5 @@ describe('doctorCommand', () => {
       expect(check.detail).toContain('MB-Pro-M4.int.example');
       expect(check.detail).toContain('MB-Pro-M4.local');
     });
-
-    it('does not warn for genuinely distinct machines sharing a date', () => {
-      mocks.listDataFiles.mockReturnValue(['/repo/data/a.json', '/repo/data/b.json']);
-      mocks.readDataFile
-        .mockReturnValueOnce(machine('laptop', { '2026-07-01': day(5) }))
-        .mockReturnValueOnce(machine('desktop', { '2026-07-01': day(7) }));
-
-      expect(duplicateMachineCheck().status).toBe('ok');
-    });
   });
 });

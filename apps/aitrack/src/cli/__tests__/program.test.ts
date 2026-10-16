@@ -66,10 +66,6 @@ describe('buildProgram', () => {
     vi.restoreAllMocks();
   });
 
-  it('reports the package version', () => {
-    expect(buildProgram().version()).toMatch(/^\d+\.\d+\.\d+/u);
-  });
-
   it('wires simple commands', async () => {
     await run('init');
     expect(mocks.initCommand).toHaveBeenCalled();

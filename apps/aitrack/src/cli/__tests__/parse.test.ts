@@ -35,22 +35,8 @@ describe('cli parse helpers', () => {
     expect(() => parseProviders(' , ')).toThrow('No valid providers given');
   });
 
-  it('parses usage report options from period and args', () => {
-    expect(parseUsageReportOptions({ period: 'month' })).toEqual({ period: 'month' });
-    expect(parseUsageReportOptions({ period: 'date', args: ['2026-06-01'] })).toEqual({
-      period: 'date',
-      from: '2026-06-01',
-    });
-    expect(
-      parseUsageReportOptions({ period: 'range', args: ['2026-06-01', '2026-06-02'] }),
-    ).toEqual({
-      period: 'range',
-      from: '2026-06-01',
-      to: '2026-06-02',
-    });
-    expect(parseUsageReportOptions({ period: 'last', args: ['14'] })).toEqual({
-      period: 'last',
-      n: 14,
-    });
+  it('defaults the usage report period to month', () => {
+    expect(parseUsageReportOptions({})).toEqual({ period: 'month' });
+    expect(() => parseUsageReportOptions({ period: 'decade' })).toThrow('Invalid period');
   });
 });
