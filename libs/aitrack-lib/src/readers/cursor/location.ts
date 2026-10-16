@@ -3,8 +3,8 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { environmentValue } from '../../env.js';
+import { splitConfiguredPaths } from '../paths.js';
 
-/** Finding Cursor's state database across platforms. */
 export const CURSOR_CONFIG_DIR_ENV = 'CURSOR_CONFIG_DIR';
 export const CURSOR_STATE_DB_PATH_ENV = 'CURSOR_STATE_DB_PATH';
 const CURSOR_STATE_DB_RELATIVE_PATH = join('User', 'globalStorage', 'state.vscdb');
@@ -34,22 +34,12 @@ function getCursorStateDatabaseCandidates(): string[] {
   const configuredDirectories = environmentValue(CURSOR_CONFIG_DIR_ENV);
   if (!configuredDirectories) return [getCursorDefaultStateDatabasePath()];
 
-  return configuredDirectories
-    .split(',')
-    .map((v) => v.trim())
-    .filter((v) => v !== '')
-    .map((value) => {
-      const resolved = resolve(value);
-      return resolved.endsWith('.vscdb') ? resolved : join(resolved, CURSOR_STATE_DB_RELATIVE_PATH);
-    });
+  return splitConfiguredPaths(configuredDirectories).map((value) => {
+    const resolved = resolve(value);
+    return resolved.endsWith('.vscdb') ? resolved : join(resolved, CURSOR_STATE_DB_RELATIVE_PATH);
+  });
 }
 
 export function getCursorStateDatabasePath(): string | null {
-  const seen = new Set<string>();
-  for (const candidate of getCursorStateDatabaseCandidates()) {
-    if (seen.has(candidate)) continue;
-    seen.add(candidate);
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
+  return getCursorStateDatabaseCandidates().find((candidate) => existsSync(candidate)) ?? null;
 }

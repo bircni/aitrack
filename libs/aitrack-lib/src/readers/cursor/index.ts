@@ -62,9 +62,7 @@ export async function readCursorData(options: ReadCursorDataOptions = {}): Promi
   }
   if (!isForced && cached && cursorCacheAgeSeconds(cached) <= maxAgeSeconds) return fromCache();
 
-  // Reading the body is part of the request: the stream can still fail after a
-  // 200, and an escaping rejection would take down the whole usage run rather
-  // than degrading like every other Cursor failure here.
+  // The body stream can still fail after a 200, so it degrades like any other failure.
   let text: string;
   let shape: string;
   try {
@@ -76,24 +74,19 @@ export async function readCursorData(options: ReadCursorDataOptions = {}): Promi
     const serverUntil =
       Date.now() + (error instanceof QuotaFailure ? (error.retryAfterSeconds ?? 0) * 1000 : 0);
     retry = { key: retryKey, until: Math.max(Date.now() + 60_000, serverUntil), serverUntil };
-    if (cached) {
-      log.warn(
-        `aitrack: Cursor — using cached export from ${cached.fetchedAt} (refresh failed: ${errorMessage(error)}).`,
-      );
-      return aggregateCursorCsvToDayMap(cached.csv);
-    }
-    log.warn(`aitrack: Cursor skipped — ${errorMessage(error)}`);
-    return new Map();
+    log.warn(
+      cached
+        ? `aitrack: Cursor — using cached export from ${cached.fetchedAt} (refresh failed: ${errorMessage(error)}).`
+        : `aitrack: Cursor skipped — ${errorMessage(error)}`,
+    );
+    return fromCache();
   }
 
   const map = aggregateCursorCsvToDayMap(text);
   if (map.size === 0) {
-    // A 200 carrying no usable rows — an interstitial page, a renamed column, a
-    // momentary backend hiccup. Caching it would hide Cursor for the whole TTL
-    // and suppress the retry that fixes it, so keep whatever cache we have and
-    // let the next command fetch again.
+    // Not cached: an empty 200 (interstitial, renamed column) would hide Cursor for the whole TTL.
     log.warn('aitrack: Cursor — no usage rows in CSV export.');
-    return cached ? aggregateCursorCsvToDayMap(cached.csv) : map;
+    return fromCache();
   }
 
   writeCursorCache({

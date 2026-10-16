@@ -16,7 +16,7 @@ export function splitConfiguredPaths(value: string | undefined): string[] {
 }
 
 /** Every `.jsonl` path under `dir`, depth-first in directory-entry order. */
-async function walkJsonlFiles(dir: string): Promise<string[]> {
+export async function listJsonlFiles(dir: string): Promise<string[]> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -27,24 +27,13 @@ async function walkJsonlFiles(dir: string): Promise<string[]> {
   // Entry order, not completion order: Claude dedup is first-file-wins.
   const perEntry = await mapWithConcurrency(entries, (entry) => {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) return walkJsonlFiles(full);
+    if (entry.isDirectory()) return listJsonlFiles(full);
     return Promise.resolve(entry.isFile() && entry.name.endsWith('.jsonl') ? [full] : []);
   });
   return perEntry.flat();
 }
 
-/** List every `.jsonl` file under `root` (recursive). */
-export function listJsonlFiles(root: string): Promise<string[]> {
-  return walkJsonlFiles(root);
-}
-
-/**
- * Every `.jsonl` file under any of `roots`, de-duplicated and in root order.
- *
- * Roots can overlap — the same directory can arrive from the env override, the
- * config value and the built-in defaults, and one can nest inside another — and
- * a file listed twice would double every token it holds.
- */
+/** Every `.jsonl` file under `roots`, de-duplicated: overlapping roots would double its tokens. */
 export async function listUniqueSourceFiles(roots: string[]): Promise<string[]> {
   const perRoot = await Promise.all(
     roots.map(async (root) => {
@@ -71,10 +60,7 @@ export async function jsonlSourceSummary(
 ): Promise<{ existing: string[]; fileCount: number }> {
   const existing = roots.filter((root) => existsSync(root));
   const counts = await Promise.all(
-    existing.map(async (root) => {
-      const files = await listJsonlFiles(root);
-      return files.length;
-    }),
+    existing.map((root) => listJsonlFiles(root).then((files) => files.length)),
   );
   return { existing, fileCount: counts.reduce((sum, count) => sum + count, 0) };
 }
@@ -139,12 +125,10 @@ export function resolveSourceRoots(options: {
   configValue?: string;
   defaults: string[];
 }): string[] {
-  const paths = new Set<string>(splitConfiguredPaths(options.envValue));
-  for (const path of splitConfiguredPaths(options.configValue)) {
-    paths.add(path);
-  }
-  for (const path of options.defaults) {
-    paths.add(path);
-  }
+  const paths = new Set([
+    ...splitConfiguredPaths(options.envValue),
+    ...splitConfiguredPaths(options.configValue),
+    ...options.defaults,
+  ]);
   return [...paths].map((p) => resolve(p));
 }

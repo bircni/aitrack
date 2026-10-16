@@ -1,12 +1,6 @@
 import { log } from '../output.js';
 
-/**
- * Records model ids that were priced by family fallback during one run.
- *
- * A fallback price is a guess: the model id had no exact entry, so the cost
- * written to the data file can be off by a whole tier, and the user needs to
- * know which models are affected.
- */
+/** Family-fallback prices can be off by a tier, so the affected model ids are reported. */
 export interface FallbackCollector {
   record: (modelId: string) => void;
   /** Recorded ids, sorted, clearing them. */

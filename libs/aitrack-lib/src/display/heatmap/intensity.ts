@@ -1,15 +1,9 @@
 import { INTENSITY_THRESHOLDS } from './constants.js';
 
-/**
- * Nearest-rank percentile.
- *
- * floor(p * (n - 1)) skews low enough on small samples to break the contract:
- * for two days it returned the *minimum* at p90, so the quieter day became the
- * intensity ceiling and every day rendered at the darkest level.
- */
-export function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const sortedAsc = sorted.toSorted((a, b) => a - b);
+/** Nearest-rank: floor(p * (n - 1)) made the quieter of two days the ceiling. */
+export function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sortedAsc = values.toSorted((a, b) => a - b);
   const rank = Math.ceil(p * sortedAsc.length) - 1;
   const index = Math.min(sortedAsc.length - 1, Math.max(0, rank));
   return sortedAsc[index] ?? 0;

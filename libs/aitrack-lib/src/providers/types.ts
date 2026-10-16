@@ -76,9 +76,5 @@ export interface LiveProvider extends ProviderBase {
   reader?: undefined;
 }
 
-/**
- * A union rather than one shape with two optional readers, so "synced ⇒ has a
- * reader" is a compile error instead of a runtime throw from inside the sync,
- * recompute and report paths.
- */
+/** A union so "synced ⇒ has a reader" is a compile error rather than a runtime throw. */
 export type Provider = SyncedProvider | LiveProvider;

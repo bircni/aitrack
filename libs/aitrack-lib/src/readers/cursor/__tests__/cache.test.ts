@@ -199,13 +199,11 @@ describe('cursor CSV cache', () => {
   describe('cursorCacheAgeSeconds', () => {
     it('measures age from fetchedAt', () => {
       const now = Date.parse('2026-01-01T01:00:00.000Z');
-      expect(cursorCacheAgeSeconds({ fetchedAt: '2026-01-01T00:00:00.000Z', csv: '' }, now)).toBe(
-        3600,
-      );
+      expect(cursorCacheAgeSeconds({ fetchedAt: '2026-01-01T00:00:00.000Z' }, now)).toBe(3600);
     });
 
     it('is Infinity for an unparseable timestamp', () => {
-      expect(cursorCacheAgeSeconds({ fetchedAt: 'not-a-date', csv: '' })).toBe(Infinity);
+      expect(cursorCacheAgeSeconds({ fetchedAt: 'not-a-date' })).toBe(Infinity);
     });
   });
 

@@ -1,22 +1,20 @@
 import type { ProviderData } from '../data/types.js';
-import { findClaudePricing } from './claude.js';
-import { findCodexPricing } from './codex.js';
+import { syncedProviders } from '../providers/index.js';
 import {
   createFallbackCollector,
   type FallbackCollector,
   reportFallbackPricing,
 } from './fallback.js';
 
-/** Record family-fallback hits for models already loaded. */
+/** Record family-fallback hits for models already loaded; merge mode prices every row. */
 export function recordPricingFallbacks(
   providerData: ProviderData,
   fallbacks: FallbackCollector,
 ): void {
-  for (const [providerKey, dayMap] of Object.entries(providerData)) {
-    for (const [date, day] of dayMap) {
-      for (const model of Object.keys(day.byModel)) {
-        if (providerKey === 'claude_code') findClaudePricing(model, date, fallbacks);
-        else if (providerKey === 'codex') findCodexPricing(model, date, fallbacks);
+  for (const { descriptor, pricing } of syncedProviders()) {
+    for (const [date, day] of providerData[descriptor.key] ?? []) {
+      for (const [model, counts] of Object.entries(day.byModel)) {
+        pricing.priceModelCost(model, counts, date, 'merge', fallbacks);
       }
     }
   }

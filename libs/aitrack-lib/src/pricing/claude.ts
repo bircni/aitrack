@@ -1,9 +1,13 @@
-// Per-model Claude pricing. Rates come from local tables/*.json, overlaid by
-// the orphan `pricing` branch cache when refreshed. Run `pnpm run pricing:check`.
-
+import { TOKEN_BREAKDOWN_FIELDS } from '../constants.js';
 import { CLAUDE_FAMILIES, canonicalizeClaudeModelId } from '../data/modelId.js';
+import type { TokenCounts } from '../data/types.js';
 import type { FallbackCollector } from './fallback.js';
-import { costFromRates } from './rates.js';
+import {
+  costFromRates,
+  type FullModelRates,
+  type TokenRateBuckets,
+  tokenRateBuckets,
+} from './rates.js';
 import { currentModelPricing } from './store.js';
 import type { ClaudePricing } from './types.js';
 
@@ -33,50 +37,30 @@ export function findClaudePricing(
   const exact = lookupClaudePricing(model, usageDate);
   if (exact) return exact;
   const id = canonicalClaudeModelId(model);
-  const fromCatalog = currentModelPricing().lookupCatalogClaude(id);
+  const pricing = currentModelPricing();
+  const fromCatalog = pricing.lookupCatalogClaude(id);
   if (fromCatalog) return fromCatalog;
-  for (const family of CLAUDE_FAMILIES) {
-    if (!id.includes(family)) {
-      continue;
-    }
-
-    fallbacks?.record(id);
-    return currentModelPricing().claudeFamilyFallback(family);
-  }
-  // An id that names no family is not Sonnet. Guessing a price there is how a
-  // missing model field turned into a confident dollar total.
-  return undefined;
+  // An id that names no family stays unpriced rather than guessed as Sonnet.
+  const family = CLAUDE_FAMILIES.find((name) => id.includes(name));
+  if (family === undefined) return undefined;
+  fallbacks?.record(id);
+  return pricing.claudeFamilyFallback(family);
 }
 
-function claudeCost(
-  pricing: ClaudePricing,
-  tokens: {
-    raw: number;
-    output: number;
-    cacheRead: number;
-    cacheCreate: number;
-    cacheCreate1h?: number;
-  },
-): number {
-  // 5-minute writes are 1.25× input (cacheCreatePerMillion). 1-hour writes are
-  // 2× the base input rate, including models whose cache hits are not 0.1×.
-  const oneHour = tokens.cacheCreate1h ?? 0;
+export function claudeRates(pricing: ClaudePricing): FullModelRates {
+  return {
+    inputPerMillion: pricing.inputPerMillion,
+    outputPerMillion: pricing.outputPerMillion,
+    cacheReadPerMillion: pricing.cacheReadPerMillion,
+    cacheWritePerMillion: pricing.cacheCreatePerMillion,
+  };
+}
+
+/** 1-hour writes cost twice the base input rate, even for models whose cache hits are not 0.1×. */
+function claudeCost(pricing: ClaudePricing, tokens: TokenRateBuckets, oneHourWrites = 0): number {
   return (
-    costFromRates(
-      {
-        inputPerMillion: pricing.inputPerMillion,
-        outputPerMillion: pricing.outputPerMillion,
-        cacheReadPerMillion: pricing.cacheReadPerMillion,
-        cacheWritePerMillion: pricing.cacheCreatePerMillion,
-      },
-      {
-        raw: tokens.raw,
-        output: tokens.output,
-        cacheRead: tokens.cacheRead,
-        cacheWrite: tokens.cacheCreate,
-      },
-    ) +
-    (oneHour * pricing.inputPerMillion * 2) / 1_000_000
+    costFromRates(claudeRates(pricing), tokens) +
+    (oneHourWrites * pricing.inputPerMillion * 2) / 1_000_000
   );
 }
 
@@ -104,22 +88,27 @@ export function claudeCacheWriteTokens(usage: ClaudeMessageUsage): {
   return { fiveMinute: usage.cache_creation_input_tokens ?? 0, oneHour: 0 };
 }
 
+export function claudeUsageCounts(usage: ClaudeMessageUsage): TokenCounts {
+  const writes = claudeCacheWriteTokens(usage);
+  const rawInputTokens = usage.input_tokens ?? 0;
+  const cachedInputTokens = usage.cache_read_input_tokens ?? 0;
+  return {
+    inputTokens: rawInputTokens + cachedInputTokens + writes.fiveMinute + writes.oneHour,
+    outputTokens: usage.output_tokens ?? 0,
+    rawInputTokens,
+    cachedInputTokens,
+    cacheCreationInputTokens: writes.fiveMinute,
+    ...(writes.oneHour > 0 && { cacheCreation1hInputTokens: writes.oneHour }),
+  };
+}
+
 export function estimateClaudeCostUSD(
   model: string,
   usage: ClaudeMessageUsage,
   usageDate?: string,
   fallbacks?: FallbackCollector,
 ): number | undefined {
-  const pricing = findClaudePricing(model, usageDate, fallbacks);
-  if (!pricing) return undefined;
-  const writes = claudeCacheWriteTokens(usage);
-  return claudeCost(pricing, {
-    raw: usage.input_tokens ?? 0,
-    output: usage.output_tokens ?? 0,
-    cacheRead: usage.cache_read_input_tokens ?? 0,
-    cacheCreate: writes.fiveMinute,
-    cacheCreate1h: writes.oneHour,
-  });
+  return estimateClaudeCostFromStoredCounts(model, claudeUsageCounts(usage), usageDate, fallbacks);
 }
 
 export function estimateClaudeCostFromAggregateTokens(
@@ -135,50 +124,24 @@ export function estimateClaudeCostFromAggregateTokens(
     raw: inputTokens,
     output: outputTokens,
     cacheRead: 0,
-    cacheCreate: 0,
+    cacheWrite: 0,
   });
 }
 
-export function claudeCountsHaveCostBreakdown(counts: {
-  rawInputTokens?: number;
-  cachedInputTokens?: number;
-  cacheCreationInputTokens?: number;
-  cacheCreation1hInputTokens?: number;
-}): boolean {
-  return (
-    counts.rawInputTokens !== undefined ||
-    counts.cachedInputTokens !== undefined ||
-    counts.cacheCreationInputTokens !== undefined ||
-    counts.cacheCreation1hInputTokens !== undefined
-  );
+export function claudeCountsHaveCostBreakdown(
+  counts: Pick<TokenCounts, (typeof TOKEN_BREAKDOWN_FIELDS)[number]>,
+): boolean {
+  return TOKEN_BREAKDOWN_FIELDS.some((field) => counts[field] !== undefined);
 }
 
 export function estimateClaudeCostFromStoredCounts(
   model: string,
-  counts: {
-    inputTokens: number;
-    outputTokens: number;
-    rawInputTokens?: number;
-    cachedInputTokens?: number;
-    cacheCreationInputTokens?: number;
-    cacheCreation1hInputTokens?: number;
-  },
+  counts: TokenCounts,
   usageDate?: string,
   fallbacks?: FallbackCollector,
 ): number | undefined {
   if (!claudeCountsHaveCostBreakdown(counts)) return undefined;
   const pricing = findClaudePricing(model, usageDate, fallbacks);
   if (!pricing) return undefined;
-  const cacheRead = counts.cachedInputTokens ?? 0;
-  const cacheCreate = counts.cacheCreationInputTokens ?? 0;
-  const cacheCreate1h = counts.cacheCreation1hInputTokens ?? 0;
-  return claudeCost(pricing, {
-    raw:
-      counts.rawInputTokens ??
-      Math.max(0, counts.inputTokens - cacheRead - cacheCreate - cacheCreate1h),
-    output: counts.outputTokens,
-    cacheRead,
-    cacheCreate,
-    cacheCreate1h,
-  });
+  return claudeCost(pricing, tokenRateBuckets(counts), counts.cacheCreation1hInputTokens);
 }

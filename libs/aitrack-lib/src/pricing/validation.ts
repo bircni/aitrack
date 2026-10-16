@@ -1,25 +1,22 @@
+import { isFiniteNumber, isRecord } from '../data/guards.js';
 import { CLAUDE_FAMILIES } from '../data/modelId.js';
 import type { CompactCatalog } from './codecs.js';
 import type { PricingManifest, PricingSupplement } from './packMeta.js';
-
-function record(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 export function compilePattern(pattern: string): RegExp {
   return pattern.startsWith('(?i)') ? new RegExp(pattern.slice(4), 'iu') : new RegExp(pattern, 'u');
 }
 
 function amount(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  return isFiniteNumber(value) && value >= 0;
 }
 
 function rates(value: unknown, fields: string[]): boolean {
-  return record(value) && fields.every((field) => amount(value[field]));
+  return isRecord(value) && fields.every((field) => amount(value[field]));
 }
 
 function map(value: unknown, validate: (value: unknown) => boolean): boolean {
-  return record(value) && Object.values(value).every((entry) => validate(entry));
+  return isRecord(value) && Object.values(value).every((entry) => validate(entry));
 }
 
 function stamp(value: unknown): value is string {
@@ -42,7 +39,7 @@ function overrides(value: unknown, fields: string[]): boolean {
     (entries) =>
       Array.isArray(entries) &&
       entries.every(
-        (entry: unknown) => record(entry) && stamp(entry.before) && rates(entry.pricing, fields),
+        (entry: unknown) => isRecord(entry) && stamp(entry.before) && rates(entry.pricing, fields),
       ),
   );
 }
@@ -52,45 +49,45 @@ const CLAUDE = [...IO, 'cacheReadPerMillion', 'cacheCreatePerMillion'];
 const CURSOR = [...IO, 'cacheReadPerMillion', 'cacheWritePerMillion'];
 
 export function isPricingSupplement(value: unknown): value is PricingSupplement {
-  if (!record(value) || !stamp(value.updatedAt)) return false;
+  if (!isRecord(value) || !stamp(value.updatedAt)) return false;
   const { claude, codex, cursor } = value;
-  const fallback = record(claude) ? claude.familyFallback : undefined;
+  const fallback = isRecord(claude) ? claude.familyFallback : undefined;
   return (
-    record(claude) &&
-    record(codex) &&
-    record(cursor) &&
+    isRecord(claude) &&
+    isRecord(codex) &&
+    isRecord(cursor) &&
     map(claude.models, (row) => rates(row, CLAUDE)) &&
     overrides(claude.overrides, CLAUDE) &&
-    record(fallback) &&
+    isRecord(fallback) &&
     CLAUDE_FAMILIES.every((family) => rates(fallback[family], CLAUDE)) &&
     map(codex.current, (row) => rates(row, IO)) &&
     map(codex.historical, (row) => rates(row, IO)) &&
     overrides(codex.overrides, IO) &&
     Array.isArray(codex.familyFallback) &&
     codex.familyFallback.every(
-      (entry: unknown) => record(entry) && pattern(entry.match) && rates(entry, IO),
+      (entry: unknown) => isRecord(entry) && pattern(entry.match) && rates(entry, IO),
     ) &&
     map(cursor.models, (row) => rates(row, CURSOR)) &&
     map(cursor.fastMultipliers, amount) &&
     Array.isArray(cursor.aliases) &&
     cursor.aliases.every(
       (entry: unknown) =>
-        record(entry) && pattern(entry.pattern) && typeof entry.canonical === 'string',
+        isRecord(entry) && pattern(entry.pattern) && typeof entry.canonical === 'string',
     )
   );
 }
 
 export function isCompactCatalog(value: unknown): value is CompactCatalog {
   return (
-    record(value) &&
+    isRecord(value) &&
     stamp(value.retrievedAt) &&
-    record(value.models) &&
+    isRecord(value.models) &&
     Object.keys(value.models).length > 0 &&
     map(
       value.models,
       (row) =>
         rates(row, ['i', 'o', 'cw', 'cr']) &&
-        record(row) &&
+        isRecord(row) &&
         ['ia', 'oa', 'cwa', 'cra', 'fast'].every(
           (field) => row[field] === undefined || amount(row[field]),
         ) &&
@@ -103,10 +100,10 @@ export function isCompactCatalog(value: unknown): value is CompactCatalog {
 
 export function isPricingManifest(value: unknown): value is PricingManifest {
   if (
-    !record(value) ||
+    !isRecord(value) ||
     value.schemaVersion !== 1 ||
     !stamp(value.updatedAt) ||
-    !record(value.files)
+    !isRecord(value.files)
   )
     return false;
   const hashes = value.hashes;
@@ -114,7 +111,7 @@ export function isPricingManifest(value: unknown): value is PricingManifest {
     value.files.supplement === 'supplement.json' &&
     value.files.litellm === 'litellm.json' &&
     value.files.modelsDev === 'models_dev.json' &&
-    record(hashes) &&
+    isRecord(hashes) &&
     ['supplement', 'litellm', 'modelsDev'].every(
       (key) => typeof hashes[key] === 'string' && /^[a-f0-9]{64}$/u.test(hashes[key]),
     )

@@ -3,12 +3,6 @@ import { createHash } from 'node:crypto';
 
 import { isFiniteNumber, isRecord } from '../../data/guards.js';
 
-/**
- * Reading claims out of an access token.
- *
- * The payload is untrusted remote input, so every step here has to tolerate
- * garbage rather than assume a well-formed token.
- */
 export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const encodedPayload = token.split('.', 2)[1];
   if (!encodedPayload) return null;

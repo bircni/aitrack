@@ -17,12 +17,7 @@ const FETCHERS: Record<QuotaProviderKey, (now: Date) => Promise<QuotaSnapshot>> 
 
 export const QUOTA_PROVIDERS = Object.keys(FETCHERS) as readonly QuotaProviderKey[];
 
-/**
- * Live limits for one provider, from the login its own tool already saved.
- *
- * Never throws: every failure comes back as a typed error so one provider
- * being signed out does not take the others down with it.
- */
+/** Never throws, so one signed-out provider does not take the others down. */
 export async function fetchQuota(
   provider: QuotaProviderKey,
   now = new Date(),

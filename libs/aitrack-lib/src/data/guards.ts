@@ -1,9 +1,3 @@
-/**
- * Structural type guards shared by the two hand-rolled validators: the config
- * loader and the machine-file parser. Both read untrusted JSON off disk and
- * narrow it field by field, so they need exactly the same primitives.
- */
-
 /** A plain JSON object — arrays and null are excluded so index access is safe. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -16,4 +10,11 @@ export function isFiniteNumber(value: unknown): value is number {
 
 export function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string';
+}
+
+/** A trimmed string, or undefined when it is blank or not a string. */
+export function stringValue(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
 }

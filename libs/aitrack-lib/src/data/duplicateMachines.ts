@@ -7,15 +7,7 @@ export interface DuplicateMachineDays {
   machines: string[];
 }
 
-/**
- * Find days that appear identically under more than one machine.
- *
- * The same machine synced under two ids (a hostname that changed with the
- * network, say) leaves two data files holding byte-identical days, and every
- * all-time total then counts that usage twice. Identical payloads are the
- * signal: two machines genuinely used on the same day produce different
- * numbers.
- */
+/** One machine synced under two ids leaves identical days; distinct machines never match exactly. */
 export function findDuplicateMachineDays(machines: MachineFile[]): DuplicateMachineDays {
   const byDay = new Map<string, Map<string, string[]>>();
   for (const machine of machines) {

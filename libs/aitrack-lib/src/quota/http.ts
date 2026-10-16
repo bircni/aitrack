@@ -1,4 +1,4 @@
-import { isFiniteNumber, isRecord } from '../data/guards.js';
+import { isFiniteNumber, isRecord, stringValue } from '../data/guards.js';
 import { errorMessage } from '../errors.js';
 import type { QuotaErrorKind } from './types.js';
 
@@ -86,11 +86,7 @@ export function numberValue(value: unknown): number | undefined {
   return isFiniteNumber(parsed) ? parsed : undefined;
 }
 
-export function stringValue(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
-}
+export { stringValue };
 
 /**
  * An ISO instant from an ISO string (a missing zone means UTC) or an epoch

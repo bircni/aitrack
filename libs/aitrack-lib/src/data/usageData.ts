@@ -14,23 +14,17 @@ import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from '.
 
 export { usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
 
-// Merge one provider-day record into the running accumulator for that day.
-// Day cost prefers the stored totals.costUSD; falls back to the sum of per-model
-// costs when totals are missing but at least one model had a (possibly
-// backfilled) cost.
 export function mergeProviderDay(
   rec: DayEntry,
   providerKey: string,
   pData: ProviderDay,
   date?: string,
 ): void {
-  // Token fields only. Day cost is a stored-total-plus-backfill policy, not a
-  // straight sum of the incoming totals and model rows.
-  addTokenCounts(rec, { ...pData.totals, costUSD: undefined, hasUnpricedTokens: undefined });
+  addTokenCounts(rec, { ...pData.totals, costUSD: undefined, hasUnpricedTokens: undefined }); // Cost follows the policy below.
 
   let summedModelCost = 0;
   let backfilledModelCost = 0;
-  let isAnyModelHadCost = false;
+  let hasModelCost = false;
   for (const [model, counts] of Object.entries(pData.byModel)) {
     const m = (rec.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
     const cost = resolveModelCost(providerKey, model, counts, date);
@@ -47,20 +41,15 @@ export function mergeProviderDay(
     if (cost !== undefined) {
       m.costUSD = (m.costUSD ?? 0) + cost;
       summedModelCost += cost;
-      isAnyModelHadCost = true;
-      // In merge mode resolveModelCost returns the stored cost when there is
-      // one, so this is exactly the amount that was estimated just now.
-      if (counts.costUSD === undefined) backfilledModelCost += cost;
+      hasModelCost = true;
+      if (counts.costUSD === undefined) backfilledModelCost += cost; // Merge mode returns stored costs as-is.
     }
   }
 
-  // A stored day total predates any per-model cost estimated above, so the
-  // model table would otherwise total more than the day it belongs to. Add the
-  // backfilled amount in rather than recomputing the whole day, which would
-  // silently reprice history that recompute-costs owns.
+  // Add only the backfill to a stored total; repricing history is recompute-costs' job.
   const dayCost =
     pData.totals.costUSD === undefined
-      ? isAnyModelHadCost
+      ? hasModelCost
         ? summedModelCost
         : undefined
       : pData.totals.costUSD + backfilledModelCost;
@@ -158,37 +147,21 @@ function mergePersistedWithLocal(
   localMachine: MachineFile | null,
   currentFile: string,
 ): MachineFile[] {
-  const reportMachines: MachineFile[] = [];
-  let isLocalMerged = false;
-
-  for (const entry of persisted) {
-    if (
-      localMachine === null ||
-      basename(entry.filePath) !== currentFile ||
-      !machineHasData(localMachine)
-    ) {
-      reportMachines.push(entry.machine);
-      continue;
-    }
-    reportMachines.push({
-      ...entry.machine,
-      days: mergePersistedDays(entry.machine.days, localMachine.days),
-    });
-    isLocalMerged = true;
+  if (localMachine === null || !machineHasData(localMachine)) {
+    return persisted.map(({ machine }) => machine);
   }
-  if (localMachine !== null && !isLocalMerged && machineHasData(localMachine)) {
-    reportMachines.push({ ...localMachine, lastUpdated: '' }); // Never synced.
-  }
-  return reportMachines;
+  const isCurrent = ({ filePath }: PersistedMachine) => basename(filePath) === currentFile;
+  const machines = persisted.map((entry) =>
+    isCurrent(entry)
+      ? { ...entry.machine, days: mergePersistedDays(entry.machine.days, localMachine.days) }
+      : entry.machine,
+  );
+  if (!persisted.some((entry) => isCurrent(entry)))
+    machines.push({ ...localMachine, lastUpdated: '' }); // Never synced.
+  return machines;
 }
 
-/**
- * Start live-provider fetches now so they overlap the JSONL read.
- *
- * The catch matters because the promise is started before later awaits: if one
- * of those threw first, an unguarded rejection here would surface as an
- * unhandled rejection rather than the original error.
- */
+/** Started before the JSONL read to overlap it; caught so an earlier throw leaves no unhandled rejection. */
 function startLiveFetches(
   providerFilter: Set<string> | undefined,
   refreshLive?: boolean,
@@ -222,8 +195,8 @@ export async function loadMergedProviderData(
       : options.localMachine;
   await options.syncedReady;
 
-  const isWarnedNotConfigured = !config || !isCloned();
-  const persisted = isWarnedNotConfigured ? [] : loadPersistedMachines();
+  const notConfigured = !config || !isCloned();
+  const persisted = notConfigured ? [] : loadPersistedMachines();
   const reportMachines = mergePersistedWithLocal(
     persisted,
     localMachine,
@@ -260,7 +233,7 @@ export async function loadMergedProviderData(
   return {
     providerData,
     machineData: persisted.map((entry) => entry.machine),
-    warnedNotConfigured: isWarnedNotConfigured,
+    warnedNotConfigured: notConfigured,
     zonedSources,
     liveProviderData,
   };

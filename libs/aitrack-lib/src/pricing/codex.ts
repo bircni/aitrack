@@ -19,17 +19,12 @@ export function findCodexPricing(
   const exact = lookupCodexPricing(model, usageDate);
   if (exact) return exact;
   const id = canonicalModelId(model);
-  const fromCatalog = currentModelPricing().lookupCatalogCodex(id);
+  const pricing = currentModelPricing();
+  const fromCatalog = pricing.lookupCatalogCodex(id);
   if (fromCatalog) return fromCatalog;
-  for (const { match, pricing } of currentModelPricing().codexFamilyFallbacks()) {
-    if (!match.test(id)) {
-      continue;
-    }
-
-    fallbacks?.record(id);
-    return pricing;
-  }
-  return undefined;
+  const fallback = pricing.codexFamilyFallbacks().find(({ match }) => match.test(id));
+  if (fallback) fallbacks?.record(id);
+  return fallback?.pricing;
 }
 
 export function estimateCodexCostUSD(

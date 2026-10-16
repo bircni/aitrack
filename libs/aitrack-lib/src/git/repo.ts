@@ -5,18 +5,17 @@ import { join } from 'node:path';
 import { machineDataFilename, normalizeMachineId } from '../machineId.js';
 import { LOCAL_REPO } from '../paths.js';
 import {
+  abortRebaseIfInProgress,
   commitStagedData,
   GitCommandError,
   type GitOptions,
   hasUpstream,
-  isRebaseInProgress,
   pushWithRetry,
   runGit,
   runGitAsync,
 } from './exec.js';
 import { withRepoLock } from './lock.js';
 
-/** Clone, pull and push the data repo. */
 export function isCloned(): boolean {
   return existsSync(join(LOCAL_REPO, '.git'));
 }
@@ -93,13 +92,7 @@ export function pull(options: GitOptions = {}): Promise<void> {
       try {
         await runGitAsync(['pull', '--rebase', '--quiet'], options);
       } catch (rebaseError) {
-        if (isRebaseInProgress()) {
-          try {
-            await runGitAsync(['rebase', '--abort']);
-          } catch {
-            // Preserve the rebase failure below.
-          }
-        }
+        await abortRebaseIfInProgress();
         throw rebaseError;
       }
     }

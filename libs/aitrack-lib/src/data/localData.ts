@@ -1,3 +1,4 @@
+import { OPTIONAL_TOKEN_NUMBER_FIELDS } from '../constants.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import { syncedProviders } from '../providers/index.js';
 import { machineTimezone } from '../timezone.js';
@@ -7,20 +8,16 @@ import type { DayMap, MachineFile, ProviderDay, TokenCounts } from './types.js';
 export { machineTimezone };
 
 function tokenCountFields(counts: TokenCounts): TokenCounts {
-  return {
+  const fields: TokenCounts = {
     inputTokens: counts.inputTokens,
     outputTokens: counts.outputTokens,
-    ...(counts.rawInputTokens !== undefined && { rawInputTokens: counts.rawInputTokens }),
-    ...(counts.cachedInputTokens !== undefined && { cachedInputTokens: counts.cachedInputTokens }),
-    ...(counts.cacheCreationInputTokens !== undefined && {
-      cacheCreationInputTokens: counts.cacheCreationInputTokens,
-    }),
-    ...(counts.cacheCreation1hInputTokens !== undefined && {
-      cacheCreation1hInputTokens: counts.cacheCreation1hInputTokens,
-    }),
-    ...(counts.costUSD !== undefined && { costUSD: counts.costUSD }),
-    ...(counts.hasUnpricedTokens && { hasUnpricedTokens: true }),
   };
+  for (const field of OPTIONAL_TOKEN_NUMBER_FIELDS) {
+    const value = counts[field];
+    if (value !== undefined) fields[field] = value;
+  }
+  if (counts.hasUnpricedTokens) fields.hasUnpricedTokens = true;
+  return fields;
 }
 
 export function buildMachineData(
@@ -44,8 +41,6 @@ export function buildMachineData(
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     hostname: machineId,
-    // Day keys are this machine's local calendar days; the zone is recorded so
-    // data merged across machines in different zones can be understood.
     timezone: machineTimezone(),
     dayBucket: 'local',
     lastUpdated: new Date().toISOString(),

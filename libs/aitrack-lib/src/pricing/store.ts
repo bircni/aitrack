@@ -1,9 +1,10 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { isRecord } from '../data/guards.js';
+import { writeFileAtomic } from '../atomicWrite.js';
+import { isOptionalString, isRecord } from '../data/guards.js';
 import { environmentValue } from '../env.js';
 import { errorMessage } from '../errors.js';
 import { APP_DIR } from '../paths.js';
@@ -52,35 +53,20 @@ function parseBody<T>(body: string, validate: (value: unknown) => value is T, ha
 
 function readState(path: string): CacheState {
   try {
-    const value = JSON.parse(readFileSync(path, 'utf8')) as { sources?: unknown } | null;
-    if (!value?.sources || typeof value.sources !== 'object' || Array.isArray(value.sources))
-      return { sources: {} };
-    for (const source of Object.values(value.sources) as unknown[]) {
-      if (
-        !source ||
-        typeof source !== 'object' ||
-        Array.isArray(source) ||
-        ['etag', 'fetchedAt', 'failedAt']
-          .map((key) => (source as Record<string, unknown>)[key])
-          .some((field) => field !== undefined && typeof field !== 'string')
-      ) {
-        return { sources: {} };
-      }
+    const value: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (
+      isRecord(value) &&
+      isRecord(value.sources) &&
+      Object.values(value.sources).every(
+        (source) =>
+          isRecord(source) &&
+          ['etag', 'fetchedAt', 'failedAt'].every((key) => isOptionalString(source[key])),
+      )
+    ) {
+      return value as unknown as CacheState;
     }
-    return value as CacheState;
-  } catch {
-    return { sources: {} };
-  }
-}
-
-async function writeAtomic(path: string, body: string): Promise<void> {
-  const tmp = `${path}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(tmp, body, 'utf8');
-    await rename(tmp, path);
-  } finally {
-    await rm(tmp, { force: true }).catch(() => undefined);
-  }
+  } catch {}
+  return { sources: {} };
 }
 
 function pricingFromParts(
@@ -258,12 +244,12 @@ export class PricingStore {
       const cachedFiles = Object.fromEntries(files.map((file) => [file.fileName, file.body]));
       // A single rename commits a whole generation, even with concurrent writers.
       if (!this.cachedFiles || files.some((file) => file.changed)) {
-        await writeAtomic(join(this.cacheDir, 'pack.json'), JSON.stringify(cachedFiles));
+        writeFileAtomic(join(this.cacheDir, 'pack.json'), JSON.stringify(cachedFiles));
       }
       for (const file of files) {
         nextState.sources[file.name] = { etag: file.etag, fetchedAt: nowIso };
       }
-      await writeAtomic(join(this.cacheDir, 'state.json'), JSON.stringify(nextState));
+      writeFileAtomic(join(this.cacheDir, 'state.json'), JSON.stringify(nextState));
       const updated =
         next.updatedAt !== this.snapshot.updatedAt ||
         supplement.changed ||
@@ -280,9 +266,9 @@ export class PricingStore {
       for (const key of SOURCES) {
         this.state.sources[key] = { ...this.state.sources[key], failedAt: nowIso };
       }
-      await writeAtomic(join(this.cacheDir, 'state.json'), JSON.stringify(this.state)).catch(
-        () => undefined,
-      );
+      try {
+        writeFileAtomic(join(this.cacheDir, 'state.json'), JSON.stringify(this.state));
+      } catch {}
       return { ...this.result(false, `refresh failed: ${errorMessage(error)}`), failed: true };
     }
   }

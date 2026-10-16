@@ -16,24 +16,17 @@ const PRICE_W = 62;
 const LEFT_W = CONTENT_WIDTH - TOKENS_W - PRICE_W;
 const ROW_HEIGHT = 13;
 
-// Courier is a PDF standard font with WinAnsi (Latin-1) encoding, so any
-// codepoint above 0xFF renders as a wrong/notdef glyph. Map the few unicode
-// characters we deliberately emit (the "→" in window labels) to ASCII, then
-// drop anything else outside the encoding so unexpected model names degrade to
-// a visible placeholder instead of silent garbage.
+// Courier is WinAnsi (Latin-1): map "→" and replace other codepoints with "?" instead of notdef glyphs.
 function asciiSafe(text: string): string {
   let out = '';
   for (const ch of text.replaceAll('→', '->')) {
     const code = ch.codePointAt(0) ?? 0;
-    // Keep printable Latin-1 (0x20–0xFF); replace anything else with a visible
-    // placeholder so it can't render as a wrong/notdef glyph.
     out += code >= 0x20 && code <= 0xff ? ch : '?';
   }
   return out;
 }
 
-// Local-time stamp (YYYY-MM-DD HH:MM:SS) so the receipt's "generated at" line
-// matches the local calendar dates used throughout the window labels.
+/** Local time, to match the local calendar dates in the window labels. */
 export function localTimestamp(at: Date): string {
   const time = [at.getHours(), at.getMinutes(), at.getSeconds()]
     .map((n) => String(n).padStart(2, '0'))
@@ -75,9 +68,7 @@ function row(
   document.y = y + ROW_HEIGHT;
 }
 
-/** Draw the full receipt onto an already-created document. */
 function drawReceipt(document: PDFKit.PDFDocument, report: UsageReport, generatedAt: Date): void {
-  // Header
   document.font(FONT_BOLD).fontSize(16).text('aitrack', { align: 'center' });
   document.font(FONT).fontSize(9).text('AI USAGE RECEIPT', { align: 'center' });
   document.moveDown(0.5);
@@ -87,7 +78,6 @@ function drawReceipt(document: PDFKit.PDFDocument, report: UsageReport, generate
   divider(document);
   document.moveDown(0.3);
 
-  // Line items grouped by provider
   for (const provider of report.providers) {
     document
       .font(FONT_BOLD)
@@ -135,20 +125,13 @@ function drawReceipt(document: PDFKit.PDFDocument, report: UsageReport, generate
     });
 }
 
-// Measure the exact content height by laying the receipt out on a throwaway
-// page tall enough that nothing auto-paginates, then reading where the cursor
-// ends up. Sizing the real page to this avoids both a blank trailing page
-// (under-estimate) and dead whitespace (over-estimate) that a static guess hits.
+// Laid out once on a page too tall to paginate, so the real page fits with no blank tail.
 function contentHeight(report: UsageReport, generatedAt: Date): number {
   const probe = new PDFDocument({ size: [PAGE_WIDTH, 100_000], margin: MARGIN });
   drawReceipt(probe, report, generatedAt);
   return Math.ceil(probe.y) + MARGIN;
 }
 
-/**
- * Render an itemized, receipt-style PDF for a usage report. Returns the PDF as
- * a Buffer so callers can write it to disk (or a stream) however they like.
- */
 export function renderReceiptPdf(
   report: UsageReport,
   generatedAt: Date = new Date(),

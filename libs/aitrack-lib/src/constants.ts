@@ -1,4 +1,4 @@
-/** Values that more than one layer has to agree on. */
+import type { TokenCounts } from './data/types.js';
 
 /** Calendar-day key format used for every date in the data files. */
 const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
@@ -15,3 +15,13 @@ export function isDayKey(value: string): boolean {
  * own cache reads in `pricing/tables/claude.json`.
  */
 export const CACHE_READ_RATE_MULTIPLIER = 0.1;
+
+/** The optional split of `inputTokens`, in the key order machine files are written with. */
+export const TOKEN_BREAKDOWN_FIELDS = [
+  'rawInputTokens',
+  'cachedInputTokens',
+  'cacheCreationInputTokens',
+  'cacheCreation1hInputTokens',
+] as const satisfies ReadonlyArray<keyof TokenCounts>;
+
+export const OPTIONAL_TOKEN_NUMBER_FIELDS = [...TOKEN_BREAKDOWN_FIELDS, 'costUSD'] as const;

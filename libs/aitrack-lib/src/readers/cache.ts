@@ -1,30 +1,19 @@
 import { createHash } from 'node:crypto';
-import {
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  type Stats,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { readdirSync, readFileSync, rmSync, type Stats, statSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { writeFileAtomic } from '../atomicWrite.js';
 import { isFiniteNumber, isOptionalString, isRecord } from '../data/guards.js';
 import type { DayEntry, DayMap, TokenCounts } from '../data/types.js';
+import { isTokenCounts } from '../data/validate.js';
 import { environmentValue } from '../env.js';
 import { CACHE_DIR } from '../paths.js';
 import { currentModelPricing } from '../pricing/store.js';
 import { machineTimezone } from '../timezone.js';
 import { packageVersion } from '../version.js';
 
-/**
- * Bump when the cached shape or the cost baked into it changes. Entries written
- * by another format are dropped wholesale rather than migrated — they are
- * rebuildable from the logs.
- */
+/** Bump when the cached shape or baked-in cost changes; old caches are rebuilt, not migrated. */
 const CACHE_FORMAT = 3;
 
 const STALE_SIBLING_MS = 7 * 24 * 60 * 60 * 1000;
@@ -54,22 +43,6 @@ interface CacheEntry {
   days: Record<string, DayEntry>;
   keys: string[];
   messages?: CachedMessage[];
-}
-
-function isTokenCounts(value: unknown): value is TokenCounts {
-  if (!isRecord(value)) return false;
-  if (!isFiniteNumber(value.inputTokens) || !isFiniteNumber(value.outputTokens)) return false;
-  if (value.hasUnpricedTokens !== undefined && typeof value.hasUnpricedTokens !== 'boolean')
-    return false;
-  return (
-    [
-      'cachedInputTokens',
-      'rawInputTokens',
-      'cacheCreationInputTokens',
-      'cacheCreation1hInputTokens',
-      'costUSD',
-    ] as const
-  ).every((field) => value[field] === undefined || isFiniteNumber(value[field]));
 }
 
 function isDayEntry(value: unknown): value is DayEntry {
@@ -162,9 +135,7 @@ function readCacheFile(filePath: string): Record<string, CacheEntry> {
   try {
     parsed = JSON.parse(readFileSync(filePath, 'utf8'));
   } catch {
-    // Missing or unreadable: the logs are the source of truth, so an absent
-    // cache is never an error — it only costs a full parse.
-    return {};
+    return {}; // Missing or unreadable only costs a full parse.
   }
 
   if (!isRecord(parsed) || parsed.timezone !== machineTimezone() || !isRecord(parsed.entries)) {
@@ -225,17 +196,7 @@ function disabledCache(): ParseCache {
   };
 }
 
-/**
- * Per-file parse cache for one provider's transcripts.
- *
- * Every command re-derives usage from the whole local corpus, which is the bulk
- * of its runtime, yet transcript files are append-mostly and the overwhelming
- * majority are byte-identical between runs. Entries are keyed by absolute path
- * and validated against the file's mtime and size.
- *
- * `name` gives each provider its own file: the readers run concurrently, and a
- * shared file would have them clobbering each other's writes.
- */
+/** Per-file parse cache validated by mtime and size; one file per provider because readers run concurrently. */
 export function openParseCache(name: string): ParseCache {
   if (environmentValue('AITRACK_NO_CACHE')) return disabledCache();
 
@@ -279,24 +240,15 @@ export function openParseCache(name: string): ParseCache {
     save() {
       const isEvicted = Object.keys(previous).some((filePath) => !(filePath in next));
       if (!isRecorded && !isEvicted) return;
-      const payload = JSON.stringify({ timezone: machineTimezone(), entries: next });
-      // Write-then-rename so a concurrent reader never sees a half-written
-      // file. A lost race just costs the next run a full parse.
-      const temporaryPath = `${cachePath}.${String(process.pid)}.tmp`;
       try {
-        mkdirSync(CACHE_DIR, { recursive: true });
-        writeFileSync(temporaryPath, payload, 'utf8');
-        renameSync(temporaryPath, cachePath);
-        remember(name, cachePath, next);
-        if (!prunedPaths.has(cachePath)) {
-          prunedPaths.add(cachePath);
-          pruneSiblings(name, fileName);
-        }
+        writeFileAtomic(cachePath, JSON.stringify({ timezone: machineTimezone(), entries: next }));
       } catch {
-        rmSync(temporaryPath, { force: true });
-        // A cache that cannot be written (read-only home, full disk) must not
-        // fail the command it was only meant to speed up.
+        return; // A read-only home or full disk must not fail the command the cache only speeds up.
       }
+      remember(name, cachePath, next);
+      if (prunedPaths.has(cachePath)) return;
+      prunedPaths.add(cachePath);
+      pruneSiblings(name, fileName);
     },
   };
 }

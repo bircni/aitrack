@@ -1,3 +1,5 @@
+import type { FullModelRates } from './rates.js';
+
 export interface ClaudePricing {
   inputPerMillion: number;
   outputPerMillion: number;
@@ -11,12 +13,7 @@ export interface CodexPricing {
 }
 
 /** Cursor-native models expose rates for all four token buckets. */
-export interface CursorPricing {
-  inputPerMillion: number;
-  outputPerMillion: number;
-  cacheReadPerMillion: number;
-  cacheWritePerMillion: number;
-}
+export type CursorPricing = FullModelRates;
 
 /** Apply `pricing` for usage dates strictly before `before` (YYYY-MM-DD). */
 export interface PricingOverride<P> {

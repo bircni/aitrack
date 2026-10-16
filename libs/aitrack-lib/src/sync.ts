@@ -53,15 +53,7 @@ function pushedMessage(host: string, syncedDays: number): string {
   return `Done! Pushed data/${host}.json (${String(syncedDays)} days)`;
 }
 
-/**
- * Commit and push this machine's data file, reporting whether anything reached
- * the remote.
- *
- * A machineId change shows up as a pending git rename rather than a content
- * change, so it needs the same commit path as an update. pushPendingCommits
- * then covers a commit whose earlier push failed: the working tree is clean
- * again, so nothing else here would notice it never landed.
- */
+/** Also commits a rename-only machineId change and pushes a commit whose earlier push failed. */
 async function pushMachineData(host: string, options: GitOptions): Promise<boolean> {
   return (
     ((await hasMachineDataChanges(host)) && (await commitAndPush(host, options))) ||
@@ -76,12 +68,7 @@ export interface DataRun {
   readLocalMaps: () => Promise<Record<string, DayMap>>;
 }
 
-/**
- * The steps sync and recompute-costs share. The local logs are parsed outside
- * the repo lock, overlapping the lock wait and the pull; the lock covers only
- * the repo work. One fallback collector per run, so a long-lived process never
- * carries one run's models into the next.
- */
+/** Parses logs outside the repo lock to overlap the wait and pull; one fallback collector per run. */
 export async function runDataPipeline<T>(
   options: { pull: boolean; git?: GitOptions },
   step: (run: DataRun) => Promise<T>,
@@ -115,11 +102,7 @@ export async function runDataPipeline<T>(
   }
 }
 
-/**
- * Push this machine's usage data. Returns the machine file built from the local
- * logs, so a caller that needs it as well does not have to parse the whole
- * JSONL corpus a second time.
- */
+/** Returns the local machine file so callers need not re-parse the corpus. */
 export function syncData(options: SyncDataOptions = {}): Promise<SyncResult> {
   return runDataPipeline({ pull: !options.dryRun, git: options }, (run) =>
     pushLocalUsage(options, run),
@@ -133,7 +116,6 @@ async function pushLocalUsage(
   const isDryRun = Boolean(options.dryRun);
   const dataFilePath = join(LOCAL_REPO, 'data', machineDataFilename(host));
 
-  // Cursor usage is loaded locally by report/display commands; it is never written to git.
   log.info('Reading local data...');
   const maps = await readLocalMaps();
 
@@ -164,24 +146,18 @@ async function pushLocalUsage(
     .map((source) => `${source.label} (${String(source.size)} days)`);
   log.info(`Found: ${sources.join(', ')}`);
 
-  // Only write if the usage data changed — avoids a spurious commit on every run
-  // (lastUpdated would otherwise always make the file dirty).
   let raw: string | null = null;
   try {
     raw = readFileSync(dataFilePath, 'utf8');
   } catch (error) {
-    // Anything other than "not synced yet" is a real read failure, and treating
-    // it as an empty file would push the local logs over whatever is there.
-    if (!isMissingPathError(error)) throw error;
+    if (!isMissingPathError(error)) throw error; // Read as empty, it would push the logs over the file.
   }
 
-  // The check also returns a null machine for a file that exists but is invalid.
-  // Merging against null there would silently replace the synced history with
-  // whatever the local logs still reach and push the loss.
   let existingDays: MachineFile['days'] | null = null;
   if (raw !== null) {
     const existing = checkRawMachineFile(raw, dataFilePath);
     reportMachineFileDiagnostics(existing.diagnostics);
+    // Merging an invalid file as empty would push the loss of its history.
     if (!existing.machine) {
       throw new Error(
         `Refusing to overwrite invalid data/${machineDataFilename(host)} (see the warning above).\n` +
@@ -191,7 +167,6 @@ async function pushLocalUsage(
     existingDays = existing.machine.days;
   }
 
-  // Keep days the local logs no longer cover — see mergePersistedDays.
   const outgoingDays = mergePersistedDays(existingDays, freshData.days);
   const keptDays = ratchetedProviderDays(existingDays, freshData.days);
   if (keptDays > 0) {
@@ -204,13 +179,9 @@ async function pushLocalUsage(
   }
   const outgoingData: MachineFile = { ...freshData, days: outgoingDays };
   const syncedDays = Object.keys(outgoingDays).length;
-  // Normalize the persisted side through the same ordering so a file that is
-  // already up to date does not look changed purely because of key order.
-  const normalizedExisting = existingDays === null ? null : mergePersistedDays(existingDays, {});
+  const normalizedExisting = existingDays === null ? null : mergePersistedDays(existingDays, {}); // Same key order as outgoing.
 
-  // Usage only. The schema header is metadata nothing reads, so a file that is
-  // otherwise up to date is not worth a commit just to stamp it — it lands on
-  // this machine's next real change.
+  // Usage only: lastUpdated and the schema header alone are not worth a commit.
   if (JSON.stringify(normalizedExisting) === JSON.stringify(outgoingDays)) {
     let isPushed = false;
     if (!isDryRun) {

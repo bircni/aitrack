@@ -1,5 +1,6 @@
 import { isDayKey } from '../../constants.js';
-import { addModelUsage, getOrCreateDay } from '../../data/dayMap.js';
+import { addModelUsage, getOrCreateDay, tryLocalDateString } from '../../data/dayMap.js';
+import { stringValue } from '../../data/guards.js';
 import { stripModelAliasSuffix } from '../../data/modelId.js';
 import type { DayMap, TokenCounts } from '../../data/types.js';
 import { estimateCursorCostUSD } from '../../pricing/cursor.js';
@@ -69,15 +70,9 @@ function parseCursorNumber(value?: string): number | null {
 
 /** Parse a Cursor CSV date cell to a YYYY-MM-DD local calendar day key. */
 export function parseCursorDateString(value?: string): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  if (isDayKey(trimmed)) return trimmed;
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) return null;
-  const y = parsed.getFullYear();
-  const m = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  return `${String(y)}-${m}-${day}`;
+  const trimmed = stringValue(value);
+  if (trimmed === undefined) return null;
+  return isDayKey(trimmed) ? trimmed : tryLocalDateString(trimmed);
 }
 
 function createCursorTokenTotals(row: CursorCsvRow): CursorTokenTotals | null {
