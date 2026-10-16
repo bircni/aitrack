@@ -9,10 +9,15 @@ import {
   type UsageComparisonReport,
   type UsageReport,
   type UsageReportOptions,
+  type UsageReportTotals,
 } from 'aitrack-lib/data/usageReport';
 import { fmt, fmtUSD, fmtUSDCost } from 'aitrack-lib/display/format';
 import { displayModelName } from 'aitrack-lib/display/modelNames';
-import { defaultTableStyle, renderTerminalTable } from 'aitrack-lib/display/terminalTable';
+import {
+  defaultTableStyle,
+  renderTerminalTable,
+  type TerminalTableColumn,
+} from 'aitrack-lib/display/terminalTable';
 import { log } from 'aitrack-lib/output';
 import chalk from 'chalk';
 
@@ -26,7 +31,18 @@ interface Row {
   cached: string;
   model: string;
   price: string;
-  isTotal?: boolean;
+}
+
+function cachedCell(value: Pick<UsageReportTotals, 'hasCached' | 'cachedInputTokens'>): string {
+  return value.hasCached ? fmt(value.cachedInputTokens) : '—';
+}
+
+function priceCell(
+  value: Pick<UsageReportTotals, 'hasCost' | 'costUSD' | 'hasUnpricedTokens'>,
+): string {
+  return value.hasCost
+    ? `${fmtUSD(value.costUSD)}${value.hasUnpricedTokens ? ' (partial)' : ''}`
+    : '—';
 }
 
 function formatDelta(metric: UsageComparisonMetric, formatter: (value: number) => string): string {
@@ -49,11 +65,9 @@ function renderUsageReport(report: UsageReport): void {
       rows.push({
         provider: provider.label,
         tokens: fmt(row.tokens),
-        cached: row.hasCached ? fmt(row.cachedInputTokens) : '—',
+        cached: cachedCell(row),
         model: displayModelName(row.model, { effort: true }),
-        price: row.hasCost
-          ? `${fmtUSD(row.costUSD)}${row.hasUnpricedTokens ? ' (partial)' : ''}`
-          : '—',
+        price: priceCell(row),
       });
     }
   }
@@ -61,22 +75,19 @@ function renderUsageReport(report: UsageReport): void {
   const totalRow: Row = {
     provider: 'TOTAL',
     tokens: fmt(report.totals.tokens),
-    cached: report.totals.hasCached ? fmt(report.totals.cachedInputTokens) : '—',
+    cached: cachedCell(report.totals),
     model: '',
-    price: report.totals.hasCost
-      ? `${fmtUSD(report.totals.costUSD)}${report.totals.hasUnpricedTokens ? ' (partial)' : ''}`
-      : '—',
-    isTotal: true,
+    price: priceCell(report.totals),
   };
 
-  const columns = [
-    { header: 'Provider', align: 'left' as const, cell: (r: Row) => r.provider },
-    { header: 'Tokens', align: 'right' as const, cell: (r: Row) => r.tokens },
+  const columns: Array<TerminalTableColumn<Row>> = [
+    { header: 'Provider', align: 'left', cell: (r) => r.provider },
+    { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
     ...(report.totals.hasCached
       ? [{ header: 'Cached', align: 'right' as const, cell: (r: Row) => r.cached }]
       : []),
-    { header: 'Model', align: 'left' as const, cell: (r: Row) => r.model },
-    { header: 'Price', align: 'right' as const, cell: (r: Row) => r.price },
+    { header: 'Model', align: 'left', cell: (r) => r.model },
+    { header: 'Price', align: 'right', cell: (r) => r.price },
   ];
 
   log.info(chalk.bold(`aitrack usage ${report.windowLabel}`));
@@ -157,11 +168,7 @@ function renderComparison(report: UsageComparisonReport): void {
   );
 }
 
-/**
- * Month-to-date spend vs the configured `budget.monthly`, but only for the
- * `thismonth` window — the rolling `month` (last 30 days) is not a calendar
- * month, so comparing it to a monthly ceiling would mislead.
- */
+/** Only for `thismonth`: the rolling 30-day `month` is not a calendar month. */
 function resolveBudgetStatus(options: UsageOptions, report: UsageReport): BudgetStatus | null {
   if (options.period !== 'thismonth' || !report.totals.hasCost) return null;
   const monthlyUSD = tryLoadConfig()?.budget?.monthlyUSD;

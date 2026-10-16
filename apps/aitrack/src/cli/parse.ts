@@ -36,11 +36,7 @@ function invalidUsagePeriodMessage(period: string): string {
   return `Invalid period: "${period}". Expected one of: ${periods}.`;
 }
 
-/**
- * Parse the `--providers` value: a comma-separated list of provider names
- * (case-insensitive, friendly aliases accepted). Returns the canonical keys,
- * de-duplicated and order-preserved. Throws on any unknown name.
- */
+/** Canonical, de-duplicated keys for a comma-separated, alias-tolerant list; throws on unknown names. */
 export function parseProviders(value: string): string[] {
   const seen = new Set<string>();
   for (const raw of value.split(',')) {
