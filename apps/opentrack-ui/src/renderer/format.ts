@@ -44,6 +44,11 @@ export function spendLabel(spend: Spend): string {
     : '—';
 }
 
+export function spendReading(spend: Spend): string {
+  const tokens = `${fmt(spend.tokens)} tokens`;
+  return spend.hasCost ? `${spendLabel(spend)} · ${tokens}` : tokens;
+}
+
 export function totalSpend(usages: Array<ProviderUsage | undefined>, period: Period): Spend {
   return usages.reduce<Spend>((total, usage) => {
     const spend = periodSpend(usage, period);
@@ -58,7 +63,6 @@ export function totalSpend(usages: Array<ProviderUsage | undefined>, period: Per
   }, EMPTY_PERIOD);
 }
 
-/** Daily cost summed across providers, aligned on date. */
 export function combinedDaily(usages: Array<ProviderUsage | undefined>): DailyUsage[] {
   const byDate = new Map<string, number>();
   for (const usage of usages) {
@@ -143,7 +147,6 @@ export interface ProblemLine {
   retry: boolean;
 }
 
-/** A one-line version of a quota error for the provider row. */
 export function problemLine(error: QuotaError, now: number, retryAt?: number): ProblemLine {
   switch (error.kind) {
     case 'noCredentials': {

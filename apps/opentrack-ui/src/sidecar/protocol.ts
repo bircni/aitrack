@@ -33,7 +33,7 @@ export type SidecarMessage =
   | { event: 'tray'; data: TrayImage };
 
 export interface HandlerContext {
-  service: QuotaService;
+  service: Pick<QuotaService, 'state' | 'refresh' | 'sync'>;
   settings: () => Settings;
   saveSettings: (settings: Settings) => Promise<Settings>;
 }

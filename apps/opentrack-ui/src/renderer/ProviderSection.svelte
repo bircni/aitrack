@@ -1,16 +1,16 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
 
-  import type { ProviderState, QuotaProviderKey, Settings, Spend } from '../shared/types.js';
+  import type { ProviderState, QuotaProviderKey, Settings } from '../shared/types.js';
   import {
     formatCost,
-    formatTokens,
     formatUpdated,
     PERIOD_LABELS,
     type Period,
     periodSpend,
     problemLine,
     spendLabel,
+    spendReading,
   } from './format.js';
   import Icon from './Icon.svelte';
   import LimitMeter from './LimitMeter.svelte';
@@ -33,11 +33,6 @@
   const problem = $derived(
     provider.quotaError ? problemLine(provider.quotaError, now, provider.retryAt) : undefined,
   );
-
-  function reading(value: Spend): string {
-    const tokens = `${formatTokens(value.tokens)} tokens`;
-    return value.hasCost ? `${spendLabel(value)} · ${tokens}` : tokens;
-  }
 </script>
 
 <section class="provider provider--{provider.key}" aria-label={provider.label}>
@@ -102,17 +97,17 @@
 
   {#if open && provider.usage}
     <div class="details" transition:slide={{ duration: 160 }}>
-      <div class="d-row"><span>{PERIOD_LABELS.today}</span><span>{reading(provider.usage.today)}</span></div>
-      <div class="d-row"><span>Yesterday</span><span>{reading(provider.usage.yesterday)}</span></div>
-      <div class="d-row"><span>{PERIOD_LABELS.week}</span><span>{reading(provider.usage.last7Days)}</span></div>
-      <div class="d-row"><span>{PERIOD_LABELS.month}</span><span>{reading(provider.usage.last30Days)}</span></div>
-      <div class="d-row"><span>{PERIOD_LABELS.all}</span><span>{reading(provider.usage.allTime)}</span></div>
+      <div class="d-row"><span>{PERIOD_LABELS.today}</span><span>{spendReading(provider.usage.today)}</span></div>
+      <div class="d-row"><span>Yesterday</span><span>{spendReading(provider.usage.yesterday)}</span></div>
+      <div class="d-row"><span>{PERIOD_LABELS.week}</span><span>{spendReading(provider.usage.last7Days)}</span></div>
+      <div class="d-row"><span>{PERIOD_LABELS.month}</span><span>{spendReading(provider.usage.last30Days)}</span></div>
+      <div class="d-row"><span>{PERIOD_LABELS.all}</span><span>{spendReading(provider.usage.allTime)}</span></div>
       {#if spend.models.length > 0}
         <div class="d-rule"></div>
         <div class="d-heading">Models · {PERIOD_LABELS[period]}</div>
         {#each spend.models as model (model.model)}
           <div class="d-row d-model">
-            <span>{model.model}</span><span>{reading(model)}</span>
+            <span>{model.model}</span><span>{spendReading(model)}</span>
           </div>
         {/each}
       {/if}
