@@ -5,6 +5,7 @@ import {
   providerDataForWindows,
   type ZonedUsageSource,
 } from 'aitrack-lib/data/usageData';
+import { ALL_TIME } from 'aitrack-lib/data/usagePeriods';
 import { buildUsageReportsFromLoaded, type UsageReport } from 'aitrack-lib/data/usageReport';
 import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 
@@ -12,7 +13,6 @@ import type { DailyUsage, MachineUsage, PeriodUsage, ProviderUsages } from '../s
 import { EMPTY_PERIOD } from '../shared/types.js';
 
 const TREND_DAYS = 30;
-const EVERY_DAY = { start: '0000-01-01', end: '9999-12-31' };
 
 export interface UsageSummary {
   providers: ProviderUsages;
@@ -91,16 +91,10 @@ function sliceLoaded(
     zonedSources,
     ...(live && loaded.liveProviderData && { liveProviderData: loaded.liveProviderData }),
   };
-  return { ...part, providerData: providerDataForWindows(part, () => EVERY_DAY) };
+  return { ...part, providerData: providerDataForWindows(part, () => ALL_TIME) };
 }
 
-/**
- * Today / yesterday / rolling 7 and 30 days / all-time per provider, plus a
- * daily series for the chart, in total and per machine.
- *
- * The windows go through the same report builder as `aitrack usage`, so the
- * numbers here always match the CLI's.
- */
+/** Same report builder as `aitrack usage`, so the numbers match the CLI. */
 export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date()): UsageSummary {
   if (!loaded) return { providers: {}, machineCount: 1 };
   const machines = (loaded.zonedSources ?? []).map((source): MachineUsage => ({

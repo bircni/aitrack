@@ -6,12 +6,12 @@
   import {
     combinedDaily,
     formatCost,
-    formatTokens,
     heatLevel,
     PERIOD_LABELS,
     type Period,
     periodSpend,
     spendLabel,
+    spendReading,
     syncStatus,
     totalSpend,
     zoneClock,
@@ -71,11 +71,6 @@
   const total = $derived(rows.reduce((sum, row) => sum + measure(row.spend), 0));
   // One scale for every strip, so a busy day looks busy next to the other machines too.
   const peak = $derived(Math.max(0, ...rows.flatMap((row) => row.daily.map((day) => day.costUSD))));
-
-  function reading(value: Spend): string {
-    const tokens = `${formatTokens(value.tokens)} tokens`;
-    return value.hasCost ? `${spendLabel(value)} · ${tokens}` : tokens;
-  }
 </script>
 
 <section class="machines" aria-label="Usage by machine">
@@ -140,7 +135,7 @@
             <div class="d-row">
               <span class="m-provider"
                 ><ProviderIcon provider={part.key} size={12} />{labels[part.key]}</span
-              ><span>{reading(part.spend)}</span>
+              ><span>{spendReading(part.spend)}</span>
             </div>
           {:else}
             <div class="d-row"><span>No usage · {PERIOD_LABELS[period]}</span></div>
@@ -149,7 +144,7 @@
             <div class="d-rule"></div>
             <div class="d-heading">Top models · {PERIOD_LABELS[period]}</div>
             {#each row.models as model (model.model)}
-              <div class="d-row d-model"><span>{model.model}</span><span>{reading(model)}</span></div>
+              <div class="d-row d-model"><span>{model.model}</span><span>{spendReading(model)}</span></div>
             {/each}
           {/if}
         </div>
