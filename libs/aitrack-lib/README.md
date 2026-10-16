@@ -16,9 +16,9 @@ Every module is also reachable at its own subpath, so a program that only needs 
 does not pull the renderers in with it:
 
 ```ts
-import { readClaudeData } from 'aitrack-lib/readers/claude';
-import { resolveModelCost } from 'aitrack-lib/pricing/resolve';
 import type { DayEntry, MachineFile } from 'aitrack-lib/data/types';
+import { resolveModelCost } from 'aitrack-lib/pricing/resolve';
+import { readClaudeData } from 'aitrack-lib/readers/claude';
 ```
 
 The main groups are `readers/` (provider ingestion), `pricing/` (list-price estimates; rates
