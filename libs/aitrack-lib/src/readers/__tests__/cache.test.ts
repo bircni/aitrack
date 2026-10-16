@@ -145,6 +145,16 @@ describe('openParseCache', () => {
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   });
 
+  it('re-parses a file that grew while it was being parsed', async () => {
+    const cache = openParseCache('claude');
+    expect(await cache.lookup(SOURCE)).toBeNull();
+    writeFileSync(SOURCE, 'line\nappended\n');
+    await cache.record(SOURCE, { days: days(10), keys: ['k1'] });
+    cache.save();
+
+    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
+  });
+
   it('records nothing for a file that vanishes before it can be stat-ed', async () => {
     const gone = join(TEST_HOME, 'never-existed.jsonl');
     const cache = openParseCache('claude');
