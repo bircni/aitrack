@@ -5,6 +5,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  type Stats,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -112,13 +113,25 @@ const memoized = new Map<string, MemoizedCache>();
 /** Pruned once per file per process: whoever writes a new sibling prunes on its own first save. */
 const prunedPaths = new Set<string>();
 
-function fileStamp(filePath: string): { mtimeMs: number; size: number } | null {
+interface FileStamp {
+  mtimeMs: number;
+  size: number;
+}
+
+function toStamp({ mtimeMs, size }: Stats): FileStamp {
+  return { mtimeMs, size };
+}
+
+function fileStamp(filePath: string): FileStamp | null {
   try {
-    const stats = statSync(filePath);
-    return { mtimeMs: stats.mtimeMs, size: stats.size };
+    return toStamp(statSync(filePath));
   } catch {
     return null;
   }
+}
+
+function statStamp(filePath: string): Promise<FileStamp | null> {
+  return stat(filePath).then(toStamp, () => null);
 }
 
 function remember(name: string, path: string, entries: Record<string, CacheEntry>): void {
@@ -231,16 +244,16 @@ export function openParseCache(name: string): ParseCache {
   const cachePath = join(CACHE_DIR, fileName);
   const previous = loadCacheFile(name, cachePath);
   const next: Record<string, CacheEntry> = {};
+  const missed = new Map<string, FileStamp>();
   let isRecorded = false;
 
   return {
     async lookup(filePath) {
+      const stamp = await statStamp(filePath);
+      if (!stamp) return null;
       const entry = previous[filePath];
-      if (!entry) return null;
-      try {
-        const stats = await stat(filePath);
-        if (stats.mtimeMs !== entry.mtimeMs || stats.size !== entry.size) return null;
-      } catch {
+      if (entry?.mtimeMs !== stamp.mtimeMs || entry.size !== stamp.size) {
+        missed.set(filePath, stamp); // Before the parse, so a write during it reads as a change next run.
         return null;
       }
       next[filePath] = entry;
@@ -252,17 +265,11 @@ export function openParseCache(name: string): ParseCache {
     },
 
     async record(filePath, parse) {
-      let stats;
-      try {
-        stats = await stat(filePath);
-      } catch {
-        // The file vanished mid-run; nothing to key the entry on.
-        return;
-      }
+      const stamp = missed.get(filePath) ?? (await statStamp(filePath));
+      if (!stamp) return; // Vanished mid-run; nothing to key the entry on.
       isRecorded = true;
       next[filePath] = {
-        mtimeMs: stats.mtimeMs,
-        size: stats.size,
+        ...stamp,
         days: Object.fromEntries(parse.days),
         keys: parse.keys,
         ...(parse.messages && { messages: parse.messages }),
