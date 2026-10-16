@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { CompactCatalog } from '../codecs.js';
 import { type ModelPricing, modelPricingFromPack } from '../modelPricing.js';
 import { supplementFromTables } from '../supplementFromTables.js';
+import { isPricingSupplement } from '../validation.js';
 
 const emptyCatalog: CompactCatalog = {
   retrievedAt: '2026-01-01T00:00:00.000Z',
@@ -31,6 +32,22 @@ describe('ModelPricing', () => {
     const pricing = pricingWithCatalog();
     expect(pricing.applyCursorAlias('composer')).toBe('composer-2.5');
     expect(pricing.cursorFastMultiplier('gpt-5.6-sol')).toBe(2);
+  });
+
+  it('compiles a case-insensitive Codex fallback the validator accepts', () => {
+    const supplement = structuredClone(supplementFromTables());
+    supplement.codex.familyFallback.unshift({
+      match: '(?i)^GPT-77',
+      inputPerMillion: 7,
+      outputPerMillion: 8,
+    });
+    expect(isPricingSupplement(supplement)).toBe(true);
+    const pricing = modelPricingFromPack({
+      supplement,
+      litellm: emptyCatalog,
+      modelsDev: emptyCatalog,
+    });
+    expect(pricing.codexFamilyFallbacks()[0]?.match.test('gpt-77-mini')).toBe(true);
   });
 
   it('fills Claude and Codex gaps from catalogs', () => {
