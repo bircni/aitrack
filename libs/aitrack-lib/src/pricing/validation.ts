@@ -6,6 +6,10 @@ function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+export function compilePattern(pattern: string): RegExp {
+  return pattern.startsWith('(?i)') ? new RegExp(pattern.slice(4), 'iu') : new RegExp(pattern, 'u');
+}
+
 function amount(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
@@ -25,7 +29,7 @@ function stamp(value: unknown): value is string {
 function pattern(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
-    new RegExp(value.startsWith('(?i)') ? value.slice(4) : value, 'u');
+    compilePattern(value);
     return true;
   } catch {
     return false;

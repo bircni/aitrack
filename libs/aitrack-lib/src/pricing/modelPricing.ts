@@ -7,6 +7,7 @@ import { findPricingCatalogRates, type PricingCatalogs } from './catalogs.js';
 import { catalogFromCompact, type PricingCatalog } from './codecs.js';
 import type { PricingSupplement } from './packMeta.js';
 import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
+import { compilePattern } from './validation.js';
 
 function canonicalPricing(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((entry: unknown) => canonicalPricing(entry));
@@ -21,10 +22,6 @@ function canonicalPricing(value: unknown): unknown {
 interface CompiledAlias {
   pattern: RegExp;
   canonical: string;
-}
-
-function compilePattern(pattern: string): RegExp {
-  return pattern.startsWith('(?i)') ? new RegExp(pattern.slice(4), 'iu') : new RegExp(pattern, 'u');
 }
 
 function pickOverride<P>(
@@ -72,7 +69,7 @@ export class ModelPricing {
       canonical: rule.canonical,
     }));
     this.codexFamilyFallback = supplement.codex.familyFallback.map((entry) => ({
-      match: new RegExp(entry.match, 'u'),
+      match: compilePattern(entry.match),
       pricing: {
         inputPerMillion: entry.inputPerMillion,
         outputPerMillion: entry.outputPerMillion,
