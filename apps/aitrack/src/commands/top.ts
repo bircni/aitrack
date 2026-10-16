@@ -51,11 +51,11 @@ function dateFilter(options: TopOptions): AggregateModelsFilter | undefined {
   return { year: options.year, start: options.since, end: options.until };
 }
 
-function windowSuffix(options: TopOptions): string {
-  if (options.since !== undefined || options.until !== undefined) {
-    return ` (${options.since ?? '…'} → ${options.until ?? '…'})`;
-  }
-  return options.year === undefined ? '' : ` (${String(options.year)})`;
+function windowSuffix({ year, since, until }: TopOptions): string {
+  const parts: string[] = [];
+  if (year !== undefined) parts.push(String(year));
+  if (since !== undefined || until !== undefined) parts.push(`${since ?? '…'} → ${until ?? '…'}`);
+  return parts.length === 0 ? '' : ` (${parts.join(', ')})`;
 }
 
 interface Row {

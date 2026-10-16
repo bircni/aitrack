@@ -93,22 +93,22 @@ describe('topCommand', () => {
     });
   });
 
-  it('respects year filter', async () => {
+  it('names both filters in the title when --year and --since are combined', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {
         claude_code: new Map([
           ['2026-01-01', makeDay(100, 0, 1, 'm1')],
-          ['2025-01-01', makeDay(9999, 0, 99, 'm1')],
+          ['2025-06-01', makeDay(9999, 0, 99, 'm1')],
         ]),
       },
       machineData: [],
     });
 
-    await topCommand({ kind: 'days', limit: 10, sort: 'tokens', year: 2026 });
+    await topCommand({ kind: 'days', limit: 10, sort: 'tokens', year: 2026, since: '2025-01-01' });
 
     const out = loggedOutput();
-    expect(out).toContain('2026-01-01');
-    expect(out).not.toContain('2025-01-01');
+    expect(out).toContain('Top 10 days by tokens (2026, 2025-01-01 → …)');
+    expect(out).not.toContain('2025-06-01');
   });
 
   it('respects an explicit --since/--until date range', async () => {
