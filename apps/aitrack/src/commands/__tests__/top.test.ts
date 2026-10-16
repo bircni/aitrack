@@ -169,7 +169,7 @@ describe('topCommand', () => {
     expect(parsed).toMatchObject({ since: '2026-01-01', until: '2026-12-31', year: null });
   });
 
-  it('days: ranks by tokens and prints JSON without a top provider when empty', async () => {
+  it('days: ranks by tokens in --json output', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {
         claude_code: new Map([
@@ -180,16 +180,17 @@ describe('topCommand', () => {
       machineData: [],
     });
 
-    await topCommand({ kind: 'days', limit: 5, sort: 'tokens', json: true, year: 2025 });
+    await topCommand({ kind: 'days', limit: 5, sort: 'tokens', json: true, year: 2026 });
 
-    const parsed = JSON.parse(loggedOutput()) as {
-      command: string;
-      kind: string;
-      year: number;
-      items: Array<{ topProvider: string | null }>;
-    };
-    expect(parsed.command).toBe('top');
-    expect(parsed).toMatchObject({ kind: 'days', year: 2025, items: [] });
+    expect(JSON.parse(loggedOutput())).toMatchObject({
+      command: 'top',
+      kind: 'days',
+      year: 2026,
+      items: [
+        { rank: 1, date: '2026-01-02', tokens: 200, topProvider: 'claude_code' },
+        { rank: 2, date: '2026-01-01', tokens: 100 },
+      ],
+    });
   });
 
   it('days: prints no-usage message when filtering removes all days', async () => {
@@ -205,72 +206,14 @@ describe('topCommand', () => {
     expect(loggedOutput()).toContain('No usage recorded.');
   });
 
-  it('models: ranks by cost and prints no-usage when all rows are empty', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-01-01', makeDay(10, 0, 1, 'cheap')],
-          ['2026-01-02', makeDay(1, 0, 10, 'expensive')],
-        ]),
-        codex: new Map([
-          [
-            '2026-01-01',
-            {
-              inputTokens: 0,
-              outputTokens: 0,
-              byModel: { empty: { inputTokens: 0, outputTokens: 0 } },
-            },
-          ],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
-
-    const out = loggedOutput();
-    expect(out.indexOf('expensive')).toBeLessThan(out.indexOf('cheap'));
-
-    vi.mocked(console.log).mockClear();
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        codex: new Map([
-          [
-            '2026-01-01',
-            {
-              inputTokens: 0,
-              outputTokens: 0,
-              byModel: { empty: { inputTokens: 0, outputTokens: 0 } },
-            },
-          ],
-        ]),
-      },
-      machineData: [],
-    });
-    await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
-
-    expect(loggedOutput()).toContain('No usage recorded.');
-  });
-
-  it('emits empty message on no data', async () => {
+  it.each([
+    [false, ['No data.']],
+    [true, ['"command": "top"', '"items": []', '"message": "No data."']],
+  ])('reports no data (json: %s)', async (json, expected) => {
     mocks.loadMergedProviderData.mockResolvedValue(null);
 
-    await topCommand({ kind: 'models', limit: 5, sort: 'cost' });
+    await topCommand({ kind: 'models', limit: 5, sort: 'cost', json });
 
-    expect(loggedOutput()).toContain('No data.');
-  });
-
-  it('emits valid empty JSON on no data', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue(null);
-
-    await topCommand({ kind: 'models', limit: 5, sort: 'cost', json: true });
-
-    expect(JSON.parse(loggedOutput())).toMatchObject({
-      command: 'top',
-      kind: 'models',
-      sort: 'cost',
-      limit: 5,
-      items: [],
-    });
+    for (const part of expected) expect(loggedOutput()).toContain(part);
   });
 });

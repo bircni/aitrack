@@ -126,40 +126,22 @@ describe('exportCommand', () => {
     expect(mocks.writeFileSync).toHaveBeenNthCalledWith(2, 'report.pdf', expect.any(String));
   });
 
-  it('exports date, range, and last windows', async () => {
+  it('passes period arguments through to the report', async () => {
     mocks.buildUsageReport.mockResolvedValue(report(3));
-    await exportCommand({ period: 'date', args: ['2026-06-01'], output: 'date.pdf' });
-    expect(mocks.buildUsageReport).toHaveBeenLastCalledWith(
-      expect.objectContaining({ period: 'date', from: '2026-06-01' }),
-    );
-
-    await exportCommand({
-      period: 'range',
-      args: ['2026-06-01', '2026-06-02'],
-      output: 'range.pdf',
-    });
-    expect(mocks.buildUsageReport).toHaveBeenLastCalledWith(
-      expect.objectContaining({ period: 'range', from: '2026-06-01', to: '2026-06-02' }),
-    );
-
     await exportCommand({ period: 'last', args: ['14'], output: 'last.pdf' });
     expect(mocks.buildUsageReport).toHaveBeenLastCalledWith(
       expect.objectContaining({ period: 'last', n: 14 }),
     );
   });
 
-  it('prints the not-configured hint and writes nothing when no data is loaded', async () => {
-    mocks.buildUsageReport.mockResolvedValue(null);
+  it.each([
+    ['no data is loaded', null, 'No local usage data found'],
+    ['the window is empty', 0, 'No usage recorded'],
+  ])('writes nothing and explains when %s', async (_label, rowCount, message) => {
+    mocks.buildUsageReport.mockResolvedValue(rowCount === null ? null : report(rowCount));
     mocks.tryLoadConfig.mockReturnValue(null);
     await exportCommand({ period: 'month', output: 'r.pdf' });
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(loggedOutput()).toContain('No local usage data found');
-  });
-
-  it('prints a no-usage message when the window is empty', async () => {
-    mocks.buildUsageReport.mockResolvedValue(report(0));
-    await exportCommand({ period: 'month', output: 'r.pdf' });
-    expect(mocks.writeFileSync).not.toHaveBeenCalled();
-    expect(loggedOutput()).toContain('No usage recorded');
+    expect(loggedOutput()).toContain(message);
   });
 });

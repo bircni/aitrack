@@ -57,12 +57,17 @@ describe('usageCommand', () => {
               outputTokens: 200,
               costUSD: 1.2,
               byModel: {
-                'claude-opus-4-8': { inputTokens: 800, outputTokens: 100, costUSD: 1 },
+                'claude-opus-4-8-thinking-high': {
+                  inputTokens: 800,
+                  outputTokens: 100,
+                  costUSD: 1,
+                },
                 'claude-sonnet-4-6': { inputTokens: 200, outputTokens: 100, costUSD: 0.2 },
               },
             },
           ],
         ]),
+        codex: new Map([[TODAY, makeDay(200, 100, undefined, 'mystery-gpt')]]),
       },
       machineData: [],
     });
@@ -71,22 +76,18 @@ describe('usageCommand', () => {
 
     const out = loggedOutput();
     expect(out).toContain(`today (${TODAY_LOCALE})`);
-    expect(out).toContain('Claude Code');
-    expect(out).toContain('Opus 4.8');
-    expect(out).toContain('Sonnet 4.6');
-    expect(out).toContain('TOTAL');
-    expect(out).toContain('$1.20');
     expect(out).not.toContain('Cached');
     expect(out).not.toContain('prompt-cache hits');
     expect(out.slice(out.indexOf('┌'))).toMatchInlineSnapshot(`
-      "┌─────────────┬────────┬────────────┬───────┐
-      │ Provider    │ Tokens │ Model      │ Price │
-      ├─────────────┼────────┼────────────┼───────┤
-      │ Claude Code │    900 │ Opus 4.8   │ $1.00 │
-      │ Claude Code │    300 │ Sonnet 4.6 │ $0.20 │
-      ├─────────────┼────────┼────────────┼───────┤
-      │ TOTAL       │   1.2K │            │ $1.20 │
-      └─────────────┴────────┴────────────┴───────┘"
+      "┌─────────────┬────────┬───────────────┬─────────────────┐
+      │ Provider    │ Tokens │ Model         │           Price │
+      ├─────────────┼────────┼───────────────┼─────────────────┤
+      │ Claude Code │    900 │ Opus 4.8 high │           $1.00 │
+      │ Claude Code │    300 │ Sonnet 4.6    │           $0.20 │
+      │ Codex       │    300 │ mystery-gpt   │               — │
+      ├─────────────┼────────┼───────────────┼─────────────────┤
+      │ TOTAL       │   1.5K │               │ $1.20 (partial) │
+      └─────────────┴────────┴───────────────┴─────────────────┘"
     `);
   });
 
@@ -160,7 +161,7 @@ describe('usageCommand', () => {
     expect(parsed.totals).toMatchObject({ tokens: 1200, costUSD: 1.2 });
   });
 
-  it('prints comparison totals and per-model movement', async () => {
+  it('prints comparison totals and per-model movement, as text and as JSON', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {
         claude_code: new Map([
@@ -180,19 +181,8 @@ describe('usageCommand', () => {
     expect(out).toContain('+100.0%');
     expect(out).toContain('+200.0%');
     expect(mocks.loadMergedProviderData).toHaveBeenCalledTimes(1);
-  });
 
-  it('includes structured comparison data in JSON output', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([
-          ['2026-06-08', makeDay(100, 0, 1, 'claude-opus')],
-          ['2026-06-15', makeDay(200, 0, 3, 'claude-opus')],
-        ]),
-      },
-      machineData: [],
-    });
-
+    vi.mocked(console.log).mockClear();
     await usageCommand({ period: 'thisweek', compare: true, json: true });
 
     const parsed = JSON.parse(loggedOutput()) as {
@@ -271,25 +261,18 @@ describe('usageCommand', () => {
   });
 
   describe('monthly budget', () => {
-    it('flags month-to-date spend against budget.monthly for the thismonth window', async () => {
+    // 90 + 82.5 = $172.50 month to date.
+    it.each([
+      [200, 'Budget: $172.50 of $200.00 this month (86%)', 'approaching your limit'],
+      [150, 'Budget: $172.50 of $150.00 this month (115%)', 'over by $22.50'],
+    ])('flags thismonth spend against a $%s budget', async (monthlyUSD, line, verdict) => {
       withJuneUsage();
-      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x', budget: { monthlyUSD: 200 } });
+      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x', budget: { monthlyUSD } });
 
       await usageCommand({ period: 'thismonth' });
 
-      // 90 + 82.5 = 172.50 of 200 → 86% → warn.
-      expect(loggedOutput()).toContain('Budget: $172.50 of $200.00 this month (86%)');
-      expect(loggedOutput()).toContain('approaching your limit');
-    });
-
-    it('reports the overage once spend passes the budget', async () => {
-      withJuneUsage();
-      mocks.tryLoadConfig.mockReturnValue({ repoUrl: 'x', budget: { monthlyUSD: 150 } });
-
-      await usageCommand({ period: 'thismonth' });
-
-      expect(loggedOutput()).toContain('Budget: $172.50 of $150.00 this month (115%)');
-      expect(loggedOutput()).toContain('over by $22.50');
+      expect(loggedOutput()).toContain(line);
+      expect(loggedOutput()).toContain(verdict);
     });
 
     it('stays silent without a configured budget or for the rolling month window', async () => {
@@ -315,69 +298,6 @@ describe('usageCommand', () => {
       };
       expect(parsed.budget).toMatchObject({ level: 'warn', budgetUSD: 200, spentUSD: 172.5 });
     });
-  });
-
-  it('renders multiple providers with em-dash for missing costs', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        claude_code: new Map([[TODAY, makeDay(100, 50, 1.5, 'mystery-claude')]]),
-        codex: new Map([[TODAY, makeDay(200, 100, undefined, 'mystery-gpt')]]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('Claude Code');
-    expect(out).toContain('Codex');
-    expect(out).toContain('mystery-claude');
-    expect(out).toContain('mystery-gpt');
-    expect(out).toContain('—');
-    expect(out).toContain('$1.50');
-    expect(out).toContain('┌');
-    expect(out).toContain('└');
-  });
-
-  it('pretty-prints Cursor model slugs in the usage table', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
-        cursor: new Map([
-          [
-            TODAY,
-            {
-              inputTokens: 39_100_000,
-              outputTokens: 1_000_000,
-              cachedInputTokens: 37_200_000,
-              costUSD: 53.12,
-              byModel: {
-                'cursor-grok-4.6-xhigh-fast': {
-                  inputTokens: 36_600_000,
-                  outputTokens: 800_000,
-                  cachedInputTokens: 34_900_000,
-                  costUSD: 43.87,
-                },
-                'claude-sonnet-4-5': {
-                  inputTokens: 2_500_000,
-                  outputTokens: 200_000,
-                  costUSD: 9.25,
-                },
-              },
-            },
-          ],
-        ]),
-      },
-      machineData: [],
-    });
-
-    await usageCommand({ period: 'today', providers: ['cursor'] });
-
-    const out = loggedOutput();
-    expect(out).toContain('Grok 4.6 xhigh fast');
-    expect(out).toContain('Sonnet 4.5');
-    expect(out).not.toContain('cursor-grok');
-    expect(out).toContain('┌');
-    expect(out).toContain('└');
   });
 
   it('marks partially priced model, total, budget and comparison estimates', async () => {

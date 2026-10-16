@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { localTimestamp } from '@aitrack/test-fixtures';
+import { localTimestamp, writeJsonl } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted runs before module loading, so TEST_HOME is available in vi.mock factories below
@@ -48,7 +48,11 @@ function cloneToLocalRepo(originDir: string): void {
 function writeClaudeData(lines: object[]): void {
   const projectDir = join(TEST_HOME, 'claude', 'projects', 'test-project');
   mkdirSync(projectDir, { recursive: true });
-  writeFileSync(join(projectDir, 'history.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n'));
+  writeJsonl(join(projectDir, 'history.jsonl'), lines);
+}
+
+function commitCount(): number {
+  return execSync('git log --oneline', { cwd: LOCAL_REPO }).toString().trim().split('\n').length;
 }
 
 function assistantLine(id: string, ts: string, inputTokens: number, outputTokens: number): object {
@@ -91,7 +95,7 @@ describe('integration', { timeout: 60_000 }, () => {
     rmSync(TEST_HOME, { recursive: true, force: true });
   });
 
-  it('sync writes a machine JSON file and commits it to git', async () => {
+  it('sync commits a machine JSON file once and not again for identical data', async () => {
     // A signing setup the sync process cannot reach, like gpg outside a GUI app's PATH.
     execSync('git config commit.gpgsign true', { cwd: LOCAL_REPO, stdio: 'pipe' });
     execSync('git config gpg.program aitrack-missing-gpg', { cwd: LOCAL_REPO, stdio: 'pipe' });
@@ -117,27 +121,12 @@ describe('integration', { timeout: 60_000 }, () => {
       '2024-06-02': { claude_code: { totals: { inputTokens: 2000 } } },
     });
 
-    // verify it was actually committed
     const log = execSync('git log --oneline', { cwd: LOCAL_REPO }).toString();
     expect(log).toContain(`sync: ${host}`);
-  });
 
-  it('sync is idempotent: second sync with identical data does not create a new commit', async () => {
-    writeClaudeData([assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500)]);
-
+    const commits = commitCount();
     await syncCommand();
-    const commitsAfterFirst = execSync('git log --oneline', { cwd: LOCAL_REPO })
-      .toString()
-      .trim()
-      .split('\n').length;
-
-    await syncCommand();
-    const commitsAfterSecond = execSync('git log --oneline', { cwd: LOCAL_REPO })
-      .toString()
-      .trim()
-      .split('\n').length;
-
-    expect(commitsAfterSecond).toBe(commitsAfterFirst);
+    expect(commitCount()).toBe(commits);
   });
 
   it('rebases and preserves both machines when concurrent pushes race', async () => {
@@ -198,26 +187,6 @@ describe('integration', { timeout: 60_000 }, () => {
     expect(existsSync(dataDir)).toBe(false);
   });
 
-  it('show renders a PNG from synced data', async () => {
-    writeClaudeData([
-      assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500),
-      assistantLine('msg2', localTimestamp('2024-06-15'), 500, 200),
-    ]);
-
-    await syncCommand();
-
-    const outputPath = join(TEST_HOME, 'output.png');
-    await showCommand({ output: outputPath, open: false, providers: ['claude_code', 'codex'] });
-
-    expect(existsSync(outputPath)).toBe(true);
-    const buffer = readFileSync(outputPath);
-    // PNG magic bytes: 89 50 4E 47
-    expect(buffer[0]).toBe(0x89);
-    expect(buffer[1]).toBe(0x50);
-    expect(buffer[2]).toBe(0x4e);
-    expect(buffer[3]).toBe(0x47);
-  });
-
   it('show merges data from multiple machines into a single heatmap', async () => {
     // Simulate a second machine's JSON already in the repo
     const dataDir = join(LOCAL_REPO, 'data');
@@ -248,8 +217,7 @@ describe('integration', { timeout: 60_000 }, () => {
     const outputPath = join(TEST_HOME, 'merged.png');
     await showCommand({ output: outputPath, open: false, providers: ['claude_code', 'codex'] });
 
-    expect(existsSync(outputPath)).toBe(true);
-    const buffer = readFileSync(outputPath);
-    expect(buffer[0]).toBe(0x89); // valid PNG
+    // PNG magic bytes: 89 50 4E 47
+    expect([...readFileSync(outputPath).subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 });

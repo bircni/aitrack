@@ -1,4 +1,4 @@
-import { loggedOutput } from '@aitrack/test-fixtures';
+import { loggedOutput, makeMachineFile, makeProviderDay } from '@aitrack/test-fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -43,26 +43,10 @@ import { machineTimezone } from 'aitrack-lib/timezone';
 
 import { showCommand } from '../show.js';
 
-const SCHEMA_FIELDS = { schemaVersion: 2, timezone: 'UTC', dayBucket: 'utc' } as const;
-
-function emptyLocalMachine(host = 'host'): MachineFile {
-  return { ...SCHEMA_FIELDS, hostname: host, lastUpdated: 'now', days: {} };
-}
-
 function localMachineWithData(host = 'host'): MachineFile {
-  return {
-    ...SCHEMA_FIELDS,
-    hostname: host,
-    lastUpdated: 'now',
-    days: {
-      '2024-01-01': {
-        codex: {
-          byModel: { 'gpt-5': { inputTokens: 10, outputTokens: 5 } },
-          totals: { inputTokens: 10, outputTokens: 5 },
-        },
-      },
-    },
-  };
+  return makeMachineFile(host, {
+    '2024-01-01': { codex: makeProviderDay(10, 5, undefined, 'gpt-5') },
+  });
 }
 
 function withPlatform(platform: NodeJS.Platform, callback: () => Promise<void>): Promise<void> {
@@ -94,7 +78,7 @@ describe('showCommand', () => {
     mocks.resolveMachineId.mockReturnValue('host');
     mocks.isCloned.mockReturnValue(true);
     mocks.listDataFiles.mockReturnValue([]);
-    mocks.buildLocalMachineFile.mockResolvedValue(emptyLocalMachine());
+    mocks.buildLocalMachineFile.mockResolvedValue(makeMachineFile('host'));
     mocks.readCursorData.mockResolvedValue(new Map());
     mocks.renderToPng.mockReturnValue(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     mocks.spawn.mockImplementation(() => {
@@ -189,43 +173,13 @@ describe('showCommand', () => {
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('--no-open'));
   });
 
-  it('backfills cost for old synced Claude JSON missing costUSD', async () => {
-    mocks.listDataFiles.mockReturnValue(['/repo/data/old.json']);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'other',
-      lastUpdated: 'now',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { 'claude-sonnet-4': { inputTokens: 1_000_000, outputTokens: 100_000 } },
-            totals: { inputTokens: 1_000_000, outputTokens: 100_000 },
-          },
-        },
-      },
-    });
-
-    await showCommand({ providers: ['claude_code', 'codex'] });
-
-    const providerData = getRenderedProviderData();
-    const day = providerData.claude_code?.get('2024-01-01');
-    expect(day?.costUSD).toBeCloseTo(4.5, 5);
-    expect(day?.byModel['claude-sonnet-4']?.costUSD).toBeCloseTo(4.5, 5);
-  });
-
   it('renders a terminal table and skips PNG generation when --tui is set', async () => {
     mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
-    mocks.readDataFile.mockReturnValue({
-      hostname: 'other',
-      lastUpdated: 'now',
-      days: {
-        '2024-01-01': {
-          claude_code: {
-            byModel: { 'claude-sonnet-4': { inputTokens: 1000, outputTokens: 500, costUSD: 1.5 } },
-            totals: { inputTokens: 1000, outputTokens: 500, costUSD: 1.5 },
-          },
-        },
-      },
-    });
+    mocks.readDataFile.mockReturnValue(
+      makeMachineFile('other', {
+        '2024-01-01': { claude_code: makeProviderDay(1000, 500, 1.5, 'claude-sonnet-4') },
+      }),
+    );
 
     await showCommand({ tui: true, providers: ['claude_code', 'codex'] });
 

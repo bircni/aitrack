@@ -1,4 +1,4 @@
-import { loggedOutput, makeProviderDay } from '@aitrack/test-fixtures';
+import { loggedOutput, makeMachineFile, makeProviderDay } from '@aitrack/test-fixtures';
 import type { MachineFile } from 'aitrack-lib/data/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,14 +24,7 @@ function makeMachine(
     Array<{ providerKey: string; input: number; output: number; cost?: number }>
   >,
 ): MachineFile {
-  const out: MachineFile = {
-    schemaVersion: 2,
-    hostname,
-    timezone: 'UTC',
-    dayBucket: 'utc',
-    lastUpdated: '2026-04-01T12:00:00.000Z',
-    days: {},
-  };
+  const out = makeMachineFile(hostname, {}, { lastUpdated: '2026-04-01T12:00:00.000Z' });
   for (const [date, items] of Object.entries(days)) {
     out.days[date] = Object.fromEntries(
       items.map((item) => [
