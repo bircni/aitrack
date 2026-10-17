@@ -22,6 +22,11 @@ local logs / Cursor export                  other machines
 
 - **Readers** turn provider logs into a `DayMap`: local calendar day → token counts per model. Each
   parsed transcript is cached by path, size and modification time.
+- **Projects**: each message is attributed to the `owner/repo` of its git origin (Codex records it;
+  for Claude Code the transcript's `cwd` is resolved with `git remote get-url origin`). Day entries
+  carry an optional `byProject` map, written to machine files without a schema bump. Working
+  directories of work without a remote stay local, for `usage --dir` on this machine. See
+  [Usage by project](cli.md#usage-by-project).
 - **Pricing** is applied while reading and again by `recompute-costs`. Stored costs are kept as
   written until repriced.
 - **`usageData`** merges this machine's fresh logs over its synced file and the other machines' files.
