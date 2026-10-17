@@ -3,7 +3,9 @@ import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from 'node:ch
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+
+import { runMain } from './runMain.ts';
 
 const IS_WIN = platform() === 'win32';
 
@@ -247,12 +249,4 @@ function main(): void {
   }
 }
 
-const entryPoint = process.argv[1];
-if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
-  try {
-    main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-}
+runMain(import.meta.url, main);

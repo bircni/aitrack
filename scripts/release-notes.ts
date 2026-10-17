@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+
+import { runMain } from './runMain.ts';
 
 // A section ends at the next release heading or at any git-cliff trailer that
 // follows the final section: reference-style link definitions ("[v1.0.0]: ...")
@@ -40,12 +41,4 @@ function main(): void {
   process.stdout.write(extractReleaseNotes(readFileSync(changelogPath, 'utf8'), tag));
 }
 
-const entryPoint = process.argv[1];
-if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
-  try {
-    main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-}
+runMain(import.meta.url, main);
