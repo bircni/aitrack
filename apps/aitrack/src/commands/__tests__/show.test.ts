@@ -191,6 +191,33 @@ describe('showCommand', () => {
     expect(out).toContain('Claude Code');
   });
 
+  it('prints the --tui stats as JSON', async () => {
+    mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
+    mocks.readDataFile.mockReturnValue(
+      makeMachineFile('other', {
+        '2024-01-01': { claude_code: makeProviderDay(1000, 500, 1.5, 'claude-sonnet-4') },
+      }),
+    );
+
+    await showCommand({ tui: true, json: true, providers: ['claude_code'] });
+
+    const out = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0])) as {
+      command: string;
+      mode: string;
+      providers: Array<Record<string, unknown>>;
+      total: unknown;
+    };
+    expect(out).toMatchObject({ command: 'show', mode: 'tui', total: null });
+    expect(out.providers[0]).toMatchObject({
+      provider: 'Claude Code',
+      days: 1,
+      inputTokens: 1000,
+      outputTokens: 500,
+      totalTokens: 1500,
+      costUSD: 1.5,
+    });
+  });
+
   it('merges synced cost fields across machines and notes their mixed calendars', async () => {
     const otherZone =
       machineTimezone() === 'Pacific/Kiritimati' ? 'Pacific/Pago_Pago' : 'Pacific/Kiritimati';

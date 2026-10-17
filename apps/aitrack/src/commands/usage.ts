@@ -11,7 +11,7 @@ import {
   type UsageReportOptions,
   type UsageReportTotals,
 } from 'aitrack-lib/data/usageReport';
-import { fmt, fmtUSD, fmtUSDCost } from 'aitrack-lib/display/format';
+import { fmt, fmtUSD, fmtUSDCost, unpricedFootnote } from 'aitrack-lib/display/format';
 import { displayModelName } from 'aitrack-lib/display/modelNames';
 import {
   defaultTableStyle,
@@ -23,18 +23,17 @@ import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
 
-export type UsageOptions = UsageReportOptions & { json?: boolean; compare?: boolean };
+export type UsageOptions = UsageReportOptions & {
+  json?: boolean;
+  compare?: boolean;
+  short?: boolean;
+};
 
 interface Row {
   provider: string;
   tokens: string;
-  cached: string;
   model: string;
   price: string;
-}
-
-function cachedCell(value: Pick<UsageReportTotals, 'hasCached' | 'cachedInputTokens'>): string {
-  return value.hasCached ? fmt(value.cachedInputTokens) : '—';
 }
 
 function priceCell(
@@ -43,6 +42,12 @@ function priceCell(
   return value.hasCost
     ? `${fmtUSD(value.costUSD)}${value.hasUnpricedTokens ? ' (partial)' : ''}`
     : '—';
+}
+
+function shortLine(totals: UsageReportTotals): string {
+  const parts = [`${fmt(totals.tokens)} tokens`];
+  if (totals.hasCost) parts.unshift(priceCell(totals));
+  return parts.join(' · ');
 }
 
 function formatDelta(metric: UsageComparisonMetric, formatter: (value: number) => string): string {
@@ -65,7 +70,6 @@ function renderUsageReport(report: UsageReport): void {
       rows.push({
         provider: provider.label,
         tokens: fmt(row.tokens),
-        cached: cachedCell(row),
         model: displayModelName(row.model, { effort: true }),
         price: priceCell(row),
       });
@@ -75,7 +79,6 @@ function renderUsageReport(report: UsageReport): void {
   const totalRow: Row = {
     provider: 'TOTAL',
     tokens: fmt(report.totals.tokens),
-    cached: cachedCell(report.totals),
     model: '',
     price: priceCell(report.totals),
   };
@@ -83,9 +86,6 @@ function renderUsageReport(report: UsageReport): void {
   const columns: Array<TerminalTableColumn<Row>> = [
     { header: 'Provider', align: 'left', cell: (r) => r.provider },
     { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
-    ...(report.totals.hasCached
-      ? [{ header: 'Cached', align: 'right' as const, cell: (r: Row) => r.cached }]
-      : []),
     { header: 'Model', align: 'left', cell: (r) => r.model },
     { header: 'Price', align: 'right', cell: (r) => r.price },
   ];
@@ -99,9 +99,6 @@ function renderUsageReport(report: UsageReport): void {
       footerStyle: chalk.bold.cyan,
     }),
   );
-  if (report.totals.hasCached) {
-    log.info(chalk.dim('Cached is included in Tokens (prompt-cache hits, billed cheaper).'));
-  }
 }
 
 function renderComparison(report: UsageComparisonReport): void {
@@ -211,6 +208,12 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
     return;
   }
 
+  if (options.short) {
+    // One line for status bars and prompts; an empty window prints nothing so the bar stays blank.
+    if (report && report.rowCount > 0) log.info(shortLine(report.totals));
+    return;
+  }
+
   if (!report || report.rowCount === 0) {
     const message = emptyReportMessage(report);
     if (message !== null) log.info(message);
@@ -218,6 +221,8 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   }
 
   renderUsageReport(report);
+  const footnote = unpricedFootnote(report.totals.unpricedModels);
+  if (footnote !== null) log.info(chalk.dim(footnote));
   if (report.timezoneNote) log.info(chalk.dim(report.timezoneNote));
 
   if (budget) {

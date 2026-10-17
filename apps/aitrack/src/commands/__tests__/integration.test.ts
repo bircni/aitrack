@@ -23,10 +23,10 @@ vi.mock('node:os', async (importOriginal) => {
 
 import { localMachineId, saveConfig } from 'aitrack-lib/config';
 import type { MachineFile } from 'aitrack-lib/data/types';
-import { commitAndPush, LOCAL_REPO } from 'aitrack-lib/git';
+import { commitAndPush, LOCAL_REPO, readDataFile } from 'aitrack-lib/git';
+import { syncData } from 'aitrack-lib/sync';
 
 import { showCommand } from '../show.js';
-import { syncCommand } from '../sync.js';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ describe('integration', { timeout: 60_000 }, () => {
       assistantLine('msg2', localTimestamp('2024-06-02'), 2000, 800),
     ]);
 
-    await syncCommand();
+    await syncData();
 
     // Short hostname, not the FQDN: the machine identity must not change with
     // the network the machine happens to be on.
@@ -125,7 +125,44 @@ describe('integration', { timeout: 60_000 }, () => {
     expect(log).toContain(`sync: ${host}`);
 
     const commits = commitCount();
-    await syncCommand();
+    await syncData();
+    expect(commitCount()).toBe(commits);
+  });
+
+  it('pushes encrypted, compacted files that only the passphrase reads back', async () => {
+    const originDir = join(TEST_HOME, 'origin.git');
+    saveConfig({ repoUrl: originDir, encryptData: true, compactAfterDays: 30 });
+    writeClaudeData([assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500)]);
+
+    vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', '');
+    await expect(syncData()).rejects.toThrow('AITRACK_ENCRYPTION_PASSPHRASE');
+
+    vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', 'correct horse');
+    await syncData();
+
+    const dataFile = join(LOCAL_REPO, 'data', `${localMachineId()}.json`);
+    const pushed = execSync(
+      `git --git-dir="${originDir}" show HEAD:data/${localMachineId()}.json`,
+      {
+        encoding: 'utf8',
+      },
+    );
+    expect(pushed).toBe(readFileSync(dataFile, 'utf8'));
+    expect(pushed).not.toContain('inputTokens');
+    expect(pushed).not.toContain('claude_code');
+
+    const decrypted = readDataFile(dataFile);
+    expect(decrypted?.days['2024-06-01']?.claude_code?.totals.inputTokens).toBe(1000);
+    expect(Object.keys(decrypted?.days['2024-06-01']?.claude_code?.byModel ?? {})).toEqual([
+      '(compacted)',
+    ]);
+
+    vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', 'wrong');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(readDataFile(dataFile)).toBeNull();
+    const commits = commitCount();
+    vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', 'correct horse');
+    await syncData();
     expect(commitCount()).toBe(commits);
   });
 
@@ -181,7 +218,7 @@ describe('integration', { timeout: 60_000 }, () => {
 
   it('sync with no AI data exits cleanly without committing anything', async () => {
     // no JSONL files → readClaudeData/readCodexData return empty Maps → early return
-    await expect(syncCommand()).resolves.toBeUndefined();
+    await expect(syncData().then((result) => typeof result.message)).resolves.toBe('string');
 
     const dataDir = join(LOCAL_REPO, 'data');
     expect(existsSync(dataDir)).toBe(false);
@@ -212,7 +249,7 @@ describe('integration', { timeout: 60_000 }, () => {
 
     // Also sync this machine's data
     writeClaudeData([assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500)]);
-    await syncCommand();
+    await syncData();
 
     const outputPath = join(TEST_HOME, 'merged.png');
     await showCommand({ output: outputPath, open: false, providers: ['claude_code', 'codex'] });

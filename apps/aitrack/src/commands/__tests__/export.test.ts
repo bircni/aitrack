@@ -69,6 +69,18 @@ describe('exportCommand', () => {
     expect(loggedOutput()).toContain('aitrack-receipt.pdf');
   });
 
+  it('reports the written file as JSON', async () => {
+    mocks.buildUsageReport.mockResolvedValue(report(3));
+    await exportCommand({ output: 'r.pdf', json: true });
+    expect(JSON.parse(loggedOutput())).toEqual({
+      command: 'export',
+      path: 'r.pdf',
+      format: 'pdf',
+      rowCount: 3,
+      windowLabel: 'this month',
+    });
+  });
+
   it('writes CSV instead of a PDF with --csv, defaulting to a .csv path', async () => {
     mocks.buildUsageReport.mockResolvedValue({
       windowLabel: 'this month',
@@ -143,5 +155,12 @@ describe('exportCommand', () => {
     await exportCommand({ period: 'month', output: 'r.pdf' });
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
     expect(loggedOutput()).toContain(message);
+    vi.mocked(console.log).mockClear();
+    await exportCommand({ period: 'month', output: 'r.pdf', json: true });
+    expect(JSON.parse(loggedOutput())).toMatchObject({
+      command: 'export',
+      path: null,
+      message: expect.stringContaining(message) as string,
+    });
   });
 });

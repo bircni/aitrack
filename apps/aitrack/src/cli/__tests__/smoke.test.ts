@@ -79,7 +79,13 @@ describe('CLI smoke', () => {
 
   it('rejects an invalid argument', () => {
     const { status, stderr } = runCli(['top', 'weeks']);
-    expect(status).toBe(1);
+    expect(status).toBe(2);
     expect(stderr).toContain('Allowed choices are days, models');
+  });
+
+  it('refuses --watch without a terminal', () => {
+    const { status, stderr } = runCli(['usage', 'today', '--watch']);
+    expect(status).toBe(2);
+    expect(stderr).toContain('interactive terminal');
   });
 });

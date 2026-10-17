@@ -12,7 +12,10 @@ vi.mock('aitrack-lib/data/usageData', () => ({
   loadReportedMachines: mocks.loadReportedMachines,
   usageEmptyMessage: () => 'No data.',
 }));
-vi.mock('aitrack-lib/config', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
+vi.mock('aitrack-lib/config', () => ({
+  tryLoadConfig: mocks.tryLoadConfig,
+  resolveMachineId: () => 'box',
+}));
 vi.mock('aitrack-lib/git', () => ({ isCloned: mocks.isCloned }));
 
 import { machinesCommand } from '../machines.js';
@@ -83,6 +86,30 @@ describe('machinesCommand', () => {
       totalTokens: 1100,
       costUSD: 5,
     });
+  });
+
+  it('marks machines that stopped syncing, but never this one', async () => {
+    vi.useFakeTimers({ now: new Date('2026-04-10T12:00:00.000Z'), toFake: ['Date'] });
+    const fresh = makeMachine('fresh', {});
+    fresh.lastUpdated = '2026-04-09T12:00:00.000Z';
+    mocks.loadReportedMachines.mockResolvedValue([
+      makeMachine('old', {}),
+      makeMachine('box', {}),
+      fresh,
+    ]);
+    await machinesCommand({ json: true });
+    const { machines } = JSON.parse(loggedOutput()) as {
+      machines: Array<{ hostname: string; stale: boolean }>;
+    };
+    expect(machines.map((m) => [m.hostname, m.stale])).toEqual([
+      ['old', true],
+      ['box', false],
+      ['fresh', false],
+    ]);
+    vi.useRealTimers();
+    vi.mocked(console.log).mockClear();
+    await machinesCommand();
+    expect(loggedOutput()).toContain('2026-04-01 (stale)');
   });
 
   it('shows empty message when no machine data', async () => {

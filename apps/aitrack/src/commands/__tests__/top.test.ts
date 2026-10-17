@@ -68,6 +68,33 @@ describe('topCommand', () => {
     expect(sonnetIndex).toBeGreaterThan(opusIndex);
   });
 
+  it('names unpriced models in the footnote and in JSON', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        cursor: new Map([
+          [
+            '2026-01-01',
+            {
+              inputTokens: 5,
+              outputTokens: 5,
+              byModel: { mystery: { inputTokens: 5, outputTokens: 5 } },
+            },
+          ],
+        ]),
+      },
+      machineData: [],
+    });
+
+    await topCommand({ kind: 'days', limit: 5, sort: 'tokens' });
+    expect(loggedOutput()).toContain('Unpriced models: mystery');
+
+    vi.mocked(console.log).mockClear();
+    await topCommand({ kind: 'models', limit: 5, sort: 'tokens', json: true });
+    expect((JSON.parse(loggedOutput()) as { unpricedModels: string[] }).unpricedModels).toEqual([
+      'mystery',
+    ]);
+  });
+
   it('prints JSON when requested', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {

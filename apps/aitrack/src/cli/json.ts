@@ -2,3 +2,7 @@
 export function printJsonCommand(command: string, payload: Record<string, unknown>): void {
   console.log(JSON.stringify({ command, ...payload }, null, 2));
 }
+
+export function printJsonError(command: string, error: string): void {
+  printJsonCommand(command, { error });
+}

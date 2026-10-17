@@ -6,13 +6,14 @@ import {
   topModels,
   topProviderKey,
   type TopSort,
+  unpricedTopModels,
 } from 'aitrack-lib/data/topUsage';
 import {
   loadMergedProviderData,
   usageEmptyMessage,
   usageEmptyWindowMessage,
 } from 'aitrack-lib/data/usageData';
-import { fmt, fmtUSD } from 'aitrack-lib/display/format';
+import { fmt, fmtUSD, unpricedFootnote } from 'aitrack-lib/display/format';
 import { displayModelName } from 'aitrack-lib/display/modelNames';
 import {
   defaultTableStyle,
@@ -113,11 +114,13 @@ function renderTopOutput<T>(
   toJsonItem: (item: T, index: number) => TopJsonItem,
   toRow: (item: T, index: number) => Row,
   columns: Array<TerminalTableColumn<Row>>,
+  unpriced: string[],
 ): void {
   if (options.json) {
     printJsonCommand('top', {
       ...topJsonEnvelope(options),
       items: items.map((item, index) => toJsonItem(item, index)),
+      ...(unpriced.length > 0 && { unpricedModels: unpriced }),
     });
     return;
   }
@@ -130,6 +133,8 @@ function renderTopOutput<T>(
   const rows = items.map((item, index) => toRow(item, index));
   log.info(chalk.bold(title));
   log.info(renderTerminalTable(rows, columns, { style: defaultTableStyle() }));
+  const footnote = unpricedFootnote(unpriced);
+  if (footnote !== null) log.info(chalk.dim(footnote));
 }
 
 export async function topCommand(options: TopOptions): Promise<void> {
@@ -173,6 +178,7 @@ export async function topCommand(options: TopOptions): Promise<void> {
       }),
       dayToRow,
       topColumns('Date', 'Top provider'),
+      unpricedTopModels(items),
     );
     return;
   }
@@ -193,5 +199,6 @@ export async function topCommand(options: TopOptions): Promise<void> {
     }),
     modelToRow,
     topColumns('Model', 'Provider'),
+    unpricedTopModels(items),
   );
 }

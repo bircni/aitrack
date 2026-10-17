@@ -144,6 +144,17 @@ describe('doctorCommand', () => {
     expect(process.exitCode).toBeUndefined();
   });
 
+  it('warns when the active pricing pack carries no checksums', async () => {
+    mocks.syncPricingPack.mockResolvedValueOnce({
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      refreshed: false,
+      detail: 'cache still fresh',
+      unverified: true,
+    });
+    await doctorCommand();
+    expect(loggedOutput()).toMatch(/WARN\s+Pricing cache:.*no checksums/u);
+  });
+
   it('warns when the pricing branch refresh fails', async () => {
     mocks.syncPricingPack.mockResolvedValueOnce({
       updatedAt: '2026-09-29T00:00:00.000Z',

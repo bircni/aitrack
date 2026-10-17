@@ -1,4 +1,6 @@
+import { tryLoadConfig, resolveMachineId } from 'aitrack-lib/config';
 import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
+import { isStaleSync } from 'aitrack-lib/data/staleSync';
 import type { MachineFile } from 'aitrack-lib/data/types';
 import { loadReportedMachines, usageEmptyMessage } from 'aitrack-lib/data/usageData';
 import { fmt, fmtUSD } from 'aitrack-lib/display/format';
@@ -17,6 +19,8 @@ interface MachineSummary {
   hostname: string;
   timezone: string;
   lastUpdated: string;
+  /** Synced before, but not in the last three days; never true for this machine. */
+  stale: boolean;
   days: number;
   inputTokens: number;
   outputTokens: number;
@@ -27,7 +31,7 @@ interface MachineSummary {
   lastDay: string | null;
 }
 
-function summarizeMachine(file: MachineFile): MachineSummary {
+function summarizeMachine(file: MachineFile, currentId: string | undefined): MachineSummary {
   let inputTokens = 0;
   let outputTokens = 0;
   let costUSD = 0;
@@ -54,6 +58,7 @@ function summarizeMachine(file: MachineFile): MachineSummary {
     hostname: file.hostname,
     timezone: file.timezone,
     lastUpdated: file.lastUpdated,
+    stale: file.hostname !== currentId && isStaleSync(file.lastUpdated, Date.now()),
     days: dayKeys.length,
     inputTokens,
     outputTokens,
@@ -82,8 +87,10 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
     return;
   }
 
+  const config = tryLoadConfig();
+  const currentId = config ? resolveMachineId(config) : undefined;
   const summaries = machineData
-    .map((machine) => summarizeMachine(machine))
+    .map((machine) => summarizeMachine(machine, currentId))
     .toSorted((a, b) => b.totalTokens - a.totalTokens);
 
   if (options.json) {
@@ -100,7 +107,10 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
     {
       header: 'Last sync',
       align: 'left',
-      cell: (m) => (m.lastUpdated === '' ? 'not synced' : m.lastUpdated.slice(0, 10)),
+      cell: (m) =>
+        m.lastUpdated === ''
+          ? 'not synced'
+          : `${m.lastUpdated.slice(0, 10)}${m.stale ? ' (stale)' : ''}`,
     },
     {
       header: 'Providers',

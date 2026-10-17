@@ -112,9 +112,9 @@ async function pricingCacheCheck(): Promise<CheckResult> {
   const result = await syncPricingPack();
   const pricing = currentModelPricing();
   return {
-    status: result.failed ? 'warn' : 'ok',
+    status: result.failed || result.unverified ? 'warn' : 'ok',
     label: 'Pricing cache',
-    detail: `${String(pricing.claudeModelCount())} Claude, ${String(pricing.codexModelCount())} Codex, ${String(pricing.cursorModelCount())} Cursor — ${result.detail} (updatedAt ${result.updatedAt})`,
+    detail: `${String(pricing.claudeModelCount())} Claude, ${String(pricing.codexModelCount())} Codex, ${String(pricing.cursorModelCount())} Cursor — ${result.detail} (updatedAt ${result.updatedAt})${result.unverified ? '; pack has no checksums, content not verified' : ''}`,
   };
 }
 

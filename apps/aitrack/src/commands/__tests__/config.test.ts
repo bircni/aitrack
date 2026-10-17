@@ -52,6 +52,25 @@ describe('configCommand', () => {
       expect(out).toContain('resolved-host');
     });
 
+    it('prints the values as JSON', () => {
+      okConfig({ repoUrl: 'git@example.com:me/d.git', budget: { monthlyUSD: 50 } });
+      configCommand({ action: 'list', json: true });
+      expect(JSON.parse(loggedOutput())).toEqual({
+        command: 'config',
+        action: 'list',
+        values: {
+          repoUrl: 'git@example.com:me/d.git',
+          machineId: null,
+          claudeProjectsDir: null,
+          codexSessionsDir: null,
+          compactAfterDays: null,
+          encryptData: null,
+          'budget.monthly': 50,
+        },
+        resolvedMachineId: 'resolved-host',
+      });
+    });
+
     it('prints a hint when no config exists', () => {
       mocks.readConfig.mockReturnValue({ status: 'missing' });
       configCommand({ action: 'list' });
@@ -64,6 +83,20 @@ describe('configCommand', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git' });
       configCommand({ action: 'get', key: 'repoUrl' });
       expect(loggedOutput()).toBe('git@example.com:me/d.git');
+    });
+
+    it('prints a value as JSON, null when unset', () => {
+      okConfig({ repoUrl: 'x' });
+      configCommand({ action: 'get', key: 'repoUrl', json: true });
+      expect(JSON.parse(loggedOutput())).toEqual({
+        command: 'config',
+        action: 'get',
+        key: 'repoUrl',
+        value: 'x',
+      });
+      vi.mocked(console.log).mockClear();
+      configCommand({ action: 'get', key: 'machineId', json: true });
+      expect(JSON.parse(loggedOutput())).toMatchObject({ key: 'machineId', value: null });
     });
 
     it('prints empty for an unset value', () => {
@@ -140,6 +173,31 @@ describe('configCommand', () => {
       expect(() => {
         configCommand({ action: 'set', key: 'budget.monthly', value });
       }).toThrow('budget.monthly');
+      expect(mocks.saveConfig).not.toHaveBeenCalled();
+    });
+
+    it('sets encryptData and compactAfterDays, and clears compaction with "off"', () => {
+      okConfig({ repoUrl: 'x' });
+      configCommand({ action: 'set', key: 'encryptData', value: 'true' });
+      expect(mocks.saveConfig).toHaveBeenLastCalledWith({ repoUrl: 'x', encryptData: true });
+
+      okConfig({ repoUrl: 'x' });
+      configCommand({ action: 'set', key: 'compactAfterDays', value: '365' });
+      expect(mocks.saveConfig).toHaveBeenLastCalledWith({ repoUrl: 'x', compactAfterDays: 365 });
+
+      okConfig({ repoUrl: 'x', compactAfterDays: 365 });
+      configCommand({ action: 'set', key: 'compactAfterDays', value: 'off' });
+      expect(mocks.saveConfig).toHaveBeenLastCalledWith({ repoUrl: 'x' });
+    });
+
+    it.each([
+      ['compactAfterDays', '0'],
+      ['compactAfterDays', '1.5'],
+      ['encryptData', 'yes'],
+    ])('rejects %s = %j', (key, value) => {
+      expect(() => {
+        configCommand({ action: 'set', key, value });
+      }).toThrow(key);
       expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
