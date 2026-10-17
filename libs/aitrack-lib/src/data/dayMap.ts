@@ -47,6 +47,36 @@ export function addTokenCounts(dest: TokenCounts, source: TokenCounts): void {
   }
 }
 
+/** Where a message's usage is counted; `cwd` only for work with no git remote. */
+export interface Attribution {
+  project: string;
+  cwd?: string;
+}
+
+/** Tokens with a missing cost are flagged, so a partly priced sum says so. */
+export function flagUnpriced(counts: TokenCounts): TokenCounts {
+  return counts.costUSD === undefined && counts.inputTokens + counts.outputTokens > 0
+    ? { ...counts, hasUnpricedTokens: true }
+    : counts;
+}
+
+export function addCountsByKey(
+  record: Record<string, TokenCounts>,
+  key: string,
+  counts: TokenCounts,
+): void {
+  addTokenCounts((record[key] ??= { inputTokens: 0, outputTokens: 0 }), counts);
+}
+
+export function addProjectUsage(
+  day: DayEntry,
+  attribution: Attribution,
+  counts: TokenCounts,
+): void {
+  addCountsByKey((day.byProject ??= {}), attribution.project, counts);
+  if (attribution.cwd !== undefined) addCountsByKey((day.byCwd ??= {}), attribution.cwd, counts);
+}
+
 /**
  * Add one model's usage onto a day — the model row and the day totals.
  *
@@ -54,14 +84,17 @@ export function addTokenCounts(dest: TokenCounts, source: TokenCounts): void {
  * already holds both the totals and the per-model rows, so that would
  * double-count.
  */
-export function addModelUsage(day: DayEntry, model: string, counts: TokenCounts): void {
+export function addModelUsage(
+  day: DayEntry,
+  model: string,
+  counts: TokenCounts,
+  attribution?: Attribution,
+): void {
   const rec = (day.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
-  const pricedCounts =
-    counts.costUSD === undefined && counts.inputTokens + counts.outputTokens > 0
-      ? { ...counts, hasUnpricedTokens: true }
-      : counts;
+  const pricedCounts = flagUnpriced(counts);
   addTokenCounts(rec, pricedCounts);
   addTokenCounts(day, pricedCounts);
+  if (attribution) addProjectUsage(day, attribution, pricedCounts);
 }
 
 export function mergeDayMaps(dst: DayMap, source: DayMap): void {
@@ -71,6 +104,12 @@ export function mergeDayMaps(dst: DayMap, source: DayMap): void {
     for (const [model, counts] of Object.entries(sourceDay.byModel)) {
       const modelTotals = (dstDay.byModel[model] ??= { inputTokens: 0, outputTokens: 0 });
       addTokenCounts(modelTotals, counts);
+    }
+    for (const [project, counts] of Object.entries(sourceDay.byProject ?? {})) {
+      addCountsByKey((dstDay.byProject ??= {}), project, counts);
+    }
+    for (const [cwd, counts] of Object.entries(sourceDay.byCwd ?? {})) {
+      addCountsByKey((dstDay.byCwd ??= {}), cwd, counts);
     }
   }
 }

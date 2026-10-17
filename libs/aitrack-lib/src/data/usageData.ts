@@ -8,7 +8,7 @@ import { log } from '../output.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { isSyncedProvider, liveProviders } from '../providers/index.js';
 import { machineTimezone } from '../timezone.js';
-import { addTokenCounts, getOrCreateDay } from './dayMap.js';
+import { addCountsByKey, addTokenCounts, flagUnpriced, getOrCreateDay } from './dayMap.js';
 import { buildLocalMachineFile, machineHasData, mergePersistedDays } from './localData.js';
 import type { DayEntry, DayMap, MachineFile, ProviderData, ProviderDay } from './types.js';
 
@@ -44,6 +44,14 @@ export function mergeProviderDay(
       hasModelCost = true;
       if (counts.costUSD === undefined) backfilledModelCost += cost; // Merge mode returns stored costs as-is.
     }
+  }
+
+  // Projects have no model to price from: their stored costs are summed as written.
+  for (const [project, counts] of Object.entries(pData.byProject ?? {})) {
+    addCountsByKey((rec.byProject ??= {}), project, flagUnpriced(counts));
+  }
+  for (const [cwd, counts] of Object.entries(pData.byCwd ?? {})) {
+    addCountsByKey((rec.byCwd ??= {}), cwd, flagUnpriced(counts));
   }
 
   // Add only the backfill to a stored total; repricing history is recompute-costs' job.
@@ -191,7 +199,9 @@ export async function loadMergedProviderData(
   const livePending = startLiveFetches(providerFilter, options.refreshLive);
   const localMachine =
     options.localMachine === undefined
-      ? await buildLocalMachineFile(machineId, undefined, options.providers)
+      ? await buildLocalMachineFile(machineId, undefined, options.providers, {
+          includeLocalDirs: true,
+        })
       : options.localMachine;
   await options.syncedReady;
 

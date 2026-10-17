@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -273,4 +274,57 @@ it('keeps richer within-file records, first-file precedence and all unkeyed cont
     outputTokens: 8,
     hasUnpricedTokens: true,
   });
+});
+
+function line(id: string, cwd: string | undefined, inputTokens: number) {
+  return {
+    type: 'assistant',
+    cwd,
+    timestamp: localTimestamp('2024-01-15'),
+    requestId: id,
+    message: {
+      id,
+      model: 'claude-sonnet-4-6',
+      usage: { input_tokens: inputTokens, output_tokens: 1 },
+    },
+  };
+}
+
+it('attributes each message to the origin of its cwd and the per-project sums equal the totals', async () => {
+  const repo = join(tmpDir, 'repo');
+  mkdirSync(join(repo, 'src'), { recursive: true });
+  execFileSync('git', ['init', '-q', repo]);
+  execFileSync('git', [
+    '-C',
+    repo,
+    'remote',
+    'add',
+    'origin',
+    'https://u:tok@github.com/Acme/Widget.git',
+  ]);
+  const loose = join(tmpDir, 'loose');
+  mkdirSync(loose);
+  const file = join(tmpDir, 'p.jsonl');
+  writeJsonl(file, [
+    line('a', join(repo, 'src'), 100),
+    line('b', loose, 10),
+    line('c', join(tmpDir, 'gone'), 1),
+    { type: 'user', cwd: repo },
+    line('d', undefined, 1000),
+    { ...line('e', undefined, 5), requestId: undefined, message: { usage: { input_tokens: 5 } } },
+  ]);
+
+  const { days } = await parseClaudeFile(file);
+  const day = days.get('2024-01-15');
+  expect(Object.keys(day?.byProject ?? {}).toSorted()).toEqual(['(no remote)', 'acme/widget']);
+  expect(day?.byProject?.['acme/widget']?.inputTokens).toBe(1105); // d and e inherit the cwd of the user line before them
+  expect(day?.byProject?.['(no remote)']?.inputTokens).toBe(11);
+  expect(Object.keys(day?.byCwd ?? {}).toSorted()).toEqual(
+    [join(tmpDir, 'gone'), loose].toSorted(),
+  );
+  const projects = Object.values(day?.byProject ?? {});
+  expect(projects.reduce((sum, counts) => sum + counts.inputTokens, 0)).toBe(day?.inputTokens);
+  expect(projects.reduce((sum, counts) => sum + (counts.costUSD ?? 0), 0)).toBeCloseTo(
+    day?.costUSD ?? 0,
+  );
 });

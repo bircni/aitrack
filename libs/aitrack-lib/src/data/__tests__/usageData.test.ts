@@ -40,6 +40,22 @@ function emptyDay(): DayEntry {
 }
 
 describe('mergeProviderDay', () => {
+  it('sums the stored costs of projects and flags those without one', () => {
+    const rec = emptyDay();
+    const counts = { inputTokens: 10, outputTokens: 5 };
+    const day: ProviderDay = {
+      byModel: { m1: { ...counts, costUSD: 1 } },
+      totals: { ...counts, costUSD: 1 },
+      byProject: { 'a/b': { ...counts, costUSD: 1 }, 'c/d': counts },
+      byCwd: { '/loose': counts },
+    };
+    mergeProviderDay(rec, 'claude_code', day);
+    mergeProviderDay(rec, 'claude_code', day);
+    expect(rec.byProject?.['a/b']).toEqual({ inputTokens: 20, outputTokens: 10, costUSD: 2 });
+    expect(rec.byProject?.['c/d']).toMatchObject({ inputTokens: 20, hasUnpricedTokens: true });
+    expect(rec.byCwd?.['/loose']?.inputTokens).toBe(20);
+  });
+
   it('prefers totals.costUSD over summing per-model costs', () => {
     const rec = emptyDay();
     const pData: ProviderDay = {

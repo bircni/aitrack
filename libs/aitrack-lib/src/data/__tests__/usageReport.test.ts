@@ -14,6 +14,7 @@ import { UNKNOWN_TIMEZONE, machineTimezone } from '../../timezone.js';
 import type { DayEntry } from '../types.js';
 import type { LoadedUsageData, ZonedUsageSource } from '../usageData.js';
 import {
+  buildProjectBreakdownsFromLoaded,
   buildUsageComparison,
   buildUsageReport,
   buildUsageReportFromLoaded,
@@ -537,4 +538,96 @@ it('compares partial and fully unpriced models without claiming complete cost ch
   );
   expect(emptyReportMessage(empty)).toContain('No usage recorded');
   expect(emptyReportMessage(null)).toContain('No');
+});
+
+describe('project scoping', () => {
+  const projectDay = {
+    claude_code: {
+      byModel: { m: { inputTokens: 100, outputTokens: 0, costUSD: 1 } },
+      totals: { inputTokens: 100, outputTokens: 0, costUSD: 1 },
+      byProject: {
+        'a/one': { inputTokens: 60, outputTokens: 0, costUSD: 0.6 },
+        '(no remote)': { inputTokens: 40, outputTokens: 0, costUSD: 0.4 },
+      },
+      byCwd: { '/w/loose': { inputTokens: 40, outputTokens: 0, costUSD: 0.4 } },
+    },
+  };
+  const loaded: LoadedUsageData = {
+    providerData: {},
+    machineData: [],
+    zonedSources: [
+      zoned('UTC', { '2026-06-15': projectDay, '2026-06-14': claudeDay(50) }),
+      zoned('Asia/Tokyo', {}),
+    ],
+  };
+
+  it('reports one project as a single model row and says what it cannot see', () => {
+    const report = buildUsageReportFromLoaded(
+      loaded,
+      { period: 'all', project: { kind: 'project', project: 'a/one' } },
+      NOW,
+    );
+    expect(report.providers[0]?.rows).toMatchObject([
+      { model: '(all models)', tokens: 60, costUSD: 0.6 },
+    ]);
+    const notes = report.project?.notes.join('\n');
+    expect(report.project?.label).toBe('a/one');
+    expect(notes).toMatch(/Cursor.*excluded/u);
+    expect(notes).toContain('Other machines count only');
+    expect(notes).toContain('50 tokens in this window are not attributed');
+  });
+
+  it('marks unpriced project usage as partial without naming a model', () => {
+    const unpriced = {
+      ...projectDay,
+      claude_code: {
+        ...projectDay.claude_code,
+        byProject: {
+          'a/one': { inputTokens: 60, outputTokens: 0, costUSD: 0.6, hasUnpricedTokens: true },
+        },
+      },
+    };
+    const report = buildUsageReportFromLoaded(
+      { ...loaded, zonedSources: [zoned('UTC', { '2026-06-15': unpriced })] },
+      { period: 'all', project: { kind: 'project', project: 'a/one' } },
+      NOW,
+    );
+    expect(report.totals.hasUnpricedTokens).toBe(true);
+    expect(report.totals.unpricedModels).toBeUndefined();
+  });
+
+  it('matches a folder without a remote on this machine only', () => {
+    const report = buildUsageReportFromLoaded(
+      loaded,
+      { period: 'all', project: { kind: 'dir', dir: '/w/loose' } },
+      NOW,
+    );
+    const notes = report.project?.notes.join('\n');
+    expect(report.totals.tokens).toBe(40);
+    expect(notes).toContain('matched by working directory on this machine only');
+    expect(notes).not.toContain('Other machines count only');
+  });
+
+  it('breaks every window into projects that add up to the report totals', () => {
+    const options = [{ period: 'all' as const }, { period: 'date' as const, from: '2026-06-15' }];
+    const breakdowns = buildProjectBreakdownsFromLoaded(loaded, options, NOW);
+    const reports = buildUsageReportsFromLoaded(loaded, options, NOW);
+    for (const [index, report] of reports.entries()) {
+      const { projects, unattributed } = breakdowns[index] ?? { projects: [] };
+      const rows = [...projects, ...(unattributed ? [unattributed] : [])];
+      expect(rows.reduce((sum, row) => sum + row.tokens, 0)).toBe(report.totals.tokens);
+      expect(rows.reduce((sum, row) => sum + row.costUSD, 0)).toBeCloseTo(report.totals.costUSD);
+    }
+    expect(breakdowns[1]?.unattributed).toBeUndefined();
+  });
+
+  it('scopes both sides of a comparison to the project', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue(loaded);
+    const result = await buildUsageComparison(
+      { period: 'date', from: '2026-06-15', project: { kind: 'project', project: 'a/one' } },
+      NOW,
+    );
+    expect(result?.current.project?.label).toBe('a/one');
+    expect(result?.comparison.totals.tokens).toMatchObject({ current: 60, previous: 0 });
+  });
 });

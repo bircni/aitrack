@@ -1,9 +1,12 @@
+import { fmt } from '../display/format.js';
 import { warnAboutPricingFallbacks } from '../pricing/scan.js';
 import { orderedProviderKeys, providerLabel } from '../providers/index.js';
 import { calendarDateInTimeZone, machineTimezone, UNKNOWN_TIMEZONE } from '../timezone.js';
 import { aggregateModelsByDayMap } from './aggregate.js';
 import { toLocalDateString } from './dayMap.js';
 import { isUsageNotConfigured, usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
+import { ALL_MODELS, type ProjectSelector, projectSelectorLabel } from './project.js';
+import { aggregateProjects, type ProjectBreakdown, projectProviderData } from './projectUsage.js';
 import { compareByCostThenTokens } from './sort.js';
 import type { ProviderData } from './types.js';
 import {
@@ -26,6 +29,14 @@ export interface UsageReportOptions extends UsageWindowOptions {
   providers?: string[];
   /** Re-fetch live-provider (Cursor) data instead of serving a cached export. */
   refreshLive?: boolean;
+  /** Only this project's usage; a project has no model split, so each provider is one row. */
+  project?: ProjectSelector;
+}
+
+/** What a project-scoped report leaves out or cannot see, in words. */
+export interface UsageProjectScope {
+  label: string;
+  notes: string[];
 }
 
 export interface UsageReportRow {
@@ -71,6 +82,8 @@ export interface UsageReport {
   rowCount: number;
   /** Set when a relative window was evaluated in more than one timezone. */
   timezoneNote?: string;
+  /** Set when the report is limited to one project. */
+  project?: UsageProjectScope;
 }
 
 export interface UsageComparisonMetric {
@@ -191,6 +204,50 @@ function windowedProviderData(
   };
 }
 
+function projectScope(
+  selector: ProjectSelector,
+  providerData: ProviderData,
+  window: UsageWindow,
+  sources: ZonedUsageSource[] | undefined,
+): UsageProjectScope {
+  const notes = ['Cursor usage is not attributed to projects and is excluded.'];
+  if (selector.kind === 'dir') {
+    notes.push(
+      'This folder has no git remote: matched by working directory on this machine only, so other machines are not included.',
+    );
+  } else if ((sources?.length ?? 0) > 1) {
+    notes.push('Other machines count only for days they synced with project data.');
+  }
+  const unattributed = aggregateProjects(providerData, window).unattributed?.tokens ?? 0;
+  if (unattributed > 0) {
+    notes.push(
+      `${fmt(unattributed)} tokens in this window are not attributed to any project (synced before projects were recorded) and are not included.`,
+    );
+  }
+  return { label: projectSelectorLabel(selector), notes };
+}
+
+/** The data the report is built from: all of it, or one project's share. */
+function scopedData(providerData: ProviderData, options: UsageReportOptions): ProviderData {
+  return options.project ? projectProviderData(providerData, options.project) : providerData;
+}
+
+function reportFromData(
+  loaded: LoadedUsageData,
+  providerData: ProviderData,
+  window: UsageWindow,
+  options: UsageReportOptions,
+): UsageReport {
+  const report = buildUsageReportFromData(scopedData(providerData, options), window);
+  const scoped = options.project
+    ? {
+        ...report,
+        project: projectScope(options.project, providerData, window, loaded.zonedSources),
+      }
+    : report;
+  return withTimezoneNote(scoped, loaded.zonedSources, options.period);
+}
+
 function buildUsageReportFromData(providerData: ProviderData, window: UsageWindow): UsageReport {
   const ordered = orderedProviderKeys(providerData);
   const providers: UsageReportProvider[] = [];
@@ -223,7 +280,8 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
         ...(agg.hasUnpricedTokens && { hasUnpricedTokens: true }),
       });
       hasUnpricedTokens ||= agg.hasUnpricedTokens === true;
-      if (agg.hasUnpricedTokens) unpriced.add(model);
+      // A project row has no model split, so there is no model to name.
+      if (agg.hasUnpricedTokens && model !== ALL_MODELS) unpriced.add(model);
       subtotalTokens += tokens;
       totals.inputTokens += agg.inputTokens;
       totals.outputTokens += agg.outputTokens;
@@ -346,23 +404,19 @@ export function buildUsageReportFromLoaded(
   now = new Date(),
 ): UsageReport {
   const { providerData, window } = windowedProviderData(loaded, options, 'current', now);
-  return withTimezoneNote(
-    buildUsageReportFromData(providerData, window),
-    loaded.zonedSources,
-    options.period,
-  );
+  return reportFromData(loaded, providerData, window, options);
 }
 
 /**
- * Several windows' reports from one load. When every source's calendar is on
- * the viewer's date, each window is the same for every source, so one merge
- * over their combined span serves all of them.
+ * Several windows' data from one load. When every source's calendar is on the
+ * viewer's date, each window is the same for every source, so one merge over
+ * their combined span serves all of them.
  */
-export function buildUsageReportsFromLoaded(
+function windowedProviderDataList(
   loaded: LoadedUsageData,
   optionsList: UsageReportOptions[],
-  now = new Date(),
-): UsageReport[] {
+  now: Date,
+): Array<{ providerData: ProviderData; window: UsageWindow; options: UsageReportOptions }> {
   const { zonedSources } = loaded;
   const labelToday = viewerToday(now);
   const zones = new Set([
@@ -373,26 +427,45 @@ export function buildUsageReportsFromLoaded(
     optionsList.length === 0 ||
     (zonedSources && [...zones].some((timezone) => todayForZone(timezone, now) !== labelToday))
   ) {
-    return optionsList.map((options) => buildUsageReportFromLoaded(loaded, options, now));
+    return optionsList.map((options) => ({
+      ...windowedProviderData(loaded, options, 'current', now),
+      options,
+    }));
   }
 
-  const windowed = optionsList.map((options) => ({
+  const windows = optionsList.map((options) => ({
     options,
     window: computeUsageWindow(options, labelToday, now),
   }));
   const span = {
-    start: windowed.reduce(
+    start: windows.reduce(
       (min, { window }) => (window.start < min ? window.start : min),
       ALL_TIME.end,
     ),
-    end: windowed.reduce(
-      (max, { window }) => (window.end > max ? window.end : max),
-      ALL_TIME.start,
-    ),
+    end: windows.reduce((max, { window }) => (window.end > max ? window.end : max), ALL_TIME.start),
   };
   const providerData = providerDataForWindows(loaded, () => span);
-  return windowed.map(({ options, window }) =>
-    withTimezoneNote(buildUsageReportFromData(providerData, window), zonedSources, options.period),
+  return windows.map(({ options, window }) => ({ providerData, window, options }));
+}
+
+export function buildUsageReportsFromLoaded(
+  loaded: LoadedUsageData,
+  optionsList: UsageReportOptions[],
+  now = new Date(),
+): UsageReport[] {
+  return windowedProviderDataList(loaded, optionsList, now).map(
+    ({ providerData, window, options }) => reportFromData(loaded, providerData, window, options),
+  );
+}
+
+/** Per-project usage for the same windows (and so the same numbers) as `buildUsageReportsFromLoaded`. */
+export function buildProjectBreakdownsFromLoaded(
+  loaded: LoadedUsageData,
+  optionsList: UsageReportOptions[],
+  now = new Date(),
+): ProjectBreakdown[] {
+  return windowedProviderDataList(loaded, optionsList, now).map(({ providerData, window }) =>
+    aggregateProjects(providerData, window),
   );
 }
 
@@ -409,12 +482,11 @@ export async function buildUsageComparison(
   warnAboutPricingFallbacks(loaded.providerData);
   const currentWindow = windowedProviderData(loaded, options, 'current', now);
   const previousWindow = windowedProviderData(loaded, options, 'previous', now);
-  const current = withTimezoneNote(
-    buildUsageReportFromData(currentWindow.providerData, currentWindow.window),
-    loaded.zonedSources,
-    options.period,
+  const current = reportFromData(loaded, currentWindow.providerData, currentWindow.window, options);
+  const previous = buildUsageReportFromData(
+    scopedData(previousWindow.providerData, options),
+    previousWindow.window,
   );
-  const previous = buildUsageReportFromData(previousWindow.providerData, previousWindow.window);
   return { current, previous, comparison: compareUsageReports(current, previous) };
 }
 

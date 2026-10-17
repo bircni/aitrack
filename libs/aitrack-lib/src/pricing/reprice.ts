@@ -1,5 +1,5 @@
 import { COMPACTED_MODEL } from '../data/compact.js';
-import type { MachineFile, ProviderDay } from '../data/types.js';
+import type { MachineFile, ProviderDay, TokenCounts } from '../data/types.js';
 import { approximatelyEqual } from '../data/validate.js';
 import { getProvider, syncedProviderKeys } from '../providers/index.js';
 import type { FallbackCollector } from './fallback.js';
@@ -10,6 +10,32 @@ export interface RepriceResult {
   isTouched: boolean;
   /** Claude model-days left alone because they predate the cache breakdown. */
   legacySkipped: number;
+}
+
+function tokenSum(counts: TokenCounts): number {
+  return counts.inputTokens + counts.outputTokens;
+}
+
+/**
+ * A project has no model split to reprice from, so its stored costs follow the
+ * day: scaled by the change in the day's total. Only when the projects cover
+ * the whole day, otherwise the share of each is unknown and they stay as written.
+ */
+function rescaleProjectCosts(providerDay: ProviderDay, previousTotal: number | undefined): boolean {
+  const { byProject, totals } = providerDay;
+  if (byProject === undefined || previousTotal === undefined || previousTotal <= 0) return false;
+  if (totals.costUSD === undefined || approximatelyEqual(previousTotal, totals.costUSD)) {
+    return false;
+  }
+  const projects = Object.values(byProject);
+  if (projects.reduce((sum, counts) => sum + tokenSum(counts), 0) !== tokenSum(totals)) {
+    return false;
+  }
+  const factor = totals.costUSD / previousTotal;
+  for (const counts of projects) {
+    if (counts.costUSD !== undefined) counts.costUSD *= factor;
+  }
+  return true;
 }
 
 /** Recompute model and day costs, ignoring float noise from summed reader estimates. */
@@ -24,6 +50,7 @@ function repriceProviderDay(
   let isCostComplete = true;
   let isTouched = false;
   let legacySkipped = 0;
+  const previousTotal = providerDay.totals.costUSD;
 
   for (const [model, counts] of Object.entries(providerDay.byModel)) {
     modelCount++;
@@ -73,6 +100,7 @@ function repriceProviderDay(
     providerDay.totals.costUSD = dayTotal;
     isTouched = true;
   }
+  if (rescaleProjectCosts(providerDay, previousTotal)) isTouched = true;
 
   return { isTouched, legacySkipped };
 }

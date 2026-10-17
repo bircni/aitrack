@@ -24,6 +24,10 @@ export interface TokenCounts {
 
 export interface DayEntry extends TokenCounts {
   byModel: Record<string, TokenCounts>;
+  /** Usage per `owner/repo`; omitted when no message could be attributed. */
+  byProject?: Record<string, TokenCounts>;
+  /** Working directories of usage with no git remote. Stays on this machine and is never synced. */
+  byCwd?: Record<string, TokenCounts>;
 }
 
 /** Map<dateStr "YYYY-MM-DD", DayEntry> */
@@ -35,6 +39,10 @@ export type ProviderData = Record<string, DayMap>;
 export interface ProviderDay {
   byModel: Record<string, TokenCounts>;
   totals: TokenCounts;
+  /** Optional: files synced before projects existed lack it, and older readers ignore it. */
+  byProject?: Record<string, TokenCounts>;
+  /** In memory only, from this machine's logs; never written to a machine file. */
+  byCwd?: Record<string, TokenCounts>;
 }
 
 /** How the day keys in a machine file were bucketed. */

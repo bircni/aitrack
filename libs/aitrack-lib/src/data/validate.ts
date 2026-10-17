@@ -22,7 +22,14 @@ export interface MachineFileValidationOptions {
 /** Something the reader noticed about a machine file; the caller decides how to present it. */
 export type MachineFileDiagnostic =
   | { kind: 'file-skipped'; filePath: string; reason: string }
-  | { kind: 'day-dropped'; filePath: string; date: string; reason: string };
+  | { kind: 'day-dropped'; filePath: string; date: string; reason: string }
+  | {
+      kind: 'projects-dropped';
+      filePath: string;
+      date: string;
+      providerKey: string;
+      reason: string;
+    };
 
 export interface MachineFileCheck {
   /** The validated file, or null when it had to be skipped entirely. */
@@ -63,6 +70,16 @@ export function isTokenCounts(value: unknown): value is TokenCounts {
 /** Float comparison with a relative epsilon, used for cost totals. */
 export function approximatelyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+}
+
+/** The first problem with a day's `byProject`, which is optional detail and never worth losing the day over. */
+function projectsProblem(value: unknown, path: string): string | null {
+  if (!isRecord(value)) return `${path}.byProject must be an object`;
+  for (const [project, counts] of Object.entries(value)) {
+    const checked = checkTokenCounts(counts, `${path}.byProject.${project}`);
+    if (!checked.ok) return checked.error;
+  }
+  return null;
 }
 
 function sumField(
@@ -160,7 +177,17 @@ export function checkMachineFile(
     }
     const providerDay: Record<string, ProviderDay> = {};
     for (const [providerKey, providerData] of Object.entries(providers)) {
-      const checked = checkProviderDay(providerData, `days.${date}.${providerKey}`, options);
+      const path = `days.${date}.${providerKey}`;
+      let source = providerData;
+      if (isRecord(providerData) && providerData.byProject !== undefined) {
+        const reason = projectsProblem(providerData.byProject, path);
+        if (reason !== null) {
+          source = { ...providerData };
+          delete (source as Record<string, unknown>).byProject;
+          diagnostics.push({ kind: 'projects-dropped', filePath, date, providerKey, reason });
+        }
+      }
+      const checked = checkProviderDay(source, path, options);
       if (!checked.ok) return skip(checked.error);
       providerDay[providerKey] = checked.value;
     }

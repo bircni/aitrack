@@ -5,6 +5,7 @@ import {
   dateInFilter,
   hasUnpricedUsage,
 } from './aggregate.js';
+import { aggregateProjects, type ProjectUsage } from './projectUsage.js';
 import { compareByCostThenTokens } from './sort.js';
 import type { DayMap, ProviderData } from './types.js';
 
@@ -103,6 +104,38 @@ export function topModels(
   }
   all.sort((a, b) => compareTopEntries(a, b, sort));
   return all.slice(0, limit);
+}
+
+export interface ProjectAccumulator extends TopSortable {
+  project: string;
+  /** The remainder with no project, ranked like the rest so it is not hidden. */
+  unattributed: boolean;
+  hasUnpricedTokens: boolean;
+  byProvider: Record<string, number>;
+}
+
+function toProjectAccumulator(usage: ProjectUsage): ProjectAccumulator {
+  return {
+    project: usage.project,
+    unattributed: usage.unattributed === true,
+    tokens: usage.tokens,
+    cost: usage.hasCost ? usage.costUSD : null,
+    hasUnpricedTokens: usage.hasUnpricedTokens === true,
+    byProvider: Object.fromEntries(usage.providers.map((entry) => [entry.key, entry.tokens])),
+  };
+}
+
+export function topProjects(
+  providerData: ProviderData,
+  limit: number,
+  sort: TopSort,
+  filter?: AggregateModelsFilter,
+): ProjectAccumulator[] {
+  const { projects, unattributed } = aggregateProjects(providerData, filter);
+  return [...projects, ...(unattributed ? [unattributed] : [])]
+    .map((usage) => toProjectAccumulator(usage))
+    .toSorted((a, b) => compareTopEntries(a, b, sort))
+    .slice(0, limit);
 }
 
 export function unpricedTopModels(
