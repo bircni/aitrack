@@ -5,6 +5,9 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Let a compromised release get caught and yanked before it is proposed; security updates skip this.
+    cooldown:
+      default-days: 7
     # One PR per weekly run instead of a dozen: dev tooling and runtime deps
     # each move together, and majors stay separate so they get a real look.
     groups:
@@ -23,6 +26,8 @@ updates:
     directories: ['/', '/.github/actions/*']
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ['*']
