@@ -159,6 +159,14 @@ describe('showCommand', () => {
     );
 
     mocks.spawn.mockClear();
+    await withPlatform('darwin', () => showCommand({ output: 'out.png' }));
+    expect(mocks.spawn).toHaveBeenLastCalledWith(
+      'open',
+      [expect.stringContaining('out.png')],
+      expect.objectContaining({ detached: true }),
+    );
+
+    mocks.spawn.mockClear();
     await withPlatform('linux', () => showCommand({ output: 'out.png' }));
     expect(mocks.spawn).toHaveBeenLastCalledWith(
       'xdg-open',
