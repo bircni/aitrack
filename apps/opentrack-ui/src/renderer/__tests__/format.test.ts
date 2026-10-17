@@ -15,6 +15,7 @@ import {
   formatUpdated,
   heatLevel,
   paceLabel,
+  periodProjects,
   periodSpend,
   spendLabel,
   problemLine,
@@ -66,6 +67,10 @@ function usage(daily: number[], today = 1): ProviderUsage {
   };
 }
 
+function projectEntry(project: string) {
+  return [{ project, tokens: 1, costUSD: 0, hasCost: false, providers: [] }];
+}
+
 describe('spend', () => {
   it('reads each period from its report', () => {
     const claude = usage([1, 1, 1, 1, 1, 1, 1, 1, 2, 3], 3);
@@ -74,6 +79,18 @@ describe('spend', () => {
     expect(periodSpend(claude, 'all').costUSD).toBe(23);
     expect(periodSpend(claude, 'week')).toBe(claude.last7Days);
     expect(periodSpend(undefined, 'week')).toBe(EMPTY_PERIOD);
+    const projects = {
+      today: projectEntry('a'),
+      last7Days: projectEntry('b'),
+      last30Days: projectEntry('c'),
+      allTime: projectEntry('d'),
+    };
+    expect(
+      (['today', 'week', 'month', 'all'] as const).map(
+        (period) => periodProjects(projects, period)[0]?.project,
+      ),
+    ).toEqual(['a', 'b', 'c', 'd']);
+    expect(periodProjects(undefined, 'week')).toEqual([]);
     expect(spendLabel({ costUSD: 0, tokens: 0, hasCost: false })).toBe('$0.00');
     expect(spendLabel({ costUSD: 0, tokens: 500, hasCost: false })).toBe('—');
     expect(totalSpend([claude, undefined, usage([0], 0)], 'today')).toEqual({

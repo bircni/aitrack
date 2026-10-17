@@ -6,10 +6,20 @@ import {
   type ZonedUsageSource,
 } from 'aitrack-lib/data/usageData';
 import { ALL_TIME } from 'aitrack-lib/data/usagePeriods';
-import { buildUsageReportsFromLoaded, type UsageReport } from 'aitrack-lib/data/usageReport';
+import {
+  buildProjectBreakdownsFromLoaded,
+  buildUsageReportsFromLoaded,
+  type UsageReport,
+} from 'aitrack-lib/data/usageReport';
 import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 
-import type { DailyUsage, MachineUsage, PeriodUsage, ProviderUsages } from '../shared/types.js';
+import type {
+  DailyUsage,
+  MachineUsage,
+  PeriodUsage,
+  ProjectUsages,
+  ProviderUsages,
+} from '../shared/types.js';
 import { EMPTY_PERIOD } from '../shared/types.js';
 
 /** The History tab's longest range; the sparkline and strips show the last 30 of these. */
@@ -21,6 +31,7 @@ export interface UsageSummary {
   machines?: MachineUsage[];
   /** Providers read live from the account (Cursor), which no machine's logs hold. */
   account?: ProviderUsages;
+  projects?: ProjectUsages;
 }
 
 function periodFor(report: UsageReport | undefined, key: string): PeriodUsage {
@@ -80,6 +91,20 @@ function providerUsages(loaded: LoadedUsageData, now: Date): ProviderUsages {
   return providers;
 }
 
+function projectUsages(loaded: LoadedUsageData, now: Date): ProjectUsages {
+  const [today, week, month, all] = buildProjectBreakdownsFromLoaded(
+    loaded,
+    [{ period: 'today' }, { period: 'week' }, { period: 'month' }, { period: 'all' }],
+    now,
+  ).map(({ projects, unattributed }) => (unattributed ? [...projects, unattributed] : projects));
+  return {
+    today: today ?? [],
+    last7Days: week ?? [],
+    last30Days: month ?? [],
+    allTime: all ?? [],
+  };
+}
+
 /** Just these machines' days, plus the live providers when asked; priced like the whole. */
 function sliceLoaded(
   loaded: LoadedUsageData,
@@ -108,6 +133,7 @@ export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date())
   const live = Object.keys(loaded.liveProviderData ?? {}).length > 0;
   return {
     providers: providerUsages(loaded, now),
+    projects: projectUsages(loaded, now),
     machineCount: Math.max(1, loaded.zonedSources?.length ?? loaded.machineData.length),
     machines,
     ...(live && { account: providerUsages(sliceLoaded(loaded, [], true), now) }),

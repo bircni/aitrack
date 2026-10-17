@@ -41,6 +41,40 @@ describe('summarizeUsage', () => {
     expect(summarizeUsage(null)).toEqual({ providers: {}, machineCount: 1 });
   });
 
+  it('groups usage by project for every period and adds the remainder up to the provider totals', () => {
+    const now = new Date(2026, 5, 15, 12);
+    const attributed = {
+      ...makeDay(100, 50, 1.5, 'claude-sonnet-4-6'),
+      byProject: { 'acme/widget': { inputTokens: 90, outputTokens: 0, costUSD: 1 } },
+    };
+    const summary = summarizeUsage(
+      {
+        providerData: {
+          claude_code: new Map([
+            ['2026-06-15', attributed],
+            ['2026-06-01', makeDay(20, 10, 0.5, 'claude-sonnet-4-6')],
+          ]),
+          cursor: new Map([['2026-06-15', makeDay(5, 5, 0.5, 'auto')]]),
+        },
+        machineData: [],
+      },
+      now,
+    );
+    const { projects } = summary;
+    expect(projects?.today.map((entry) => [entry.project, entry.tokens])).toEqual([
+      ['acme/widget', 90],
+      ['(unattributed)', 60],
+    ]);
+    expect(projects?.today[1]).toMatchObject({ unattributed: true, costUSD: 0.5 });
+    expect(projects?.last7Days).toEqual(projects?.today);
+    expect(projects?.last30Days.reduce((sum, entry) => sum + entry.tokens, 0)).toBe(
+      summary.providers.claude_code?.last30Days.tokens, // Cursor is not attributed, so it is not here.
+    );
+    expect(projects?.allTime.reduce((sum, entry) => sum + entry.tokens, 0)).toBe(
+      summary.providers.claude_code?.allTime.tokens,
+    );
+  });
+
   it('counts an unsynced local machine alongside persisted machines', () => {
     const summary = summarizeUsage(
       {
