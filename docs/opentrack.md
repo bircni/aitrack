@@ -111,10 +111,13 @@ not start them. The behaviour differs from macOS and Windows in a few places:
   and Ubuntu's GNOME session show it; stock GNOME needs the AppIndicator extension. A tray
   click always opens the menu, so open the dashboard with **Open** there. The icon has no
   hover tooltip.
-- **Popup position** — the dashboard opens in the top-right corner of the screen. Wayland
-  compositors may place it themselves, typically in the centre.
-- **Global shortcut** — needs X11. In a Wayland session it only fires while an XWayland
-  window has focus, and without XWayland Settings shows why it could not be registered.
+- **Display backend** — opentrack runs through X11 (XWayland in a Wayland session) so it can
+  position the dashboard and register the global shortcut. Set `GDK_BACKEND=wayland` to
+  override this; the dashboard is then placed by the compositor, typically in the centre, and
+  the shortcut only fires while an XWayland window has focus.
+- **Popup position** — the dashboard opens in the top-right corner of the screen.
+- **Global shortcut** — needs X11 or XWayland; without it Settings shows why it could not be
+  registered.
 - **Launch at login** — writes `~/.config/autostart/opentrack.desktop`, pointing at the
   AppImage or the installed binary. After moving the AppImage, start it once from its new
   place so the entry follows.

@@ -179,6 +179,12 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 fn main() {
+    // Wayland compositors ignore window positions and block global shortcuts; XWayland honours both.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("GDK_BACKEND").is_none() {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app, "dashboard")))
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
