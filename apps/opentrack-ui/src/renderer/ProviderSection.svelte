@@ -4,11 +4,13 @@
   import type { ProviderState, QuotaProviderKey, Settings } from '../shared/types.js';
   import {
     formatCost,
+    formatNumber,
     formatUpdated,
     PERIOD_LABELS,
     type Period,
     periodSpend,
     problemLine,
+    slideDuration,
     spendLabel,
     spendReading,
   } from './format.js';
@@ -86,7 +88,7 @@
     <div class="l-row">
       <span class="l-name">{value.label}</span>
       <span class="l-static"
-        >{value.format === 'dollars' ? formatCost(value.value) : value.value.toLocaleString()}</span
+        >{value.format === 'dollars' ? formatCost(value.value) : formatNumber(value.value)}</span
       >
     </div>
   {/each}
@@ -96,7 +98,7 @@
   {/if}
 
   {#if open && provider.usage}
-    <div class="details" transition:slide={{ duration: 160 }}>
+    <div class="details" transition:slide={{ duration: slideDuration() }}>
       <div class="d-row"><span>{PERIOD_LABELS.today}</span><span>{spendReading(provider.usage.today)}</span></div>
       <div class="d-row"><span>Yesterday</span><span>{spendReading(provider.usage.yesterday)}</span></div>
       <div class="d-row"><span>{PERIOD_LABELS.week}</span><span>{spendReading(provider.usage.last7Days)}</span></div>

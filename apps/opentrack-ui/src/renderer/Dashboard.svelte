@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { AppState, DashboardView, QuotaProviderKey, Settings } from '../shared/types.js';
   import { formatUpdated, type Period } from './format.js';
+  import History from './History.svelte';
   import Machines from './Machines.svelte';
   import ProviderSection from './ProviderSection.svelte';
   import Summary from './Summary.svelte';
@@ -35,6 +36,29 @@
 
   const machines = $derived(appState.machines ?? []);
   const showMachines = $derived(view === 'machines' && machines.length > 0);
+  const showHistory = $derived(view === 'history');
+  const active = $derived<DashboardView>(
+    showHistory ? 'history' : showMachines ? 'machines' : 'providers',
+  );
+  const tabs = $derived<Array<{ view: DashboardView; label: string; count?: number }>>([
+    { view: 'providers', label: 'Providers' },
+    { view: 'history', label: 'History' },
+    ...(machines.length > 0
+      ? [{ view: 'machines' as const, label: 'Machines', count: machines.length }]
+      : []),
+  ]);
+
+  function onTabKey(event: KeyboardEvent): void {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+    if (step === undefined) return;
+    event.preventDefault();
+    const index = (tabs.findIndex((tab) => tab.view === active) + step + tabs.length) % tabs.length;
+    const next = tabs[index];
+    if (!next) return;
+    onView(next.view);
+    const list = event.currentTarget;
+    if (list instanceof HTMLElement) list.querySelectorAll<HTMLElement>('[role="tab"]')[index]?.focus();
+  }
 </script>
 
 <Summary
@@ -46,42 +70,46 @@
 />
 
 {#if appState.pullError}
-  <p class="banner">
+  <p class="banner" role="status">
     {appState.pullError}
     <button class="link" type="button" aria-label="Retry pull" onclick={onRefresh}>Retry</button>
   </p>
 {/if}
 {#if appState.usageError && appState.usageUpdatedAt}
-  <p class="banner">Cached usage: {formatUpdated(appState.usageUpdatedAt, now)}</p>
+  <p class="banner" role="status">Cached usage: {formatUpdated(appState.usageUpdatedAt, now)}</p>
 {/if}
 {#if appState.usageError}
-  <p class="banner">
+  <p class="banner" role="status">
     {appState.usageError}
     <button class="link" type="button" aria-label="Retry usage" onclick={onRefresh}>Retry</button>
   </p>
 {/if}
 {#if appState.syncResult && !appState.syncResult.ok}
-  <p class="banner">
+  <p class="banner" role="status">
     Sync failed: {appState.syncResult.message}
     <button class="link" type="button" aria-label="Retry sync" onclick={onSync}>Retry</button>
   </p>
 {/if}
 
-{#if machines.length > 0 && appState.providers.length > 0}
-  <div class="tabs" role="tablist" aria-label="Group usage by">
-    <button
-      type="button"
-      role="tab"
-      aria-selected={!showMachines}
-      onclick={() => onView('providers')}>Providers</button
-    >
-    <button type="button" role="tab" aria-selected={showMachines} onclick={() => onView('machines')}
-      >Machines <span class="tab-count">{machines.length}</span></button
-    >
+{#if appState.providers.length > 0}
+  <div class="tabs" role="tablist" aria-label="Usage view" tabindex="-1" onkeydown={onTabKey}>
+    {#each tabs as tab (tab.view)}
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active === tab.view}
+        tabindex={active === tab.view ? 0 : -1}
+        onclick={() => onView(tab.view)}
+        >{tab.label}{#if tab.count !== undefined}
+          <span class="tab-count">{tab.count}</span>{/if}</button
+      >
+    {/each}
   </div>
 {/if}
 
-{#if showMachines}
+{#if showHistory}
+  <History providers={appState.providers} />
+{:else if showMachines}
   <Machines
     {machines}
     accountUsage={appState.accountUsage}

@@ -1,0 +1,54 @@
+/* Design tokens: light by default, dark under prefers-color-scheme. Quiet surfaces, precise typography,
+   provider accents; warnings carry the strongest colour. */
+:root {
+  color-scheme: light;
+  --ui:
+    'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --ui-display:
+    'Segoe UI Variable Display', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --surface: #f6f7f9;
+  --card: #ffffff;
+  --card-shadow: 0 2px 8px rgba(25, 35, 50, 0.025);
+  --provider-codex: #27876d;
+  --provider-cursor: #6273bc;
+  --raised: #f1f1f3;
+  --ink: #18181b;
+  --ink-2: #5f6068;
+  --ink-3: #747780;
+  --rule: #ececef;
+  --track: #e4e4e8;
+  --meter: #2a2a2f;
+  --warn: #b97800;
+  --crit: #d8432f;
+  --focus: #2f6fe4;
+  --edge: rgba(0, 0, 0, 0.08);
+  --provider-claude: #c96442;
+  --curve: rgba(42, 42, 47, 0.9);
+  --curve-fill: rgba(42, 42, 47, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --surface: #191c20;
+    --card: #22262b;
+    --card-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    --provider-codex: #65c3a3;
+    --provider-cursor: #9ba9ee;
+    --raised: #2b3036;
+    --ink: #f3f3f5;
+    --ink-2: #a3a4ab;
+    --ink-3: #969ca6;
+    --rule: #30363d;
+    --track: #353c44;
+    --meter: #e9e9ec;
+    --warn: #f5b945;
+    --crit: #ff7a66;
+    --focus: #8ab4ff;
+    --edge: rgba(255, 255, 255, 0.07);
+    --provider-claude: #d97757;
+    --curve: rgba(233, 233, 236, 0.9);
+    --curve-fill: rgba(233, 233, 236, 0.08);
+  }
+}

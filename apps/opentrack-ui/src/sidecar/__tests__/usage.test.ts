@@ -33,7 +33,7 @@ describe('summarizeUsage', () => {
     expect(claude?.last7Days.tokens).toBe(165);
     expect(claude?.last30Days.tokens).toBe(165);
     expect(claude?.allTime.tokens).toBe(195);
-    expect(claude?.daily).toHaveLength(30);
+    expect(claude?.daily).toHaveLength(90);
     expect(claude?.daily.at(-1)).toEqual({ date: '2026-06-15', costUSD: 1.5 });
     expect(summary.providers.codex?.today).toEqual(EMPTY_PERIOD);
     expect(summary.providers.cursor).toBeUndefined();

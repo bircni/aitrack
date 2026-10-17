@@ -1,0 +1,40 @@
+/* Popup frame, scroll area, empty states and banners. */
+.pop {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  user-select: none;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden auto;
+  scrollbar-width: none;
+}
+
+.scroll::-webkit-scrollbar {
+  width: 0;
+}
+
+/* Holds its children's margins, which would otherwise collapse out of its measured height. */
+.content {
+  display: flow-root;
+}
+
+.empty {
+  padding: 24px 16px;
+  color: var(--ink-3);
+  font-size: 12px;
+  text-align: center;
+}
+
+.banner {
+  margin: 0 16px 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink-2);
+  font-size: 12px;
+  user-select: text;
+}

@@ -1,4 +1,6 @@
-import { fmt, fmtUSDCost } from 'aitrack-lib/display/format';
+import { mondayOfWeek } from 'aitrack-lib/data/calendar';
+import { isStaleSync } from 'aitrack-lib/data/staleSync';
+import { fmt } from 'aitrack-lib/display/format';
 import { clampPercent, type PaceProjection } from 'aitrack-lib/quota/pacing';
 
 import { formatWhen } from '../shared/pace.js';
@@ -6,15 +8,40 @@ import type {
   DailyUsage,
   MachineUsage,
   PeriodUsage,
+  ProviderState,
   ProviderUsage,
   QuotaError,
+  QuotaProviderKey,
   QuotaWindow,
   Settings,
   Spend,
 } from '../shared/types.js';
 import { EMPTY_PERIOD } from '../shared/types.js';
 
-export { fmt as formatTokens, fmtUSDCost as formatCost };
+export { fmt as formatTokens };
+
+const locale = (): string => navigator.language;
+
+export function formatCost(value: number): string {
+  if (value > 0 && value < 0.01) return `<${formatCost(0.01)}`;
+  return new Intl.NumberFormat(locale(), { style: 'currency', currency: 'USD' }).format(value);
+}
+
+/** Zero under `prefers-reduced-motion`, so expanding a section just appears. */
+export function slideDuration(): number {
+  return matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160;
+}
+
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat(locale()).format(value);
+}
+
+/** `fraction` is 0–1. */
+export function formatPercent(fraction: number): string {
+  return new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(
+    fraction,
+  );
+}
 
 export type Period = 'today' | 'week' | 'month' | 'all';
 
@@ -40,7 +67,7 @@ export function isPriced(spend: Spend): boolean {
 
 export function spendLabel(spend: Spend): string {
   return isPriced(spend)
-    ? `${fmtUSDCost(spend.costUSD)}${spend.hasCost && spend.hasUnpricedTokens ? ' (partial)' : ''}`
+    ? `${formatCost(spend.costUSD)}${spend.hasCost && spend.hasUnpricedTokens ? ' (partial)' : ''}`
     : '—';
 }
 
@@ -63,7 +90,8 @@ export function totalSpend(usages: Array<ProviderUsage | undefined>, period: Per
   }, EMPTY_PERIOD);
 }
 
-export function combinedDaily(usages: Array<ProviderUsage | undefined>): DailyUsage[] {
+/** The sidecar keeps 90 days; the sparkline and machine strips show the latest `days`. */
+export function combinedDaily(usages: Array<ProviderUsage | undefined>, days = 30): DailyUsage[] {
   const byDate = new Map<string, number>();
   for (const usage of usages) {
     for (const day of usage?.daily ?? []) {
@@ -72,13 +100,98 @@ export function combinedDaily(usages: Array<ProviderUsage | undefined>): DailyUs
   }
   return [...byDate]
     .map(([date, costUSD]) => ({ date, costUSD }))
-    .toSorted((a, b) => a.date.localeCompare(b.date));
+    .toSorted((a, b) => a.date.localeCompare(b.date))
+    .slice(-days);
 }
 
-/** "$115" and ".70", so the cents can be set quieter than the dollars. */
-export function splitAmount(value: number): { whole: string; cents: string } {
-  const [whole = '0', cents = '00'] = value.toFixed(2).split('.');
-  return { whole: `$${Number(whole).toLocaleString('en-US')}`, cents: `.${cents}` };
+export type HistoryRange = 30 | 90;
+export type HistoryBucket = 'day' | 'week';
+
+interface HistoryBar {
+  /** First day the bar covers; weeks start on Monday. */
+  start: string;
+  totalUSD: number;
+  parts: Array<{ key: QuotaProviderKey; costUSD: number }>;
+}
+
+export interface History {
+  bars: HistoryBar[];
+  totalUSD: number;
+  /** Per calendar day in the range, empty days included. */
+  averageUSD: number;
+  /** First and last day covered; empty without data. */
+  from: string;
+  to: string;
+  peakUSD: number;
+  /** Start of the busiest bar; empty without data. */
+  busiest: string;
+  byProvider: Array<{ key: QuotaProviderKey; label: string; costUSD: number }>;
+}
+
+/** Stacked cost per day (or week) over the last `range` days, split by provider. */
+export function buildHistory(
+  providers: Array<Pick<ProviderState, 'key' | 'label' | 'usage'>>,
+  range: number,
+  bucket: HistoryBucket,
+): History {
+  const dates = [...new Set(providers.flatMap((p) => p.usage?.daily.map((d) => d.date) ?? []))]
+    .toSorted()
+    .slice(-range);
+  const inRange = new Set(dates);
+  const bars = new Map<string, HistoryBar>();
+  for (const provider of providers) {
+    for (const day of provider.usage?.daily ?? []) {
+      if (!inRange.has(day.date)) continue;
+      const start = bucket === 'day' ? day.date : mondayOfWeek(day.date);
+      const bar = bars.get(start) ?? { start, totalUSD: 0, parts: [] };
+      bars.set(start, bar);
+      bar.totalUSD += day.costUSD;
+      const part = bar.parts.find((entry) => entry.key === provider.key);
+      if (part) part.costUSD += day.costUSD;
+      else bar.parts.push({ key: provider.key, costUSD: day.costUSD });
+    }
+  }
+  const list = [...bars.values()].toSorted((a, b) => a.start.localeCompare(b.start));
+  const totalUSD = list.reduce((sum, bar) => sum + bar.totalUSD, 0);
+  const peak = list.reduce<HistoryBar | undefined>(
+    (best, bar) => (bar.totalUSD > (best?.totalUSD ?? 0) ? bar : best),
+    undefined,
+  );
+  return {
+    bars: list,
+    totalUSD,
+    averageUSD: dates.length > 0 ? totalUSD / dates.length : 0,
+    from: dates[0] ?? '',
+    to: dates.at(-1) ?? '',
+    peakUSD: peak?.totalUSD ?? 0,
+    busiest: peak?.start ?? '',
+    byProvider: providers
+      .map(({ key, label, usage }) => ({
+        key,
+        label,
+        costUSD: (usage?.daily ?? [])
+          .filter((day) => inRange.has(day.date))
+          .reduce((sum, day) => sum + day.costUSD, 0),
+      }))
+      .filter((part) => part.costUSD > 0)
+      .toSorted((a, b) => b.costUSD - a.costUSD),
+  };
+}
+
+/** "$115", ".70" and "", so the cents can be set quieter; currencies written after the number fill `tail`. */
+export function splitAmount(value: number): { whole: string; cents: string; tail: string } {
+  const parts = new Intl.NumberFormat(locale(), {
+    style: 'currency',
+    currency: 'USD',
+  }).formatToParts(value);
+  const first = parts.findIndex(({ type }) => type === 'decimal');
+  const end = parts.findLastIndex(({ type }) => type === 'fraction');
+  const text = (from: number, to: number): string =>
+    parts
+      .slice(from, to)
+      .map(({ value: part }) => part)
+      .join('');
+  return { whole: text(0, first), cents: text(first, end + 1), tail: text(end + 1, parts.length) };
 }
 
 export function formatDuration(ms: number): string {
@@ -101,7 +214,7 @@ export function formatReset(
   if (at - now <= 60_000) return 'Resets soon';
   return mode === 'relative'
     ? `Resets in ${formatDuration(at - now)}`
-    : `Resets ${formatWhen(at, now)}`;
+    : `Resets ${formatWhen(at, now, locale())}`;
 }
 
 /** The right-hand note under a meter, coloured by the meter's tone; nothing when there is too little to judge. */
@@ -117,7 +230,9 @@ export function paceLabel(pace: PaceProjection, now: number): string | undefined
       return 'Tight';
     }
     case 'runningOut': {
-      return pace.runOutAt === null ? 'Will run out' : `Runs out ${formatWhen(pace.runOutAt, now)}`;
+      return pace.runOutAt === null
+        ? 'Will run out'
+        : `Runs out ${formatWhen(pace.runOutAt, now, locale())}`;
     }
     case 'spent': {
       return 'Limit reached';
@@ -136,9 +251,9 @@ export function formatLimitValue(window: QuotaWindow, display: Settings['display
   const suffix = display === 'left' ? ' left' : '';
   if (window.format === 'dollars' && usedValue !== undefined && limitValue !== undefined) {
     const shown = display === 'used' ? usedValue : Math.max(0, limitValue - usedValue);
-    return `${fmtUSDCost(shown)} / ${fmtUSDCost(limitValue)}${suffix}`;
+    return `${formatCost(shown)} / ${formatCost(limitValue)}${suffix}`;
   }
-  return `${fillPercent(window, display).toFixed(0)}%${suffix}`;
+  return `${formatPercent(fillPercent(window, display) / 100)}${suffix}`;
 }
 
 export interface ProblemLine {
@@ -215,8 +330,6 @@ export function sparkline(
   };
 }
 
-const STALE_SYNC_MS = 3 * 86_400_000;
-
 /** How current a machine's numbers are: this one reads its logs live, others are as of their last sync. */
 export function syncStatus(
   machine: Pick<MachineUsage, 'lastUpdated' | 'current'>,
@@ -232,15 +345,15 @@ export function syncStatus(
   const ago = age < 60_000 ? 'just now' : `${formatDuration(age)} ago`;
   return machine.current
     ? { text: `Live · synced ${ago}`, stale: false }
-    : { text: `Synced ${ago}`, stale: age > STALE_SYNC_MS };
+    : { text: `Synced ${ago}`, stale: isStaleSync(machine.lastUpdated, now) };
 }
 
 /** "07:42" on that machine's clock, or nothing when it shares this one's zone. */
 export function zoneClock(timezone: string, now: number): string | undefined {
   try {
-    const here = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const here = Intl.DateTimeFormat(locale()).resolvedOptions().timeZone;
     if (timezone === '' || timezone === here) return undefined;
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(locale(), {
       timeZone: timezone,
       hour: '2-digit',
       minute: '2-digit',

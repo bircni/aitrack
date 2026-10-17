@@ -122,6 +122,7 @@
         <input
           class="switch"
           type="checkbox"
+          role="switch"
           aria-label="Show {provider.label}"
           checked={provider.enabled}
           onchange={(event) => toggleProvider(provider.key, event.currentTarget.checked)}
@@ -214,6 +215,7 @@
       id="set-tray-colored"
       class="switch"
       type="checkbox"
+      role="switch"
       checked={settings.trayColored}
       onchange={(event) => onPatch({ trayColored: event.currentTarget.checked })}
     />
@@ -228,6 +230,7 @@
       id="set-alerts"
       class="switch"
       type="checkbox"
+      role="switch"
       checked={settings.notifications}
       onchange={(event) => onPatch({ notifications: event.currentTarget.checked })}
     />
@@ -238,6 +241,7 @@
       id="set-pull"
       class="switch"
       type="checkbox"
+      role="switch"
       checked={settings.pullSyncedData}
       onchange={(event) => onPatch({ pullSyncedData: event.currentTarget.checked })}
     />
@@ -248,6 +252,7 @@
       id="set-login"
       class="switch"
       type="checkbox"
+      role="switch"
       aria-invalid={errors.launchAtLogin !== undefined}
       aria-describedby={describedBy('launchAtLogin')}
       checked={settings.launchAtLogin}
@@ -276,7 +281,9 @@
   </div>
   <div class="row">
     <span class="row-text"
-      >Updates<small class:row-error={updateError || check.status === 'failed'}
+      >Updates<small
+        aria-live="polite"
+        class:row-error={updateError || check.status === 'failed'}
         >{updateStatus}</small
       ></span
     >

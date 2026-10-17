@@ -6,11 +6,13 @@
   import {
     combinedDaily,
     formatCost,
+    formatPercent,
     heatLevel,
     PERIOD_LABELS,
     type Period,
     periodSpend,
     spendLabel,
+    slideDuration,
     spendReading,
     syncStatus,
     totalSpend,
@@ -76,6 +78,7 @@
 <section class="machines" aria-label="Usage by machine">
   {#each rows as row (row.id)}
     {@const share = total > 0 ? measure(row.spend) / total : 0}
+    {@const percent = formatPercent(share)}
     <article class="machine" class:current={row.machine?.current}>
       <button
         class="m-head"
@@ -104,7 +107,7 @@
       </button>
 
       {#if share > 0}
-        <div class="m-share" title="{Math.round(share * 100)}% of {byCost ? 'spend' : 'tokens'}">
+        <div class="m-share" title="{percent} of {byCost ? 'spend' : 'tokens'}">
           <div class="m-bar">
             {#each row.parts as part (part.key)}
               <span
@@ -113,7 +116,7 @@
               ></span>
             {/each}
           </div>
-          <span class="m-percent">{Math.round(share * 100)}%</span>
+          <span class="m-percent">{percent}</span>
         </div>
       {/if}
 
@@ -130,7 +133,7 @@
       {/if}
 
       {#if open === row.id}
-        <div class="details" transition:slide={{ duration: 160 }}>
+        <div class="details" transition:slide={{ duration: slideDuration() }}>
           {#each row.parts as part (part.key)}
             <div class="d-row">
               <span class="m-provider"

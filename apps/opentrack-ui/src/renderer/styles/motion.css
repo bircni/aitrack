@@ -1,0 +1,27 @@
+/* Reduced motion and keyframes; imported last so it wins. */
+@media (prefers-reduced-motion: reduce) {
+  .p-busy,
+  .spinning,
+  .pulsing {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}

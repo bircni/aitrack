@@ -2,6 +2,7 @@
   import type { ProviderState } from '../shared/types.js';
   import {
     combinedDaily,
+    formatCost,
     formatTokens,
     isPriced,
     PERIOD_LABELS,
@@ -31,6 +32,7 @@
   const daily = $derived(period === 'all' ? [] : combinedDaily(usages));
   const curve = $derived(sparkline(daily.map((day) => day.costUSD), 112, 36));
   const peak = $derived(Math.max(0, ...daily.map((day) => day.costUSD)));
+  const sparkLabel = $derived(`Spend per day, last 30 days, peak ${formatCost(peak)}`);
 </script>
 
 <section class="summary" aria-label="Spend">
@@ -53,7 +55,7 @@
       <div class="amount">
         {#if isPriced(spend)}{amount.whole}<span class="cents"
             >{amount.cents}</span
-          >{:else}—{/if}
+          >{amount.tail}{:else}—{/if}
       </div>
       {#if spend.hasCost && spend.hasUnpricedTokens}
         <span class="sub">Partial estimate</span>
@@ -70,7 +72,7 @@
         class="spark"
         viewBox="0 0 112 36"
         role="img"
-        aria-label="Spend per day, last 30 days, peak ${Math.round(peak)}"
+        aria-label={sparkLabel}
       >
         <path d={curve.area} class="spark-area" />
         <path d={curve.line} class="spark-line" />

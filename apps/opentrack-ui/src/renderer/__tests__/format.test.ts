@@ -1,11 +1,13 @@
 import { useTimeZone } from '@aitrack/test-fixtures';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { formatWhen, meterTone } from '../../shared/pace.js';
 import type { PeriodUsage, ProviderUsage, QuotaWindow } from '../../shared/types.js';
 import { EMPTY_PERIOD } from '../../shared/types.js';
 import {
+  buildHistory,
   combinedDaily,
+  formatCost,
   fillPercent,
   formatDuration,
   formatLimitValue,
@@ -16,12 +18,20 @@ import {
   periodSpend,
   spendLabel,
   problemLine,
+  slideDuration,
   sparkline,
   splitAmount,
   syncStatus,
   totalSpend,
   zoneClock,
 } from '../format.js';
+
+beforeEach(() => {
+  vi.stubGlobal('navigator', { language: 'en-US' });
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const NOW = new Date(2026, 5, 1, 12).getTime();
 const HOUR = 3_600_000;
@@ -80,9 +90,59 @@ describe('spend', () => {
     ]);
   });
 
+  it('keeps only the latest days of a long series', () => {
+    expect(combinedDaily([usage([1, 2, 3])], 2).map((day) => day.costUSD)).toEqual([2, 3]);
+  });
+
+  it('stacks history by provider and groups it by Monday-start week', () => {
+    // 2026-05-01 is a Friday, so May 1-3 fall in the week of Apr 27.
+    const providers = [
+      { key: 'claude_code' as const, label: 'Claude Code', usage: usage([1, 2, 3, 4]) },
+      { key: 'codex' as const, label: 'Codex', usage: usage([1, 0, 0, 0]) },
+    ];
+    const days = buildHistory(providers, 30, 'day');
+    expect(days.bars).toHaveLength(4);
+    expect(days.totalUSD).toBe(11);
+    expect(days.averageUSD).toBe(11 / 4);
+    expect([days.from, days.to, days.peakUSD, days.busiest]).toEqual([
+      '2026-05-01',
+      '2026-05-04',
+      4,
+      '2026-05-04',
+    ]);
+    expect(days.byProvider).toEqual([
+      { key: 'claude_code', label: 'Claude Code', costUSD: 10 },
+      { key: 'codex', label: 'Codex', costUSD: 1 },
+    ]);
+
+    const weeks = buildHistory(providers, 30, 'week');
+    expect(weeks.bars.map((bar) => [bar.start, bar.totalUSD])).toEqual([
+      ['2026-04-27', 7],
+      ['2026-05-04', 4],
+    ]);
+    expect(buildHistory(providers, 30, 'day').bars.at(0)?.parts).toEqual([
+      { key: 'claude_code', costUSD: 1 },
+      { key: 'codex', costUSD: 1 },
+    ]);
+    expect(buildHistory(providers, 2, 'day').bars.map((bar) => bar.start)).toEqual([
+      '2026-05-03',
+      '2026-05-04',
+    ]);
+    expect(buildHistory([], 30, 'day')).toMatchObject({ bars: [], totalUSD: 0, averageUSD: 0 });
+  });
+
   it('splits dollars from cents', () => {
-    expect(splitAmount(115.7)).toEqual({ whole: '$115', cents: '.70' });
-    expect(splitAmount(4246.62)).toEqual({ whole: '$4,246', cents: '.62' });
+    expect(splitAmount(115.7)).toEqual({ whole: '$115', cents: '.70', tail: '' });
+    expect(splitAmount(4246.62)).toEqual({ whole: '$4,246', cents: '.62', tail: '' });
+    expect(formatCost(0.004)).toBe('<$0.01');
+  });
+
+  it('follows the system locale for numbers, currency and dates', () => {
+    vi.stubGlobal('navigator', { language: 'de-DE' });
+    expect(formatCost(4246.62)).toBe('4.246,62\u00A0$');
+    expect(splitAmount(4246.62)).toEqual({ whole: '4.246', cents: ',62', tail: '\u00A0$' });
+    expect(formatLimitValue({ ...percent, usedPercent: 13 }, 'used')).toBe('13\u00A0%');
+    expect(formatWhen(new Date(2026, 5, 16, 15).getTime(), NOW, 'de-DE')).toBe('16. Juni');
   });
 
   it('draws a sparkline, or nothing without data', () => {
@@ -93,6 +153,13 @@ describe('spend', () => {
     expect(sparkline([0, 0], 112, 36)).toBeUndefined();
     expect(sparkline([4], 112, 36)).toBeUndefined();
   });
+});
+
+it('skips the slide under reduced motion', () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce') }));
+  expect(slideDuration()).toBe(0);
+  vi.stubGlobal('matchMedia', () => ({ matches: false }));
+  expect(slideDuration()).toBe(160);
 });
 
 describe('limits', () => {

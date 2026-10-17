@@ -12,7 +12,8 @@ import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 import type { DailyUsage, MachineUsage, PeriodUsage, ProviderUsages } from '../shared/types.js';
 import { EMPTY_PERIOD } from '../shared/types.js';
 
-const TREND_DAYS = 30;
+/** The History tab's longest range; the sparkline and strips show the last 30 of these. */
+const TREND_DAYS = 90;
 
 export interface UsageSummary {
   providers: ProviderUsages;

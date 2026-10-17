@@ -18,6 +18,10 @@
   const pace = $derived(projectPace(window, now));
   const label = $derived(paceLabel(pace, now));
   const reset = $derived(formatReset(window.resetsAt, now, settings.resetDisplay));
+  const value = $derived(formatLimitValue(window, settings.display));
+  const valueLabel = $derived(`${window.label} ${value}, show used or left`);
+  const resetLabel = $derived(`${reset ?? ''}, show time or countdown`);
+  const meterLabel = $derived(`${window.label} ${settings.display}`);
   const tick = $derived(
     label === undefined || pace.evenPacePercent === null
       ? null
@@ -30,27 +34,37 @@
 <div class="limit tone-{meterTone(window, pace)}">
   <div class="l-row">
     <span class="l-name">{window.label}</span>
-    <button class="l-value" type="button" title="Show used or left" onclick={onToggleUsage}
-      >{formatLimitValue(window, settings.display)}</button
+    <button
+      class="l-value"
+      type="button"
+      title="Show used or left"
+      aria-label={valueLabel}
+      onclick={onToggleUsage}>{value}</button
     >
   </div>
   <div
     class="track"
     role="meter"
-    aria-label="{window.label} {settings.display}"
+    aria-label={meterLabel}
     aria-valuemin={0}
     aria-valuemax={100}
     aria-valuenow={Math.round(fillPercent(window, settings.display))}
+    aria-valuetext={value}
   >
     <div class="fill" style:width="{fillPercent(window, settings.display)}%"></div>
     {#if tick !== null}
-      <span class="tick" style:left="{clampPercent(tick)}%" title="Even pace"></span>
+      <span class="tick" style:left="{clampPercent(tick)}%" title="Even pace" aria-hidden="true"></span>
     {/if}
   </div>
   {#if reset || label}
     <div class="l-meta">
       {#if reset}
-        <button type="button" title="Show time or countdown" onclick={onToggleReset}>{reset}</button>
+        <button
+          type="button"
+          title="Show time or countdown"
+          aria-label={resetLabel}
+          onclick={onToggleReset}>{reset}</button
+        >
       {:else}
         <span></span>
       {/if}

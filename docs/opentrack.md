@@ -13,6 +13,8 @@ reads — including other machines synced through your aitrack data repo.
 - **Usage** — today, yesterday, the last 7 / 30 days and all-time per provider, a daily trend
   and a per-model breakdown. Numbers come from the same report builder as `aitrack usage`, so
   they match the CLI.
+- **History** — a tab with stacked daily or weekly spend per provider over the last 30 or 90
+  days, with the total, the average per day and the busiest day.
 - **Machines** — with a synced data repo, a tab next to Providers splits the same spend per
   machine: its share of the period, a 30-day activity strip on one scale for every machine, the
   machine's local time when its timezone differs, and when it last synced. A machine that has not
@@ -23,6 +25,11 @@ reads — including other machines synced through your aitrack data repo.
   **Bars** for a rounded progress bar per available limit (session, weekly and model limits),
   grouped by provider in dashboard order, or **Icon** for
   the "O". Turn off **Colored tray icon** for monochrome; macOS adapts it to the menu-bar appearance.
+
+Dates, times and numbers follow the system language: grouping, decimal separators and clock
+format. Costs stay in US dollars. The interface text is English only. Limit meters expose their
+value to screen readers, refresh and sync results are announced politely, focus is always
+visible, and with reduced motion enabled the spinners stop and sections expand without sliding.
 
 ## Where data comes from
 

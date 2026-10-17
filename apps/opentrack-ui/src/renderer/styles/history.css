@@ -1,0 +1,49 @@
+/* History */
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 12px 10px;
+}
+
+.h-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.h-chart {
+  width: 100%;
+  height: 96px;
+}
+
+.h-bar {
+  fill: var(--provider-codex);
+}
+
+.h-bar--claude_code {
+  fill: var(--provider-claude);
+}
+
+.h-bar--cursor {
+  fill: var(--provider-cursor);
+}
+
+.h-axis,
+.h-stats {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.h-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.h-stats strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
