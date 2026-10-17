@@ -14,7 +14,7 @@ import { machineTimezone } from '../timezone.js';
 import { packageVersion } from '../version.js';
 
 /** Bump when the cached shape or baked-in cost changes; old caches are rebuilt, not migrated. */
-const CACHE_FORMAT = 4;
+const CACHE_FORMAT = 5;
 
 const STALE_SIBLING_MS = 7 * 24 * 60 * 60 * 1000;
 

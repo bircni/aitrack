@@ -28,14 +28,22 @@ function originUrl(cwd: string): Promise<string | null> {
   });
 }
 
-/** One git call per directory for the life of the resolver, so a run asks once per cwd. */
+const AGENT_WORKTREE = /^(.+?)[\\/]\.claude[\\/]worktrees[\\/][^\\/]+/u;
+
+/** An agent worktree is gone once its task ends; the repository that created it still answers. */
+function repositoryOf(cwd: string): string {
+  return AGENT_WORKTREE.exec(cwd)?.[1] ?? cwd;
+}
+
+/** One git call per repository for the life of the resolver, so a run asks once per directory. */
 export function createProjectResolver(): ProjectResolver {
   const known = new Map<string, Promise<string | null>>();
   return (cwd) => {
-    let pending = known.get(cwd);
+    const repository = repositoryOf(cwd);
+    let pending = known.get(repository);
     if (!pending) {
-      pending = originUrl(cwd).then((url) => (url ? normalizeRemoteUrl(url) : null));
-      known.set(cwd, pending);
+      pending = originUrl(repository).then((url) => (url ? normalizeRemoteUrl(url) : null));
+      known.set(repository, pending);
     }
     return pending;
   };
