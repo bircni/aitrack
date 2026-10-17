@@ -152,8 +152,7 @@ jobs:
           sparse-checkout: |
             .node-version
             CHANGELOG.md
-            scripts/release-notes.ts
-            scripts/updater-manifest.ts
+            scripts/*.ts
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
@@ -235,7 +234,7 @@ jobs:
         with:
           sparse-checkout: |
             .node-version
-            scripts/homebrew-cask.ts
+            scripts/*.ts
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
