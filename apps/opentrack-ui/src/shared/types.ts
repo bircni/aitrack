@@ -25,6 +25,21 @@ export interface PeriodUsage extends Spend {
 
 export const EMPTY_PERIOD: PeriodUsage = { tokens: 0, costUSD: 0, hasCost: false, models: [] };
 
+export interface ProjectUsageEntry extends Spend {
+  /** `owner/repo`, `(no remote)`, or `(unattributed)` for what no project explains. */
+  project: string;
+  unattributed?: boolean;
+  providers: Array<Spend & { key: string; label: string }>;
+}
+
+/** Projects per period, by cost; the unattributed remainder comes last. */
+export interface ProjectUsages {
+  today: ProjectUsageEntry[];
+  last7Days: ProjectUsageEntry[];
+  last30Days: ProjectUsageEntry[];
+  allTime: ProjectUsageEntry[];
+}
+
 export interface DailyUsage {
   date: string;
   costUSD: number;
@@ -70,6 +85,8 @@ export interface AppState {
   machines?: MachineUsage[];
   /** Usage read from a provider account (Cursor) rather than from any machine. */
   accountUsage?: ProviderUsages;
+  /** Absent until a usage load that records projects has run. */
+  projects?: ProjectUsages;
   usageError?: string;
   pullError?: string;
   usageUpdatedAt?: string;
@@ -107,7 +124,7 @@ export interface Settings {
 
 export type Screen = 'dashboard' | 'settings';
 
-export type DashboardView = 'providers' | 'history' | 'machines';
+export type DashboardView = 'providers' | 'history' | 'projects' | 'machines';
 
 /** Why a setting the OS applies did not take; empty when all did. */
 export type SettingErrors = Partial<Record<'launchAtLogin' | 'globalShortcut', string>>;

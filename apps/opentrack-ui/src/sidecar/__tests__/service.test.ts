@@ -365,6 +365,23 @@ describe('QuotaService', () => {
     });
   });
 
+  it('keeps cached project usage only when every period is well formed', () => {
+    const entry = {
+      project: 'acme/widget',
+      tokens: 1,
+      costUSD: 0,
+      hasCost: false,
+      providers: [{ key: 'codex', label: 'Codex', tokens: 1, costUSD: 0, hasCost: false }],
+    };
+    const projects = { today: [entry], last7Days: [], last30Days: [], allTime: [] };
+    expect(loadProjects(projects)?.projects).toEqual(projects);
+    expect(
+      loadProjects({ ...projects, today: [{ ...entry, providers: [{ key: 1 }] }] })?.projects,
+    ).toBe(undefined);
+    expect(loadProjects({ ...projects, allTime: undefined })?.projects).toBeUndefined();
+    expect(loadProjects('nope')?.projects).toBeUndefined();
+  });
+
   it('migrates each supported cache format and discards stale v1 update time', () => {
     const snapshot = ok('codex');
     const v1 = {
@@ -522,3 +539,7 @@ describe('QuotaService', () => {
     expect(h.service.state().usageError).toBeUndefined();
   });
 });
+
+function loadProjects(value: unknown) {
+  return loadCachedState({ format: CACHE_FORMAT, usage: { providers: {}, projects: value } }).usage;
+}

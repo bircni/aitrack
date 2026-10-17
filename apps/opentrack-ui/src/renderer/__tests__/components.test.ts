@@ -423,12 +423,18 @@ it('compares machines by share, activity and freshness, with account-wide usage 
   expect(target.querySelector<HTMLButtonElement>('.p-head')?.disabled).toBe(true);
   click('.sub-link');
   for (const tab of target.querySelectorAll<HTMLButtonElement>('[role="tab"]')) tab.click();
-  expect(view.mock.calls).toEqual([['machines'], ['providers'], ['history'], ['machines']]);
+  expect(view.mock.calls).toEqual([
+    ['machines'],
+    ['providers'],
+    ['history'],
+    ['projects'],
+    ['machines'],
+  ]);
   const list = target.querySelector('[role="tablist"]');
   list?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
   list?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
   list?.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
-  expect(view.mock.calls.slice(4)).toEqual([['history'], ['machines']]);
+  expect(view.mock.calls.slice(5)).toEqual([['history'], ['machines']]);
 
   await unmount(tabs);
   const machinesView = mount(Dashboard, { target, props: { ...props, view: 'machines' } });
@@ -482,6 +488,100 @@ it('compares machines by share, activity and freshness, with account-wide usage 
     expect(target.textContent).toContain('aitrack init');
     await unmount(view);
   }
+});
+
+function projectPart(key: string, label: string, tokens: number, costUSD: number) {
+  return { key, label, tokens, costUSD, hasCost: costUSD > 0 };
+}
+
+it('lists projects by share with a provider split, the unattributed remainder last, and an empty state', async () => {
+  const entries = [
+    {
+      project: 'acme/widget',
+      tokens: 300,
+      costUSD: 3,
+      hasCost: true,
+      providers: [
+        projectPart('claude_code', 'Claude Code', 200, 2),
+        projectPart('codex', 'Codex', 100, 1),
+      ],
+    },
+    { project: 'free/unpriced', tokens: 5, costUSD: 0, hasCost: false, providers: [] },
+    {
+      project: '(unattributed)',
+      unattributed: true,
+      tokens: 100,
+      costUSD: 1,
+      hasCost: true,
+      providers: [projectPart('codex', 'Codex', 100, 1)],
+    },
+  ];
+  const projects = { today: [], last7Days: entries, last30Days: [], allTime: [] };
+  const props = {
+    appState: {
+      ...state,
+      providers: [{ key: 'claude_code' as const, label: 'Claude Code', refreshing: false }],
+      projects,
+    },
+    settings: DEFAULT_SETTINGS,
+    now: Date.parse('2026-06-10T12:00:00Z'),
+    period: 'week' as const,
+    view: 'projects' as const,
+    onPeriod: vi.fn(),
+    onView: vi.fn(),
+    onPatch: vi.fn(),
+    ...handlers(),
+  };
+  const list = mount(Dashboard, { target, props });
+  await settle();
+  expect([...target.querySelectorAll('.m-name')].map((name) => name.textContent)).toEqual([
+    'acme/widget',
+    'free/unpriced',
+    '(unattributed)',
+  ]);
+  expect([...target.querySelectorAll('.m-percent')].map((cell) => cell.textContent)).toEqual([
+    '75%',
+    '25%',
+  ]);
+  expect(target.querySelector('.project.remainder .m-name')?.textContent).toBe('(unattributed)');
+  expect(target.textContent).toContain('Cursor is not attributed');
+  expect(target.querySelector('.details')).toBeNull();
+  click('.m-head');
+  await settle();
+  expect(target.querySelector('.details')?.textContent).toContain('Codex');
+  click('.m-head');
+  await unmount(list);
+
+  // Unpriced projects share by tokens; no projects explains how they appear.
+  const unpriced = mount(Dashboard, {
+    target,
+    props: {
+      ...props,
+      period: 'all' as const,
+      appState: {
+        ...props.appState,
+        projects: {
+          ...projects,
+          allTime: [{ ...entries[0], costUSD: 0, hasCost: false }],
+        },
+      },
+    },
+  });
+  await settle();
+  expect(target.querySelector('.m-share')?.getAttribute('title')).toContain('of tokens');
+  await unmount(unpriced);
+  const empty = mount(Dashboard, {
+    target,
+    props: {
+      ...props,
+      period: 'month' as const,
+      appState: { ...props.appState, projects: undefined },
+    },
+  });
+  await settle();
+  expect(target.textContent).toContain('No project usage 30 days.');
+  expect(target.textContent).toContain('from the next sync or refresh onward');
+  await unmount(empty);
 });
 
 it('charts spend history by provider and switches range and grouping', async () => {

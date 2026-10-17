@@ -3,6 +3,7 @@
   import { formatUpdated, type Period } from './format.js';
   import History from './History.svelte';
   import Machines from './Machines.svelte';
+  import Projects from './Projects.svelte';
   import ProviderSection from './ProviderSection.svelte';
   import Summary from './Summary.svelte';
 
@@ -37,12 +38,14 @@
   const machines = $derived(appState.machines ?? []);
   const showMachines = $derived(view === 'machines' && machines.length > 0);
   const showHistory = $derived(view === 'history');
+  const showProjects = $derived(view === 'projects');
   const active = $derived<DashboardView>(
-    showHistory ? 'history' : showMachines ? 'machines' : 'providers',
+    showHistory ? 'history' : showProjects ? 'projects' : showMachines ? 'machines' : 'providers',
   );
   const tabs = $derived<Array<{ view: DashboardView; label: string; count?: number }>>([
     { view: 'providers', label: 'Providers' },
     { view: 'history', label: 'History' },
+    { view: 'projects', label: 'Projects' },
     ...(machines.length > 0
       ? [{ view: 'machines' as const, label: 'Machines', count: machines.length }]
       : []),
@@ -109,6 +112,8 @@
 
 {#if showHistory}
   <History providers={appState.providers} />
+{:else if showProjects}
+  <Projects projects={appState.projects} {period} />
 {:else if showMachines}
   <Machines
     {machines}
