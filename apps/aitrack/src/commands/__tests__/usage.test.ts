@@ -136,6 +136,43 @@ describe('usageCommand', () => {
     `);
   });
 
+  it('names the project and its caveats, as text and as JSON', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([
+          [
+            '2026-06-14',
+            {
+              ...makeDay(100, 0, 10, 'opus'),
+              byProject: { 'acme/widget': { inputTokens: 60, outputTokens: 0, costUSD: 6 } },
+            },
+          ],
+        ]),
+      },
+      machineData: [],
+    });
+    const project = { kind: 'project' as const, project: 'acme/widget' };
+
+    await usageCommand({ period: 'month', project });
+    const out = loggedOutput();
+    expect(out).toContain('Project: acme/widget');
+    expect(out).toContain('Cursor usage is not attributed to projects');
+    expect(out).toContain('40 tokens in this window are not attributed');
+
+    vi.mocked(console.log).mockClear();
+    await usageCommand({ period: 'month', project, json: true });
+    const parsed = JSON.parse(loggedOutput()) as {
+      totals: { tokens: number };
+      project: { label: string; notes: string[] };
+    };
+    expect(parsed.totals.tokens).toBe(60);
+    expect(parsed.project.label).toBe('acme/widget');
+
+    vi.mocked(console.log).mockClear();
+    await usageCommand({ period: 'today', project });
+    expect(loggedOutput()).toContain('Project: acme/widget');
+  });
+
   it('prints a single line with --short', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {

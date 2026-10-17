@@ -2,8 +2,10 @@ import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
 import {
   type DayEntryAccumulator,
   type ModelAccumulator,
+  type ProjectAccumulator,
   topDays,
   topModels,
+  topProjects,
   topProviderKey,
   type TopSort,
   unpricedTopModels,
@@ -27,7 +29,9 @@ import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
 
-export type TopKind = 'days' | 'models';
+export type TopKind = 'days' | 'models' | 'projects';
+
+const PROJECTS_NOTE = 'Cursor usage is not attributed to projects and is not counted here.';
 
 export interface TopOptions {
   kind: TopKind;
@@ -96,6 +100,17 @@ function modelToRow(m: ModelAccumulator, index: number): Row {
   };
 }
 
+function projectToRow(p: ProjectAccumulator, index: number): Row {
+  const providerKey = topProviderKey(p.byProvider);
+  return {
+    rank: String(index + 1),
+    label: p.project,
+    sub: providerKey ? providerLabel(providerKey) : '',
+    tokens: fmt(p.tokens),
+    cost: fmtUSD(p.cost),
+  };
+}
+
 function topJsonEnvelope(options: TopOptions): Record<string, unknown> {
   return {
     kind: options.kind,
@@ -115,12 +130,14 @@ function renderTopOutput<T>(
   toRow: (item: T, index: number) => Row,
   columns: Array<TerminalTableColumn<Row>>,
   unpriced: string[],
+  notes: string[] = [],
 ): void {
   if (options.json) {
     printJsonCommand('top', {
       ...topJsonEnvelope(options),
       items: items.map((item, index) => toJsonItem(item, index)),
       ...(unpriced.length > 0 && { unpricedModels: unpriced }),
+      ...(notes.length > 0 && { notes }),
     });
     return;
   }
@@ -135,6 +152,7 @@ function renderTopOutput<T>(
   log.info(renderTerminalTable(rows, columns, { style: defaultTableStyle() }));
   const footnote = unpricedFootnote(unpriced);
   if (footnote !== null) log.info(chalk.dim(footnote));
+  for (const note of notes) log.info(chalk.dim(note));
 }
 
 export async function topCommand(options: TopOptions): Promise<void> {
@@ -179,6 +197,29 @@ export async function topCommand(options: TopOptions): Promise<void> {
       dayToRow,
       topColumns('Date', 'Top provider'),
       unpricedTopModels(items),
+    );
+    return;
+  }
+
+  if (options.kind === 'projects') {
+    const items = topProjects(loaded.providerData, options.limit, options.sort, filter);
+    renderTopOutput(
+      options,
+      `Top ${String(options.limit)} projects by ${options.sort}${suffix}`,
+      items,
+      (p, index) => ({
+        rank: index + 1,
+        project: p.project,
+        unattributed: p.unattributed,
+        tokens: p.tokens,
+        costUSD: p.cost,
+        topProvider: topProviderKey(p.byProvider),
+        byProvider: p.byProvider,
+      }),
+      projectToRow,
+      topColumns('Project', 'Top provider'),
+      [],
+      [PROJECTS_NOTE],
     );
     return;
   }
