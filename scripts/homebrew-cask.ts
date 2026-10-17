@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+
+import { runMain } from './runMain.ts';
+import { sha256File, versionFromTag } from './util.ts';
 
 /** The cask published to bircni/homebrew-tap as Casks/opentrack.rb. */
 function renderCask(version: string, sha256: string): string {
@@ -42,16 +42,8 @@ end
 function main(): void {
   const [tag, dmgPath] = process.argv.slice(2);
   if (!tag || !dmgPath) throw new Error('Usage: tsx scripts/homebrew-cask.ts <tag> <dmg-path>');
-  const sha256 = createHash('sha256').update(readFileSync(dmgPath)).digest('hex');
-  process.stdout.write(renderCask(tag.replace(/^v/u, ''), sha256));
+  const sha256 = sha256File(dmgPath);
+  process.stdout.write(renderCask(versionFromTag(tag), sha256));
 }
 
-const entryPoint = process.argv[1];
-if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
-  try {
-    main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-}
+runMain(import.meta.url, main);

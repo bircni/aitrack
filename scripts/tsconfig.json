@@ -1,8 +1,10 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "composite": true,
     "declaration": true,
+    "emitDeclarationOnly": true,
     "rootDir": "..",
     "outDir": ".typecheck",
     "resolveJsonModule": true

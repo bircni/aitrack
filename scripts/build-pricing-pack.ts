@@ -1,7 +1,6 @@
 #!/usr/bin/env tsx
 /** Build the pricing branch pack from local tables and live catalogs. */
 
-import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
@@ -22,6 +21,7 @@ import {
   supplementFromTables,
   type PricingTables,
 } from '../libs/aitrack-lib/src/pricing/supplementFromTables.js';
+import { sha256 } from './util.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const TABLES = join(ROOT, 'libs/aitrack-lib/src/pricing/tables');
@@ -34,10 +34,6 @@ export interface BuildPackOptions {
   writeTablesFromFeeds?: boolean;
   /** Skip network; only rebuild supplement + manifest from existing catalog files. */
   offline?: boolean;
-}
-
-function sha256File(body: string): string {
-  return createHash('sha256').update(body).digest('hex');
 }
 
 function pretty(value: unknown): string {
@@ -139,9 +135,9 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
       modelsDev: 'models_dev.json',
     },
     hashes: {
-      supplement: sha256File(supplementBody),
-      litellm: sha256File(litellmBody),
-      modelsDev: sha256File(modelsDevBody),
+      supplement: sha256(supplementBody),
+      litellm: sha256(litellmBody),
+      modelsDev: sha256(modelsDevBody),
     },
   };
   await writeFile(join(PACK, 'manifest.json'), pretty(manifest), 'utf8');

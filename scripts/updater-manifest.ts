@@ -1,7 +1,9 @@
 #!/usr/bin/env tsx
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+
+import { runMain } from './runMain.ts';
+import { versionFromTag } from './util.ts';
 
 /** Tauri updater target per installer the release workflow builds. */
 const PLATFORMS = [
@@ -35,7 +37,7 @@ function buildManifest(
       url: `https://github.com/${repository}/releases/download/${tag}/${encodeURIComponent(file)}`,
     };
   }
-  return { version: tag.replace(/^v/u, ''), pub_date: now.toISOString(), platforms };
+  return { version: versionFromTag(tag), pub_date: now.toISOString(), platforms };
 }
 
 function main(): void {
@@ -47,12 +49,4 @@ function main(): void {
   process.stdout.write(`${JSON.stringify(manifest, null, 2)}\n`);
 }
 
-const entryPoint = process.argv[1];
-if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
-  try {
-    main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-}
+runMain(import.meta.url, main);

@@ -1,13 +1,13 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreExportsUsedInFile": true,
+  "ignoreExportsUsedInFile": false,
   "workspaces": {
     ".": {
       "ignoreBinaries": ["hdiutil", "7z"],
       "entry": ["scripts/*.ts", "scripts/__tests__/**/*.test.ts"],
       "project": ["scripts/**/*.ts", "*.config.ts"],
       "ignoreDependencies": [
-        "@typescript/native",
+        "@stryker-mutator/vitest-runner",
         "git-cliff",
         "nx-oxlint",
         "oxlint",
@@ -16,11 +16,10 @@
       ]
     },
     "libs/aitrack-lib": {
-      "entry": ["src/index.ts", "src/display/checkResult.ts"],
+      "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]
     },
     "apps/aitrack": {
-      "ignoreBinaries": ["explorer.exe"],
       "entry": ["src/**/__tests__/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },

@@ -1,8 +1,9 @@
 #!/usr/bin/env tsx
-import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+
+import { runMain } from './runMain.ts';
+import { sha256File, versionFromTag } from './util.ts';
 
 const IDENTIFIER = 'bircni.opentrack';
 const MANIFEST_VERSION = '1.12.0';
@@ -68,8 +69,8 @@ function main(): void {
   if (!tag || !installerPath) {
     throw new Error('Usage: tsx scripts/winget-manifest.ts <tag> <setup-exe> [winget-pkgs-dir]');
   }
-  const version = tag.replace(/^v/u, '');
-  const sha256 = createHash('sha256').update(readFileSync(installerPath)).digest('hex');
+  const version = versionFromTag(tag);
+  const sha256 = sha256File(installerPath);
   const directory = join(outRoot, 'manifests', 'b', 'bircni', PRODUCT, version);
   mkdirSync(directory, { recursive: true });
   for (const [name, contents] of Object.entries(renderManifests(version, sha256))) {
@@ -78,12 +79,4 @@ function main(): void {
   process.stdout.write(`${directory}\n`);
 }
 
-const entryPoint = process.argv[1];
-if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
-  try {
-    main();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-}
+runMain(import.meta.url, main);
