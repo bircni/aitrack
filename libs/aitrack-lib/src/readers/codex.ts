@@ -167,7 +167,7 @@ function addSessionResult(
  * One session file's contribution, computed from its own bytes alone so it can
  * be cached. Codex has no cross-file de-duplication, so there are no keys.
  */
-export async function parseCodexFile(
+async function parseCodexFile(
   filePath: string,
   fallbacks?: FallbackCollector,
 ): Promise<CachedParse> {

@@ -2,6 +2,7 @@ import { OPTIONAL_TOKEN_NUMBER_FIELDS } from '../constants.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import { syncedProviders } from '../providers/index.js';
 import { machineTimezone } from '../timezone.js';
+import { isCompactedDay } from './compact.js';
 import { CURRENT_SCHEMA_VERSION } from './schema.js';
 import type { DayMap, MachineFile, ProviderDay, TokenCounts } from './types.js';
 
@@ -89,7 +90,15 @@ export function mergePersistedDays(
     const providers: Record<string, ProviderDay> = { ...persisted?.[date] };
     for (const [providerKey, freshDay] of Object.entries(fresh[date] ?? {})) {
       const persistedDay = providers[providerKey];
-      if (persistedDay === undefined || dayTokens(freshDay) >= dayTokens(persistedDay)) {
+      // An equal day keeps its compacted form, so fresh logs do not undo it on every sync.
+      const isUnchangedCompacted =
+        persistedDay !== undefined &&
+        isCompactedDay(persistedDay) &&
+        dayTokens(freshDay) === dayTokens(persistedDay);
+      if (
+        persistedDay === undefined ||
+        (dayTokens(freshDay) >= dayTokens(persistedDay) && !isUnchangedCompacted)
+      ) {
         providers[providerKey] = freshDay;
       }
     }

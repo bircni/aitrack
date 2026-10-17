@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 
 import { toLocalDateString } from '../../data/dayMap.js';
 import type { UsageReport } from '../../data/usageReport.js';
-import { fmt, fmtUSD } from '../format.js';
+import { fmt, fmtUSD, unpricedFootnote } from '../format.js';
 
 const PAGE_WIDTH = 360; // narrow, receipt-like
 const MARGIN = 22;
@@ -10,7 +10,6 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const FONT = 'Courier';
 const FONT_BOLD = 'Courier-Bold';
 
-// Three-column layout: model name (left), tokens, price (both right-aligned).
 const TOKENS_W = 62;
 const PRICE_W = 62;
 const LEFT_W = CONTENT_WIDTH - TOKENS_W - PRICE_W;
@@ -107,13 +106,18 @@ function drawReceipt(document: PDFKit.PDFDocument, report: UsageReport, generate
   );
   divider(document);
 
-  if (report.totals.hasCost && report.totals.hasUnpricedTokens) {
-    document
-      .font(FONT)
-      .fontSize(8)
-      .text('Partial estimate: some usage is unpriced.', MARGIN, document.y, {
-        width: CONTENT_WIDTH,
-      });
+  const note = [
+    report.totals.hasCost && report.totals.hasUnpricedTokens
+      ? 'Partial estimate: some usage is unpriced.'
+      : null,
+    unpricedFootnote(report.totals.unpricedModels),
+  ]
+    .filter((line) => line !== null)
+    .join(' ');
+  if (note !== '') {
+    document.font(FONT).fontSize(8).text(asciiSafe(note), MARGIN, document.y, {
+      width: CONTENT_WIDTH,
+    });
   }
   document.moveDown(1);
   document

@@ -28,7 +28,7 @@ export interface ClaudeCredentials {
   rateLimitTier?: string;
 }
 
-export function claudeCredentialsPaths(): string[] {
+function claudeCredentialsPaths(): string[] {
   return claudeHomeDirs({ overrideOnly: true }).map((dir) => join(dir, '.credentials.json'));
 }
 
@@ -67,7 +67,7 @@ function readKeychainCredentials(): Promise<string | undefined> {
 }
 
 /** The file Claude Code writes, then (macOS) the Keychain item it prefers there. */
-export async function readClaudeCredentials(): Promise<ClaudeCredentials | undefined> {
+async function readClaudeCredentials(): Promise<ClaudeCredentials | undefined> {
   for (const path of claudeCredentialsPaths()) {
     const text = await readFile(path, 'utf8').catch(() => undefined);
     const fromFile = text === undefined ? undefined : parseClaudeCredentials(text);

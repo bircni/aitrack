@@ -24,7 +24,7 @@ export interface CodexCredentials {
   expiresAt?: number;
 }
 
-export function codexAuthPaths(): string[] {
+function codexAuthPaths(): string[] {
   return codexHomeDirs({ overrideOnly: true }).map((dir) => join(dir, 'auth.json'));
 }
 
@@ -58,7 +58,7 @@ export function parseCodexAuth(text: string): CodexCredentials | 'apiKeyOnly' | 
   };
 }
 
-export async function readCodexCredentials(): Promise<CodexCredentials | 'apiKeyOnly' | undefined> {
+async function readCodexCredentials(): Promise<CodexCredentials | 'apiKeyOnly' | undefined> {
   let apiKeyOnly = false;
   for (const path of codexAuthPaths()) {
     const text = await readFile(path, 'utf8').catch(() => undefined);

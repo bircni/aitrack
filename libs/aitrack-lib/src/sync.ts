@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { loadConfig, resolveMachineId } from './config.js';
+import { compactDays } from './data/compact.js';
 import { reportMachineFileDiagnostics } from './data/diagnostics.js';
 import {
   buildMachineData,
@@ -11,12 +12,14 @@ import {
 } from './data/localData.js';
 import { REPO_NOT_CLONED_MESSAGE } from './data/messages.js';
 import type { DayMap, MachineFile } from './data/types.js';
+import { todayString } from './data/usagePeriods.js';
 import { checkRawMachineFile } from './data/validate.js';
 import { isMissingPathError } from './errors.js';
 import {
   commitAndPush,
   type GitOptions,
   hasMachineDataChanges,
+  hasUnpushedCommits,
   isCloned,
   LOCAL_REPO,
   pull,
@@ -35,9 +38,17 @@ import {
 import { recordPricingFallbacks } from './pricing/scan.js';
 import { syncPricingPack } from './pricing/syncPack.js';
 import { syncedProviders } from './providers/index.js';
+import {
+  ENCRYPTION_PASSPHRASE_ENV,
+  encryptionPassphrase,
+  isEncryptedRaw,
+} from './store/encryption.js';
+import { missingPassphraseMessage } from './store/machineFiles.js';
 
 export interface SyncDataOptions extends GitOptions {
   dryRun?: boolean;
+  /** Fail when commits are still waiting to be pushed after the sync. */
+  verify?: boolean;
 }
 
 export interface SyncResult {
@@ -45,6 +56,10 @@ export interface SyncResult {
   machine: MachineFile;
   /** The outcome in one line, as the CLI logs it. */
   message: string;
+  /** Whether this run pushed commits to the remote. */
+  pushed: boolean;
+  /** Days in the machine file after the run. */
+  days: number;
 }
 
 const NO_CHANGES_MESSAGE = 'No changes to push — data is already up to date.';
@@ -103,10 +118,14 @@ export async function runDataPipeline<T>(
 }
 
 /** Returns the local machine file so callers need not re-parse the corpus. */
-export function syncData(options: SyncDataOptions = {}): Promise<SyncResult> {
-  return runDataPipeline({ pull: !options.dryRun, git: options }, (run) =>
+export async function syncData(options: SyncDataOptions = {}): Promise<SyncResult> {
+  const result = await runDataPipeline({ pull: !options.dryRun, git: options }, (run) =>
     pushLocalUsage(options, run),
   );
+  if (options.verify && !options.dryRun && (await hasUnpushedCommits())) {
+    throw new Error('Sync finished, but commits are still waiting to be pushed to the remote.');
+  }
+  return result;
 }
 
 async function pushLocalUsage(
@@ -114,15 +133,20 @@ async function pushLocalUsage(
   { machineId: host, readLocalMaps }: DataRun,
 ): Promise<SyncResult> {
   const isDryRun = Boolean(options.dryRun);
+  const { encryptData, compactAfterDays } = loadConfig();
+  const encrypt = encryptData === true;
+  if (encrypt && encryptionPassphrase() === undefined) {
+    throw new Error(missingPassphraseMessage());
+  }
   const dataFilePath = join(LOCAL_REPO, 'data', machineDataFilename(host));
 
   log.info('Reading local data...');
   const maps = await readLocalMaps();
 
   const freshData = buildMachineData(host, maps);
-  const done = (message: string): SyncResult => {
+  const done = (message: string, pushed: boolean, days: number): SyncResult => {
     log.info(message);
-    return { machine: freshData, message };
+    return { machine: freshData, message, pushed, days };
   };
   const totalDays = new Set(Object.values(maps).flatMap((map) => [...map.keys()])).size;
 
@@ -134,6 +158,8 @@ async function pushLocalUsage(
         : `No local data found (${syncedProviders()
             .map((provider) => provider.descriptor.label)
             .join(' or ')}).`,
+      isPushed,
+      0,
     );
   }
 
@@ -159,15 +185,21 @@ async function pushLocalUsage(
     reportMachineFileDiagnostics(existing.diagnostics);
     // Merging an invalid file as empty would push the loss of its history.
     if (!existing.machine) {
+      const fix = isEncryptedRaw(raw)
+        ? `  Set ${ENCRYPTION_PASSPHRASE_ENV} to the passphrase the file was encrypted with.`
+        : "  Run: npx aitrack recompute-costs   (rebuilds this machine's file from the local logs)";
       throw new Error(
-        `Refusing to overwrite invalid data/${machineDataFilename(host)} (see the warning above).\n` +
-          "  Run: npx aitrack recompute-costs   (rebuilds this machine's file from the local logs)",
+        `Refusing to overwrite invalid data/${machineDataFilename(host)} (see the warning above).\n${fix}`,
       );
     }
     existingDays = existing.machine.days;
   }
 
-  const outgoingDays = mergePersistedDays(existingDays, freshData.days);
+  const mergedDays = mergePersistedDays(existingDays, freshData.days);
+  const outgoingDays =
+    compactAfterDays === undefined
+      ? mergedDays
+      : compactDays(mergedDays, compactAfterDays, todayString());
   const keptDays = ratchetedProviderDays(existingDays, freshData.days);
   if (keptDays > 0) {
     log.info(
@@ -182,26 +214,36 @@ async function pushLocalUsage(
   const normalizedExisting = existingDays === null ? null : mergePersistedDays(existingDays, {}); // Same key order as outgoing.
 
   // Usage only: lastUpdated and the schema header alone are not worth a commit.
-  if (JSON.stringify(normalizedExisting) === JSON.stringify(outgoingDays)) {
+  const isEncryptionChange = raw !== null && isEncryptedRaw(raw) !== encrypt;
+  if (!isEncryptionChange && JSON.stringify(normalizedExisting) === JSON.stringify(outgoingDays)) {
     let isPushed = false;
     if (!isDryRun) {
       removePendingMachineFile(host);
       isPushed = await pushMachineData(host, options);
     }
-    return done(isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE);
+    return done(
+      isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE,
+      isPushed,
+      syncedDays,
+    );
   }
 
   if (isDryRun) {
     const action = existingDays === null ? 'create' : 'update';
     return done(
       `Dry run: would ${action} data/${host}.json (${String(syncedDays)} days). No changes written.`,
+      false,
+      syncedDays,
     );
   }
 
-  writeMachineFile(dataFilePath, outgoingData);
+  writeMachineFile(dataFilePath, outgoingData, encrypt);
   removePendingMachineFile(host);
 
+  const isPushed = await commitAndPush(host, options);
   return done(
-    (await commitAndPush(host, options)) ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE,
+    isPushed ? pushedMessage(host, syncedDays) : NO_CHANGES_MESSAGE,
+    isPushed,
+    syncedDays,
   );
 }

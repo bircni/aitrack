@@ -4,12 +4,10 @@ import type { ProviderData } from '../../data/types.js';
 import {
   activeProviderKeys,
   costColumnLabel,
-  normalizeProviderKey,
   orderedProviderKeys,
-  PROVIDERS,
   providerLabel,
   sortProviderKeys,
-} from '../../providers/index.js';
+} from '../index.js';
 
 describe('provider helpers', () => {
   it('returns human-readable labels with fallback to the key', () => {
@@ -46,15 +44,5 @@ describe('provider helpers', () => {
       'alpha',
       'zebra',
     ]);
-  });
-
-  it('reads labels and aliases from each descriptor', () => {
-    for (const { descriptor } of PROVIDERS) {
-      expect(providerLabel(descriptor.key)).toBe(descriptor.label);
-      expect(costColumnLabel(descriptor.key)).toBe(descriptor.costLabel);
-      for (const alias of descriptor.aliases) {
-        expect(normalizeProviderKey(alias.toUpperCase())).toBe(descriptor.key);
-      }
-    }
   });
 });

@@ -1,7 +1,6 @@
-import { filterProviderDataByYear } from '../../data/dayMap.js';
+import { filterProviderDataByYear, mergeAllDayMaps } from '../../data/dayMap.js';
 import type { ProviderData } from '../../data/types.js';
 import { activeProviderKeys } from '../../providers/index.js';
-import { mergeAllProviderDayMaps } from './merge.js';
 
 export interface ProviderLayoutOptions {
   all?: boolean;
@@ -23,7 +22,7 @@ export function resolveProviderLayout(
       : filterProviderDataByYear(providerData, options.year);
 
   if (options.all) {
-    const merged = mergeAllProviderDayMaps(filtered);
+    const merged = mergeAllDayMaps(Object.values(filtered));
     if (merged.size === 0) {
       return { layoutData: {}, keys: [] };
     }

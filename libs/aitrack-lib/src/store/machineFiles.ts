@@ -10,13 +10,22 @@ import {
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
+import { tryLoadConfig } from '../config.js';
 import type { MachineFile } from '../data/types.js';
 import { type MachineFileValidationOptions, parseMachineFile } from '../data/validate.js';
 import { machineDataFilename, machineIdValidationError } from '../machineId.js';
 import { log } from '../output.js';
 import { DATA_DIR, PENDING_DATA_DIR } from '../paths.js';
+import { ENCRYPTION_PASSPHRASE_ENV, encryptionPassphrase, encryptText } from './encryption.js';
 
-/** Path of a machine's JSON file inside `directory`. */
+function isEncryptionEnabled(): boolean {
+  return tryLoadConfig()?.encryptData === true;
+}
+
+export function missingPassphraseMessage(): string {
+  return `encryptData is on but ${ENCRYPTION_PASSPHRASE_ENV} is not set. Set it to your data repo passphrase, or run: aitrack config set encryptData false`;
+}
+
 export function machineFilePath(directory: string, machineId: string): string {
   return join(directory, machineDataFilename(machineId));
 }
@@ -36,14 +45,25 @@ export function readDataFile(
 }
 
 /** Serialize a machine file the way every writer must, so round-trips stay stable. */
-export function serializeMachineFile(machine: MachineFile): string {
-  return JSON.stringify(machine, null, 2);
+export function serializeMachineFile(
+  machine: MachineFile,
+  encrypt = isEncryptionEnabled(),
+): string {
+  const json = JSON.stringify(machine, null, 2);
+  if (!encrypt) return json;
+  const passphrase = encryptionPassphrase();
+  if (passphrase === undefined) throw new Error(missingPassphraseMessage());
+  return encryptText(json, passphrase);
 }
 
 /** Write a machine file, creating its parent directory if needed. */
-export function writeMachineFile(filePath: string, machine: MachineFile): void {
+export function writeMachineFile(
+  filePath: string,
+  machine: MachineFile,
+  encrypt = isEncryptionEnabled(),
+): void {
   mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, serializeMachineFile(machine), 'utf8');
+  writeFileSync(filePath, serializeMachineFile(machine, encrypt), 'utf8');
 }
 
 export function writePendingMachineFile(machine: MachineFile): void {

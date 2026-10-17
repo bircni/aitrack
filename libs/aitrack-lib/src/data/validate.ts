@@ -1,5 +1,12 @@
 import { isDayKey, OPTIONAL_TOKEN_NUMBER_FIELDS, TOKEN_BREAKDOWN_FIELDS } from '../constants.js';
 import { errorMessage } from '../errors.js';
+import {
+  decryptEnvelope,
+  ENCRYPTION_PASSPHRASE_ENV,
+  encryptionPassphrase,
+  type EncryptedEnvelope,
+  isEncryptedEnvelope,
+} from '../store/encryption.js';
 import { applyMigrations } from '../store/migrations/index.js';
 import { UNKNOWN_TIMEZONE } from '../timezone.js';
 import { reportMachineFileDiagnostics } from './diagnostics.js';
@@ -30,7 +37,6 @@ function invalid(error: string): { ok: false; error: string } {
   return { ok: false, error };
 }
 
-/** Validate token counts and hand back the value. */
 function checkTokenCounts(value: unknown, path: string): Checked<TokenCounts> {
   if (!isRecord(value)) return invalid(`${path} must be an object`);
   if (!isFiniteNumber(value.inputTokens)) return invalid(`${path}.inputTokens must be a number`);
@@ -174,35 +180,43 @@ export function checkMachineFile(
   };
 }
 
-/** Parse and validate raw JSON, reporting nothing. */
+/** The plaintext of an encrypted file, or the reason it cannot be read, naming the fix. */
+function decryptRaw(envelope: EncryptedEnvelope): Checked<string> {
+  const passphrase = encryptionPassphrase();
+  if (passphrase === undefined) {
+    return invalid(`it is encrypted; set ${ENCRYPTION_PASSPHRASE_ENV} to the data repo passphrase`);
+  }
+  try {
+    return { ok: true, value: decryptEnvelope(envelope, passphrase) };
+  } catch (error) {
+    return invalid(
+      `it could not be decrypted (${errorMessage(error)}); check ${ENCRYPTION_PASSPHRASE_ENV} matches the passphrase it was written with, or restore the file if it was modified`,
+    );
+  }
+}
+
+/** Parse and validate raw JSON, decrypting an encrypted file first; reports nothing. */
 export function checkRawMachineFile(
   raw: string,
   filePath: string,
   options: MachineFileValidationOptions = {},
 ): MachineFileCheck {
+  const skip = (reason: string): MachineFileCheck => ({
+    machine: null,
+    diagnostics: [{ kind: 'file-skipped', filePath, reason }],
+  });
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
+    if (isEncryptedEnvelope(parsed)) {
+      const decrypted = decryptRaw(parsed);
+      if (!decrypted.ok) return skip(decrypted.error);
+      parsed = JSON.parse(decrypted.value);
+    }
   } catch (error) {
-    return {
-      machine: null,
-      diagnostics: [
-        { kind: 'file-skipped', filePath, reason: `invalid JSON (${errorMessage(error)})` },
-      ],
-    };
+    return skip(`invalid JSON (${errorMessage(error)})`);
   }
   return checkMachineFile(parsed, filePath, options);
-}
-
-/** Validate a parsed machine file, warning about whatever it found. */
-export function validateMachineFile(
-  data: unknown,
-  filePath: string,
-  options: MachineFileValidationOptions = {},
-): MachineFile | null {
-  const checked = checkMachineFile(data, filePath, options);
-  reportMachineFileDiagnostics(checked.diagnostics);
-  return checked.machine;
 }
 
 /** Parse and validate raw JSON, warning about whatever it found. */

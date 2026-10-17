@@ -13,4 +13,8 @@ export interface Config {
   /** Comma-separated Codex session roots; defaults to the standard Codex locations. */
   codexSessionsDir?: string;
   budget?: BudgetConfig;
+  /** Encrypt this machine's synced file; needs AITRACK_ENCRYPTION_PASSPHRASE at write and read time. */
+  encryptData?: boolean;
+  /** Days older than this many keep per-provider totals only in the synced file. Irreversible once pushed. */
+  compactAfterDays?: number;
 }

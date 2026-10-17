@@ -1,5 +1,10 @@
 import { providerLabel } from '../providers/index.js';
-import { type AggregateModelsFilter, aggregateModelsByDayMap, dateInFilter } from './aggregate.js';
+import {
+  type AggregateModelsFilter,
+  aggregateModelsByDayMap,
+  dateInFilter,
+  hasUnpricedUsage,
+} from './aggregate.js';
 import { compareByCostThenTokens } from './sort.js';
 import type { DayMap, ProviderData } from './types.js';
 
@@ -14,6 +19,7 @@ interface TopSortable {
 export interface DayEntryAccumulator extends TopSortable {
   date: string;
   byProvider: Record<string, number>;
+  unpricedModels: string[];
 }
 
 export interface ModelAccumulator extends TopSortable {
@@ -21,6 +27,7 @@ export interface ModelAccumulator extends TopSortable {
   provider: string;
   model: string;
   days: number;
+  hasUnpricedTokens: boolean;
 }
 
 function compareTopEntries(a: TopSortable, b: TopSortable, sort: TopSort): number {
@@ -47,12 +54,17 @@ export function topDays(
       if (!dateInFilter(date, filter)) continue;
       let accumulator = byDate.get(date);
       if (!accumulator) {
-        accumulator = { date, tokens: 0, cost: null, byProvider: {} };
+        accumulator = { date, tokens: 0, cost: null, byProvider: {}, unpricedModels: [] };
         byDate.set(date, accumulator);
       }
       const dayTokens = day.inputTokens + day.outputTokens;
       accumulator.tokens += dayTokens;
       accumulator.byProvider[providerKey] = (accumulator.byProvider[providerKey] ?? 0) + dayTokens;
+      for (const [model, counts] of Object.entries(day.byModel)) {
+        if (hasUnpricedUsage(counts) && !accumulator.unpricedModels.includes(model)) {
+          accumulator.unpricedModels.push(model);
+        }
+      }
       if (day.costUSD !== undefined) {
         accumulator.cost = (accumulator.cost ?? 0) + day.costUSD;
       }
@@ -75,6 +87,7 @@ function aggregateModels(
     tokens: agg.inputTokens + agg.outputTokens,
     cost: agg.hasCost ? agg.costUSD : null,
     days: agg.days,
+    hasUnpricedTokens: agg.hasUnpricedTokens === true,
   }));
 }
 
@@ -90,4 +103,15 @@ export function topModels(
   }
   all.sort((a, b) => compareTopEntries(a, b, sort));
   return all.slice(0, limit);
+}
+
+export function unpricedTopModels(
+  entries: ReadonlyArray<DayEntryAccumulator | ModelAccumulator>,
+): string[] {
+  const names = new Set<string>();
+  for (const entry of entries) {
+    if ('unpricedModels' in entry) for (const model of entry.unpricedModels) names.add(model);
+    else if (entry.hasUnpricedTokens) names.add(entry.model);
+  }
+  return [...names].toSorted();
 }

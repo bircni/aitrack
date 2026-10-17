@@ -151,7 +151,9 @@ export function buildProgram(): Command {
       'Rebuild this machine from the local logs, dropping synced days the logs no longer cover',
     )
     .action((options: { replaceLocal?: boolean }) => {
-      runAsync(() => recomputeCosts({ replaceLocal: options.replaceLocal }));
+      runAsync(async () => {
+        await recomputeCosts({ replaceLocal: options.replaceLocal });
+      });
     });
 
   program

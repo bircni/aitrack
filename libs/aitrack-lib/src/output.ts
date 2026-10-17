@@ -26,3 +26,10 @@ export function createLogger(options: { quiet?: boolean } = {}): Logger {
 
 /** Default sink for command output; machine-readable output goes through `cli/json.ts` instead. */
 export const log: Logger = createLogger();
+
+/** For `--json` runs: stdout must hold only the JSON document, so progress moves to stderr. */
+export function routeInfoToStderr(): void {
+  log.info = (message) => {
+    console.error(message);
+  };
+}

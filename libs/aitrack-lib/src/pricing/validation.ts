@@ -111,9 +111,10 @@ export function isPricingManifest(value: unknown): value is PricingManifest {
     value.files.supplement === 'supplement.json' &&
     value.files.litellm === 'litellm.json' &&
     value.files.modelsDev === 'models_dev.json' &&
-    isRecord(hashes) &&
-    ['supplement', 'litellm', 'modelsDev'].every(
-      (key) => typeof hashes[key] === 'string' && /^[a-f0-9]{64}$/u.test(hashes[key]),
-    )
+    (hashes === undefined ||
+      (isRecord(hashes) &&
+        ['supplement', 'litellm', 'modelsDev'].every(
+          (key) => typeof hashes[key] === 'string' && /^[a-f0-9]{64}$/u.test(hashes[key]),
+        )))
   );
 }

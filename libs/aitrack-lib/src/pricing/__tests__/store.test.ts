@@ -485,7 +485,19 @@ describe('PricingStore', () => {
     expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(3);
   });
 
-  it.each([undefined, {}, { supplement: 'a'.repeat(64) }])(
+  it('accepts a pack whose manifest has no checksums and flags it unverified', async () => {
+    const { dir, files } = await fixture();
+    const manifest = JSON.parse(files['manifest.json'] ?? '') as Record<string, unknown>;
+    delete manifest.hashes;
+    files['manifest.json'] = JSON.stringify(manifest);
+    const store = new PricingStore(dir);
+    const result = await store.refreshIfDue(true);
+    expect(result).toMatchObject({ updated: true, unverified: true });
+    expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(9);
+    await expect(new PricingStore(dir).refreshIfDue()).resolves.toMatchObject({ unverified: true });
+  });
+
+  it.each([{}, { supplement: 'a'.repeat(64) }])(
     'rejects manifests without complete hashes: %j',
     async (hashes) => {
       const { dir, files } = await fixture();

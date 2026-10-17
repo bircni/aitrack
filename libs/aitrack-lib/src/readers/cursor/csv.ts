@@ -15,7 +15,7 @@ interface CursorTokenTotals {
   hasBreakdown: boolean;
 }
 
-export interface CursorCsvRow {
+interface CursorCsvRow {
   Date?: string;
   Model?: string;
   Tokens?: string;
@@ -68,7 +68,6 @@ function parseCursorNumber(value?: string): number | null {
   return Math.round(numeric);
 }
 
-/** Parse a Cursor CSV date cell to a YYYY-MM-DD local calendar day key. */
 export function parseCursorDateString(value?: string): string | null {
   const trimmed = stringValue(value);
   if (trimmed === undefined) return null;
@@ -109,7 +108,6 @@ function processCursorCsvLines(lines: Iterable<string>, onRow: (row: CursorCsvRo
   }
 }
 
-/** Aggregate Cursor CSV text into a DayMap (for tests and readCursorData). */
 export function aggregateCursorCsvToDayMap(content: string): DayMap {
   const result: DayMap = new Map();
 

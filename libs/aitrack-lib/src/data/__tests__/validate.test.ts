@@ -1,11 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { resetMachineFileDiagnostics } from '../diagnostics.js';
 import {
   checkMachineFile,
+  type MachineFileValidationOptions,
   checkRawMachineFile,
   parseMachineFile,
-  validateMachineFile,
 } from '../validate.js';
 
 const validMachine = {
@@ -37,43 +36,29 @@ function withProvider(edit: (provider: MutableProvider) => void): unknown {
   return copy;
 }
 
-beforeEach(() => {
-  resetMachineFileDiagnostics(); // the reporter remembers warned files across tests
-});
+function machineOf(data: unknown, filePath: string, options?: MachineFileValidationOptions) {
+  return checkMachineFile(data, filePath, options).machine;
+}
 
-describe('validateMachineFile', () => {
+function reasonOf(checked: ReturnType<typeof checkMachineFile>): string {
+  const [diagnostic] = checked.diagnostics;
+  return diagnostic && 'reason' in diagnostic ? diagnostic.reason : '';
+}
+
+describe('checkMachineFile validation', () => {
   it('accepts a valid machine file', () => {
-    expect(validateMachineFile(validMachine, 'data/laptop.json')).toEqual(validMachine);
+    expect(machineOf(validMachine, 'data/laptop.json')).toEqual(validMachine);
   });
 
   it('drops a day whose key is not a date and keeps the rest of the file', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const withGarbageDay = {
       ...validMachine,
       days: { 'NaN-NaN-NaN': validMachine.days['2026-01-15'], ...validMachine.days },
     };
 
-    const result = validateMachineFile(withGarbageDay, 'data/laptop.json');
+    const result = machineOf(withGarbageDay, 'data/laptop.json');
 
     expect(Object.keys(result?.days ?? {})).toEqual(['2026-01-15']);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('NaN-NaN-NaN'));
-    warn.mockRestore();
-  });
-
-  it('warns about bad day keys once per file', () => {
-    // Only the current machine self-heals, so another machine's file would
-    // otherwise print this on every single command.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const withGarbageDay = {
-      ...validMachine,
-      days: { 'NaN-NaN-NaN': validMachine.days['2026-01-15'], ...validMachine.days },
-    };
-
-    validateMachineFile(withGarbageDay, 'data/other-laptop.json');
-    validateMachineFile(withGarbageDay, 'data/other-laptop.json');
-
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
   });
 
   it('accepts Claude cache breakdown fields on token counts', () => {
@@ -104,22 +89,20 @@ describe('validateMachineFile', () => {
         },
       },
     };
-    expect(validateMachineFile(withBreakdown, 'data/laptop.json')).toEqual(withBreakdown);
+    expect(machineOf(withBreakdown, 'data/laptop.json')).toEqual(withBreakdown);
   });
 
   it('rejects a stale aggregate cost but lets recompute load it for repair', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const stale = structuredClone(validMachine);
     stale.days['2026-01-15'].claude_code.totals.costUSD = 99;
 
-    expect(validateMachineFile(stale, 'data/stale.json')).toBeNull();
-    expect(
-      validateMachineFile(stale, 'data/stale.json', { allowInconsistentCostTotals: true }),
-    ).toEqual(stale);
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('totals.costUSD must equal the sum of byModel.costUSD'),
+    expect(machineOf(stale, 'data/stale.json')).toBeNull();
+    expect(machineOf(stale, 'data/stale.json', { allowInconsistentCostTotals: true })).toEqual(
+      stale,
     );
-    warn.mockRestore();
+    expect(reasonOf(checkMachineFile(stale, 'data/stale.json'))).toContain(
+      'totals.costUSD must equal the sum of byModel.costUSD',
+    );
   });
 
   it('accepts a legacy aggregate cost when by-model costs are absent', () => {
@@ -130,7 +113,7 @@ describe('validateMachineFile', () => {
       }
     ).costUSD;
 
-    expect(validateMachineFile(legacy, 'data/legacy.json')).toEqual(legacy);
+    expect(machineOf(legacy, 'data/legacy.json')).toEqual(legacy);
   });
 
   it.each<[string, () => unknown, string]>([
@@ -192,11 +175,11 @@ describe('validateMachineFile', () => {
         }),
       'totals.cachedInputTokens must equal the sum of byModel.cachedInputTokens',
     ],
-  ])('warns and returns null when %s', (_, build, message) => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    expect(validateMachineFile(build(), 'data/bad.json')).toBeNull();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining(message));
-    warn.mockRestore();
+  ])('skips the file when %s', (_, build, message) => {
+    const checked = checkMachineFile(build(), 'data/bad.json');
+    expect(checked.machine).toBeNull();
+    expect(checked.diagnostics[0]?.kind).toBe('file-skipped');
+    expect(reasonOf(checked)).toContain(message);
   });
 });
 
@@ -260,6 +243,23 @@ describe('parseMachineFile', () => {
     expect(parseMachineFile(JSON.stringify(validMachine), 'data/laptop.json')).toEqual(
       validMachine,
     );
+  });
+
+  it('warns about bad day keys once per file', () => {
+    // Only the current machine self-heals, so another machine's file would
+    // otherwise print this on every single command.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const withGarbageDay = {
+      ...validMachine,
+      days: { 'NaN-NaN-NaN': validMachine.days['2026-01-15'], ...validMachine.days },
+    };
+
+    parseMachineFile(JSON.stringify(withGarbageDay), 'data/other-laptop.json');
+    parseMachineFile(JSON.stringify(withGarbageDay), 'data/other-laptop.json');
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('NaN-NaN-NaN'));
+    warn.mockRestore();
   });
 
   it('warns and returns null for malformed JSON', () => {

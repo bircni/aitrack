@@ -1,8 +1,10 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import {
   inclusiveDayCount,
   mondayOfWeek,
+  weekdayOf,
   sameDayInYear,
   shiftDate,
   shiftMonthEnd,
@@ -44,6 +46,7 @@ describe('calendar date-string arithmetic', () => {
     expect(sameDayInYear('2024-02-29', 2023)).toBe('2023-02-28');
     expect(sameDayInYear('2024-02-29', 2028)).toBe('2028-02-29');
     expect(sameDayInYear('2026-07-04', 2025)).toBe('2025-07-04');
+    expect(sameDayInYear('2026-07-04', 999)).toBe('0999-07-04');
   });
 
   it('snaps any weekday back to its Monday', () => {
@@ -56,5 +59,49 @@ describe('calendar date-string arithmetic', () => {
     expect(inclusiveDayCount('2026-06-17', '2026-06-17')).toBe(1);
     expect(inclusiveDayCount('2026-06-01', '2026-06-30')).toBe(30);
     expect(inclusiveDayCount('2025-12-31', '2026-01-01')).toBe(2);
+  });
+});
+
+describe('calendar properties', () => {
+  const date = fc
+    .date({
+      min: new Date('1970-01-01T00:00:00Z'),
+      max: new Date('2100-12-31T00:00:00Z'),
+      noInvalidDate: true,
+    })
+    .map((value) => value.toISOString().slice(0, 10));
+  const offset = fc.integer({ min: -4000, max: 4000 });
+
+  it('shifting is reversible and counts the days it moved', () => {
+    fc.assert(
+      fc.property(date, offset, (day, days) => {
+        const moved = shiftDate(day, days);
+        expect(shiftDate(moved, -days)).toBe(day);
+        const [from, to] = days < 0 ? [moved, day] : [day, moved];
+        expect(inclusiveDayCount(from, to)).toBe(Math.abs(days) + 1);
+      }),
+    );
+  });
+
+  it('puts every date in a Monday-start week of seven days that contains it', () => {
+    fc.assert(
+      fc.property(date, (day) => {
+        const monday = mondayOfWeek(day);
+        expect(weekdayOf(monday)).toBe(1);
+        expect(inclusiveDayCount(monday, day)).toBeGreaterThanOrEqual(1);
+        expect(inclusiveDayCount(monday, day)).toBeLessThanOrEqual(7);
+      }),
+    );
+  });
+
+  it('keeps month shifts inside the target month', () => {
+    fc.assert(
+      fc.property(date, fc.integer({ min: -240, max: 240 }), (day, months) => {
+        const same = shiftMonthSameDay(day, months);
+        expect(same.slice(0, 7)).toBe(shiftMonthStart(day, months).slice(0, 7));
+        expect(same <= shiftMonthEnd(day, months)).toBe(true);
+        expect(same >= shiftMonthStart(day, months)).toBe(true);
+      }),
+    );
   });
 });

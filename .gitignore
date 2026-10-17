@@ -13,3 +13,6 @@ coverage/
 .env
 /target/
 apps/opentrack/gen/
+/.claude/worktrees/
+.stryker-tmp/
+reports/
