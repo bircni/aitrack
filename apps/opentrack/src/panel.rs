@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 
-use crate::position::{popup_bounds, Rect};
+use crate::position::{corner_tray, popup_bounds, Rect};
 
 const WIDTH: f64 = 320.0;
 /// A tray click that lands right after a blur-hide is the same click; ignore it.
@@ -135,9 +135,7 @@ impl Panel {
             width: area.size.width as i32,
             height: area.size.height as i32,
         };
-        // Opened from the menu before any tray click: use the usual tray corner.
-        let tray =
-            tray.unwrap_or(Rect { x: work.x + work.width - 1, y: work.y + work.height + 1, width: 1, height: 1 });
+        let tray = tray.unwrap_or_else(|| corner_tray(work, cfg!(target_os = "linux")));
         let scale = monitor.scale_factor();
         let bounds = popup_bounds(tray, work, (WIDTH * scale).round() as i32, (content_height * scale).round() as i32);
         let _ = window.set_size(PhysicalSize::new(bounds.width as u32, bounds.height as u32));

@@ -9,6 +9,9 @@ import { versionFromTag } from './util.ts';
 const PLATFORMS = [
   { key: 'darwin-aarch64', suffix: '.app.tar.gz' },
   { key: 'windows-x86_64', suffix: '-setup.exe' },
+  { key: 'linux-x86_64', suffix: '_amd64.AppImage' },
+  // Read only by .deb installs; the updater installs it through pkexec.
+  { key: 'linux-x86_64-deb', suffix: '_amd64.deb' },
 ] as const;
 
 interface UpdaterManifest {

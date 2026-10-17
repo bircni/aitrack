@@ -5,6 +5,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,6 +27,7 @@ const MANIFEST = {
   platforms: {
     'darwin-aarch64': { url: 'https://example.test/opentrack.app.tar.gz', signature: 'mac-sig' },
     'windows-x86_64': { url: 'https://example.test/opentrack-setup.exe', signature: 'win-sig' },
+    'linux-x86_64': { url: 'https://example.test/opentrack.AppImage', signature: 'linux-sig' },
   },
 };
 
@@ -151,12 +153,36 @@ describe('installOpentrackCommand', () => {
 
     mocks.spawnSync.mockReturnValue({ status: 2 });
     await expect(installOpentrackCommand()).rejects.toThrow('exited with code 2');
-    await expect(installOpentrackCommand({ dir })).rejects.toThrow('--dir applies to macOS only');
+    await expect(installOpentrackCommand({ dir })).rejects.toThrow(
+      '--dir applies to macOS and Linux only',
+    );
+  });
+
+  it('replaces the AppImage on Linux with the verified, executable release', async () => {
+    onMachine('linux', 'x64');
+    const target = join(dir, 'bin');
+    mkdirSync(target);
+    writeFileSync(join(target, 'opentrack.AppImage'), 'old');
+
+    await installOpentrackCommand({ dir: target });
+
+    expect(mocks.verifyMinisign).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'linux-sig',
+      'release-key',
+    );
+    const appImage = join(target, 'opentrack.AppImage');
+    expect(readFileSync(appImage, 'utf8')).toBe('package');
+    expect(statSync(appImage).mode & 0o100).toBe(0o100);
+    expect(readdirSync(target)).toEqual(['opentrack.AppImage']);
+    expect(mocks.spawnSync).not.toHaveBeenCalled();
   });
 
   it('explains machines and releases it cannot install on', async () => {
-    onMachine('linux', 'x64');
-    await expect(installOpentrackCommand()).rejects.toThrow('opentrack has no build for linux x64');
+    onMachine('linux', 'arm64');
+    await expect(installOpentrackCommand()).rejects.toThrow(
+      'opentrack has no build for linux arm64',
+    );
 
     onMachine('win32', 'x64');
     serve({ version: '3.1.0', platforms: {} });

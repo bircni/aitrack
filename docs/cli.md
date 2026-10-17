@@ -88,7 +88,7 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 | `aitrack doctor`                | Check Node, git, config, source paths, Cursor auth, sync health, and pricing                                                                                                   |
 | `aitrack completion <shell>`    | Print a `bash`, `zsh` or `fish` completion script, e.g. `eval "$(aitrack completion zsh)"`                                                                                     |
 | `aitrack config list\|get\|set` | Inspect or update supported configuration keys                                                                                                                                 |
-| `aitrack install-opentrack`     | Download the latest opentrack desktop app, verify its release signature and install it (`--dir` picks the macOS folder)                                                        |
+| `aitrack install-opentrack`     | Download the latest opentrack desktop app, verify its release signature and install it (`--dir` picks the macOS or Linux folder)                                               |
 
 **Usage and export windows:** `today`, `yesterday`, `date <YYYY-MM-DD>`, `range <from> <to>`, `thisweek`, `lastweek`, `week` (rolling 7 days), `thismonth`, `lastmonth`, `month` (rolling 30 days), `last <n>`, `year`, and `all`.
 

@@ -34,6 +34,10 @@ describe('updater manifest', () => {
       'opentrack_3.1.0_aarch64.dmg': '',
       'opentrack_3.1.0_x64-setup.exe': '',
       'opentrack_3.1.0_x64-setup.exe.sig': 'windows-signature\n',
+      'opentrack_3.1.0_amd64.AppImage': '',
+      'opentrack_3.1.0_amd64.AppImage.sig': 'appimage-signature\n',
+      'opentrack_3.1.0_amd64.deb': '',
+      'opentrack_3.1.0_amd64.deb.sig': 'deb-signature\n',
     });
 
     expect(result.status).toBe(0);
@@ -52,6 +56,14 @@ describe('updater manifest', () => {
         'windows-x86_64': {
           signature: 'windows-signature',
           url: 'https://github.com/bircni/aitrack/releases/download/v3.1.0/opentrack_3.1.0_x64-setup.exe',
+        },
+        'linux-x86_64': {
+          signature: 'appimage-signature',
+          url: 'https://github.com/bircni/aitrack/releases/download/v3.1.0/opentrack_3.1.0_amd64.AppImage',
+        },
+        'linux-x86_64-deb': {
+          signature: 'deb-signature',
+          url: 'https://github.com/bircni/aitrack/releases/download/v3.1.0/opentrack_3.1.0_amd64.deb',
         },
       },
     });

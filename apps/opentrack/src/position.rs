@@ -40,6 +40,13 @@ pub fn popup_bounds(tray: Rect, work: Rect, width: i32, height: i32) -> Rect {
     Rect { x: x.clamp(work.x, work_right - width), y: y.clamp(work.y, work_bottom - height), width, height }
 }
 
+/// A stand-in tray in the right-hand corner, above or below the work area, for a popup opened
+/// before any tray click; Linux reports none, and its tray is usually in a top bar.
+pub fn corner_tray(work: Rect, top: bool) -> Rect {
+    let y = if top { work.y - 1 } else { work.y + work.height + 1 };
+    Rect { x: work.x + work.width - 1, y, width: 1, height: 1 }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,6 +70,11 @@ mod tests {
         let work = Rect { y: 25, ..WORK };
         let bounds = popup_bounds(tray(900, 0, 22), work, 320, 640);
         assert_eq!((bounds.x, bounds.y), (751, 31));
+        assert_eq!(
+            popup_bounds(corner_tray(work, true), work, 320, 640),
+            Rect { x: 1600, y: 31, width: 320, height: 640 }
+        );
+        assert_eq!(popup_bounds(corner_tray(WORK, false), WORK, 320, 640).y, 394);
     }
 
     #[test]

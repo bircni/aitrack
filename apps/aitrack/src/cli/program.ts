@@ -211,7 +211,10 @@ export function buildProgram(): Command {
   program
     .command('install-opentrack')
     .description('Install the opentrack desktop app from the latest GitHub release')
-    .option('--dir <path>', 'macOS: folder to put opentrack.app in (default: /Applications)')
+    .option(
+      '--dir <path>',
+      'folder for opentrack.app on macOS (default: /Applications) or opentrack.AppImage on Linux (default: ~/.local/bin)',
+    )
     .option('--json', 'print machine-readable JSON')
     .action((options: { dir?: string; json?: boolean }) => {
       runAsync(() => installOpentrackCommand({ dir: options.dir, json: options.json }), {
