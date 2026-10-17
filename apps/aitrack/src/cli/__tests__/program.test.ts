@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
   recomputeCosts: vi.fn(),
   configCommand: vi.fn(),
   installOpentrackCommand: vi.fn(),
+  resolveProjectSelector: vi.fn(),
+}));
+vi.mock('aitrack-lib/readers/projectResolver', () => ({
+  resolveProjectSelector: mocks.resolveProjectSelector,
 }));
 
 vi.mock('../../commands/init.js', () => ({ initCommand: mocks.initCommand }));
@@ -144,6 +148,28 @@ describe('buildProgram', () => {
     );
   });
 
+  it('resolves --dir to a project, defaulting to the current directory', async () => {
+    mocks.resolveProjectSelector.mockResolvedValue({ kind: 'project', project: 'acme/widget' });
+    await run('usage', 'week', '--dir', '/work/widget');
+    expect(mocks.resolveProjectSelector).toHaveBeenLastCalledWith('/work/widget');
+    expect(mocks.usageCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({ project: { kind: 'project', project: 'acme/widget' } }),
+    );
+
+    await run('usage', 'week', '--dir');
+    expect(mocks.resolveProjectSelector).toHaveBeenLastCalledWith(process.cwd());
+
+    await run('usage', 'week');
+    expect(mocks.usageCommand).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ project: expect.anything() as unknown }),
+    );
+
+    await run('top', 'projects');
+    expect(mocks.topCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'projects' }),
+    );
+  });
+
   it('maps export options', async () => {
     await run('export', 'week', '-o', 'out.pdf');
     expect(mocks.exportCommand).toHaveBeenCalledWith(
@@ -217,6 +243,12 @@ describe('buildProgram', () => {
         command: 'usage',
         error: expect.stringContaining('nope') as string,
       });
+    });
+
+    it('exits 2 when --dir is not a directory', async () => {
+      mocks.resolveProjectSelector.mockRejectedValue(new Error('Not a directory: nope'));
+      expect(await runAndSettle('usage', 'week', '--dir', 'nope')).toBe(2);
+      expect(mocks.usageCommand).not.toHaveBeenCalled();
     });
 
     it('rejects --watch below the minimum and with --json', async () => {
