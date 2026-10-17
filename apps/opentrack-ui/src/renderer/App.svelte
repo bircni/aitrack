@@ -40,6 +40,20 @@
     };
   });
 
+  let announcement = $state('');
+  let wasBusy: 'sync' | 'refresh' | undefined;
+
+  // A polite live region, since the footer text only changes visually.
+  $effect(() => {
+    if (!appState) return;
+    const busy = appState.syncing ? 'sync' : appState.refreshing ? 'refresh' : undefined;
+    if (busy) announcement = busy === 'sync' ? 'Syncing…' : 'Updating…';
+    else if (wasBusy) {
+      announcement = wasBusy === 'sync' ? (appState.syncResult?.message ?? 'Synced') : 'Usage updated';
+    }
+    wasBusy = busy;
+  });
+
   function tick(): void {
     now = Date.now();
   }
@@ -160,6 +174,7 @@
 </script>
 
 <main class="pop">
+  <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
   <div class="scroll">
     <div class="content" bind:this={content}>
       {#if loadError && !(appState && settings)}

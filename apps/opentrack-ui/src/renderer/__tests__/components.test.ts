@@ -40,6 +40,7 @@ import Dashboard from '../Dashboard.svelte';
 import LimitMeter from '../LimitMeter.svelte';
 import SettingsScreen from '../SettingsScreen.svelte';
 
+window.matchMedia = () => ({ matches: false }) as MediaQueryList;
 let target: HTMLDivElement;
 let reportResize: (() => void) | undefined;
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -222,6 +223,16 @@ describe('desktop commands and settings', () => {
     onState({ ...state, syncing: true });
     await settle();
     expect(target.textContent).toContain('Syncing');
+    const live = () => target.querySelector('[role="status"][aria-live="polite"]')?.textContent;
+    expect(live()).toBe('Syncing…');
+    onState({ ...state, syncResult: { ok: true, message: 'Synced 2 files' } });
+    await settle();
+    expect(live()).toBe('Synced 2 files');
+    onState({ ...state, refreshing: true });
+    await settle();
+    onState({ ...state });
+    await settle();
+    expect(live()).toBe('Usage updated');
     const onScreen = listener('onScreen');
     onScreen('settings');
     await settle();
@@ -412,7 +423,12 @@ it('compares machines by share, activity and freshness, with account-wide usage 
   expect(target.querySelector<HTMLButtonElement>('.p-head')?.disabled).toBe(true);
   click('.sub-link');
   for (const tab of target.querySelectorAll<HTMLButtonElement>('[role="tab"]')) tab.click();
-  expect(view.mock.calls).toEqual([['machines'], ['providers'], ['machines']]);
+  expect(view.mock.calls).toEqual([['machines'], ['providers'], ['history'], ['machines']]);
+  const list = target.querySelector('[role="tablist"]');
+  list?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  list?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+  list?.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+  expect(view.mock.calls.slice(4)).toEqual([['history'], ['machines']]);
 
   await unmount(tabs);
   const machinesView = mount(Dashboard, { target, props: { ...props, view: 'machines' } });
@@ -466,6 +482,59 @@ it('compares machines by share, activity and freshness, with account-wide usage 
     expect(target.textContent).toContain('aitrack init');
     await unmount(view);
   }
+});
+
+it('charts spend history by provider and switches range and grouping', async () => {
+  const days = Array.from({ length: 40 }, (_, index) => ({
+    date: new Date(Date.UTC(2026, 4, 1 + index)).toISOString().slice(0, 10),
+    costUSD: index === 10 ? 20 : 1,
+  }));
+  const appState: AppState = {
+    ...state,
+    providers: [
+      {
+        key: 'claude_code',
+        label: 'Claude Code',
+        refreshing: false,
+        usage: usage(spent(100, 1, 'opus'), days),
+      },
+      { key: 'codex', label: 'Codex', refreshing: false },
+    ],
+  };
+  const props = {
+    appState,
+    settings: DEFAULT_SETTINGS,
+    now: Date.parse('2026-06-10T12:00:00Z'),
+    period: 'today' as const,
+    view: 'history' as const,
+    onPeriod: vi.fn(),
+    onView: vi.fn(),
+    onPatch: vi.fn(),
+    ...handlers(),
+  };
+  const history = mount(Dashboard, { target, props });
+  await settle();
+  expect(target.querySelectorAll('.h-bar')).toHaveLength(30);
+  expect(target.textContent).toContain('peak $20.00');
+  expect(target.textContent).toContain('2026-05-11'); // the busiest day
+
+  const [thirty, ninety, , week] = target.querySelectorAll<HTMLButtonElement>('.h-controls button');
+  ninety?.click();
+  await settle();
+  expect(target.querySelectorAll('.h-bar')).toHaveLength(40);
+  week?.click();
+  await settle();
+  expect(target.querySelectorAll('.h-bar').length).toBeLessThan(10);
+  thirty?.click();
+  await unmount(history);
+
+  const empty = mount(Dashboard, {
+    target,
+    props: { ...props, appState: { ...appState, providers: appState.providers.slice(1) } },
+  });
+  await settle();
+  expect(target.textContent).toContain('No priced usage');
+  await unmount(empty);
 });
 
 it('renders remaining quotas with and without reset metadata and delivers toggles', async () => {
@@ -582,7 +651,9 @@ it('updates quota meters and settings controls when the sidecar pushes new value
   const onSettings = listener('onSettings');
   onSettings({ ...DEFAULT_SETTINGS, display: 'left', resetDisplay: 'relative' });
   await settle();
-  expect(target.querySelector('[role="meter"]')?.getAttribute('aria-valuenow')).toBe('60');
+  const meter = target.querySelector('[role="meter"]');
+  expect(meter?.getAttribute('aria-valuenow')).toBe('60');
+  expect(meter?.getAttribute('aria-valuetext')).toBe('60% left');
   onState({
     ...state,
     providers: [

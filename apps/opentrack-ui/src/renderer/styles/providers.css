@@ -1,0 +1,191 @@
+/* Provider cards and their limit meters. */
+.provider {
+  --provider-accent: var(--provider-codex);
+  display: grid;
+  gap: 16px;
+  margin: 0 12px 10px;
+  padding: 14px;
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+
+.p-head {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  margin: -4px -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+}
+
+.p-head:hover:not(:disabled) {
+  background: var(--raised);
+}
+
+.p-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.p-plan {
+  color: var(--ink-2);
+  font-size: 10.5px;
+}
+
+.p-busy {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--ink-3);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+.p-cost {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.limit {
+  display: grid;
+  gap: 6px;
+}
+
+.l-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.l-name {
+  font-size: 12.5px;
+}
+
+.l-value,
+.l-static {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.track {
+  position: relative;
+  height: 5px;
+  border-radius: 4px;
+  background: var(--track);
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+  background: var(--provider-accent);
+  transition:
+    width 220ms ease,
+    background-color 220ms ease;
+}
+
+.tone-warn .fill {
+  background: var(--warn);
+}
+
+.tone-crit .fill {
+  background: var(--crit);
+}
+
+.tick {
+  position: absolute;
+  top: -3px;
+  width: 1.5px;
+  height: 10px;
+  border-radius: 1px;
+  background: var(--ink-3);
+  transform: translateX(-50%);
+}
+
+.l-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  row-gap: 3px;
+  color: var(--ink-2);
+  font-size: 10.5px;
+}
+
+.l-meta button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+.tone-warn .l-pace {
+  color: var(--warn);
+}
+
+.tone-crit .l-pace {
+  color: var(--crit);
+}
+
+.state {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.provider--claude_code {
+  --provider-accent: var(--provider-claude);
+}
+
+.provider--cursor {
+  --provider-accent: var(--provider-cursor);
+}
+
+.p-mark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--provider-accent) 10%, var(--card));
+  place-items: center;
+}
+
+.p-identity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.p-chevron {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  transition: transform 160ms ease;
+}
+
+.p-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.l-value:hover,
+.l-meta button:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

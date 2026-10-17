@@ -1,0 +1,24 @@
+/* Footer status line and its busy indicators. */
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 10px 10px 16px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+
+.foot > span {
+  flex: 1;
+}
+
+.spinning {
+  display: grid;
+  animation: spin 900ms linear infinite;
+}
+
+.pulsing {
+  display: grid;
+  animation: pulse 1.2s ease-in-out infinite;
+}

@@ -1,0 +1,133 @@
+/* Settings screen: groups, rows, switch. */
+.s-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px 6px 8px;
+}
+
+.s-head h1 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.group {
+  display: grid;
+  margin: 8px 16px 16px;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+
+.group h2 {
+  padding: 8px 12px 6px;
+  color: var(--ink-3);
+  background: var(--surface);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+}
+
+.row-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-text {
+  display: grid;
+  gap: 1px;
+}
+
+.row-text small {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.row-text .row-error {
+  color: var(--crit);
+}
+
+.row-value {
+  color: var(--ink-2);
+}
+
+.row-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.row-controls .switch {
+  margin-left: 8px;
+}
+
+.row select,
+.row input[type='text'] {
+  max-width: 150px;
+  padding: 3px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--raised);
+  font-size: 12px;
+}
+
+.switch {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin: 0;
+  border-radius: 9px;
+  background: var(--track);
+  cursor: pointer;
+  appearance: none;
+  transition: background-color 160ms ease;
+}
+
+.switch::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface);
+  content: '';
+  transition: transform 160ms ease;
+}
+
+.switch:checked {
+  background: var(--meter);
+}
+
+.switch:checked::after {
+  transform: translateX(12px);
+}
+
+.quit {
+  display: block;
+  margin: 0 16px 16px;
+  padding: 0;
+  border: 0;
+  color: var(--crit);
+  background: none;
+  font-size: 12px;
+}
+
+.quit:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

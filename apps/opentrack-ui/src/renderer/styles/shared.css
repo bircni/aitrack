@@ -1,0 +1,82 @@
+/* Pieces used by several screens: links, icon buttons, expandable details. */
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.details {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+}
+
+.d-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.d-row span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.d-row span:last-child {
+  flex: 0 0 auto;
+}
+
+.d-model {
+  font-size: 11.5px;
+}
+
+.d-rule {
+  height: 1px;
+  margin: 2px 0;
+  background: var(--rule);
+}
+
+.d-heading {
+  color: var(--ink-2);
+}
+
+.icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink-2);
+  background: none;
+  place-items: center;
+}
+
+.icon:hover:not(:disabled),
+.icon.active {
+  color: var(--ink);
+  background: var(--raised);
+}
+
+.icon:disabled {
+  opacity: 0.4;
+}
+
+.icon-sm {
+  width: 24px;
+  height: 24px;
+}

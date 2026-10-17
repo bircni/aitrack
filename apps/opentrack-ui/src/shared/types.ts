@@ -15,7 +15,7 @@ export interface Spend {
   hasUnpricedTokens?: boolean;
 }
 
-export interface ModelUsage extends Spend {
+interface ModelUsage extends Spend {
   model: string;
 }
 
@@ -79,7 +79,7 @@ export interface AppState {
   syncResult?: { ok: boolean; message: string };
 }
 
-export type ThemeSetting = 'system' | 'light' | 'dark';
+type ThemeSetting = 'system' | 'light' | 'dark';
 
 export type TrayWindow = 'highest' | 'session' | 'weekly';
 
@@ -107,7 +107,7 @@ export interface Settings {
 
 export type Screen = 'dashboard' | 'settings';
 
-export type DashboardView = 'providers' | 'machines';
+export type DashboardView = 'providers' | 'history' | 'machines';
 
 /** Why a setting the OS applies did not take; empty when all did. */
 export type SettingErrors = Partial<Record<'launchAtLogin' | 'globalShortcut', string>>;

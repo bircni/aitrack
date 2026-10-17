@@ -15,7 +15,7 @@ export interface SidecarRequest {
   params?: unknown;
 }
 
-export interface TrayImage {
+interface TrayImage {
   /** Straight RGBA, base64. */
   rgba: string;
   size: number;
