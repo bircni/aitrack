@@ -71,13 +71,20 @@ export interface RecomputeCostsOptions {
   replaceLocal?: boolean;
 }
 
+export interface RecomputeResult {
+  /** Machine files rewritten. */
+  changed: number;
+  /** Whether the rewritten files were pushed. */
+  pushed: boolean;
+}
+
 /** Re-read this machine's logs, reprice every synced machine file, and push what changed. */
-export function recomputeCosts(options: RecomputeCostsOptions = {}): Promise<void> {
+export function recomputeCosts(options: RecomputeCostsOptions = {}): Promise<RecomputeResult> {
   return runDataPipeline({ pull: true }, async ({ machineId, fallbacks, readLocalMaps }) => {
     const files = listDataFiles();
     if (files.length === 0) {
       log.info('No synced data files found.');
-      return;
+      return { changed: 0, pushed: false };
     }
 
     const localFresh = buildMachineData(machineId, await readLocalMaps());
@@ -106,14 +113,16 @@ export function recomputeCosts(options: RecomputeCostsOptions = {}): Promise<voi
     if (changed === 0) {
       log.info('Nothing to recompute — costs are already current.');
       reportLegacySkipped(legacySkipped, 'skipped');
-      return;
+      return { changed: 0, pushed: false };
     }
 
     log.info(`Recomputed costs in ${String(changed)} file(s).`);
     reportLegacySkipped(legacySkipped, 'left unchanged');
 
-    if (await commitDataChanges(`recompute: refresh costs at ${new Date().toISOString()}`)) {
-      log.info('Pushed updated costs.');
-    }
+    const pushed = await commitDataChanges(
+      `recompute: refresh costs at ${new Date().toISOString()}`,
+    );
+    if (pushed) log.info('Pushed updated costs.');
+    return { changed, pushed };
   });
 }

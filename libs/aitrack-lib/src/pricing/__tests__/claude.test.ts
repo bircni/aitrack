@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  type ClaudeMessageUsage,
   type ClaudePricing,
+  claudeUsageCounts,
   estimateClaudeCostFromStoredCounts,
-  estimateClaudeCostUSD,
   findClaudePricing,
 } from '../claude.js';
 import { createFallbackCollector, type FallbackCollector } from '../fallback.js';
@@ -13,6 +14,9 @@ function priced(model: string, usageDate?: string, fallbacks?: FallbackCollector
   if (!pricing) throw new Error(`expected pricing for ${model}`);
   return pricing;
 }
+
+const estimateClaudeCostUSD = (model: string, usage: ClaudeMessageUsage): number | undefined =>
+  estimateClaudeCostFromStoredCounts(model, claudeUsageCounts(usage));
 
 describe('claude pricing', () => {
   it('finds exact pricing for known model ids', () => {

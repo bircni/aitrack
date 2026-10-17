@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 
 import { sumDayMap } from '../data/aggregate.js';
-import { mergeDayMaps } from '../data/dayMap.js';
+import { mergeAllDayMaps } from '../data/dayMap.js';
 import type { DayMap, ProviderData } from '../data/types.js';
 import { costColumnLabel, providerLabel } from '../providers/index.js';
 import { fmt, fmtUSD } from './format.js';
@@ -13,15 +13,16 @@ import { defaultTableStyle, renderTerminalTable } from './terminalTable.js';
 
 export type TuiOptions = RenderOptions;
 
-interface StatsRow {
+export interface StatsRow {
   provider: string;
   days: number;
-  input: string;
-  output: string;
-  total: string;
-  cost: string;
-  streak: string;
-  peak: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUSD: number | null;
+  currentStreak: number | null;
+  longestStreak: number | null;
+  peakMonth: string | null;
 }
 
 function summarizeDayMap(dayMap: DayMap, providerKey: string): StatsRow {
@@ -29,31 +30,31 @@ function summarizeDayMap(dayMap: DayMap, providerKey: string): StatsRow {
   return {
     provider: providerLabel(providerKey),
     days: stats.activeDays,
-    input: fmt(stats.inputTokens),
-    output: fmt(stats.outputTokens),
-    total: fmt(stats.totalTokens),
-    cost: stats.hasCost ? fmtUSD(stats.costUSD) : '—',
-    streak: `${String(stats.currentStreak)} / ${String(stats.longestStreak)}`,
-    peak: stats.peakMonth ? formatMonthLabel(stats.peakMonth.month) : '—',
+    inputTokens: stats.inputTokens,
+    outputTokens: stats.outputTokens,
+    totalTokens: stats.totalTokens,
+    costUSD: stats.hasCost ? stats.costUSD : null,
+    currentStreak: stats.currentStreak,
+    longestStreak: stats.longestStreak,
+    peakMonth: stats.peakMonth?.month ?? null,
   };
 }
 
 /** Every provider together, merged first so a day two providers shared counts once. */
 function totalRow(dayMaps: DayMap[]): StatsRow {
-  const merged: DayMap = new Map();
-  for (const dayMap of dayMaps) mergeDayMaps(merged, dayMap);
-  const { inputTokens, outputTokens, costUSD, hasCost, days } = sumDayMap(merged);
+  const { inputTokens, outputTokens, costUSD, hasCost, days } = sumDayMap(mergeAllDayMaps(dayMaps));
 
   // Streak and peak month are per-provider figures, so they are left blank rather than guessed.
   return {
     provider: 'TOTAL',
     days,
-    input: fmt(inputTokens),
-    output: fmt(outputTokens),
-    total: fmt(inputTokens + outputTokens),
-    cost: hasCost ? fmtUSD(costUSD) : '—',
-    streak: '—',
-    peak: '—',
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    costUSD: hasCost ? costUSD : null,
+    currentStreak: null,
+    longestStreak: null,
+    peakMonth: null,
   };
 }
 
@@ -62,7 +63,11 @@ function costHeader(keys: string[]): string {
   return only === undefined ? 'Est. cost' : costColumnLabel(only);
 }
 
-export function renderTui(providerData: ProviderData, options: TuiOptions = {}): string {
+/** The rows `renderTui` draws, unformatted; `footer` is the all-provider total when there are several. */
+export function tuiStats(
+  providerData: ProviderData,
+  options: TuiOptions = {},
+): { rows: StatsRow[]; footer: StatsRow | undefined; keys: string[] } {
   const { layoutData, keys } = resolveProviderLayout(providerData, {
     all: options.all,
     year: options.year,
@@ -82,6 +87,11 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
     if (bodyRows.length > 1) footer = totalRow(present.map(({ dayMap }) => dayMap));
   }
 
+  return { rows: bodyRows, footer, keys };
+}
+
+export function renderTui(providerData: ProviderData, options: TuiOptions = {}): string {
+  const { rows: bodyRows, footer, keys } = tuiStats(providerData, options);
   if (bodyRows.length === 0) return '';
 
   const style = defaultTableStyle(Boolean(options.dark));
@@ -96,12 +106,27 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
     [
       { header: 'Provider', align: 'left', cell: (r) => r.provider },
       { header: 'Days', align: 'right', cell: (r) => String(r.days) },
-      { header: 'Input', align: 'right', cell: (r) => r.input },
-      { header: 'Output', align: 'right', cell: (r) => r.output },
-      { header: 'Total', align: 'right', cell: (r) => r.total },
-      { header: costHeader(keys), align: 'right', cell: (r) => r.cost },
-      { header: 'Streak', align: 'right', cell: (r) => r.streak },
-      { header: 'Peak month', align: 'left', cell: (r) => r.peak },
+      { header: 'Input', align: 'right', cell: (r) => fmt(r.inputTokens) },
+      { header: 'Output', align: 'right', cell: (r) => fmt(r.outputTokens) },
+      { header: 'Total', align: 'right', cell: (r) => fmt(r.totalTokens) },
+      {
+        header: costHeader(keys),
+        align: 'right',
+        cell: (r) => (r.costUSD === null ? '—' : fmtUSD(r.costUSD)),
+      },
+      {
+        header: 'Streak',
+        align: 'right',
+        cell: (r) =>
+          r.currentStreak === null
+            ? '—'
+            : `${String(r.currentStreak)} / ${String(r.longestStreak)}`,
+      },
+      {
+        header: 'Peak month',
+        align: 'left',
+        cell: (r) => (r.peakMonth === null ? '—' : formatMonthLabel(r.peakMonth)),
+      },
     ],
     {
       style,

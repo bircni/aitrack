@@ -28,8 +28,3 @@ export function reportMachineFileDiagnostics(diagnostics: MachineFileDiagnostic[
     log.warn(formatMachineFileDiagnostic(diagnostic));
   }
 }
-
-/** Forget which files have been warned about. Exposed for tests. */
-export function resetMachineFileDiagnostics(): void {
-  warnedDroppedDays.clear();
-}

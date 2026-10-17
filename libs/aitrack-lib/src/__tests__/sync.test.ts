@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   commitAndPush: vi.fn(),
   hasMachineDataChanges: vi.fn(),
   pushPendingCommits: vi.fn(),
+  hasUnpushedCommits: vi.fn(),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   readFileSync: vi.fn(),
@@ -69,6 +70,7 @@ vi.mock('../git.js', () => ({
   commitAndPush: mocks.commitAndPush,
   hasMachineDataChanges: mocks.hasMachineDataChanges,
   pushPendingCommits: mocks.pushPendingCommits,
+  hasUnpushedCommits: mocks.hasUnpushedCommits,
   removePendingMachineFile: vi.fn(),
   withRepoLock: (fn: () => Promise<unknown>) => fn(),
   writeMachineFile: (filePath: string, machine: object) => {
@@ -108,6 +110,7 @@ describe('syncData', () => {
     mocks.commitAndPush.mockReturnValue(false);
     mocks.hasMachineDataChanges.mockReturnValue(false);
     mocks.pushPendingCommits.mockReturnValue(false);
+    mocks.hasUnpushedCommits.mockResolvedValue(false);
     mocks.readFileSync.mockImplementation(() => {
       throw Object.assign(new Error('missing'), { code: 'ENOENT' });
     });
@@ -140,6 +143,14 @@ describe('syncData', () => {
 
     await expect(syncData()).rejects.toThrow('Repo not cloned');
     expect(syncPricingPack).not.toHaveBeenCalled();
+  });
+
+  it('fails a verified sync that leaves commits unpushed', async () => {
+    mocks.hasUnpushedCommits.mockResolvedValue(true);
+
+    await expect(syncData({ verify: true })).rejects.toThrow('still waiting to be pushed');
+    await expect(syncData({ verify: true, dryRun: true })).resolves.toBeDefined();
+    await expect(syncData()).resolves.toBeDefined();
   });
 
   it('writes codex-only data and pushes it', async () => {
@@ -180,6 +191,36 @@ describe('syncData', () => {
     const written = mocks.writeFileSync.mock.calls[0]?.[1] as string;
     const parsed = JSON.parse(written) as { days: Record<string, unknown> };
     expect(Object.keys(parsed.days)).toEqual(['2023-06-01', '2024-01-01']);
+  });
+
+  it('compacts old days on write, keeping their totals, and does not rewrite a compacted file', async () => {
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'x', compactAfterDays: 30 });
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+
+    await syncData();
+
+    const written = mocks.writeFileSync.mock.calls[0]?.[1] as string;
+    const day = (JSON.parse(written) as { days: Record<string, { codex: unknown }> }).days[
+      '2024-01-01'
+    ];
+    expect(day?.codex).toEqual({
+      byModel: { '(compacted)': { inputTokens: 20, outputTokens: 10, costUSD: 0.000125 } },
+      totals: { inputTokens: 20, outputTokens: 10, costUSD: 0.000125 },
+    });
+
+    mocks.writeFileSync.mockClear();
+    mocks.readFileSync.mockReturnValue(written);
+    await syncData();
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('fails before writing when encryptData is on and the passphrase is missing', async () => {
+    vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', '');
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'x', encryptData: true });
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+
+    await expect(syncData()).rejects.toThrow('AITRACK_ENCRYPTION_PASSPHRASE');
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 
   it('refuses to overwrite a persisted file that fails validation', async () => {

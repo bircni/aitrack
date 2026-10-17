@@ -39,12 +39,27 @@ function validateConfig(parsed: unknown): Config | null {
   const budget = parsed.budget === undefined ? undefined : validateBudget(parsed.budget);
   if (budget === null) return null;
 
+  const { encryptData, compactAfterDays } = parsed;
+  if (encryptData !== undefined && typeof encryptData !== 'boolean') return null;
+  if (
+    compactAfterDays !== undefined &&
+    !(
+      typeof compactAfterDays === 'number' &&
+      Number.isInteger(compactAfterDays) &&
+      compactAfterDays > 0
+    )
+  ) {
+    return null;
+  }
+
   return {
     repoUrl,
     ...(machineId !== undefined && { machineId }),
     ...(claudeProjectsDir !== undefined && { claudeProjectsDir }),
     ...(codexSessionsDir !== undefined && { codexSessionsDir }),
     ...(budget !== undefined && { budget }),
+    ...(encryptData !== undefined && { encryptData }),
+    ...(compactAfterDays !== undefined && { compactAfterDays }),
   };
 }
 

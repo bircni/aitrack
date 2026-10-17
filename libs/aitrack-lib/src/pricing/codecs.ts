@@ -9,7 +9,7 @@
 
 import { isRecord } from '../data/guards.js';
 
-export interface CompactModelRates {
+interface CompactModelRates {
   i: number;
   o: number;
   cw: number;
@@ -91,7 +91,7 @@ function ratesFromCompact(model: CompactModelRates): ModelRates {
 }
 
 /** Prefer first-party provider keys when both `anthropic/x` and `x` exist. */
-export function preferProviderKey(key: string): number {
+function preferProviderKey(key: string): number {
   if (key.startsWith('anthropic/') || key.startsWith('openai/') || key.startsWith('cursor/')) {
     return 0;
   }

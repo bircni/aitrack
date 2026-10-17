@@ -7,7 +7,7 @@ import { percentile } from './intensity.js';
 import { providerStats } from './providerStats.js';
 import { computeModelStats, formatMonthLabel, formatPeakDate } from './stats.js';
 
-export interface StatCell {
+interface StatCell {
   label: string;
   value: string;
   /** Optional secondary line (e.g. token amount) rendered under the value in a lighter font. */

@@ -15,7 +15,7 @@ import { supplementFromTables } from './supplementFromTables.js';
 import type { PricingOverride } from './types.js';
 import { isCompactCatalog, isPricingManifest, isPricingSupplement } from './validation.js';
 
-export const PRICING_CACHE_DIR = join(APP_DIR, 'pricing');
+const PRICING_CACHE_DIR = join(APP_DIR, 'pricing');
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FAILURE_RETRY_MS = 30 * 60 * 1000;
 const EMPTY_CATALOG: CompactCatalog = { retrievedAt: '1970-01-01T00:00:00.000Z', models: {} };
@@ -35,6 +35,8 @@ export interface PricingRefreshResult {
   reason: string;
   updatedAt: string;
   failed?: true;
+  /** The active pack's manifest carries no checksums, so its content was not verified. */
+  unverified?: true;
 }
 
 function isStale(state: SourceState | undefined, now: number): boolean {
@@ -111,6 +113,7 @@ export class PricingStore {
   private readonly localSupplement = supplementFromTables();
   private state: CacheState = { sources: {} };
   private cachedFiles: Record<string, unknown> | undefined;
+  private unverified = false;
   private refreshInFlight: Promise<PricingRefreshResult> | undefined;
 
   constructor(private readonly cacheDir = PRICING_CACHE_DIR) {
@@ -133,13 +136,19 @@ export class PricingStore {
       const supplement = load(
         manifest.files.supplement,
         isPricingSupplement,
-        manifest.hashes.supplement,
+        manifest.hashes?.supplement,
       );
-      const litellm = load(manifest.files.litellm, isCompactCatalog, manifest.hashes.litellm);
-      const modelsDev = load(manifest.files.modelsDev, isCompactCatalog, manifest.hashes.modelsDev);
+      const litellm = load(manifest.files.litellm, isCompactCatalog, manifest.hashes?.litellm);
+      const modelsDev = load(
+        manifest.files.modelsDev,
+        isCompactCatalog,
+        manifest.hashes?.modelsDev,
+      );
+      this.unverified = manifest.hashes === undefined;
       this.snapshot = pricingFromParts(this.mergeSupplement(supplement), litellm, modelsDev);
     } catch {
       this.snapshot = pricingFromParts(structuredClone(this.localSupplement));
+      this.unverified = false;
       // An incomplete cache must recover immediately, except during failure backoff.
       for (const source of Object.values(this.state.sources)) source.fetchedAt = undefined;
     }
@@ -202,7 +211,12 @@ export class PricingStore {
   }
 
   private result(updated: boolean, reason: string): PricingRefreshResult {
-    return { updated, reason, updatedAt: this.snapshot.updatedAt };
+    return {
+      updated,
+      reason,
+      updatedAt: this.snapshot.updatedAt,
+      ...(this.unverified && { unverified: true as const }),
+    };
   }
 
   private async refresh(): Promise<PricingRefreshResult> {
@@ -223,15 +237,21 @@ export class PricingStore {
           urls.supplement,
           'supplement.json',
           isPricingSupplement,
-          hashes.supplement,
+          hashes?.supplement,
         ),
-        this.refreshFile('litellm', urls.litellm, 'litellm.json', isCompactCatalog, hashes.litellm),
+        this.refreshFile(
+          'litellm',
+          urls.litellm,
+          'litellm.json',
+          isCompactCatalog,
+          hashes?.litellm,
+        ),
         this.refreshFile(
           'modelsDev',
           urls.modelsDev,
           'models_dev.json',
           isCompactCatalog,
-          hashes.modelsDev,
+          hashes?.modelsDev,
         ),
       ]);
       const next = pricingFromParts(
@@ -256,6 +276,7 @@ export class PricingStore {
         litellm.changed ||
         modelsDev.changed;
       this.cachedFiles = cachedFiles;
+      this.unverified = hashes === undefined;
       this.state = nextState;
       this.snapshot = next;
       return this.result(

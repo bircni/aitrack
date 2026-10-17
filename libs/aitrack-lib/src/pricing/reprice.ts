@@ -1,3 +1,4 @@
+import { COMPACTED_MODEL } from '../data/compact.js';
 import type { MachineFile, ProviderDay } from '../data/types.js';
 import { approximatelyEqual } from '../data/validate.js';
 import { getProvider, syncedProviderKeys } from '../providers/index.js';
@@ -26,6 +27,12 @@ function repriceProviderDay(
 
   for (const [model, counts] of Object.entries(providerDay.byModel)) {
     modelCount++;
+    if (model === COMPACTED_MODEL) {
+      // The models are gone, so the stored cost cannot be repriced.
+      if (counts.costUSD === undefined) isCostComplete = false;
+      else dayTotal += counts.costUSD;
+      continue;
+    }
     const cost = resolveModelCost(providerKey, model, counts, date, 'recompute', fallbacks);
     if (cost === undefined) {
       if (counts.costUSD === undefined) {

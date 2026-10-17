@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, vi } from 'vitest';
 
@@ -31,7 +32,6 @@ interface FixtureMachineFile {
   days: Record<string, Record<string, FixtureProviderDay>>;
 }
 
-/** Write a JSONL file, one object per line. */
 export function writeJsonl(path: string, lines: object[]): void {
   writeFileSync(path, lines.map((line) => JSON.stringify(line)).join('\n'));
 }
@@ -122,4 +122,9 @@ export function loggedOutput(method: 'log' | 'warn' | 'error' = 'log'): string {
     .mocked(console[method])
     .mock.calls.map((call) => String(call[0]))
     .join('\n');
+}
+
+/** Absolute path of a checked-in provider log sample under `src/providers`. */
+export function providerFixture(name: string): string {
+  return fileURLToPath(new URL(`./providers/${name}`, import.meta.url));
 }

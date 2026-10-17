@@ -64,7 +64,6 @@ export function addModelUsage(day: DayEntry, model: string, counts: TokenCounts)
   addTokenCounts(day, pricedCounts);
 }
 
-/** Merge one DayMap into another, summing day totals, breakdowns and models. */
 export function mergeDayMaps(dst: DayMap, source: DayMap): void {
   for (const [date, sourceDay] of source) {
     const dstDay = getOrCreateDay(dst, date);
@@ -74,6 +73,13 @@ export function mergeDayMaps(dst: DayMap, source: DayMap): void {
       addTokenCounts(modelTotals, counts);
     }
   }
+}
+
+/** A fresh DayMap holding all of these merged, so a day several share counts once. */
+export function mergeAllDayMaps(dayMaps: Iterable<DayMap>): DayMap {
+  const merged: DayMap = new Map();
+  for (const dayMap of dayMaps) mergeDayMaps(merged, dayMap);
+  return merged;
 }
 
 export function filterDayMapByYear(dayMap: DayMap, year: number): DayMap {

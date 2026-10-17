@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { aggregateModelsByDayMap } from '../aggregate.js';
+import { aggregateModelsByDayMap, sumDayMap } from '../aggregate.js';
 import type { DayEntry, DayMap } from '../types.js';
 
 function day(
@@ -55,6 +55,22 @@ describe('aggregateModelsByDayMap', () => {
     expect(aggregateModelsByDayMap(dayMap).size).toBe(0);
   });
 
+  it('keeps a zero-token model that carries cost and flags equal input and output as unpriced', () => {
+    const dayMap: DayMap = new Map([
+      [
+        '2024-01-01',
+        day({
+          credit: { inputTokens: 0, outputTokens: 0, costUSD: 0.5 },
+          even: { inputTokens: 5, outputTokens: 5 },
+        }),
+      ],
+    ]);
+    const agg = aggregateModelsByDayMap(dayMap);
+    expect(agg.get('credit')).toMatchObject({ hasCost: true, costUSD: 0.5 });
+    expect(agg.get('credit')?.hasUnpricedTokens).toBeUndefined();
+    expect(agg.get('even')).toMatchObject({ hasCost: false, hasUnpricedTokens: true });
+  });
+
   it('sums cached input when the split is present', () => {
     const dayMap: DayMap = new Map([
       [
@@ -79,5 +95,23 @@ describe('aggregateModelsByDayMap', () => {
 
     const range = aggregateModelsByDayMap(dayMap, { start: '2024-12-01', end: '2025-12-31' });
     expect(range.get('m')?.inputTokens).toBe(20);
+  });
+});
+
+describe('sumDayMap', () => {
+  it('counts only days with tokens and sums cost where present', () => {
+    const dayMap: DayMap = new Map([
+      ['2024-01-01', day({}, { inputTokens: 10, outputTokens: 0, costUSD: 1 })],
+      ['2024-01-02', day({}, { inputTokens: 0, outputTokens: 4 })],
+      ['2024-01-03', day({}, { inputTokens: 0, outputTokens: 0 })],
+    ]);
+    expect(sumDayMap(dayMap)).toEqual({
+      inputTokens: 10,
+      outputTokens: 4,
+      costUSD: 1,
+      hasCost: true,
+      days: 2,
+    });
+    expect(sumDayMap(new Map()).hasCost).toBe(false);
   });
 });

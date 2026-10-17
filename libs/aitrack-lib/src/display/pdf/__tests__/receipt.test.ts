@@ -101,10 +101,13 @@ it('labels partially priced receipts without dropping the known-cost amount', as
   try {
     const report = sampleReport();
     report.totals.hasUnpricedTokens = true;
+    report.totals.unpricedModels = ['mystery'];
     const buffer = await renderReceiptPdf(report);
     expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
     expect(
-      text.mock.calls.some(([value]) => value === 'Partial estimate: some usage is unpriced.'),
+      text.mock.calls.some(
+        ([value]) => value === 'Partial estimate: some usage is unpriced. Unpriced models: mystery',
+      ),
     ).toBe(true);
   } finally {
     text.mockRestore();

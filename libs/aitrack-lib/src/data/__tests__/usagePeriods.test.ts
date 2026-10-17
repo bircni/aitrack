@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   computePreviousUsageWindow,
+  ALL_TIME,
   computeUsageWindow,
+  isUsagePeriod,
+  parsePositiveInteger,
+  periodAnchorsOnToday,
   USAGE_PERIOD_DEFINITIONS,
   type UsagePeriod,
   usagePeriodDefinition,
@@ -183,18 +187,63 @@ it('validates registry arguments and compares fixed and rolling calendar windows
     expect(() => period.parseArgs(args)).not.toThrow(/./u);
     expect(() => period.parseArgs(['invalid', 'extra', 'arguments'])).toThrow(/./u);
   }
-  for (const [period, args] of [
-    ['date', []],
-    ['date', ['bad']],
-    ['date', ['2026-02-30']],
-    ['range', []],
-    ['range', ['bad', 'bad']],
-    ['range', ['2026-06-12', '2026-06-10']],
-    ['range', ['2026-01-01', '2026-13-45']],
-    ['last', []],
-    ['last', ['0']],
-    ['last', ['1.5']],
+  const single = /expects a single date/u;
+  const two = /expects two dates/u;
+  const invalid = /Invalid date/u;
+  const days = /positive integer/u;
+  for (const [period, args, message] of [
+    ['date', [], single],
+    ['date', ['2026-06-10', '2026-06-11'], single],
+    ['date', ['bad'], invalid],
+    ['date', ['2026-02-30'], invalid],
+    ['range', [], two],
+    ['range', ['2026-06-10'], two],
+    ['range', ['2026-06-10', '2026-06-11', '2026-06-12'], two],
+    ['range', ['bad', '2026-06-12'], invalid],
+    ['range', ['2026-06-10', 'bad'], invalid],
+    ['range', ['2026-01-01', '2026-13-45'], invalid],
+    ['range', ['2026-06-12', '2026-06-10'], /must not be after/u],
+    ['last', [], days],
+    ['last', ['3', '4'], days],
+    ['last', ['0'], days],
+    ['last', ['1.5'], days],
+    ['last', ['3x'], days],
+    ['last', ['x3'], days],
+    ['today', ['x'], /does not accept extra arguments/u],
   ] as const) {
-    expect(() => usagePeriodDefinition(period).parseArgs([...args])).toThrow(/./u);
+    const parse = () => usagePeriodDefinition(period).parseArgs([...args]);
+    expect(parse).toThrow(message);
   }
+  for (const [period, args] of [
+    ['last', ['1']],
+    ['range', ['2026-06-10', '2026-06-10']],
+  ] as const) {
+    expect(() => usagePeriodDefinition(period).parseArgs([...args])).not.toThrow();
+  }
+  expect(usagePeriodDefinition('date').parseArgs(['2026-06-10'])).toEqual({ from: '2026-06-10' });
+  expect(usagePeriodDefinition('range').parseArgs(['2026-06-10', '2026-06-12'])).toEqual({
+    from: '2026-06-10',
+    to: '2026-06-12',
+  });
+  expect(usagePeriodDefinition('last').parseArgs(['12'])).toEqual({ n: 12 });
+  expect(['1', '12'].map((value) => parsePositiveInteger(value))).toEqual([1, 12]);
+  expect(
+    ['', '0', '-1', '1e3', '0x10', ' 1', '1 ', '9'.repeat(20)].map((value) =>
+      parsePositiveInteger(value),
+    ),
+  ).toEqual(Array.from({ length: 8 }, () => null));
+  expect(
+    ['today', 'week', 'last', 'date', 'range', 'all'].map((p) =>
+      periodAnchorsOnToday(p as UsagePeriod),
+    ),
+  ).toEqual([true, true, true, false, false, false]);
+  expect(ALL_TIME).toEqual({ start: '0000-01-01', end: '9999-12-31' });
+  const last = computeUsageWindow({ period: 'last', n: 3 }, '2026-06-17', now);
+  expect(last.label).toBe('last 3 days (2026-06-15 → 2026-06-17)');
+  expect(computePreviousUsageWindow({ period: 'last', n: 3 }, last, '2026-06-17').label).toBe(
+    'previous period (2026-06-12 → 2026-06-14)',
+  );
+  expect(isUsagePeriod('week')).toBe(true);
+  expect(isUsagePeriod('weak')).toBe(false);
+  expect(() => usagePeriodDefinition('bogus' as UsagePeriod)).toThrow('Unknown usage period');
 });

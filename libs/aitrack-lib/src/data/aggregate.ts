@@ -1,4 +1,4 @@
-import type { DayMap } from './types.js';
+import type { DayMap, TokenCounts } from './types.js';
 
 export interface TokenTotals {
   inputTokens: number;
@@ -26,6 +26,13 @@ export function sumDayMap(dayMap: DayMap): TokenTotals {
   }
 
   return { inputTokens, outputTokens, costUSD, hasCost, days };
+}
+
+export function hasUnpricedUsage(counts: TokenCounts): boolean {
+  return (
+    counts.hasUnpricedTokens === true ||
+    (counts.inputTokens + counts.outputTokens > 0 && counts.costUSD === undefined)
+  );
 }
 
 export interface ModelAgg {
@@ -82,8 +89,7 @@ export function aggregateModelsByDayMap(
         agg.hasCached = true;
       }
       agg.days++;
-      if (counts.hasUnpricedTokens || (tokens > 0 && counts.costUSD === undefined))
-        agg.hasUnpricedTokens = true;
+      if (hasUnpricedUsage(counts)) agg.hasUnpricedTokens = true;
       if (counts.costUSD !== undefined) {
         agg.costUSD += counts.costUSD;
         agg.hasCost = true;

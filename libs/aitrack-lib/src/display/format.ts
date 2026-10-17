@@ -31,3 +31,8 @@ export function pad(value: string, width: number, align: 'left' | 'right'): stri
   const padString = ' '.repeat(width - value.length);
   return align === 'left' ? value + padString : padString + value;
 }
+
+/** Footnote naming the models left out of a cost, or null when every model was priced. */
+export function unpricedFootnote(models: readonly string[] | undefined): string | null {
+  return models && models.length > 0 ? `Unpriced models: ${models.join(', ')}` : null;
+}

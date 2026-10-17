@@ -70,7 +70,7 @@ export interface SyncedProvider extends ProviderBase {
   live?: undefined;
 }
 
-/** A provider fetched live on every command and never persisted (Cursor). */
+/** A provider fetched from the account (cached for a while) and never persisted (Cursor). */
 export interface LiveProvider extends ProviderBase {
   live: LiveProviderReader;
   reader?: undefined;

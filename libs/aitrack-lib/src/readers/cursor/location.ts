@@ -5,8 +5,8 @@ import { join, resolve } from 'node:path';
 import { environmentValue } from '../../env.js';
 import { splitConfiguredPaths } from '../paths.js';
 
-export const CURSOR_CONFIG_DIR_ENV = 'CURSOR_CONFIG_DIR';
-export const CURSOR_STATE_DB_PATH_ENV = 'CURSOR_STATE_DB_PATH';
+const CURSOR_CONFIG_DIR_ENV = 'CURSOR_CONFIG_DIR';
+const CURSOR_STATE_DB_PATH_ENV = 'CURSOR_STATE_DB_PATH';
 const CURSOR_STATE_DB_RELATIVE_PATH = join('User', 'globalStorage', 'state.vscdb');
 
 function getCursorDefaultStateDatabasePath(): string {

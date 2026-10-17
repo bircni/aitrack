@@ -3,8 +3,6 @@ import type { MigratableFile, Migration } from './types.js';
 import { v2 } from './v2.js';
 
 export type { Migration } from './types.js';
-/** @public Kept for the published subpath; lives in `timezone.ts`. */
-export { UNKNOWN_TIMEZONE } from '../../timezone.js';
 
 /**
  * Ordered migration chain. Each entry consumes `from` and produces `to`; the

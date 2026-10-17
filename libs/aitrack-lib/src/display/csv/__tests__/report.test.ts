@@ -47,9 +47,9 @@ describe('renderUsageReportCsv', () => {
     );
 
     expect(csv.split('\n')).toEqual([
-      'provider,model,input_tokens,cached_input_tokens,output_tokens,total_tokens,cost_usd,pricing_status',
-      'Claude Code,claude-opus-4-8,1000,,200,1200,3.5000,complete',
-      'TOTAL,,1000,,200,1200,3.5000,complete',
+      'provider,model,input_tokens,cached_input_tokens,output_tokens,total_tokens,cost_usd,pricing_status,unpriced_models',
+      'Claude Code,claude-opus-4-8,1000,,200,1200,3.5000,complete,',
+      'TOTAL,,1000,,200,1200,3.5000,complete,',
       '',
     ]);
   });
@@ -79,8 +79,8 @@ describe('renderUsageReportCsv', () => {
       ),
     );
 
-    expect(csv).toContain('Cursor,auto,500,,100,600,,unpriced\n');
-    expect(csv.trimEnd().endsWith('TOTAL,,500,,100,600,,unpriced')).toBe(true);
+    expect(csv).toContain('Cursor,auto,500,,100,600,,unpriced,\n');
+    expect(csv.trimEnd().endsWith('TOTAL,,500,,100,600,,unpriced,')).toBe(true);
   });
 
   it('prefixes formula-like model names so spreadsheets treat them as text', () => {
@@ -160,9 +160,9 @@ it('exports explicit partial status alongside cached input and known costs', () 
           hasUnpricedTokens: true,
         },
       ],
-      { ...item, tokens: 12 },
+      { ...item, tokens: 12, unpricedModels: ['mixed', 'other'] },
     ),
   );
-  expect(csv).toContain('Claude,mixed,10,5,2,12,1.0000,partial');
-  expect(csv).toContain('TOTAL,,10,5,2,12,1.0000,partial');
+  expect(csv).toContain('Claude,mixed,10,5,2,12,1.0000,partial,mixed');
+  expect(csv).toContain('TOTAL,,10,5,2,12,1.0000,partial,mixed; other');
 });

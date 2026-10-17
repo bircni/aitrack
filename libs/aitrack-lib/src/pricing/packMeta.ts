@@ -2,13 +2,13 @@ import type { ClaudeFamily } from '../data/modelId.js';
 import { environmentValue } from '../env.js';
 import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
 
-export interface PricingSupplementClaude {
+interface PricingSupplementClaude {
   models: Record<string, ClaudePricing>;
   overrides: Record<string, Array<PricingOverride<ClaudePricing>>>;
   familyFallback: Record<ClaudeFamily, ClaudePricing>;
 }
 
-export interface PricingSupplementCodex {
+interface PricingSupplementCodex {
   current: Record<string, CodexPricing>;
   historical: Record<string, CodexPricing>;
   overrides: Record<string, Array<PricingOverride<CodexPricing>>>;
@@ -19,7 +19,7 @@ export interface PricingSupplementCodex {
   }>;
 }
 
-export interface PricingSupplementCursor {
+interface PricingSupplementCursor {
   models: Record<string, CursorPricing>;
   fastMultipliers: Record<string, number>;
   aliases: Array<{ pattern: string; canonical: string }>;
@@ -47,12 +47,12 @@ export interface PricingManifest {
     litellm: string;
     modelsDev: string;
   };
-  /** SHA-256 hex digests for cache validation. */
-  hashes: Record<'supplement' | 'litellm' | 'modelsDev', string>;
+  /** SHA-256 hex digests the downloader checks; packs published before they existed lack them. */
+  hashes?: Record<'supplement' | 'litellm' | 'modelsDev', string>;
 }
 
-export const PRICING_BRANCH = 'pricing';
-export const PRICING_REPO = 'bircni/aitrack';
+const PRICING_BRANCH = 'pricing';
+const PRICING_REPO = 'bircni/aitrack';
 
 /**
  * Overridable for tests / mirrors.

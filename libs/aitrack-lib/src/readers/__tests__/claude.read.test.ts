@@ -14,13 +14,31 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, homedir: () => TEST_HOME };
 });
 
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    stat: vi.fn(actual.stat),
+    realpath: vi.fn(actual.realpath),
+    readdir: vi.fn(actual.readdir),
+  };
+});
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
   return { ...actual, createReadStream: vi.fn(actual.createReadStream) };
 });
 import { createReadStream } from 'node:fs';
+import { readdir, realpath, stat } from 'node:fs/promises';
 
 import { getClaudePaths, readClaudeData } from '../claude.js';
+
+function metadata(): number {
+  return [stat, realpath, readdir].reduce(
+    (sum, call) => sum + vi.mocked(call).mock.calls.length,
+    0,
+  );
+}
 
 function assistantLine(id: string, inputTokens: number, outputTokens: number): object {
   return {
@@ -105,6 +123,37 @@ describe('readClaudeData', () => {
     expect(cold.get('2024-01-15')?.inputTokens).toBe(10);
     expect([...warm]).toEqual([...cold]);
     expect(createReadStream).not.toHaveBeenCalled();
+  });
+
+  it('opens each transcript once cold and none warm, with a fixed metadata cost', async () => {
+    const root = join(TEST_HOME, 'claude', 'projects', 'project');
+    mkdirSync(root, { recursive: true });
+    process.env.AITRACK_CLAUDE_PROJECTS_DIRS = root;
+    const files = 5;
+    for (let file = 0; file < files; file++) {
+      writeJsonl(join(root, `${String(file)}.jsonl`), [
+        assistantLine('shared', 10, 5),
+        assistantLine(`own-${String(file)}`, 1, 1),
+      ]);
+    }
+    vi.mocked(createReadStream).mockClear();
+    const before = metadata();
+    const cold = await readClaudeData();
+    const coldCalls = metadata() - before;
+    expect(
+      vi
+        .mocked(createReadStream)
+        .mock.calls.map(([path]) => path)
+        .toSorted((a, b) => String(a).localeCompare(String(b))),
+    ).toEqual(Array.from({ length: files }, (_, file) => join(root, `${String(file)}.jsonl`)));
+
+    vi.mocked(createReadStream).mockClear();
+    const warmBefore = metadata();
+    const warm = await readClaudeData();
+
+    expect([...warm]).toEqual([...cold]);
+    expect(createReadStream).not.toHaveBeenCalled();
+    expect(metadata() - warmBefore).toBe(coldCalls);
   });
 
   it('picks up an appended message once the file changes', async () => {

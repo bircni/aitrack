@@ -9,6 +9,7 @@ const HEADER = [
   'total_tokens',
   'cost_usd',
   'pricing_status',
+  'unpriced_models',
 ];
 
 function csvField(value: string | number): string {
@@ -46,6 +47,7 @@ export function renderUsageReportCsv(report: UsageReport): string {
           row.tokens,
           row.hasCost ? row.costUSD.toFixed(4) : '', // Blank, not 0, when unpriced.
           pricingStatus(row),
+          row.hasUnpricedTokens ? row.model : '',
         ]),
       );
     }
@@ -62,6 +64,7 @@ export function renderUsageReportCsv(report: UsageReport): string {
       totals.tokens,
       totals.hasCost ? totals.costUSD.toFixed(4) : '',
       pricingStatus(totals),
+      (totals.unpricedModels ?? []).join('; '),
     ]),
   );
 

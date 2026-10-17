@@ -1,4 +1,4 @@
-import { EXTREME_TIME_ZONES, useTimeZone } from '@aitrack/test-fixtures';
+import { EXTREME_TIME_ZONES, makeDay, useTimeZone } from '@aitrack/test-fixtures';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,6 +6,7 @@ import {
   filterDayMapByYear,
   filterProviderDataByYear,
   getOrCreateDay,
+  mergeAllDayMaps,
   mergeDayMaps,
   toLocalDateString,
   tryLocalDateString,
@@ -46,6 +47,18 @@ describe('dayMap helpers', () => {
     const second = getOrCreateDay(dayMap, '2024-01-01');
     expect(second).toBe(first);
     expect(second.inputTokens).toBe(10);
+  });
+
+  it('mergeAllDayMaps sums a shared day into a fresh map', () => {
+    const a: DayMap = new Map([['2024-01-01', makeDay(100, 50, 0.2, 'm1')]]);
+    const b: DayMap = new Map([['2024-01-01', makeDay(200, 80, 0.3, 'm2')]]);
+
+    const merged = mergeAllDayMaps([a, b]);
+
+    expect(merged.get('2024-01-01')).toMatchObject({ inputTokens: 300, outputTokens: 130 });
+    expect(merged.get('2024-01-01')?.costUSD).toBeCloseTo(0.5);
+    expect(Object.keys(merged.get('2024-01-01')?.byModel ?? {})).toEqual(['m1', 'm2']);
+    expect(a.get('2024-01-01')?.inputTokens).toBe(100);
   });
 
   it('mergeDayMaps carries the cache token breakdown across', () => {

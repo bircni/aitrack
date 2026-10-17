@@ -76,7 +76,7 @@ export interface ClaudeMessageUsage {
 }
 
 /** Split cache writes into the 5-minute and 1-hour buckets when the transcript does. */
-export function claudeCacheWriteTokens(usage: ClaudeMessageUsage): {
+function claudeCacheWriteTokens(usage: ClaudeMessageUsage): {
   fiveMinute: number;
   oneHour: number;
 } {
@@ -102,15 +102,6 @@ export function claudeUsageCounts(usage: ClaudeMessageUsage): TokenCounts {
   };
 }
 
-export function estimateClaudeCostUSD(
-  model: string,
-  usage: ClaudeMessageUsage,
-  usageDate?: string,
-  fallbacks?: FallbackCollector,
-): number | undefined {
-  return estimateClaudeCostFromStoredCounts(model, claudeUsageCounts(usage), usageDate, fallbacks);
-}
-
 export function estimateClaudeCostFromAggregateTokens(
   model: string,
   inputTokens: number,
@@ -128,7 +119,7 @@ export function estimateClaudeCostFromAggregateTokens(
   });
 }
 
-export function claudeCountsHaveCostBreakdown(
+function claudeCountsHaveCostBreakdown(
   counts: Pick<TokenCounts, (typeof TOKEN_BREAKDOWN_FIELDS)[number]>,
 ): boolean {
   return TOKEN_BREAKDOWN_FIELDS.some((field) => counts[field] !== undefined);

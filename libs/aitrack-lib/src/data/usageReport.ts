@@ -60,6 +60,8 @@ export interface UsageReportTotals {
   costUSD: number;
   hasCost: boolean;
   hasUnpricedTokens?: boolean;
+  /** Models whose usage could not be priced, sorted and de-duplicated. */
+  unpricedModels?: string[];
 }
 
 export interface UsageReport {
@@ -194,6 +196,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
   const providers: UsageReportProvider[] = [];
   const totals = emptyUsageTotals();
   let rowCount = 0;
+  const unpriced = new Set<string>();
 
   for (const key of ordered) {
     const dayMap = providerData[key];
@@ -220,6 +223,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
         ...(agg.hasUnpricedTokens && { hasUnpricedTokens: true }),
       });
       hasUnpricedTokens ||= agg.hasUnpricedTokens === true;
+      if (agg.hasUnpricedTokens) unpriced.add(model);
       subtotalTokens += tokens;
       totals.inputTokens += agg.inputTokens;
       totals.outputTokens += agg.outputTokens;
@@ -251,6 +255,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
   }
 
   totals.tokens = totals.inputTokens + totals.outputTokens;
+  if (unpriced.size > 0) totals.unpricedModels = [...unpriced].toSorted();
   return { windowLabel: window.label, providers, totals, rowCount };
 }
 
