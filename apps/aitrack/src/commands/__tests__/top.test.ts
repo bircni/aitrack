@@ -95,6 +95,41 @@ describe('topCommand', () => {
     ]);
   });
 
+  it('projects: ranks by tokens, keeps the unattributed remainder and says Cursor is excluded', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([
+          [
+            '2026-01-01',
+            {
+              ...makeDay(100, 0, 10, 'opus'),
+              byProject: { 'acme/widget': { inputTokens: 60, outputTokens: 0, costUSD: 6 } },
+            },
+          ],
+        ]),
+      },
+      machineData: [],
+    });
+
+    await topCommand({ kind: 'projects', limit: 5, sort: 'tokens' });
+    const out = loggedOutput();
+    expect(out).toContain('Top 5 projects by tokens');
+    expect(out.indexOf('acme/widget')).toBeLessThan(out.indexOf('(unattributed)'));
+    expect(out).toContain('Cursor usage is not attributed');
+
+    vi.mocked(console.log).mockClear();
+    await topCommand({ kind: 'projects', limit: 5, sort: 'cost', json: true });
+    const parsed = JSON.parse(loggedOutput()) as {
+      items: Array<{ project: string; unattributed: boolean; tokens: number }>;
+      notes: string[];
+    };
+    expect(parsed.items.map((item) => [item.project, item.unattributed, item.tokens])).toEqual([
+      ['acme/widget', false, 60],
+      ['(unattributed)', true, 40],
+    ]);
+    expect(parsed.notes).toHaveLength(1);
+  });
+
   it('prints JSON when requested', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {

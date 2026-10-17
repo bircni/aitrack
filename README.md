@@ -49,13 +49,14 @@ The CLI needs **Node.js 24+**. Git is needed for cross-machine sync.
 <img src="docs/heatmap.png" alt="aitrack heatmap showing daily usage, token totals, estimated cost and streaks" width="720">
 
 - View daily usage by provider and model, or choose a calendar or rolling period.
-- Compare usage with the previous period and rank your busiest days or models.
+- Compare usage with the previous period and rank your busiest days, models or projects.
 - Render PNG heatmaps and export PDF or CSV reports.
 - Inspect machine totals and sync Claude Code and Codex history across computers.
 
 ```sh
 aitrack usage thismonth --compare
-aitrack top models
+aitrack top projects
+aitrack usage month --dir
 aitrack export month --csv
 ```
 

@@ -8,6 +8,8 @@ import type {
   DailyUsage,
   MachineUsage,
   PeriodUsage,
+  ProjectUsageEntry,
+  ProjectUsages,
   ProviderState,
   ProviderUsage,
   QuotaError,
@@ -58,6 +60,17 @@ export function periodSpend(usage: ProviderUsage | undefined, period: Period): P
   if (period === 'month') return usage.last30Days;
   if (period === 'all') return usage.allTime;
   return usage.last7Days;
+}
+
+export function periodProjects(
+  projects: ProjectUsages | undefined,
+  period: Period,
+): ProjectUsageEntry[] {
+  if (!projects) return [];
+  if (period === 'today') return projects.today;
+  if (period === 'month') return projects.last30Days;
+  if (period === 'all') return projects.allTime;
+  return projects.last7Days;
 }
 
 /** Unpriced tokens are not free, so their cost is a dash rather than $0.00. */

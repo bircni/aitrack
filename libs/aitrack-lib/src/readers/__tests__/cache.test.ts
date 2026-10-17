@@ -271,6 +271,7 @@ it('rejects corrupted message contributions and rebuilds only the affected entry
     date: '2024-01-15',
     model: 'm',
     counts: { inputTokens: 10, outputTokens: 1, costUSD: 2 },
+    project: 'o/r',
   };
   await cache.record(SOURCE, { days: days(10), keys: ['k'], messages: [message] });
   cache.save();
@@ -287,6 +288,18 @@ it('rejects corrupted message contributions and rebuilds only the affected entry
       mtimeMs: 1,
       size: 1,
       keys: [],
+      days: { date: { inputTokens: 1, outputTokens: 2, byModel: {}, byProject: { p: null } } },
+    },
+    {
+      mtimeMs: 1,
+      size: 1,
+      keys: [],
+      days: { date: { inputTokens: 1, outputTokens: 2, byModel: {}, byCwd: 'bad' } },
+    },
+    {
+      mtimeMs: 1,
+      size: 1,
+      keys: [],
       days: { date: { inputTokens: 1, outputTokens: 2, byModel: { m: null } } },
     },
   ]) {
@@ -298,6 +311,8 @@ it('rejects corrupted message contributions and rebuilds only the affected entry
     { ...message, key: 1 },
     { ...message, date: null },
     { ...message, model: null },
+    { ...message, project: null },
+    { ...message, cwd: 1 },
     { ...message, counts: { inputTokens: 1, outputTokens: 2, hasUnpricedTokens: 'bad' } },
     { ...message, counts: { inputTokens: 1, outputTokens: 2, costUSD: null } },
   ]) {

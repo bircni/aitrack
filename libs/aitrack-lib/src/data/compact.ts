@@ -27,7 +27,11 @@ function compactProviderDay(providerKey: string, date: string, day: ProviderDay)
       totals.hasUnpricedTokens = true;
     }
   }
-  return { byModel: { [COMPACTED_MODEL]: { ...totals } }, totals };
+  return {
+    byModel: { [COMPACTED_MODEL]: { ...totals } },
+    totals,
+    ...(day.byProject && { byProject: day.byProject }), // Small, and the only place a compacted day keeps its projects.
+  };
 }
 
 /** Days before `today` minus `afterDays` keep per-provider totals only; `today` is a local YYYY-MM-DD. */

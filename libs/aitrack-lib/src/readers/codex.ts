@@ -1,7 +1,14 @@
 import { join } from 'node:path';
 
 import { tryLoadConfig } from '../config.js';
-import { addModelUsage, getOrCreateDay, mergeDayMaps, tryLocalDateString } from '../data/dayMap.js';
+import {
+  addModelUsage,
+  type Attribution,
+  getOrCreateDay,
+  mergeDayMaps,
+  tryLocalDateString,
+} from '../data/dayMap.js';
+import { normalizeRemoteUrl } from '../data/project.js';
 import type { DayMap } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { estimateCodexCostUSD } from '../pricing/codex.js';
@@ -10,6 +17,7 @@ import type { CachedParse } from './cache.js';
 import { streamJsonlObjects } from './jsonl.js';
 import { codexHomeDirs, resolveSourceRoots } from './paths.js';
 import { parseProviderSources } from './pipeline.js';
+import { attributeCwd, createProjectResolver, type ProjectResolver } from './projectResolver.js';
 
 export function getCodexPaths(): string[] {
   return resolveSourceRoots({
@@ -36,6 +44,8 @@ interface CodexEntry {
   payload?: {
     type?: string;
     model?: string;
+    cwd?: string;
+    git?: { repository_url?: string };
     info?: {
       total_token_usage?: TokenUsage;
       last_token_usage?: TokenUsage;
@@ -49,9 +59,14 @@ interface SessionUsage {
   cachedInputTokens: number;
 }
 
-interface SessionResult extends SessionUsage {
+interface SessionTotals extends SessionUsage {
   dateStr: string;
   model: string;
+}
+
+interface SessionResult extends SessionTotals {
+  /** One per session file, so every result of a file shares it. */
+  attribution: Attribution;
 }
 
 function tokenUsageValues(usage: TokenUsage): SessionUsage {
@@ -63,7 +78,7 @@ function tokenUsageValues(usage: TokenUsage): SessionUsage {
 }
 
 function addSessionUsage(
-  results: Map<string, SessionResult>,
+  results: Map<string, SessionTotals>,
   dateStr: string,
   model: string,
   usage: SessionUsage,
@@ -83,14 +98,24 @@ function addSessionUsage(
   results.set(key, result);
 }
 
-export async function parseSessionFile(filePath: string): Promise<SessionResult[]> {
+export async function parseSessionFile(
+  filePath: string,
+  resolveProject: ProjectResolver = createProjectResolver(),
+): Promise<SessionResult[]> {
   let currentDate: string | null = null;
   let model = 'unknown';
   let previousTotal = { input_tokens: 0, output_tokens: 0, cached_input_tokens: 0 };
-  const results = new Map<string, SessionResult>();
+  const results = new Map<string, SessionTotals>();
+  let repositoryUrl: string | undefined;
+  let cwd: string | undefined;
 
   for await (const parsed of streamJsonlObjects(filePath)) {
     const entry = parsed as unknown as CodexEntry;
+
+    if (entry.type === 'session_meta' || (entry.type === 'turn_context' && cwd === undefined)) {
+      repositoryUrl ??= entry.payload?.git?.repository_url;
+      cwd ??= entry.payload?.cwd;
+    }
 
     if (entry.timestamp) {
       currentDate = tryLocalDateString(entry.timestamp) ?? currentDate;
@@ -137,7 +162,10 @@ export async function parseSessionFile(filePath: string): Promise<SessionResult[
     if (currentDate && usage) addSessionUsage(results, currentDate, model, usage);
   }
 
-  return [...results.values()];
+  const remote = repositoryUrl === undefined ? null : normalizeRemoteUrl(repositoryUrl);
+  const attribution: Attribution =
+    remote === null ? await attributeCwd(resolveProject, cwd) : { project: remote };
+  return [...results.values()].map((result) => ({ ...result, attribution }));
 }
 
 function addSessionResult(
@@ -155,12 +183,17 @@ function addSessionResult(
     dateStr,
     fallbacks,
   );
-  addModelUsage(day, model, {
-    inputTokens,
-    outputTokens,
-    cachedInputTokens,
-    ...(cost !== undefined && { costUSD: cost }),
-  });
+  addModelUsage(
+    day,
+    model,
+    {
+      inputTokens,
+      outputTokens,
+      cachedInputTokens,
+      ...(cost !== undefined && { costUSD: cost }),
+    },
+    result.attribution,
+  );
 }
 
 /**
@@ -169,20 +202,22 @@ function addSessionResult(
  */
 async function parseCodexFile(
   filePath: string,
-  fallbacks?: FallbackCollector,
+  fallbacks: FallbackCollector | undefined,
+  resolveProject: ProjectResolver,
 ): Promise<CachedParse> {
   const days: DayMap = new Map();
-  for (const result of await parseSessionFile(filePath)) {
+  for (const result of await parseSessionFile(filePath, resolveProject)) {
     addSessionResult(days, result, fallbacks);
   }
   return { days, keys: [] };
 }
 
 export async function readCodexData(fallbacks?: FallbackCollector): Promise<DayMap> {
+  const resolveProject = createProjectResolver();
   const parsed = await parseProviderSources({
     cacheName: 'codex',
     roots: getCodexPaths(),
-    parseFile: parseCodexFile,
+    parseFile: (filePath, collector) => parseCodexFile(filePath, collector, resolveProject),
     fallbacks,
   });
 

@@ -132,7 +132,21 @@ cost, and per-model movement with the equivalent previous period. Calendar-to-da
 the same elapsed days—for example, `aitrack usage thisweek --compare` compares this week so far with
 the same weekdays last week. Comparison data is also included with `--json`.
 
-**`top` flags:** `[days|models]` (default `days`), `-n, --limit <n>` (default 10), `--sort tokens|cost` (default `cost`), `--year <year>`, and `--since <YYYY-MM-DD>` / `--until <YYYY-MM-DD>` for an explicit inclusive date range.
+**`top` flags:** `[days|models|projects]` (default `days`), `-n, --limit <n>` (default 10), `--sort tokens|cost` (default `cost`), `--year <year>`, and `--since <YYYY-MM-DD>` / `--until <YYYY-MM-DD>` for an explicit inclusive date range.
+
+### Usage by project
+
+A project is the git `origin` of the folder the work happened in, written `owner/repo`: SSH, scp-style and HTTPS remotes, with or without `.git`, all give the same name, lower-cased. Only that name is stored. Never the host, credentials, a local path or a branch.
+
+- **Codex** sessions record the repository URL; when one is missing, or for **Claude Code**, aitrack runs `git -C <cwd> remote get-url origin` on the directory recorded in the transcript (once per directory per run). A directory that is gone, is not a repository or has no `origin` counts as `(no remote)`.
+- **Cursor** exports carry no project, so Cursor usage is never attributed and is excluded from every project view.
+- `aitrack usage <window> --dir [path]` filters the report to the project of that folder (default: the current directory) and includes every session of that repository, whatever subfolder it ran in. It works with `--json`, `--compare`, `--short` and `--watch`. A project has no model split, so each provider is one `(all models)` row. The output names the project and states what it cannot see: Cursor, other machines (only the days they synced with project data) and tokens that were never attributed.
+- A folder without an `origin` is matched by working-directory prefix on this machine only, with a note saying so. Those paths stay in this machine's local cache and are never synced; other machines' work in the same folder is not found.
+- `aitrack top projects` ranks projects like the other kinds (`--limit`, `--sort`, `--since`, `--until`, `--year`, `--json`). Work no project explains shows up as `(unattributed)`.
+
+**Encryption and repricing.** With `encryptData` on, `byProject` is encrypted with the rest of the file. A project has no per-model split to reprice from, so `recompute-costs` rescales a day's project costs by the same factor as the day's total, but only when the projects cover every token of that day; otherwise it leaves them as stored. Days re-read from the local logs get freshly priced project costs. Compacted days are never repriced, so their project costs do not change either. A malformed `byProject` is ignored with a warning (the day and the file still load).
+
+**Backfill.** Synced files gain an optional per-day, per-provider `byProject` map (`{ "owner/repo": tokens and cost }`), written by `sync` without a schema bump: older aitrack versions ignore it, and files without it still load. The next `sync` adds it for every day the local logs still cover, including days already compacted. Days whose logs were pruned before this version, and other machines' days until they sync with a new version, stay unattributed: there is no way to derive their projects afterwards. The unattributed part of a day is its total minus its `byProject`, and reports show it as `(unattributed)` where it matters. Parse caches rebuild once because they now store the project.
 
 **`doctor` flags:** `--pricing-check` also runs the pricing drift script when you are in a source checkout. Without it, doctor still reports the pricing cache: model counts, refresh outcome and the rates' `updatedAt`.
 
@@ -211,7 +225,7 @@ Stored at `~/.config/aitrack/config.json`:
 
 `aitrack config set compactAfterDays 365` (a positive whole number; `off` clears it) shrinks long-lived repos. When `sync` writes this machine's file, each day older than that many local calendar days keeps its per-provider totals (tokens and cost) but loses its per-model breakdown, which is replaced by a single `(compacted)` entry mirroring the totals. Report totals and costs for those days do not change, and older aitrack versions still read the file.
 
-The tradeoff is that per-model history for old days is gone: model tables show those days as `(compacted)`, and `recompute-costs` cannot reprice them and leaves the stored cost as it is. It is irreversible once pushed, because earlier commits are the only copy of the detail and the local logs are not used to restore a compacted day whose totals have not changed. Only this machine's file is compacted; other machines compact their own.
+A compacted day keeps its `byProject` map (it is small, and not part of the totals consistency rules), so project history survives compaction. The tradeoff is that per-model history for old days is gone: model tables show those days as `(compacted)`, and `recompute-costs` cannot reprice them and leaves the stored cost as it is. It is irreversible once pushed, because earlier commits are the only copy of the detail and the local logs are not used to restore a compacted day whose totals have not changed. Only this machine's file is compacted; other machines compact their own.
 
 ---
 
@@ -250,6 +264,9 @@ Each machine's file in the repo:
         "totals": { "inputTokens": 45000, "outputTokens": 3200, "costUSD": 0.183 }
       },
       "codex": {
+        "byProject": {
+          "owner/repo": { "inputTokens": 12000, "outputTokens": 800, "costUSD": 0.0185 }
+        },
         "byModel": {
           "gpt-5.1-codex": {
             "inputTokens": 12000,

@@ -138,9 +138,13 @@ export function buildProgram(): Command {
   program
     .command('top')
     .description(
-      'Show top days or models by tokens or cost. Uses already-local synced machine data.',
+      'Show top days, models or projects by tokens or cost. Uses already-local synced machine data.',
     )
-    .addArgument(new Argument('[kind]', 'what to rank').choices(['days', 'models']).default('days'))
+    .addArgument(
+      new Argument('[kind]', 'what to rank')
+        .choices(['days', 'models', 'projects'])
+        .default('days'),
+    )
     .option('-n, --limit <n>', 'number of items to show', parsePositiveIntArgument, 10)
     .addOption(
       new Option('--sort <field>', 'sort field').choices(['tokens', 'cost']).default('cost'),

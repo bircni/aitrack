@@ -221,6 +221,34 @@ describe('checkMachineFile', () => {
     }
   });
 
+  it('keeps an optional byProject without a schema bump and still loads files without one', () => {
+    const withProjects = structuredClone(validMachine);
+    Object.assign(withProjects.days['2026-01-15'].claude_code, {
+      byProject: { 'acme/widget': { inputTokens: 40, outputTokens: 10, costUSD: 0.5 } }, // Partial: not required to add up to the totals.
+    });
+    const raw = JSON.stringify(withProjects);
+    const checked = checkRawMachineFile(raw, 'data/laptop.json');
+    expect(checked.diagnostics).toEqual([]);
+    expect(checked.machine?.schemaVersion).toBe(2);
+    expect(JSON.stringify(checked.machine)).toBe(raw);
+    expect(checkMachineFile(validMachine, 'data/laptop.json').machine?.days).toEqual(
+      validMachine.days,
+    );
+  });
+
+  it('drops a malformed byProject but never the day or the file', () => {
+    for (const byProject of [[], { 'a/b': { inputTokens: 'x', outputTokens: 1 } }, 'nope']) {
+      const checked = checkMachineFile(
+        withProvider((provider) => {
+          Object.assign(provider, { byProject });
+        }),
+        'data/laptop.json',
+      );
+      expect(checked.diagnostics).toMatchObject([{ kind: 'projects-dropped', date: '2026-01-15' }]);
+      expect(checked.machine?.days).toEqual(validMachine.days);
+    }
+  });
+
   it('keeps the objects it was given, so a round-trip is byte-identical', () => {
     // sync writes back what it read; rebuilding these would reorder keys and
     // produce a spurious diff on every already-up-to-date machine.
@@ -259,6 +287,20 @@ describe('parseMachineFile', () => {
 
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('NaN-NaN-NaN'));
+    warn.mockRestore();
+  });
+
+  it('warns once per file when it ignores a malformed byProject', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const raw = JSON.stringify(
+      withProvider((provider) => {
+        Object.assign(provider, { byProject: 7 });
+      }),
+    );
+    for (const _ of [0, 1])
+      expect(parseMachineFile(raw, 'data/projects-warn.json')?.days).toBeDefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('Ignoring the project split of 2026-01-15');
     warn.mockRestore();
   });
 

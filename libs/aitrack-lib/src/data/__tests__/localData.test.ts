@@ -170,6 +170,47 @@ it('skips unselected provider readers while keeping default local-machine reads 
   expect(mocks.readCodexData).toHaveBeenCalledTimes(1);
 });
 
+it('writes byProject sorted, and the working directories only when asked to keep them locally', () => {
+  const counts = { inputTokens: 3, outputTokens: 1, costUSD: 2 };
+  const maps = {
+    claude_code: new Map([
+      [
+        '2026-01-01',
+        {
+          ...counts,
+          byModel: { m: counts },
+          byProject: { 'z/last': counts, 'a/first': counts },
+          byCwd: { '/work/loose': counts },
+        },
+      ],
+    ]),
+  };
+  const synced = buildMachineData('host', maps).days['2026-01-01']?.claude_code;
+  expect(Object.keys(synced?.byProject ?? {})).toEqual(['a/first', 'z/last']);
+  expect(synced).not.toHaveProperty('byCwd');
+  const local = buildMachineData('host', maps, { includeLocalDirs: true });
+  expect(local.days['2026-01-01']?.claude_code?.byCwd).toEqual({ '/work/loose': counts });
+});
+
+it('backfills byProject onto a compacted day without undoing the compaction', () => {
+  const compacted = {
+    '2026-01-01': {
+      claude_code: {
+        byModel: { '(compacted)': { inputTokens: 5, outputTokens: 0 } },
+        totals: { inputTokens: 5, outputTokens: 0 },
+      },
+    },
+  };
+  const byProject = { 'a/b': { inputTokens: 5, outputTokens: 0 } };
+  const fresh = {
+    '2026-01-01': { claude_code: { ...providerDay(5), byProject } },
+  };
+  expect(mergePersistedDays(compacted, fresh)['2026-01-01']?.claude_code).toEqual({
+    ...compacted['2026-01-01'].claude_code,
+    byProject,
+  });
+});
+
 it('preserves token breakdowns and partial pricing when writing machine data', () => {
   const counts = {
     inputTokens: 10,

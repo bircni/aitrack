@@ -1,4 +1,7 @@
+import type { ProjectSelector } from 'aitrack-lib/data/project';
 import { USAGE_PERIOD_DEFINITIONS } from 'aitrack-lib/data/usagePeriods';
+import { errorMessage } from 'aitrack-lib/errors';
+import { resolveProjectSelector } from 'aitrack-lib/readers/projectResolver';
 import type { Command } from 'commander';
 
 import { usageCommand } from '../commands/usage.js';
@@ -13,7 +16,18 @@ interface UsageCommonOptions {
   compare?: boolean;
   short?: boolean;
   refresh?: boolean;
+  dir?: string | true;
   watch?: number | true;
+}
+
+/** The project of `--dir`, which is the current directory when given without a path. */
+async function projectFor(dir: string | true | undefined): Promise<ProjectSelector | undefined> {
+  if (dir === undefined) return undefined;
+  try {
+    return await resolveProjectSelector(dir === true ? process.cwd() : dir);
+  } catch (error) {
+    throw new UsageError(`--dir: ${errorMessage(error)}`);
+  }
 }
 
 const PROVIDERS_FLAG = '--providers <list>';
@@ -33,6 +47,10 @@ export function registerUsageCommands(
       .option(REFRESH_FLAG, REFRESH_DESC)
       .option('--compare', 'compare with the equivalent previous period')
       .option('--short', 'print a single line (cost · tokens) for status bars and prompts')
+      .option(
+        '--dir [path]',
+        "only the project (origin remote) of this folder, default the current one; Cursor isn't attributed",
+      )
       .option('--json', 'print machine-readable JSON')
       .option(
         '--watch [seconds]',
@@ -48,18 +66,22 @@ export function registerUsageCommands(
           if (options.watch !== undefined && options.json) {
             throw new UsageError('--watch cannot be combined with --json.');
           }
-          const run = (): Promise<void> =>
-            usageCommand({
-              ...parseUsageReportOptions({
-                period: def.period,
-                args: command.args,
-                providers: options.providers,
-              }),
+          const reportOptions = parseUsageReportOptions({
+            period: def.period,
+            args: command.args,
+            providers: options.providers,
+          });
+          const run = async (): Promise<void> => {
+            const project = await projectFor(options.dir);
+            await usageCommand({
+              ...reportOptions,
               json: options.json,
+              ...(project !== undefined && { project }),
               ...(options.short !== undefined && { short: options.short }),
               ...(options.compare !== undefined && { compare: options.compare }),
               ...(options.refresh !== undefined && { refreshLive: options.refresh }),
             });
+          };
           return options.watch === undefined ? run() : watchUntilInterrupted(run, options.watch);
         },
         { command: 'usage', enabled: options.json },

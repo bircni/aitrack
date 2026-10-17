@@ -9,6 +9,8 @@ import type {
   AppState,
   MachineUsage,
   PeriodUsage,
+  ProjectUsageEntry,
+  ProjectUsages,
   ProviderState,
   ProviderUsage,
   QuotaProviderKey,
@@ -100,6 +102,33 @@ function readProviderUsage(value: unknown): ProviderUsage | undefined {
   };
 }
 
+function readProjectEntries(value: unknown): ProjectUsageEntry[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const entries = value.filter(
+    (entry): entry is ProjectUsageEntry =>
+      isSpend(entry) &&
+      typeof entry.project === 'string' &&
+      Array.isArray(entry.providers) &&
+      entry.providers.every(
+        (part) => isSpend(part) && typeof part.key === 'string' && typeof part.label === 'string',
+      ),
+  );
+  return entries.length === value.length ? entries : undefined;
+}
+
+function readProjects(value: unknown): ProjectUsages | undefined {
+  if (!isRecord(value)) return undefined;
+  const [today, last7Days, last30Days, allTime] = [
+    value.today,
+    value.last7Days,
+    value.last30Days,
+    value.allTime,
+  ].map((period) => readProjectEntries(period));
+  return today && last7Days && last30Days && allTime
+    ? { today, last7Days, last30Days, allTime }
+    : undefined;
+}
+
 function readMachineUsage(value: unknown): MachineUsage | undefined {
   if (
     !isRecord(value) ||
@@ -186,6 +215,7 @@ function normalizeCachedState(input: unknown): CachedState {
       ...(isRecord(usage.account) && {
         account: providerMap(usage.account, readProviderUsage),
       }),
+      ...(readProjects(usage.projects) && { projects: readProjects(usage.projects) }),
     },
     fired: Object.fromEntries(
       Object.entries(isRecord(raw.fired) ? raw.fired : {}).filter(
@@ -307,6 +337,7 @@ export class QuotaService {
       machineCount: this.cache.usage?.machineCount ?? 1,
       machines: this.cache.usage?.machines,
       accountUsage: this.cache.usage?.account,
+      projects: this.cache.usage?.projects,
       usageError: this.usageError,
       updatedAt: this.cache.updatedAt,
       usageUpdatedAt: this.cache.usageUpdatedAt,

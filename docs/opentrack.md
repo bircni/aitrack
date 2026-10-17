@@ -15,6 +15,13 @@ reads — including other machines synced through your aitrack data repo.
   they match the CLI.
 - **History** — a tab with stacked daily or weekly spend per provider over the last 30 or 90
   days, with the total, the average per day and the busiest day.
+- **Projects** — a tab that lists projects (the git `owner/repo` of the folder the work ran in)
+  for the selected period (Today / 7 days / 30 days / All time) with cost, tokens and a share bar;
+  expand one for its split per provider. Usage that no project explains is shown as
+  `(unattributed)`, and work in folders without a remote as `(no remote)`. Cursor has no project
+  data and is not counted. Attribution starts with the next refresh (this machine) or sync (other
+  machines), so the tab is empty until then and older synced days stay unattributed. The numbers
+  come from the same report builder as `aitrack top projects`.
 - **Machines** — with a synced data repo, a tab next to Providers splits the same spend per
   machine: its share of the period, a 30-day activity strip on one scale for every machine, the
   machine's local time when its timezone differs, and when it last synced. A machine that has not

@@ -12,6 +12,9 @@ function formatMachineFileDiagnostic(diagnostic: MachineFileDiagnostic): string 
     case 'day-dropped': {
       return `Dropping day ${diagnostic.date} from machine file ${diagnostic.filePath}: ${diagnostic.reason}`;
     }
+    case 'projects-dropped': {
+      return `Ignoring the project split of ${diagnostic.date} (${diagnostic.providerKey}) in machine file ${diagnostic.filePath}: ${diagnostic.reason}`;
+    }
     default: {
       const _exhaustive: never = diagnostic;
       throw new Error(`Unhandled machine-file diagnostic: ${JSON.stringify(_exhaustive)}`);
@@ -21,7 +24,7 @@ function formatMachineFileDiagnostic(diagnostic: MachineFileDiagnostic): string 
 
 export function reportMachineFileDiagnostics(diagnostics: MachineFileDiagnostic[]): void {
   for (const diagnostic of diagnostics) {
-    if (diagnostic.kind === 'day-dropped') {
+    if (diagnostic.kind !== 'file-skipped') {
       if (warnedDroppedDays.has(diagnostic.filePath)) continue;
       warnedDroppedDays.add(diagnostic.filePath);
     }

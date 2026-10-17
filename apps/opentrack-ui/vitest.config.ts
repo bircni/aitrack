@@ -1,13 +1,22 @@
+import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 
 import { aitrackLibAlias } from './vite.alias.js';
+
+// The tests must never read or write the developer's real ~/.config/aitrack (live pricing pack, config, caches).
+const testHome = join(tmpdir(), 'aitrack-vitest-home');
+mkdirSync(testHome, { recursive: true });
 
 export default defineConfig({
   plugins: [svelte()],
   resolve: { alias: aitrackLibAlias, conditions: ['browser'] },
   test: {
     include: ['src/**/__tests__/**/*.test.ts'],
+    env: { HOME: testHome, USERPROFILE: testHome },
     testTimeout: 15_000,
     coverage: {
       provider: 'v8',

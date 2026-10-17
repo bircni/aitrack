@@ -91,6 +91,7 @@ function renderUsageReport(report: UsageReport): void {
   ];
 
   log.info(chalk.bold(`aitrack usage ${report.windowLabel}`));
+  if (report.project) log.info(chalk.bold(`Project: ${report.project.label}`));
   log.info(
     renderTerminalTable([...rows, totalRow], columns, {
       style: defaultTableStyle(),
@@ -99,6 +100,12 @@ function renderUsageReport(report: UsageReport): void {
       footerStyle: chalk.bold.cyan,
     }),
   );
+}
+
+function renderProjectNotes(report: UsageReport | null): void {
+  if (!report?.project) return;
+  if (report.rowCount === 0) log.info(`Project: ${report.project.label}`);
+  for (const note of report.project.notes) log.info(chalk.dim(note));
 }
 
 function renderComparison(report: UsageComparisonReport): void {
@@ -203,6 +210,7 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
       ...(comparisonReport !== null && { comparison: comparisonReport.comparison }),
       ...(budget !== null && { budget }),
       ...(report?.timezoneNote !== undefined && { timezoneNote: report.timezoneNote }),
+      ...(report?.project !== undefined && { project: report.project }),
       ...(message !== null && { message }),
     });
     return;
@@ -217,6 +225,7 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   if (!report || report.rowCount === 0) {
     const message = emptyReportMessage(report);
     if (message !== null) log.info(message);
+    renderProjectNotes(report);
     return;
   }
 
@@ -224,6 +233,7 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   const footnote = unpricedFootnote(report.totals.unpricedModels);
   if (footnote !== null) log.info(chalk.dim(footnote));
   if (report.timezoneNote) log.info(chalk.dim(report.timezoneNote));
+  renderProjectNotes(report);
 
   if (budget) {
     renderBudgetLine(budget);
