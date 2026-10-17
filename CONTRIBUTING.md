@@ -170,6 +170,8 @@ If `nx` hangs without starting tasks (typically when Nx Cloud is unreachable),
 rerun with `NX_NO_CLOUD=true NX_DAEMON=false`.
 
 CI uses `nx affected` with `nrwl/nx-set-shas` supplying the comparison commits.
+The Audit job lints the workflows with actionlint, runs GitHub's dependency review on
+pull requests and `pnpm audit` against the lockfile, failing on high-severity advisories.
 The Ubuntu job runs the affected checks for every project except the Rust shell, plus
 CLI smoke tests and publish-tarball checks. In parallel, a `macos-latest` /
 `windows-latest` matrix runs CLI smoke and publish-tarball checks alongside opentrack's
@@ -256,7 +258,9 @@ The [Publish workflow](.github/workflows/publish.yml) triggers on that same `v*`
 - After both desktop packages succeed, the npm job re-runs `validate`, which also
   builds, for every project except the Rust shell, which the desktop jobs check. It
   then publishes `aitrack-lib` before `aitrack` with provenance. pnpm rewrites
-  `workspace:*` to the published library version.
+  `workspace:*` to the published library version. It also writes a CycloneDX SBOM of
+  each package's production dependencies from the lockfile, which the release job
+  attaches to the GitHub release.
 - Desktop jobs check the Rust shell's formatting, Clippy and tests, and package a
   Windows NSIS installer and a macOS DMG for Apple Silicon, plus the updater's signed
   `.app.tar.gz` and installer signatures, then upload them as workflow artifacts. Missing installers fail the build.
