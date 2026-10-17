@@ -8,10 +8,12 @@ import { buildLocalMachineFile } from 'aitrack-lib/data/localData';
 import { loadMergedProviderData } from 'aitrack-lib/data/usageData';
 import { machineZones } from 'aitrack-lib/data/usageReport';
 import { renderToPng } from 'aitrack-lib/display/renderPng';
-import { renderTui } from 'aitrack-lib/display/tui';
+import { renderTui, tuiStats } from 'aitrack-lib/display/tui';
 import { isCloned, writePendingMachineFile } from 'aitrack-lib/git';
 import { log } from 'aitrack-lib/output';
 import { warnAboutPricingFallbacks } from 'aitrack-lib/pricing/scan';
+
+import { printJsonCommand } from '../cli/json.js';
 
 function openFile(filePath: string): void {
   const opener =
@@ -38,6 +40,7 @@ export interface ShowOptions {
   year?: number;
   tui?: boolean;
   refresh?: boolean;
+  json?: boolean;
 }
 
 export async function showCommand(options: ShowOptions = {}): Promise<void> {
@@ -56,7 +59,12 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
   });
 
   if (!loaded) {
-    log.info(usageEmptyMessage(isUsageNotConfigured()));
+    const message = usageEmptyMessage(isUsageNotConfigured());
+    if (options.json) {
+      printJsonCommand('show', { mode: options.tui ? 'tui' : 'png', message });
+    } else {
+      log.info(message);
+    }
     return;
   }
 
@@ -64,6 +72,21 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
   const zones = machineZones(loaded.zonedSources);
   if (zones.length > 0) {
     log.info(`Heatmap days are each machine's local dates (${zones.join(', ')}).`);
+  }
+
+  if (options.tui && options.json) {
+    const { rows, footer } = tuiStats(loaded.providerData, {
+      all: options.all,
+      year: options.year,
+    });
+    printJsonCommand('show', {
+      mode: 'tui',
+      ...(options.year !== undefined && { year: options.year }),
+      providers: rows,
+      total: footer ?? null,
+      ...(rows.length === 0 && { message: usageEmptyMessage(loaded.warnedNotConfigured) }),
+    });
+    return;
   }
 
   if (options.tui) {
@@ -84,6 +107,10 @@ export async function showCommand(options: ShowOptions = {}): Promise<void> {
   });
   writeFileSync(outputPath, png);
 
-  log.info(`Saved: ${outputPath}`);
+  if (options.json) {
+    printJsonCommand('show', { mode: 'png', path: outputPath });
+  } else {
+    log.info(`Saved: ${outputPath}`);
+  }
   if (options.open !== false) openFile(outputPath);
 }

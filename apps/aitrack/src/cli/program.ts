@@ -1,8 +1,13 @@
 import { errorMessage } from 'aitrack-lib/errors';
-import { log } from 'aitrack-lib/output';
+import { log, routeInfoToStderr } from 'aitrack-lib/output';
 import { recomputeCosts } from 'aitrack-lib/recompute';
 import { Argument, Command, Option } from 'commander';
 
+import {
+  COMPLETION_SHELLS,
+  type CompletionShell,
+  completionScript,
+} from '../commands/completion.js';
 import { CONFIG_KEYS, configCommand } from '../commands/config.js';
 import { doctorCommand } from '../commands/doctor.js';
 import type { ExportOptions } from '../commands/export.js';
@@ -10,9 +15,11 @@ import { initCommand } from '../commands/init.js';
 import { installOpentrackCommand } from '../commands/installOpentrack.js';
 import { machinesCommand } from '../commands/machines.js';
 import type { ShowOptions } from '../commands/show.js';
-import { syncCommand } from '../commands/sync.js';
+import { type SyncOptions, syncCommand } from '../commands/sync.js';
 import { topCommand, type TopKind, type TopOptions } from '../commands/top.js';
 import { cliVersion } from '../version.js';
+import { EXIT_FAILURE, EXIT_USAGE, UsageError } from './errors.js';
+import { printJsonCommand, printJsonError } from './json.js';
 import {
   parseDateOption,
   parsePositiveIntArgument,
@@ -27,22 +34,37 @@ import {
   registerUsageCommands,
 } from './usageCommands.js';
 
+/** With `--json`, stdout carries only one JSON document, a `{ command, error }` one on failure. */
+export interface JsonRun {
+  command: string;
+  enabled: boolean | undefined;
+}
+
 /** Prints a thrown or rejected failure and sets a failing exit code. */
-export function runAsync(function_: () => void | Promise<void>): void {
+export function runAsync(function_: () => void | Promise<void>, json?: JsonRun): void {
+  const jsonCommand = json?.enabled ? json.command : undefined;
+  if (jsonCommand !== undefined) routeInfoToStderr();
+  const onFail = (error: unknown): void => {
+    fail(error, jsonCommand);
+  };
   try {
-    Promise.resolve(function_()).catch(fail);
+    Promise.resolve(function_()).catch(onFail);
   } catch (error) {
-    fail(error);
+    onFail(error);
   }
 }
 
-function fail(error: unknown): void {
-  log.error(errorMessage(error));
-  process.exitCode = 1; // Not process.exit, which can truncate buffered stdout.
+function fail(error: unknown, jsonCommand: string | undefined): void {
+  if (jsonCommand === undefined) log.error(errorMessage(error));
+  else printJsonError(jsonCommand, errorMessage(error));
+  process.exitCode = error instanceof UsageError ? EXIT_USAGE : EXIT_FAILURE; // Not process.exit, which can truncate buffered stdout.
 }
 
 export function buildProgram(): Command {
   const program = new Command();
+  program.exitOverride((error) => {
+    process.exit(error.exitCode === 0 ? 0 : EXIT_USAGE); // Set before the subcommands exist, so they inherit it.
+  });
 
   program
     .name('aitrack')
@@ -60,8 +82,10 @@ export function buildProgram(): Command {
     .command('sync')
     .description('Read local AI usage data and push to git repo')
     .option('--dry-run', 'show whether data would change without writing, committing, or pushing')
-    .action((options: { dryRun?: boolean }) => {
-      runAsync(() => syncCommand({ dryRun: options.dryRun }));
+    .option('--verify', 'exit with an error if commits are still waiting to be pushed afterwards')
+    .option('--json', 'print machine-readable JSON')
+    .action((options: SyncOptions) => {
+      runAsync(() => syncCommand(options), { command: 'sync', enabled: options.json });
     });
 
   program
@@ -77,11 +101,15 @@ export function buildProgram(): Command {
     .option('--year <year>', 'only include days from this calendar year', parseYearArgument)
     .option(REFRESH_FLAG, REFRESH_DESC)
     .option('--tui', 'render a stats table in the terminal instead of a PNG')
+    .option('--json', 'print machine-readable JSON (the stats with --tui, else the PNG path)')
     .action((options: ShowOptions) => {
-      runAsync(async () => {
-        const { showCommand } = await import('../commands/show.js'); // Keeps the native canvas binding off other commands' startup.
-        await showCommand(options);
-      });
+      runAsync(
+        async () => {
+          const { showCommand } = await import('../commands/show.js'); // Keeps the native canvas binding off other commands' startup.
+          await showCommand(options);
+        },
+        { command: 'show', enabled: options.json },
+      );
     });
 
   const usage = program
@@ -96,11 +124,15 @@ export function buildProgram(): Command {
     .option('--csv', 'write a spreadsheet-friendly CSV instead of the PDF receipt')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option(REFRESH_FLAG, REFRESH_DESC)
+    .option('--json', 'print machine-readable JSON')
     .action((period: string | undefined, args: string[], options: ExportOptions) => {
-      runAsync(async () => {
-        const { exportCommand } = await import('../commands/export.js'); // Keeps pdfkit off other commands' startup.
-        await exportCommand({ ...options, period, args });
-      });
+      runAsync(
+        async () => {
+          const { exportCommand } = await import('../commands/export.js'); // Keeps pdfkit off other commands' startup.
+          await exportCommand({ ...options, period, args });
+        },
+        { command: 'export', enabled: options.json },
+      );
     });
 
   program
@@ -128,7 +160,7 @@ export function buildProgram(): Command {
     .option(REFRESH_FLAG, REFRESH_DESC)
     .option('--json', 'print machine-readable JSON')
     .action((kind: TopKind, options: Omit<TopOptions, 'kind'>) => {
-      runAsync(() => topCommand({ ...options, kind }));
+      runAsync(() => topCommand({ ...options, kind }), { command: 'top', enabled: options.json });
     });
 
   program
@@ -138,7 +170,10 @@ export function buildProgram(): Command {
     )
     .option('--json', 'print machine-readable JSON')
     .action((options: { json?: boolean }) => {
-      runAsync(() => machinesCommand({ json: options.json }));
+      runAsync(() => machinesCommand({ json: options.json }), {
+        command: 'machines',
+        enabled: options.json,
+      });
     });
 
   program
@@ -150,10 +185,15 @@ export function buildProgram(): Command {
       '--replace-local',
       'Rebuild this machine from the local logs, dropping synced days the logs no longer cover',
     )
-    .action((options: { replaceLocal?: boolean }) => {
-      runAsync(async () => {
-        await recomputeCosts({ replaceLocal: options.replaceLocal });
-      });
+    .option('--json', 'print machine-readable JSON')
+    .action((options: { replaceLocal?: boolean; json?: boolean }) => {
+      runAsync(
+        async () => {
+          const { changed, pushed } = await recomputeCosts({ replaceLocal: options.replaceLocal });
+          if (options.json) printJsonCommand('recompute-costs', { changed, pushed });
+        },
+        { command: 'recompute-costs', enabled: options.json },
+      );
     });
 
   program
@@ -162,15 +202,30 @@ export function buildProgram(): Command {
     .option('--pricing-check', 'run the pricing drift script from a source checkout')
     .option('--json', 'print machine-readable JSON')
     .action((options: { pricingCheck?: boolean; json?: boolean }) => {
-      runAsync(() => doctorCommand({ pricingCheck: options.pricingCheck, json: options.json }));
+      runAsync(() => doctorCommand({ pricingCheck: options.pricingCheck, json: options.json }), {
+        command: 'doctor',
+        enabled: options.json,
+      });
     });
 
   program
     .command('install-opentrack')
     .description('Install the opentrack desktop app from the latest GitHub release')
     .option('--dir <path>', 'macOS: folder to put opentrack.app in (default: /Applications)')
-    .action((options: { dir?: string }) => {
-      runAsync(() => installOpentrackCommand({ dir: options.dir }));
+    .option('--json', 'print machine-readable JSON')
+    .action((options: { dir?: string; json?: boolean }) => {
+      runAsync(() => installOpentrackCommand({ dir: options.dir, json: options.json }), {
+        command: 'install-opentrack',
+        enabled: options.json,
+      });
+    });
+
+  program
+    .command('completion')
+    .description('Print a shell completion script (eval it or save it to your completions folder)')
+    .addArgument(new Argument('<shell>', 'target shell').choices(COMPLETION_SHELLS))
+    .action((shell: CompletionShell) => {
+      process.stdout.write(completionScript(program, shell));
     });
 
   const config = program
@@ -180,19 +235,27 @@ export function buildProgram(): Command {
   config
     .command('list')
     .description('Print the current configuration')
-    .action(() => {
-      runAsync(() => {
-        configCommand({ action: 'list' });
-      });
+    .option('--json', 'print machine-readable JSON')
+    .action((options: { json?: boolean }) => {
+      runAsync(
+        () => {
+          configCommand({ action: 'list', ...(options.json && { json: true }) });
+        },
+        { command: 'config', enabled: options.json },
+      );
     });
 
   config
     .command('get <key>')
     .description('Print a single configuration value')
-    .action((key: string) => {
-      runAsync(() => {
-        configCommand({ action: 'get', key });
-      });
+    .option('--json', 'print machine-readable JSON')
+    .action((key: string, options: { json?: boolean }) => {
+      runAsync(
+        () => {
+          configCommand({ action: 'get', key, ...(options.json && { json: true }) });
+        },
+        { command: 'config', enabled: options.json },
+      );
     });
 
   config

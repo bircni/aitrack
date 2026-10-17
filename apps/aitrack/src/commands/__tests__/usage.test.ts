@@ -87,11 +87,12 @@ describe('usageCommand', () => {
       │ Codex       │    300 │ mystery-gpt   │               — │
       ├─────────────┼────────┼───────────────┼─────────────────┤
       │ TOTAL       │   1.5K │               │ $1.20 (partial) │
-      └─────────────┴────────┴───────────────┴─────────────────┘"
+      └─────────────┴────────┴───────────────┴─────────────────┘
+      Unpriced models: mystery-gpt"
     `);
   });
 
-  it('shows cached input and the cache-rate note for Codex rows', async () => {
+  it('omits the cached column for Codex rows', async () => {
     mocks.loadMergedProviderData.mockResolvedValue({
       providerData: {
         codex: new Map([
@@ -122,19 +123,30 @@ describe('usageCommand', () => {
     const out = loggedOutput();
     expect(out).toContain('GPT-6 Astra');
     expect(out).toContain('5.0M');
-    expect(out).toContain('4.8M');
     expect(out).toContain('$7.21');
-    expect(out).toContain('Cached is included in Tokens');
+    expect(out).not.toContain('Cached');
     expect(out.slice(out.indexOf('┌'))).toMatchInlineSnapshot(`
-      "┌──────────┬────────┬────────┬─────────────┬───────┐
-      │ Provider │ Tokens │ Cached │ Model       │ Price │
-      ├──────────┼────────┼────────┼─────────────┼───────┤
-      │ Codex    │   5.0M │   4.8M │ GPT-6 Astra │ $7.21 │
-      ├──────────┼────────┼────────┼─────────────┼───────┤
-      │ TOTAL    │   5.0M │   4.8M │             │ $7.21 │
-      └──────────┴────────┴────────┴─────────────┴───────┘
-      Cached is included in Tokens (prompt-cache hits, billed cheaper)."
+      "┌──────────┬────────┬─────────────┬───────┐
+      │ Provider │ Tokens │ Model       │ Price │
+      ├──────────┼────────┼─────────────┼───────┤
+      │ Codex    │   5.0M │ GPT-6 Astra │ $7.21 │
+      ├──────────┼────────┼─────────────┼───────┤
+      │ TOTAL    │   5.0M │             │ $7.21 │
+      └──────────┴────────┴─────────────┴───────┘"
     `);
+  });
+
+  it('prints a single line with --short', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue({
+      providerData: {
+        claude_code: new Map([[TODAY, makeDay(1000, 200, 1.2, 'claude-opus-4-8')]]),
+      },
+      machineData: [],
+    });
+
+    await usageCommand({ period: 'today', providers: ['claude_code'], short: true });
+
+    expect(loggedOutput()).toBe('$1.20 · 1.2K tokens');
   });
 
   it('prints JSON when requested', async () => {
@@ -320,6 +332,7 @@ describe('usageCommand', () => {
     });
     await usageCommand({ period: 'thismonth', compare: true });
     expect(loggedOutput()).toContain('(partial)');
+    expect(loggedOutput()).toContain('Unpriced models: mixed');
     expect(loggedOutput()).toContain('Cost comparison is a partial estimate');
     expect(loggedOutput()).toContain('Budget spend is a partial estimate');
   });

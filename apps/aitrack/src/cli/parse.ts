@@ -7,8 +7,11 @@ import {
   usagePeriodDefinition,
 } from 'aitrack-lib/data/usagePeriods';
 import type { UsageReportOptions } from 'aitrack-lib/data/usageReport';
+import { errorMessage } from 'aitrack-lib/errors';
 import { normalizeProviderKey, providerKeys } from 'aitrack-lib/providers/index';
 import { InvalidArgumentError } from 'commander';
+
+import { UsageError } from './errors.js';
 
 /** Commander option parser: a bare YYYY-MM-DD date, or a friendly rejection. */
 export function parseDateOption(value: string): string {
@@ -71,8 +74,12 @@ export function parseUsageReportOptions(input: ParseUsageReportOptionsInput): Us
   const { providers } = input;
 
   if (!isUsagePeriod(period)) {
-    throw new Error(invalidUsagePeriodMessage(period));
+    throw new UsageError(invalidUsagePeriodMessage(period));
   }
 
-  return { period, providers, ...usagePeriodDefinition(period).parseArgs(args) };
+  try {
+    return { period, providers, ...usagePeriodDefinition(period).parseArgs(args) };
+  } catch (error) {
+    throw new UsageError(errorMessage(error));
+  }
 }

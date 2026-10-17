@@ -4,7 +4,11 @@ import { NO_CONFIG_MESSAGE, REPO_URL_UNSET_MESSAGE } from 'aitrack-lib/data/mess
 import { migrateMachineDataFiles } from 'aitrack-lib/git';
 import { normalizeMachineId } from 'aitrack-lib/machineId';
 import { log } from 'aitrack-lib/output';
+import { ENCRYPTION_PASSPHRASE_ENV, encryptionPassphrase } from 'aitrack-lib/store/encryption';
 import chalk from 'chalk';
+
+import { UsageError } from '../cli/errors.js';
+import { printJsonCommand } from '../cli/json.js';
 
 export const CONFIG_KEYS = [
   'repoUrl',
@@ -12,6 +16,8 @@ export const CONFIG_KEYS = [
   'claudeProjectsDir',
   'codexSessionsDir',
   'budget.monthly',
+  'encryptData',
+  'compactAfterDays',
 ] as const;
 type ConfigKey = (typeof CONFIG_KEYS)[number];
 
@@ -20,7 +26,7 @@ function isConfigKey(key: string): key is ConfigKey {
 }
 
 function unknownKeyError(key: string): Error {
-  return new Error(`Unknown config key: "${key}". Valid keys: ${CONFIG_KEYS.join(', ')}.`);
+  return new UsageError(`Unknown config key: "${key}". Valid keys: ${CONFIG_KEYS.join(', ')}.`);
 }
 
 function configValue(config: Config | null, key: ConfigKey): string | number | boolean | undefined {
@@ -35,6 +41,10 @@ function configValue(config: Config | null, key: ConfigKey): string | number | b
     case 'budget.monthly': {
       return config.budget?.monthlyUSD;
     }
+    case 'encryptData':
+    case 'compactAfterDays': {
+      return config[key];
+    }
     default: {
       const _exhaustive: never = key;
       throw new Error(`Unhandled config key: ${String(_exhaustive)}`);
@@ -45,7 +55,22 @@ function configValue(config: Config | null, key: ConfigKey): string | number | b
 function parseMonthlyBudget(value: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error('budget.monthly must be a positive dollar amount, e.g. 200 or 149.99.');
+    throw new UsageError('budget.monthly must be a positive dollar amount, e.g. 200 or 149.99.');
+  }
+  return parsed;
+}
+
+function parseEncryptData(value: string): boolean {
+  if (value === 'true' || value === 'false') return value === 'true';
+  throw new Error('encryptData must be true or false.');
+}
+
+/** Undefined for "off", which clears the setting. */
+function parseCompactAfterDays(value: string): number | undefined {
+  if (value === 'off') return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error('compactAfterDays must be a positive whole number of days, or "off".');
   }
   return parsed;
 }
@@ -54,16 +79,17 @@ export interface ConfigCommandOptions {
   action: 'list' | 'get' | 'set';
   key?: string;
   value?: string;
+  json?: boolean;
 }
 
 export function configCommand(options: ConfigCommandOptions): void {
   switch (options.action) {
     case 'list': {
-      listConfig();
+      listConfig(options.json);
       break;
     }
     case 'get': {
-      getConfig(options.key);
+      getConfig(options.key, options.json);
       break;
     }
     case 'set': {
@@ -84,8 +110,17 @@ function existingConfig(): Config | null {
   return loaded.status === 'ok' ? loaded.config : null;
 }
 
-function listConfig(): void {
+function listConfig(json?: boolean): void {
   const config = existingConfig();
+  if (json) {
+    printJsonCommand('config', {
+      action: 'list',
+      values: Object.fromEntries(CONFIG_KEYS.map((key) => [key, configValue(config, key) ?? null])),
+      resolvedMachineId: config ? resolveMachineId(config) : null,
+      ...(!config && { message: NO_CONFIG_MESSAGE }),
+    });
+    return;
+  }
   if (!config) {
     log.info(NO_CONFIG_MESSAGE);
     return;
@@ -98,11 +133,15 @@ function listConfig(): void {
   log.info(`  ${chalk.dim('resolved machineId')} = ${resolveMachineId(config)}`);
 }
 
-function getConfig(key: string | undefined): void {
+function getConfig(key: string | undefined, json?: boolean): void {
   if (key === undefined || !isConfigKey(key)) {
     throw unknownKeyError(key ?? '');
   }
   const value = configValue(existingConfig(), key);
+  if (json) {
+    printJsonCommand('config', { action: 'get', key, value: value ?? null });
+    return;
+  }
   if (value === undefined) {
     log.info('');
     return;
@@ -115,13 +154,24 @@ function setConfig(key: string | undefined, value: string | undefined): void {
     throw unknownKeyError(key ?? '');
   }
   if (value === undefined) {
-    throw new Error(`A value is required: aitrack config set ${key} <value>`);
+    throw new UsageError(`A value is required: aitrack config set ${key} <value>`);
   }
   const existing = existingConfig();
   const base: Config = existing ?? { repoUrl: '' };
   let next: Config;
   if (key === 'budget.monthly') {
     next = { ...base, budget: { ...base.budget, monthlyUSD: parseMonthlyBudget(value) } };
+  } else if (key === 'encryptData') {
+    next = { ...base, encryptData: parseEncryptData(value) };
+    if (next.encryptData && encryptionPassphrase() === undefined) {
+      log.warn(
+        chalk.yellow(`${ENCRYPTION_PASSPHRASE_ENV} is not set; sync will fail until it is.`),
+      );
+    }
+  } else if (key === 'compactAfterDays') {
+    const { compactAfterDays: _previous, ...rest } = base;
+    const days = parseCompactAfterDays(value);
+    next = days === undefined ? rest : { ...rest, compactAfterDays: days };
   } else if (key === 'machineId') {
     const machineId = normalizeMachineId(value);
     migrateMachineDataFiles(resolveMachineId(existing), machineId);

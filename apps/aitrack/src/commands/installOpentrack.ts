@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { isRecord } from 'aitrack-lib/data/guards';
 import { log } from 'aitrack-lib/output';
 
+import { printJsonCommand } from '../cli/json.js';
 import { OPENTRACK_PUBLIC_KEY, verifyMinisign } from '../minisign.js';
 
 /** The manifest opentrack's own updater reads; prereleases never become "latest". */
@@ -17,6 +18,7 @@ const APP_NAME = 'opentrack.app';
 export interface InstallOpentrackOptions {
   /** macOS: the folder opentrack.app goes into. */
   dir?: string;
+  json?: boolean;
 }
 
 interface Release {
@@ -106,6 +108,21 @@ function runWindowsInstaller(installer: Buffer): void {
   }
 }
 
+function reportInstalled(
+  options: InstallOpentrackOptions,
+  version: string,
+  path: string | null,
+): void {
+  if (options.json) {
+    printJsonCommand('install-opentrack', { version, path });
+    return;
+  }
+  log.info(`Installed opentrack ${version}${path === null ? '' : ` to ${path}`}.`);
+  if (path !== null) {
+    log.info('It updates itself from now on. If it was running, quit and reopen it.');
+  }
+}
+
 export async function installOpentrackCommand(
   options: InstallOpentrackOptions = {},
 ): Promise<void> {
@@ -122,10 +139,9 @@ export async function installOpentrackCommand(
   if (process.platform === 'win32') {
     log.info('Running the opentrack installer...');
     runWindowsInstaller(file);
-    log.info(`Installed opentrack ${release.version}.`);
+    reportInstalled(options, release.version, null);
     return;
   }
   const path = installMacApp(file, options.dir ?? '/Applications');
-  log.info(`Installed opentrack ${release.version} to ${path}.`);
-  log.info('It updates itself from now on. If it was running, quit and reopen it.');
+  reportInstalled(options, release.version, path);
 }

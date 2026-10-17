@@ -84,8 +84,14 @@ describe('installOpentrackCommand', () => {
     mkdirSync(join(dir, 'opentrack.app'));
     writeFileSync(join(dir, 'opentrack.app', 'version'), '3.0.0');
 
-    await installOpentrackCommand({ dir });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    await installOpentrackCommand({ dir, json: true });
 
+    expect(JSON.parse(String(log.mock.calls.at(-1)?.[0]))).toEqual({
+      command: 'install-opentrack',
+      version: '3.1.0',
+      path: join(dir, 'opentrack.app'),
+    });
     expect(mocks.verifyMinisign).toHaveBeenCalledWith(
       Buffer.from('package'),
       'mac-sig',

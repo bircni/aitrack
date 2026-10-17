@@ -6,6 +6,7 @@ import { renderReceiptPdf } from 'aitrack-lib/display/pdf/receipt';
 import { log } from 'aitrack-lib/output';
 import chalk from 'chalk';
 
+import { printJsonCommand } from '../cli/json.js';
 import { parseUsageReportOptions } from '../cli/parse.js';
 
 export interface ExportOptions {
@@ -15,6 +16,7 @@ export interface ExportOptions {
   providers?: string[];
   csv?: boolean;
   refresh?: boolean;
+  json?: boolean;
 }
 
 export async function exportCommand(options: ExportOptions): Promise<void> {
@@ -25,18 +27,30 @@ export async function exportCommand(options: ExportOptions): Promise<void> {
 
   if (!report || report.rowCount === 0) {
     const message = emptyReportMessage(report);
-    if (message !== null) log.info(message);
+    if (options.json) {
+      printJsonCommand('export', { path: null, rowCount: 0, ...(message !== null && { message }) });
+    } else if (message !== null) {
+      log.info(message);
+    }
     return;
   }
 
   const output = options.output ?? `aitrack-receipt.${options.csv ? 'csv' : 'pdf'}`;
-  if (options.csv) {
-    writeFileSync(output, renderUsageReportCsv(report));
-    log.info(chalk.bold(`Wrote CSV for ${report.windowLabel} → ${output}`));
+  const format = options.csv ? 'csv' : 'pdf';
+  writeFileSync(
+    output,
+    options.csv ? renderUsageReportCsv(report) : await renderReceiptPdf(report),
+  );
+  if (options.json) {
+    printJsonCommand('export', {
+      path: output,
+      format,
+      rowCount: report.rowCount,
+      windowLabel: report.windowLabel,
+    });
     return;
   }
-
-  const pdf = await renderReceiptPdf(report);
-  writeFileSync(output, pdf);
-  log.info(chalk.bold(`Wrote receipt for ${report.windowLabel} → ${output}`));
+  log.info(
+    chalk.bold(`Wrote ${options.csv ? 'CSV' : 'receipt'} for ${report.windowLabel} → ${output}`),
+  );
 }

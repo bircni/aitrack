@@ -59,6 +59,7 @@ describe('buildProgram', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     for (const function_ of Object.values(mocks)) function_.mockResolvedValue(undefined);
+    mocks.recomputeCosts.mockResolvedValue({ changed: 2, pushed: true });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -70,9 +71,11 @@ describe('buildProgram', () => {
     await run('init');
     expect(mocks.initCommand).toHaveBeenCalled();
     await run('sync');
-    expect(mocks.syncCommand).toHaveBeenCalledWith({ dryRun: undefined });
-    await run('sync', '--dry-run');
-    expect(mocks.syncCommand).toHaveBeenCalledWith({ dryRun: true });
+    expect(mocks.syncCommand).toHaveBeenCalledWith({});
+    await run('sync', '--dry-run', '--json');
+    expect(mocks.syncCommand).toHaveBeenCalledWith({ dryRun: true, json: true });
+    await run('sync', '--verify');
+    expect(mocks.syncCommand).toHaveBeenCalledWith({ verify: true });
     await run('machines');
     expect(mocks.machinesCommand).toHaveBeenCalledWith({ json: undefined });
     await run('machines', '--json');
@@ -88,7 +91,10 @@ describe('buildProgram', () => {
     await run('doctor', '--json');
     expect(mocks.doctorCommand).toHaveBeenCalledWith({ pricingCheck: undefined, json: true });
     await run('install-opentrack', '--dir', '/tmp/apps');
-    expect(mocks.installOpentrackCommand).toHaveBeenCalledWith({ dir: '/tmp/apps' });
+    expect(mocks.installOpentrackCommand).toHaveBeenCalledWith({
+      dir: '/tmp/apps',
+      json: undefined,
+    });
   });
 
   it('maps show options', async () => {
@@ -167,8 +173,12 @@ describe('buildProgram', () => {
   it('wires the config subcommands', async () => {
     await run('config', 'list');
     expect(mocks.configCommand).toHaveBeenCalledWith({ action: 'list' });
-    await run('config', 'get', 'repoUrl');
-    expect(mocks.configCommand).toHaveBeenCalledWith({ action: 'get', key: 'repoUrl' });
+    await run('config', 'get', 'repoUrl', '--json');
+    expect(mocks.configCommand).toHaveBeenCalledWith({
+      action: 'get',
+      key: 'repoUrl',
+      json: true,
+    });
     await run('config', 'set', 'machineId', 'box');
     expect(mocks.configCommand).toHaveBeenCalledWith({
       action: 'set',
@@ -191,7 +201,27 @@ describe('buildProgram', () => {
     });
 
     it('rejects an invalid usage date', async () => {
-      expect(await runAndSettle('usage', 'date', 'nope')).toBe(1);
+      expect(await runAndSettle('usage', 'date', 'nope')).toBe(2);
+      expect(mocks.usageCommand).not.toHaveBeenCalled();
+    });
+
+    it('exits 2 for commander argument errors', async () => {
+      await expect(run('top', 'weeks')).rejects.toThrow('exit');
+      expect(vi.spyOn(process, 'exit')).toHaveBeenCalledWith(2);
+    });
+
+    it('prints a JSON error document in --json mode', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      expect(await runAndSettle('usage', 'date', 'nope', '--json')).toBe(2);
+      expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
+        command: 'usage',
+        error: expect.stringContaining('nope') as string,
+      });
+    });
+
+    it('rejects --watch below the minimum and with --json', async () => {
+      await expect(run('usage', 'today', '--watch', '2')).rejects.toThrow('exit');
+      expect(await runAndSettle('usage', 'today', '--watch', '--json')).toBe(2);
       expect(mocks.usageCommand).not.toHaveBeenCalled();
     });
 
