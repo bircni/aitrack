@@ -36,6 +36,14 @@ describe('project resolution', () => {
     expect(await resolve(join(root, 'gone'))).toBeNull();
   });
 
+  it('resolves a removed agent worktree through the repository that created it', async () => {
+    const resolve = createProjectResolver();
+    const gone = join(withRemote, '.claude', 'worktrees', 'agent-1a2b');
+    expect(await resolve(gone)).toBe('owner/repo');
+    expect(await resolve(join(gone, 'sub'))).toBe('owner/repo');
+    expect(await resolve(join(withoutRemote, '.claude', 'worktrees', 'agent-1a2b'))).toBeNull();
+  });
+
   it('attributes a cwd to its project and keeps the cwd of work without a remote', async () => {
     const resolve = createProjectResolver();
     expect(await attributeCwd(resolve, withRemote)).toEqual({ project: 'owner/repo' });
