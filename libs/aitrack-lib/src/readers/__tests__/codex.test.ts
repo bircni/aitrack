@@ -181,6 +181,7 @@ describe('parseSessionFile', () => {
 
     expect(await parseSessionFile(file)).toEqual([
       {
+        attribution: { project: '(no remote)' },
         dateStr: '2024-01-15',
         model: 'gpt-5.1-codex',
         inputTokens: 100,
@@ -188,6 +189,7 @@ describe('parseSessionFile', () => {
         cachedInputTokens: 0,
       },
       {
+        attribution: { project: '(no remote)' },
         dateStr: '2024-01-16',
         model: 'gpt-5.4',
         inputTokens: 150,
@@ -271,4 +273,36 @@ describe('parseSessionFile', () => {
     const sessions = await parseSessionFile(file);
     expect(sessions[0]).toMatchObject({ outputTokens: 8 });
   });
+});
+
+function tokenEvent(input: number): object {
+  return {
+    type: 'event_msg',
+    timestamp: localTimestamp('2024-01-15'),
+    payload: {
+      type: 'token_count',
+      info: { total_token_usage: { input_tokens: input, output_tokens: 1 } },
+    },
+  };
+}
+
+it('attributes a session to its repository_url, else to the cwd origin, else to no remote', async () => {
+  const write = (name: string, meta: object | undefined) => {
+    const file = join(tmpDir, name);
+    writeJsonl(file, [...(meta ? [{ type: 'session_meta', payload: meta }] : []), tokenEvent(10)]);
+    return file;
+  };
+  const gitUrl = write('a.jsonl', {
+    cwd: '/x/y',
+    git: { repository_url: 'git@github.com:Acme/Widget.git' },
+  });
+  const cwdOnly = write('b.jsonl', { cwd: join(tmpDir, 'missing') });
+  const bare = write('c.jsonl', undefined);
+
+  const [fromUrl] = await parseSessionFile(gitUrl);
+  const [fromCwd] = await parseSessionFile(cwdOnly);
+  const [fromNothing] = await parseSessionFile(bare);
+  expect(fromUrl?.attribution).toEqual({ project: 'acme/widget' });
+  expect(fromCwd?.attribution).toEqual({ project: '(no remote)', cwd: join(tmpDir, 'missing') });
+  expect(fromNothing?.attribution).toEqual({ project: '(no remote)' });
 });

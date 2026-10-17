@@ -21,9 +21,26 @@ function tokenCountFields(counts: TokenCounts): TokenCounts {
   return fields;
 }
 
+/** Sorted by key, so the serialized file does not change when only the read order did. */
+function sortedCounts(
+  byKey: Record<string, TokenCounts> | undefined,
+): Record<string, TokenCounts> | undefined {
+  if (byKey === undefined) return undefined;
+  const entries = Object.entries(byKey).toSorted(([a], [b]) => a.localeCompare(b));
+  return entries.length === 0
+    ? undefined
+    : Object.fromEntries(entries.map(([key, counts]) => [key, tokenCountFields(counts)]));
+}
+
+export interface BuildMachineOptions {
+  /** Keep the working directories of work with no remote, for matching `--dir` on this machine. Never synced. */
+  includeLocalDirs?: boolean;
+}
+
 export function buildMachineData(
   machineId: string,
   allProviders: Record<string, DayMap>,
+  options: BuildMachineOptions = {},
 ): MachineFile {
   const days: MachineFile['days'] = {};
   for (const [providerKey, dayMap] of Object.entries(allProviders)) {
@@ -33,9 +50,13 @@ export function buildMachineData(
       for (const [model, counts] of Object.entries(day.byModel)) {
         byModel[model] = tokenCountFields(counts);
       }
+      const byProject = sortedCounts(day.byProject);
+      const byCwd = options.includeLocalDirs ? sortedCounts(day.byCwd) : undefined;
       days[date][providerKey] = {
         byModel,
         totals: tokenCountFields(day),
+        ...(byProject && { byProject }),
+        ...(byCwd && { byCwd }),
       };
     }
   }
@@ -100,6 +121,12 @@ export function mergePersistedDays(
         (dayTokens(freshDay) >= dayTokens(persistedDay) && !isUnchangedCompacted)
       ) {
         providers[providerKey] = freshDay;
+      } else if (
+        isUnchangedCompacted &&
+        persistedDay.byProject === undefined &&
+        freshDay.byProject !== undefined
+      ) {
+        providers[providerKey] = { ...persistedDay, byProject: freshDay.byProject }; // Backfill without undoing the compaction.
       }
     }
     days[date] = Object.fromEntries(
@@ -133,7 +160,8 @@ export async function buildLocalMachineFile(
   machineId: string,
   fallbacks?: FallbackCollector,
   providers?: readonly string[],
+  options?: BuildMachineOptions,
 ): Promise<MachineFile> {
   const maps = await readLocalProviderMaps(fallbacks, providers);
-  return buildMachineData(machineId, maps);
+  return buildMachineData(machineId, maps, options);
 }

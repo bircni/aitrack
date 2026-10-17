@@ -43,6 +43,7 @@ vi.mock('../data/localData.js', async () => {
           days[date][providerKey] = {
             byModel: day.byModel,
             totals: { inputTokens: day.inputTokens, outputTokens: day.outputTokens },
+            ...(day.byProject && { byProject: day.byProject }),
           };
         }
       }
@@ -207,6 +208,34 @@ describe('syncData', () => {
       byModel: { '(compacted)': { inputTokens: 20, outputTokens: 10, costUSD: 0.000125 } },
       totals: { inputTokens: 20, outputTokens: 10, costUSD: 0.000125 },
     });
+
+    mocks.writeFileSync.mockClear();
+    mocks.readFileSync.mockReturnValue(written);
+    await syncData();
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('backfills byProject onto an already synced compacted day, then stays quiet', async () => {
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'x', compactAfterDays: 30 });
+    const byProject = { 'acme/widget': { inputTokens: 20, outputTokens: 10, costUSD: 0.000125 } };
+    mocks.readCodexData.mockResolvedValue(
+      new Map([['2024-01-01', { ...makeDay(20, 10, undefined, 'gpt-5'), byProject }]]),
+    );
+    const compacted = {
+      byModel: { '(compacted)': { inputTokens: 20, outputTokens: 10, costUSD: 0.000125 } },
+      totals: { inputTokens: 20, outputTokens: 10, costUSD: 0.000125 },
+    };
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify(makeMachineFile('host', { '2024-01-01': { codex: compacted } })),
+    );
+
+    await syncData();
+
+    const written = mocks.writeFileSync.mock.calls[0]?.[1] as string;
+    const day = (JSON.parse(written) as { days: Record<string, { codex: unknown }> }).days[
+      '2024-01-01'
+    ];
+    expect(day?.codex).toEqual({ ...compacted, byProject });
 
     mocks.writeFileSync.mockClear();
     mocks.readFileSync.mockReturnValue(written);

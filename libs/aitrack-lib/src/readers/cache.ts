@@ -14,7 +14,7 @@ import { machineTimezone } from '../timezone.js';
 import { packageVersion } from '../version.js';
 
 /** Bump when the cached shape or baked-in cost changes; old caches are rebuilt, not migrated. */
-const CACHE_FORMAT = 3;
+const CACHE_FORMAT = 4;
 
 const STALE_SIBLING_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -23,6 +23,9 @@ export interface CachedMessage {
   date: string;
   model: string;
   counts: TokenCounts;
+  project: string;
+  /** Set for work without a remote, to match `--dir` on this machine. */
+  cwd?: string;
 }
 
 /** One transcript file's contribution, as cached. */
@@ -45,9 +48,16 @@ interface CacheEntry {
   messages?: CachedMessage[];
 }
 
+function isCountsRecord(value: unknown): boolean {
+  return isRecord(value) && Object.values(value).every((counts) => isTokenCounts(counts));
+}
+
 function isDayEntry(value: unknown): value is DayEntry {
-  if (!isTokenCounts(value) || !isRecord(value) || !isRecord(value.byModel)) return false;
-  return Object.values(value.byModel).every((counts) => isTokenCounts(counts));
+  if (!isTokenCounts(value) || !isRecord(value) || !isCountsRecord(value.byModel)) return false;
+  return (
+    (value.byProject === undefined || isCountsRecord(value.byProject)) &&
+    (value.byCwd === undefined || isCountsRecord(value.byCwd))
+  );
 }
 
 function isCacheEntry(value: unknown): value is CacheEntry {
@@ -65,6 +75,8 @@ function isCacheEntry(value: unknown): value is CacheEntry {
           isOptionalString(message.key) &&
           typeof message.date === 'string' &&
           typeof message.model === 'string' &&
+          typeof message.project === 'string' &&
+          isOptionalString(message.cwd) &&
           isTokenCounts(message.counts),
       ))
   )

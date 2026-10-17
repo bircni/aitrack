@@ -45,6 +45,7 @@ describe('provider log format contracts', () => {
     const results = await parseSessionFile(providerFixture('codex-session.jsonl'));
     expect(results).toEqual([
       {
+        attribution: { project: '(no remote)' },
         dateStr: '2025-03-10',
         model: 'gpt-5',
         inputTokens: 1800,
@@ -52,6 +53,7 @@ describe('provider log format contracts', () => {
         cachedInputTokens: 900,
       },
       {
+        attribution: { project: '(no remote)' },
         dateStr: '2025-03-11',
         model: 'gpt-5-codex',
         inputTokens: 2500,

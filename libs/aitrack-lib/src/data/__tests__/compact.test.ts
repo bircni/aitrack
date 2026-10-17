@@ -68,6 +68,51 @@ describe('compactDays', () => {
     expect(compacted['2026-01-01']?.codex?.totals.hasUnpricedTokens).toBeUndefined();
   });
 
+  it('keeps the small byProject of a compacted day and reprices it with the day, only when it covers the day', () => {
+    const model = {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      rawInputTokens: 1_000_000,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      costUSD: 1,
+    };
+    const stale = (covered: number): ProviderDay => ({
+      byModel: { 'claude-sonnet-4-6': { ...model } },
+      totals: { ...model },
+      byProject: {
+        'a/one': { inputTokens: covered, outputTokens: 0, costUSD: 0.75 },
+        'b/two': { inputTokens: 1_000_000 - covered, outputTokens: 1_000_000, costUSD: 0.25 },
+      },
+    });
+    const compacted = compactDays(
+      { '2026-01-01': { claude_code: stale(500_000) } },
+      1,
+      '2026-03-15',
+    );
+    expect(compacted['2026-01-01']?.claude_code?.byProject).toEqual(stale(500_000).byProject);
+
+    const whole = { '2026-01-01': { claude_code: stale(500_000) } };
+    expect(repriceMachineDays(whole).isTouched).toBe(true);
+    const day = whole['2026-01-01'].claude_code;
+    const total = day.totals.costUSD ?? 0;
+    expect(total).toBeGreaterThan(1);
+    expect(day.byProject?.['a/one']?.costUSD).toBeCloseTo(total * 0.75);
+    expect(day.byProject?.['b/two']?.costUSD).toBeCloseTo(total * 0.25);
+    expect(repriceMachineDays(whole).isTouched).toBe(false);
+
+    const partial = {
+      '2026-01-01': {
+        claude_code: {
+          ...stale(500_000),
+          byProject: { 'a/one': { inputTokens: 5, outputTokens: 0, costUSD: 0.75 } },
+        },
+      },
+    };
+    repriceMachineDays(partial);
+    expect(partial['2026-01-01'].claude_code.byProject['a/one'].costUSD).toBe(0.75);
+  });
+
   it('stays valid for older readers, is stable on re-sync and is left alone by repricing', () => {
     const compacted = compactDays(days, 30, '2026-03-15');
 
