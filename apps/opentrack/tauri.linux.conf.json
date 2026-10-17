@@ -1,0 +1,11 @@
+{
+  "$schema": "../../node_modules/@tauri-apps/cli/config.schema.json",
+  "bundle": {
+    "targets": ["appimage", "deb"],
+    "linux": {
+      "deb": {
+        "depends": ["libayatana-appindicator3-1 | libappindicator3-1"]
+      }
+    }
+  }
+}

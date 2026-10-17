@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { isRecord } from 'aitrack-lib/data/guards';
@@ -14,9 +14,10 @@ const MANIFEST_URL = 'https://github.com/bircni/aitrack/releases/latest/download
 const MANIFEST_TIMEOUT_MS = 30_000;
 const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
 const APP_NAME = 'opentrack.app';
+const APPIMAGE_NAME = 'opentrack.AppImage';
 
 export interface InstallOpentrackOptions {
-  /** macOS: the folder opentrack.app goes into. */
+  /** macOS: the folder opentrack.app goes into; Linux: the folder for opentrack.AppImage. */
   dir?: string;
   json?: boolean;
 }
@@ -31,8 +32,9 @@ interface Release {
 function updaterTarget(): string {
   if (process.platform === 'darwin' && process.arch === 'arm64') return 'darwin-aarch64';
   if (process.platform === 'win32' && process.arch === 'x64') return 'windows-x86_64';
+  if (process.platform === 'linux' && process.arch === 'x64') return 'linux-x86_64';
   throw new Error(
-    `opentrack has no build for ${process.platform} ${process.arch}; releases cover Apple Silicon Macs and 64-bit Windows.`,
+    `opentrack has no build for ${process.platform} ${process.arch}; releases cover Apple Silicon Macs, 64-bit Windows and 64-bit Linux.`,
   );
 }
 
@@ -97,6 +99,20 @@ function installMacApp(archive: Buffer, dir: string): string {
   }
 }
 
+/** Renamed over the old file, so a running copy keeps its own until it restarts. */
+function installAppImage(appImage: Buffer, dir: string): string {
+  mkdirSync(dir, { recursive: true });
+  const destination = join(dir, APPIMAGE_NAME);
+  const staging = join(dir, `.${APPIMAGE_NAME}.download`);
+  try {
+    writeFileSync(staging, appImage, { mode: 0o755 });
+    renameSync(staging, destination);
+  } finally {
+    rmSync(staging, { force: true });
+  }
+  return destination;
+}
+
 function runWindowsInstaller(installer: Buffer): void {
   const directory = mkdtempSync(join(tmpdir(), 'aitrack-opentrack-'));
   try {
@@ -128,7 +144,9 @@ export async function installOpentrackCommand(
 ): Promise<void> {
   const target = updaterTarget();
   if (process.platform === 'win32' && options.dir !== undefined) {
-    throw new Error('--dir applies to macOS only; the Windows installer chooses its own folder.');
+    throw new Error(
+      '--dir applies to macOS and Linux only; the Windows installer chooses its own folder.',
+    );
   }
   const release = await latestRelease(target);
   log.info(`Downloading opentrack ${release.version}...`);
@@ -140,6 +158,12 @@ export async function installOpentrackCommand(
     log.info('Running the opentrack installer...');
     runWindowsInstaller(file);
     reportInstalled(options, release.version, null);
+    return;
+  }
+  if (process.platform === 'linux') {
+    const path = installAppImage(file, options.dir ?? join(homedir(), '.local', 'bin'));
+    log.info(`Installed opentrack ${release.version} to ${path}.`);
+    log.info('Run it to start opentrack; Settings can launch it at login. It updates itself.');
     return;
   }
   const path = installMacApp(file, options.dir ?? '/Applications');

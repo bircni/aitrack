@@ -20,7 +20,7 @@ Track Claude Code, Codex and Cursor with two apps built on the same usage data:
 
 |                | aitrack                                   | opentrack                                              |
 | -------------- | ----------------------------------------- | ------------------------------------------------------ |
-| Where it runs  | Terminal on macOS, Windows and Linux      | macOS menu bar and Windows system tray                 |
+| Where it runs  | Terminal on macOS, Windows and Linux      | macOS menu bar, Windows and Linux system tray          |
 | Main use       | Usage reports, heatmaps, exports and sync | Live limits, reset times, pacing and usage at a glance |
 | Providers      | Claude Code, Codex and Cursor             | Claude Code, Codex and Cursor                          |
 | Install        | npm / npx                                 | Download a desktop installer                           |
@@ -73,8 +73,8 @@ provider limits alongside the usage history and cost estimates used by aitrack.
 - A configurable tray icon or bars for your available limits, with colour or monochrome rendering.
 - A floating dashboard, global shortcut and optional launch at login.
 
-Install opentrack with Homebrew on macOS 13.5+ (Apple Silicon), or with the CLI on macOS or
-64-bit Windows:
+Install opentrack with Homebrew on macOS 13.5+ (Apple Silicon), or with the CLI on macOS,
+64-bit Windows or 64-bit Linux:
 
 ```sh
 brew install --cask bircni/tap/opentrack
@@ -87,6 +87,8 @@ Or download it from [GitHub Releases](https://github.com/bircni/aitrack/releases
 | -------------------------- | ---------------- | ------------------------------------------------------ |
 | Windows                    | `.exe` installer | Run the installer                                      |
 | macOS 13.5+, Apple Silicon | `aarch64.dmg`    | Open the disk image and drag opentrack to Applications |
+| Linux x86_64               | `amd64.AppImage` | Make it executable and run it                          |
+| Debian, Ubuntu x86_64      | `amd64.deb`      | `sudo apt install ./opentrack_*_amd64.deb`             |
 
 opentrack checks GitHub for new releases and offers to install them from the dashboard.
 
@@ -95,7 +97,8 @@ view local usage and limits. Sign in to Claude Code, Codex or Cursor as usual: o
 reads their saved credentials. Codex live limits require a ChatGPT login.
 
 Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
-SmartScreen or Gatekeeper may block the first launch.
+SmartScreen or Gatekeeper may block the first launch. On Linux the tray icon needs a desktop
+with AppIndicator support; see the [Linux notes](docs/opentrack.md#linux).
 
 [Desktop guide: limits, credentials, settings and sync](docs/opentrack.md)
 

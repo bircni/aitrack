@@ -75,20 +75,20 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 ## Commands
 
-| Command                                | What it does                                                                                                                                                                   |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `aitrack init`                         | Configure a remote and stable machine ID, then clone the data repo                                                                                                             |
-| `aitrack sync`                         | Read local data, write it to the cloned repo, and push (`--dry-run` previews, `--verify` fails if commits remain unpushed, `--json` for scripts)                               |
-| `aitrack show`                         | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table)                                                                                                  |
-| `aitrack usage <window>`               | Usage by provider and model for a rolling, calendar, or custom window (`--watch [seconds]` redraws it in place, `--dir [path]` limits it to one project)                       |
-| `aitrack export [window] [...]`        | Export the same windows as an itemized PDF, or `--csv` (defaults to `month`)                                                                                                   |
-| `aitrack top [days\|models\|projects]` | Rank busiest days, most-used models or most expensive projects by cost (or `--sort tokens`)                                                                                    |
-| `aitrack machines`                     | Per-machine totals, timezone, and last sync time, marked `(stale)` after three days without a sync (this machine includes fresh local logs)                                    |
-| `aitrack recompute-costs`              | Refresh costs: re-read local JSONL; reprice other machines from stored cache. `--replace-local` rebuilds this machine from the logs and drops synced days they no longer cover |
-| `aitrack doctor`                       | Check Node, git, config, source paths, Cursor auth, sync health, and pricing                                                                                                   |
-| `aitrack completion <shell>`           | Print a `bash`, `zsh` or `fish` completion script, e.g. `eval "$(aitrack completion zsh)"`                                                                                     |
-| `aitrack config list\|get\|set`        | Inspect or update supported configuration keys                                                                                                                                 |
-| `aitrack install-opentrack`            | Download the latest opentrack desktop app, verify its release signature and install it (`--dir` picks the macOS folder)                                                        |
+| Command                         | What it does                                                                                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `aitrack init`                  | Configure a remote and stable machine ID, then clone the data repo                                                                                                             |
+| `aitrack sync`                  | Read local data, write it to the cloned repo, and push (`--dry-run` previews, `--verify` fails if commits remain unpushed, `--json` for scripts)                               |
+| `aitrack show`                  | Merge all sources and render a heatmap PNG (add `--tui` for a terminal table)                                                                                                  |
+| `aitrack usage <window>`        | Usage by provider and model for a rolling, calendar, or custom window (`--watch [seconds]` redraws it in place)                                                                |
+| `aitrack export [window] [...]` | Export the same windows as an itemized PDF, or `--csv` (defaults to `month`)                                                                                                   |
+| `aitrack top [days\|models]`    | Rank busiest days or most-used models by cost (or `--sort tokens`)                                                                                                             |
+| `aitrack machines`              | Per-machine totals, timezone, and last sync time, marked `(stale)` after three days without a sync (this machine includes fresh local logs)                                    |
+| `aitrack recompute-costs`       | Refresh costs: re-read local JSONL; reprice other machines from stored cache. `--replace-local` rebuilds this machine from the logs and drops synced days they no longer cover |
+| `aitrack doctor`                | Check Node, git, config, source paths, Cursor auth, sync health, and pricing                                                                                                   |
+| `aitrack completion <shell>`    | Print a `bash`, `zsh` or `fish` completion script, e.g. `eval "$(aitrack completion zsh)"`                                                                                     |
+| `aitrack config list\|get\|set` | Inspect or update supported configuration keys                                                                                                                                 |
+| `aitrack install-opentrack`     | Download the latest opentrack desktop app, verify its release signature and install it (`--dir` picks the macOS or Linux folder)                                               |
 
 **Usage and export windows:** `today`, `yesterday`, `date <YYYY-MM-DD>`, `range <from> <to>`, `thisweek`, `lastweek`, `week` (rolling 7 days), `thismonth`, `lastmonth`, `month` (rolling 30 days), `last <n>`, `year`, and `all`.
 

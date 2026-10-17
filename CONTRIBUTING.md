@@ -29,7 +29,8 @@ Use `pnpm run dev -- init` (or `sync`, `show`) to run from TypeScript without bu
 
 opentrack has two Nx projects: `opentrack-ui` (Svelte renderer and Node sidecar, which reads
 usage through `aitrack-lib`) and `opentrack` (Tauri 2 Rust shell). They exchange JSON lines
-on stdin/stdout. See [docs/opentrack.md](docs/opentrack.md).
+on stdin/stdout. The UI uses the system webview (WebView2, WKWebView, WebKitGTK on Linux).
+See [docs/opentrack.md](docs/opentrack.md).
 
 ```sh
 pnpm nx run opentrack:dev
@@ -37,11 +38,12 @@ pnpm nx run opentrack:package        # builds renderer and sidecar first; run on
 pnpm nx run opentrack:bundle:check
 ```
 
-Installers land in `target/release/bundle/`. `pnpm install` downloads the Node runtime
-pinned in `apps/opentrack-ui/package.json`; the `sea` target needs it because some system
-Node builds (including Homebrew's) disable SEA. macOS builds are ad hoc signed, not
-notarized, and need macOS 13.5+. The app version is the workspace `package.json` version;
-there is no separate desktop tag.
+Installers (NSIS, DMG, AppImage and `.deb`) land under `target/release/bundle/`; package on
+the platform you target. `pnpm install` downloads the Node runtime pinned in
+`apps/opentrack-ui/package.json`; the `sea` target needs it because some system Node builds
+(including Homebrew's) disable SEA. macOS builds are ad hoc signed, not notarized, and need
+macOS 13.5+. The app version is the workspace `package.json` version; there is no separate
+desktop tag.
 
 ## Project layout
 
@@ -141,12 +143,13 @@ run with `pnpm exec nx run aitrack-lib:mutation -- --mutate 'src/data/usageRepor
 
 CI uses `nx affected` with `nrwl/nx-set-shas`. The Audit job lints the workflows with actionlint, runs GitHub's dependency review on
 pull requests and `pnpm audit` against the lockfile, failing on high-severity advisories.
-Ubuntu runs the affected checks for every
-project except the Rust shell, plus CLI smoke and publish-tarball checks. A `macos-latest`
-/ `windows-latest` matrix runs those smoke checks and opentrack's Rust checks and
-packaging, and uploads the NSIS installer and Apple Silicon DMG as workflow artifacts.
-`bundle:check` starts the bundled sidecar from the DMG or installer (Windows needs `7z`
-on `PATH`) with temporary app data and no provider or remote requests.
+Ubuntu runs the affected checks for every project except the Rust shell, plus CLI smoke and
+publish-tarball checks. A `macos-latest` / `windows-latest` / `ubuntu-latest` matrix runs
+opentrack's Rust checks and packaging (the Linux row installs the WebKitGTK, AppIndicator and
+`libxdo` development packages first) and uploads the NSIS installer, Apple Silicon DMG,
+AppImage and `.deb` as workflow artifacts. `bundle:check` starts the bundled sidecar from the
+DMG, the installer (Windows needs `7z` on `PATH`), the `.deb` (`dpkg-deb`) or the AppImage
+(`--appimage-extract`) with temporary app data and no provider or remote requests.
 
 Run `pnpm run validate` before opening a PR.
 
@@ -210,8 +213,9 @@ The [Publish workflow](.github/workflows/publish.yml) triggers on that same `v*`
   each package's production dependencies from the lockfile, which the release job
   attaches to the GitHub release.
 - Desktop jobs check the Rust shell's formatting, Clippy and tests, and package a
-  Windows NSIS installer and a macOS DMG for Apple Silicon, plus the updater's signed
-  `.app.tar.gz` and installer signatures, then upload them as workflow artifacts. Missing installers fail the build.
+  Windows NSIS installer, a macOS DMG for Apple Silicon and a Linux AppImage and `.deb`
+  for x86_64, plus the updater's signed `.app.tar.gz` and installer signatures, then
+  upload them as workflow artifacts. Missing installers fail the build.
 - After npm publishing and all desktop jobs succeed, the release job extracts that
   tag's section from `CHANGELOG.md`, creates or updates the GitHub release, downloads
   the installer artifacts and uploads them to that release. Reruns replace existing

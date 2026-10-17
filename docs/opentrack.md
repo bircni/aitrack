@@ -75,15 +75,15 @@ the download must carry a signature from the release key or it is refused. Devel
 builds never check.
 
 Settings and the last snapshot live in the app's data folder (`%APPDATA%\dev.bircni.opentrack` on
-Windows): `settings.json`, `cache.json`, and `sidecar.log`. There is no account, telemetry or
-backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
+Windows, `~/.local/share/dev.bircni.opentrack` on Linux): `settings.json`, `cache.json`, and
+`sidecar.log`. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
 check, and for the pricing refresh the sync button runs like `aitrack sync` (at most daily).
 
 ## Downloads
 
 ```sh
 brew install --cask bircni/tap/opentrack   # macOS 13.5+, Apple Silicon
-npx aitrack install-opentrack              # macOS (Apple Silicon) or 64-bit Windows
+npx aitrack install-opentrack              # macOS (Apple Silicon), 64-bit Windows or Linux
 ```
 
 The cask lives in [bircni/homebrew-tap](https://github.com/bircni/homebrew-tap), not in
@@ -94,16 +94,49 @@ unless you pass `--greedy`.
 
 `aitrack install-opentrack` fetches the same release the in-app updater uses, checks its
 signature and installs it: on macOS it replaces `opentrack.app` in `/Applications`
-(`--dir` for another folder), on Windows it runs the installer.
+(`--dir` for another folder), on Windows it runs the installer, and on Linux it writes
+`opentrack.AppImage` to `~/.local/bin` (`--dir` for another folder).
 
-Windows installers and macOS disk images (Apple Silicon, macOS 13.5+) are also attached to
-the [same GitHub releases](https://github.com/bircni/aitrack/releases) as aitrack. Choose
-the `.exe` on Windows, or the `.dmg` matching your Mac, and drag opentrack to Applications.
+Windows installers, macOS disk images (Apple Silicon, macOS 13.5+) and Linux AppImage and
+`.deb` packages (x86_64) are also attached to the
+[same GitHub releases](https://github.com/bircni/aitrack/releases) as aitrack. Choose the
+`.exe` on Windows, or the `.dmg` matching your Mac, and drag opentrack to Applications. On
+Linux, run the `.AppImage` after `chmod +x`, or install the `.deb` with
+`sudo apt install ./opentrack_*_amd64.deb`.
 
 Windows builds are unsigned. macOS builds are ad hoc signed and are not notarized.
 SmartScreen or Gatekeeper may block the first launch.
 
 See [Contributing](../CONTRIBUTING.md#desktop-development) to build from source.
+
+## Linux
+
+Linux packages are built on Ubuntu 24.04 for x86_64; distributions with an older glibc may
+not start them. The behaviour differs from macOS and Windows in a few places:
+
+- **Tray icon** — shown through AppIndicator / StatusNotifierItem. KDE Plasma, Xfce, Cinnamon
+  and Ubuntu's GNOME session show it; stock GNOME needs the AppIndicator extension. A tray
+  click always opens the menu, so open the dashboard with **Open** there. The icon has no
+  hover tooltip.
+- **Display backend** — opentrack runs through X11 (XWayland in a Wayland session) so it can
+  position the dashboard and register the global shortcut. Set `GDK_BACKEND=wayland` to
+  override this; the dashboard is then placed by the compositor, typically in the centre, and
+  the shortcut only fires while an XWayland window has focus.
+- **Popup position** — the dashboard opens in the top-right corner of the screen.
+- **Global shortcut** — needs X11 or XWayland; without it Settings shows why it could not be
+  registered.
+- **Launch at login** — writes `~/.config/autostart/opentrack.desktop`, pointing at the
+  AppImage or the installed binary. After moving the AppImage, start it once from its new
+  place so the entry follows.
+- **Credentials** — there is no Keychain to fall back on, so the files are the only source:
+  Claude Code's `.credentials.json` in `$CLAUDE_CONFIG_DIR`, `~/.config/claude` or `~/.claude`;
+  Codex's `auth.json` in `$CODEX_HOME`, `~/.codex` or `~/.config/codex`; and Cursor's
+  `state.vscdb` under `$XDG_CONFIG_HOME/Cursor` (default `~/.config/Cursor`).
+- **Updates** — the AppImage replaces itself in place, so keep it in a folder you can write
+  to. A `.deb` install updates by installing the new package and asks for your password
+  through `pkexec`.
+- **AppImage** — needs FUSE 2 to start (`libfuse2`, or `libfuse2t64` on Ubuntu 24.04); use the
+  `.deb` otherwise.
 
 ## Acknowledgements
 

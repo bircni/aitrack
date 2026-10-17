@@ -22,7 +22,7 @@ function onlyMatch(pattern: string, cwd: string): string {
   return join(cwd, match);
 }
 
-function extractSidecar(): string {
+function extractSidecars(): string[] {
   if (process.platform === 'darwin') {
     const arch = process.arch === 'arm64' ? 'aarch64' : process.arch;
     const installer = onlyMatch(`opentrack_${version}_${arch}.dmg`, join(bundleRoot, 'dmg'));
@@ -37,19 +37,29 @@ function extractSidecar(): string {
     cleanup.push(() => {
       execFileSync('hdiutil', ['detach', mountPoint], { stdio: 'pipe' });
     });
-    return onlyMatch('*.app/Contents/Resources/opentrack-sidecar.exe', mountPoint);
+    return [onlyMatch('*.app/Contents/Resources/opentrack-sidecar.exe', mountPoint)];
   }
-  assert.equal(process.platform, 'win32', 'Installer smoke checks require macOS or Windows');
+  if (process.platform === 'linux') {
+    const deb = onlyMatch(`opentrack_${version}_amd64.deb`, join(bundleRoot, 'deb'));
+    const debRoot = join(temporary, 'deb');
+    execFileSync('dpkg-deb', ['-x', deb, debRoot], { stdio: 'pipe' });
+    const appImage = onlyMatch(`opentrack_${version}_amd64.AppImage`, join(bundleRoot, 'appimage'));
+    // Runs only the AppImage runtime, which unpacks to ./squashfs-root without FUSE.
+    execFileSync(appImage, ['--appimage-extract'], { cwd: temporary, stdio: 'pipe' });
+    return [
+      onlyMatch('**/opentrack-sidecar.exe', debRoot),
+      onlyMatch('**/opentrack-sidecar.exe', join(temporary, 'squashfs-root')),
+    ];
+  }
+  assert.equal(process.platform, 'win32', 'Installer smoke checks require macOS, Linux or Windows');
   const installer = onlyMatch(`opentrack_${version}_x64-setup.exe`, join(bundleRoot, 'nsis'));
   const extracted = join(temporary, 'installer');
   // Unpack the installer without registering or launching an installed app.
   execFileSync('7z', ['x', installer, `-o${extracted}`, '-y'], { stdio: 'pipe' });
-  return onlyMatch('**/opentrack-sidecar.exe', extracted);
+  return [onlyMatch('**/opentrack-sidecar.exe', extracted)];
 }
 
-try {
-  const program = extractSidecar();
-  const dataDir = join(temporary, 'data');
+function checkSidecar(program: string, dataDir: string): void {
   mkdirSync(dataDir);
   writeFileSync(join(dataDir, 'settings.json'), JSON.stringify({ theme: 'dark' }));
   const result = spawnSync(program, ['--smoke-test', '--data-dir', dataDir], {
@@ -77,6 +87,12 @@ try {
   assert.deepEqual(JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8')), {
     theme: 'dark',
   });
+}
+
+try {
+  for (const [index, program] of extractSidecars().entries()) {
+    checkSidecar(program, join(temporary, `data-${String(index)}`));
+  }
   console.log(
     'Packaged sidecar started, read isolated settings and answered both protocol requests.',
   );
