@@ -27,35 +27,21 @@ Use `pnpm run dev -- init` (or `sync`, `show`) to run from TypeScript without bu
 
 ## Desktop development
 
-opentrack has two Nx projects. `opentrack-ui` contains the Svelte renderer and the Node
-sidecar, which reads usage through `aitrack-lib` and fetches provider limits. `opentrack`
-is the Tauri 2 Rust shell: tray icon, window, notifications, autostart and shortcuts.
-The shell and sidecar exchange JSON lines on stdin/stdout. The UI uses the system
-webview (WebView2 on Windows, WKWebView on macOS).
+opentrack has two Nx projects: `opentrack-ui` (Svelte renderer and Node sidecar, which reads
+usage through `aitrack-lib`) and `opentrack` (Tauri 2 Rust shell). They exchange JSON lines
+on stdin/stdout. See [docs/opentrack.md](docs/opentrack.md).
 
 ```sh
 pnpm nx run opentrack:dev
-pnpm nx run opentrack-ui:test
-pnpm nx run opentrack:test
-pnpm nx run opentrack:package
+pnpm nx run opentrack:package        # builds renderer and sidecar first; run on the target platform
 pnpm nx run opentrack:bundle:check
 ```
 
-The package target builds the renderer and sidecar before invoking Tauri. Windows
-installers land in `target/release/bundle/nsis/`; macOS app bundles and disk images land
-in `target/release/bundle/macos/` and `target/release/bundle/dmg/`. Run packaging on the
-platform you are targeting. macOS release builds run on `macos-latest` for Apple Silicon,
-so the Rust app and sidecar share the same native architecture. The bundled Node runtime requires macOS 13.5+.
-
-`pnpm install` downloads the official Node runtime pinned in `apps/opentrack-ui/package.json`.
-The `sea` target runs that binary through `pnpm exec` to create a self-contained sidecar;
-some system Node builds, including Homebrew's, disable SEA support. The resource keeps
-the name `opentrack-sidecar.exe` on every platform, but contains a native executable for
-the build machine. On macOS the SEA build reapplies an ad hoc signature after modifying
-the Node executable, and Tauri ad hoc signs the app bundle. These builds are not notarized.
-
-The app version is read from the workspace `package.json` through Tauri's `version`
-setting; there is no separate desktop release tag or version bump.
+Installers land in `target/release/bundle/`. `pnpm install` downloads the Node runtime
+pinned in `apps/opentrack-ui/package.json`; the `sea` target needs it because some system
+Node builds (including Homebrew's) disable SEA. macOS builds are ad hoc signed, not
+notarized, and need macOS 13.5+. The app version is the workspace `package.json` version;
+there is no separate desktop tag.
 
 ## Project layout
 
@@ -66,7 +52,7 @@ apps/
   aitrack/            The CLI: `aitrack` on the command line
     src/
       cli.ts          Commander entrypoint
-      cli/            Pure CLI parsing/validation helpers
+      cli/            Commander program, option parsing and JSON output
       commands/       Command handlers (show, sync, usage, …)
   opentrack/          Tauri Rust shell, native configuration and icons
     src/             Window, tray, commands and sidecar supervision
@@ -112,83 +98,55 @@ pnpm run pricing:check             # optional local compare of tables vs catalog
 
 Shared pricing calculations, catalog access, table conversion, and stored-day repricing belong in `aitrack-lib`. Apps and scripts handle command arguments, presentation, and file publishing.
 
-Tests are colocated per module in one `__tests__` folder each.
+Tests are colocated per module in one `__tests__` folder each. Usage is keyed by the
+**local** calendar day, so cover day edges with `useTimeZone` and `EXTREME_TIME_ZONES` from
+`@aitrack/test-fixtures`, not by changing `TZ`.
 
-Usage is keyed by the **local** calendar day, so anything reading `getFullYear`/`getMonth`/
-`getDate` can be right at UTC and a day out at the edges of the offset range. Cover that in
-the suite, not by re-running it under a different `TZ`: `useTimeZone` from
-`@aitrack/test-fixtures` moves the process into a real zone for the surrounding `describe`,
-and `EXTREME_TIME_ZONES` is the +14/UTC/-11 set to run it over. `localTimestamp` builds a
-fixture instant from local components so its day key holds in every zone.
-
-The CLI imports the library by subpath — `import { log } from 'aitrack-lib/output'` — which
-the package's `exports` map resolves to `dist/`. Within a package, imports are relative and
-carry a `.js` extension (Node ESM).
+The CLI imports the library by subpath (`import { log } from 'aitrack-lib/output'`), which
+the `exports` map resolves to `dist/`. Within a package, imports are relative with a `.js`
+extension.
 
 ### How nx is configured
 
-The `@nx/js/typescript` plugins infer build and typecheck targets from the package
-TypeScript configurations. `@nx/vitest` infers test targets. Other targets live in each
-project's `project.json`, with shared defaults in `nx.json`.
+The `@nx/js/typescript` plugins infer build and typecheck targets from the TypeScript
+configurations and `@nx/vitest` infers test targets; other targets live in each
+`project.json`, with defaults in `nx.json`. Builds run `tsc --build` with dependencies
+first. CLI tests and development use the source paths in its `tsconfig.json`; compiled CLI
+imports resolve through the library's exports to `dist/`.
 
-Builds run `tsc --build` and build dependencies first. Typechecking follows TypeScript
-project references. CLI tests and development use the source paths in its `tsconfig.json`;
-compiled CLI imports resolve through the library's exports to `dist/`.
+Projects: `aitrack`, `aitrack-lib`, `opentrack-ui`, `@aitrack/test-fixtures`, `opentrack`
+(Rust) and `repo-tools` (`scripts/`: release tooling, pricing checks, script tests, root
+config checks). Lint is `nx-oxlint:lint` (type-aware for TypeScript); Svelte blocks get the
+supported Oxlint rules and `svelte-check --fail-on-warnings` stays required. Clippy runs
+with `-D warnings`. Root `.oxlintrc.json` and `.oxfmtrc.json` are Nx inputs. Shared tool
+versions live in the `pnpm-workspace.yaml` catalog.
 
-The package projects are `aitrack`, `aitrack-lib`, `opentrack-ui`, and `@aitrack/test-fixtures`;
-`opentrack` is the Rust application. Vite infers renderer builds and `@monodon/rust`
-supplies the Rust build, lint and test executors.
-The `repo-tools` project in `scripts/` owns release tooling, pricing checks, script tests,
-and checks for root configuration files. Package lint, format and unused-code checks
-run per project. Lint uses `nx-oxlint:lint` with type-aware checking for TypeScript.
-Svelte script blocks receive the supported Oxlint rules from the same overrides;
-Oxlint does not currently provide complete type-aware checking for `.svelte` files.
-`svelte-check --fail-on-warnings` remains required. Repository tests probe supported
-Svelte rules so configuration changes cannot silently stop enforcing them.
-Rust lint runs Clippy on application and test targets with `-D warnings`.
-Root `.oxlintrc.json` and `.oxfmtrc.json` are included in formatting checks and Nx inputs.
+Tests run `vitest run`; the `ci` configuration adds coverage (`pnpm exec nx run
+aitrack-lib:test:ci`, or `pnpm run test:ci` for all). Aggregate thresholds are 90%
+lines/statements/functions and 80% branches, plus 80% per measured file and metric. Fixture
+changes invalidate dependents' cached checks.
 
-Tests run `vitest run`; the `ci` configuration adds coverage. Run
-`pnpm exec nx run aitrack-lib:test:ci` for one package or `pnpm run test:ci` for all suites.
-Library, CLI and desktop coverage retains aggregate 90% lines/statements/functions
-and 80% branches, with an additional 80% minimum for every measured file and metric.
-The desktop suite uses the Svelte Vite plugin and jsdom, measures components and the
-API bridge, and exercises command failures, settings queues, provider controls and
-partial/stale presentation. Only the renderer entrypoint, sidecar process entrypoint
-and shared type declarations are excluded; builds, CLI smoke and native app checks
-validate the process/bootstrap glue.
-The CLI, library and desktop depend on the shared test-fixtures package, so fixture
-changes invalidate their cached checks. Calendar tests use `useTimeZone` and
-`EXTREME_TIME_ZONES` rather than changing `TZ`.
+`pnpm exec tsx scripts/benchmark-readers.ts` runs a synthetic reader benchmark; see
+[recorded results](docs/reader-benchmarks.md).
 
-Run `pnpm exec tsx scripts/benchmark-readers.ts` for an isolated synthetic reader
-benchmark. It verifies cold/warm totals and ordering, reports median timings over
-five runs, filesystem counts, derived-cache size and process memory, and
-includes a 10,000-file listing. See [recorded results](docs/reader-benchmarks.md).
+If `nx` hangs without starting tasks (usually Nx Cloud unreachable), rerun with
+`NX_NO_CLOUD=true NX_DAEMON=false`.
 
-If `nx` hangs without starting tasks (typically when Nx Cloud is unreachable),
-rerun with `NX_NO_CLOUD=true NX_DAEMON=false`.
+`pnpm run mutation` runs [StrykerJS](https://stryker-mutator.io/) over `libs/aitrack-lib/src/data`
+and `src/pricing` (not the rate tables) and writes an HTML report to
+`libs/aitrack-lib/reports/mutation/`. It is slow and deliberately outside `validate` and CI.
+Stryker runs vitest in worker threads, where `useTimeZone` cannot move the zone, so the target
+pins `TZ=UTC` and `libs/aitrack-lib/vitest.mutation.config.ts` skips the non-UTC cases. Narrow a
+run with `pnpm exec nx run aitrack-lib:mutation -- --mutate 'src/data/usageReport.ts'`.
 
-CI uses `nx affected` with `nrwl/nx-set-shas` supplying the comparison commits.
-The Audit job lints the workflows with actionlint, runs GitHub's dependency review on
+CI uses `nx affected` with `nrwl/nx-set-shas`. The Audit job lints the workflows with actionlint, runs GitHub's dependency review on
 pull requests and `pnpm audit` against the lockfile, failing on high-severity advisories.
-The Ubuntu job runs the affected checks for every project except the Rust shell, plus
-CLI smoke tests and publish-tarball checks. In parallel, a `macos-latest` /
-`windows-latest` matrix runs CLI smoke and publish-tarball checks alongside opentrack's
-Rust formatting, lint, tests and release packaging with the pinned toolchain; opentrack
-ships only for those two platforms, so Linux does not compile it.
-Nx builds the renderer and native sidecar dependencies needed by the Rust shell;
-Full JavaScript checks and unit tests stay in the Ubuntu job.
-The matrix uploads the Windows NSIS installer and Apple Silicon macOS DMG as
-workflow artifacts so PR builds can be downloaded and tried. Missing installers
-fail the job. Packaging also checks the release build and bundle configuration.
-`bundle:check` mounts the macOS DMG or extracts the Windows NSIS installer with
-7-Zip, then starts its bundled sidecar and checks the settings/state protocol.
-It uses temporary app data and a smoke mode that makes no provider or git requests.
-The Windows check needs `7z` on `PATH`; GitHub's Windows runners include it.
-Lint and formatter configuration are inputs to their respective targets. Shared tool
-versions live in the catalog in `pnpm-workspace.yaml`; published packages have catalog
-and workspace references replaced with concrete versions by pnpm.
+Ubuntu runs the affected checks for every
+project except the Rust shell, plus CLI smoke and publish-tarball checks. A `macos-latest`
+/ `windows-latest` matrix runs those smoke checks and opentrack's Rust checks and
+packaging, and uploads the NSIS installer and Apple Silicon DMG as workflow artifacts.
+`bundle:check` starts the bundled sidecar from the DMG or installer (Windows needs `7z`
+on `PATH`) with temporary app data and no provider or remote requests.
 
 Run `pnpm run validate` before opening a PR.
 
@@ -198,23 +156,13 @@ Commits **must** follow [Conventional Commits](https://www.conventionalcommits.o
 
 ## Scripts
 
-| Script                  | Description                                            |
-| ----------------------- | ------------------------------------------------------ |
-| `pnpm run validate`     | Lint, format, typecheck, test, and unused-export check |
-| `pnpm run check:unused` | Knip — unused files, exports, dependencies             |
-| `pnpm run test`         | Run package and repository-tool tests                  |
-| `pnpm run test:scripts` | Just the `repo-tools` tests                            |
-| `pnpm run test:ci`      | The same tests with coverage and thresholds            |
-| `pnpm run build`        | Compile each package to its own `dist/`                |
-| `pnpm run lint`         | oxlint (type-aware)                                    |
-| `pnpm run format`       | oxfmt write                                            |
-| `pnpm run format:check` | oxfmt check                                            |
-| `pnpm run graph`        | Open the nx project graph                              |
+Common ones (see `package.json` for the rest): `pnpm run validate` (format, lint, typecheck,
+unused-export check, test, build), `validate:affected` (same, scoped to projects changed
+against the base branch), `test`, `test:ci`, `test:smoke`, `check:unused` (knip), `build`,
+`lint`, `format`, `changelog`.
 
-Checks can be scoped to one project: `pnpm exec nx run aitrack:test`,
-`pnpm exec nx run-many -t test -p aitrack-lib`, or
+Scope checks to one project with e.g. `pnpm exec nx run aitrack:test` or
 `pnpm exec nx run repo-tools:check:unused`.
-`pnpm run validate:affected` scopes validation to projects touched by your branch.
 
 ## Releasing
 
