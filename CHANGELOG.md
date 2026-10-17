@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v4.0.0] - 2026-10-17
+
+
+### ⚠ Breaking Changes
+
+- **aitrack-lib:** Add optional encryption and compaction and name unpriced models
+- **aitrack:** Add completion, --short, --watch and --json everywhere
+
+
+### Bug Fixes
+
+- **aitrack-lib:** Compile case-insensitive Codex fallback patterns
+- **aitrack-lib:** Re-parse a transcript that grew while it was being parsed
+- **aitrack:** Keep the year in the top title alongside --since/--until
+- **opentrack:** Alert for the next quota window right after a reset
+
+### CI
+
+- Bump nrwl/nx-set-shas from 5.0.1 to 5.1.0 in the actions group across 1 directory (#121)
+- Lint workflows, review dependencies and attach SBOMs (#124)
+
+### Documentation
+
+- Add an architecture overview and trim CONTRIBUTING
+- Describe usage by project
+
+### Features
+
+- **opentrack:** Add a History tab, locale-aware formatting and accessibility
+- **aitrack-lib:** Attribute usage to projects and sync it as byProject
+- **aitrack:** Add usage --dir and top projects
+- **opentrack:** Add a Projects tab
+- **aitrack-lib:** Attribute removed agent worktrees to their repository
+- **opentrack:** Add Linux support (#123)
+
+### Refactoring
+
+- **aitrack-lib:** Share duplicated helpers and trim comments
+- **aitrack:** Share prompt and table cell helpers and trim comments
+- **opentrack:** Share the spend reading and the all-time window
+- **scripts:** Share the pricing table check and merge script tests
+- **scripts:** Share the release tool helpers
+
+### Tests
+
+- **aitrack-lib:** Consolidate library tests
+- **aitrack:** Consolidate CLI tests
+- **opentrack:** Consolidate sidecar and renderer tests
+- Add provider contract tests and a mutation testing target
+- Keep the unit tests away from the real ~/.config/aitrack (#125)
+
 ## [v3.2.0] - 2026-10-14
 
 
