@@ -135,6 +135,7 @@ aitrack show --tui --providers claude,codex
 - [CLI guide](docs/cli.md) — commands, reports, configuration, sync and data format.
 - [Desktop guide](docs/opentrack.md) — live limits, credentials and desktop behaviour.
 - [Library guide](docs/library.md) — use `aitrack-lib` in your own tools.
+- [Architecture](docs/architecture.md) — how the data flows and how the apps fit together.
 - [Contributing](CONTRIBUTING.md) — development setup, project layout, checks and releases.
 - [Changelog](CHANGELOG.md) — changes across both apps and the shared library.
 
