@@ -1,0 +1,5 @@
+Date,Kind,Model,Max Mode,Input (w/ Cache Write),Input (w/o Cache Write),Cache Read,Output Tokens,Total Tokens,Cost
+"2025-03-10T09:00:00.000Z","Included","claude-4-sonnet","No","1,000","200","3,000","400","4,600","Included"
+"2025-03-10T10:00:00.000Z","Included","claude-4-sonnet","No","0","100","0","50","150","Included"
+"2025-03-10T11:00:00.000Z","Included","gpt-5","No","0","0","0","0","","Included"
+"2025-03-11T09:00:00.000Z","Included","gpt-5","No","0","500","250","125","875","Included"

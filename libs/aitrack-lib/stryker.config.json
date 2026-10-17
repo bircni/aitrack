@@ -1,0 +1,20 @@
+{
+  "$schema": "../../node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "concurrency": 4,
+  "vitest": { "configFile": "vitest.mutation.config.ts" },
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/data/**/*.ts",
+    "src/pricing/**/*.ts",
+    "!src/**/__tests__/**",
+    "!src/data/types.ts",
+    "!src/pricing/types.ts",
+    "!src/pricing/tables/**"
+  ],
+  "reporters": ["clear-text", "html"],
+  "htmlReporter": { "fileName": "reports/mutation/index.html" },
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true
+}

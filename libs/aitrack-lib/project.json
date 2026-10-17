@@ -28,6 +28,15 @@
           "coverage": true
         }
       }
+    },
+    "mutation": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "stryker run",
+        "env": { "TZ": "UTC" }
+      }
     }
   }
 }
