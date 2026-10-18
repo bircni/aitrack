@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-18T11:01:53.255Z",
+  "files": {
+    "supplement": "supplement.json",
+    "litellm": "litellm.json",
+    "modelsDev": "models_dev.json"
+  },
+  "hashes": {
+    "supplement": "84b0b318d353eccc68ba950174b627b3721ae21d3acb72097fc5613a2e72c23e",
+    "litellm": "f248864fb320edf7366be3214cfc4c5b2a30025dc979eb932df63fb3f332f6b0",
+    "modelsDev": "96de5fd939c25f349f2f0612144812c6f15705e6636758693a650693825cd4ad"
+  }
+}
