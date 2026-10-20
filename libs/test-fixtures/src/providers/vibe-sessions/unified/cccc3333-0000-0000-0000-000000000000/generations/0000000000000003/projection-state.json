@@ -1,0 +1,15 @@
+{
+  "projection_state_version": 1,
+  "session_id": "cccc3333-0000-0000-0000-000000000000",
+  "snapshot": {
+    "session": {
+      "updatedAt": 1741694400000,
+      "tokenUsage": {
+        "cachedInputTokens": 0,
+        "inputTokens": 3000,
+        "outputTokens": 300,
+        "totalTokens": 3300
+      }
+    }
+  }
+}

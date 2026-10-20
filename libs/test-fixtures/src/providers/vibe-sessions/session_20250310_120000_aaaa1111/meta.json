@@ -1,0 +1,26 @@
+{
+  "session_id": "aaaa1111-0000-0000-0000-000000000000",
+  "parent_session_id": null,
+  "start_time": "2025-03-10T11:00:00.000000+00:00",
+  "end_time": "2025-03-10T12:00:00.000000+00:00",
+  "environment": { "working_directory": "/nonexistent/vibe-legacy" },
+  "origin_directory": "/nonexistent/vibe-legacy",
+  "config": {
+    "active_model": "mistral-medium-3.5",
+    "routed_default_model": "",
+    "models": {
+      "mistral-medium-3.5": {
+        "name": "mistral-vibe-cli-latest",
+        "provider": "mistral",
+        "alias": "mistral-medium-3.5"
+      }
+    }
+  },
+  "stats": {
+    "steps": 12,
+    "session_prompt_tokens": 120000,
+    "session_completion_tokens": 2000,
+    "session_cached_tokens": 100000,
+    "session_cost": 0.06
+  }
+}

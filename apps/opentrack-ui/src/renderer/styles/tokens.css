@@ -12,6 +12,7 @@
   --card-shadow: 0 2px 8px rgba(25, 35, 50, 0.025);
   --provider-codex: #27876d;
   --provider-cursor: #6273bc;
+  --provider-vibe: #b8860b;
   --raised: #f1f1f3;
   --ink: #18181b;
   --ink-2: #5f6068;
@@ -36,6 +37,7 @@
     --card-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     --provider-codex: #65c3a3;
     --provider-cursor: #9ba9ee;
+    --provider-vibe: #f2c23a;
     --raised: #2b3036;
     --ink: #f3f3f5;
     --ink-2: #a3a4ab;

@@ -1,7 +1,7 @@
 # opentrack desktop guide
 
 A tray (or menu-bar) dashboard for Claude Code, Codex and Cursor: live session and weekly limits
-with reset times and pacing, plus token usage and estimated cost from the same data `aitrack`
+with reset times and pacing, plus token usage (Mistral Vibe included) and estimated cost from the same data `aitrack`
 reads — including other machines synced through your aitrack data repo.
 
 ## What it shows

@@ -190,6 +190,16 @@ export class PricingStore {
         fastMultipliers: { ...local.cursor.fastMultipliers, ...remote.cursor.fastMultipliers },
         aliases: mergeRules(local.cursor.aliases, remote.cursor.aliases, (rule) => rule.pattern),
       },
+      mistral: remote.mistral
+        ? {
+            models: { ...local.mistral?.models, ...remote.mistral.models },
+            familyFallback: mergeRules(
+              local.mistral?.familyFallback ?? [],
+              remote.mistral.familyFallback,
+              (rule) => rule.match,
+            ),
+          }
+        : local.mistral,
     };
   }
 

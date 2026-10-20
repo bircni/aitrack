@@ -71,7 +71,7 @@ libs/
       data/           Types, validation, aggregation, usage loading
       display/        TUI, PNG heatmap, PDF/CSV receipts
         heatmap/      Shared heatmap stats, themes, view models
-      readers/        Provider-specific ingestion (Claude, Codex, Cursor)
+      readers/        Provider-specific ingestion (Claude, Codex, Cursor, Mistral Vibe)
       pricing/        Cost resolution; editable rates in pricing/tables/*.json
                       (live pack published on orphan branch `pricing`, not bundled)
       providers/      Provider registry and descriptors
@@ -89,6 +89,7 @@ Editable sources of truth for first-party rates (also the offline CLI baseline):
 - `libs/aitrack-lib/src/pricing/tables/claude.json`
 - `libs/aitrack-lib/src/pricing/tables/codex.json`
 - `libs/aitrack-lib/src/pricing/tables/cursor.json`
+- `libs/aitrack-lib/src/pricing/tables/mistral.json`
 
 No pricing pack is shipped in the npm package. CI builds `artifacts/pricing-pack/` and publishes it to the orphan `pricing` branch daily, adding a commit when rates changed; installs refresh into `~/.config/aitrack/pricing/`.
 

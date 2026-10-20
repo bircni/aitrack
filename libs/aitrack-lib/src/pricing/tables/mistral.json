@@ -1,0 +1,21 @@
+{
+  "updatedAt": "2026-10-20",
+  "source": "https://docs.mistral.ai/inference/pricing",
+  "comment": "USD per million tokens, standard tier. Cache hits bill at 10% of input at estimate time. Keys are the ids Vibe records, with the API name tried after the alias.",
+  "models": {
+    "mistral-large-4": { "inputPerMillion": 1.36, "outputPerMillion": 4.18 },
+    "mistral-large-3": { "inputPerMillion": 0.5, "outputPerMillion": 1.5 },
+    "mistral-medium-3.5": { "inputPerMillion": 1.5, "outputPerMillion": 7.5 },
+    "mistral-small-4": { "inputPerMillion": 0.15, "outputPerMillion": 0.6 },
+    "ministral-3-14b": { "inputPerMillion": 0.2, "outputPerMillion": 0.2 },
+    "ministral-3-8b": { "inputPerMillion": 0.15, "outputPerMillion": 0.15 },
+    "ministral-3-3b": { "inputPerMillion": 0.1, "outputPerMillion": 0.1 },
+    "codestral": { "inputPerMillion": 0.3, "outputPerMillion": 0.9 }
+  },
+  "familyFallback": [
+    { "match": "^mistral-large", "inputPerMillion": 1.36, "outputPerMillion": 4.18 },
+    { "match": "^mistral-medium", "inputPerMillion": 1.5, "outputPerMillion": 7.5 },
+    { "match": "^mistral-small", "inputPerMillion": 0.15, "outputPerMillion": 0.6 },
+    { "match": "^codestral", "inputPerMillion": 0.3, "outputPerMillion": 0.9 }
+  ]
+}

@@ -48,9 +48,16 @@ const IO = ['inputPerMillion', 'outputPerMillion'];
 const CLAUDE = [...IO, 'cacheReadPerMillion', 'cacheCreatePerMillion'];
 const CURSOR = [...IO, 'cacheReadPerMillion', 'cacheWritePerMillion'];
 
+function familyFallbacks(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every((entry: unknown) => isRecord(entry) && pattern(entry.match) && rates(entry, IO))
+  );
+}
+
 export function isPricingSupplement(value: unknown): value is PricingSupplement {
   if (!isRecord(value) || !stamp(value.updatedAt)) return false;
-  const { claude, codex, cursor } = value;
+  const { claude, codex, cursor, mistral } = value;
   const fallback = isRecord(claude) ? claude.familyFallback : undefined;
   return (
     isRecord(claude) &&
@@ -63,17 +70,18 @@ export function isPricingSupplement(value: unknown): value is PricingSupplement 
     map(codex.current, (row) => rates(row, IO)) &&
     map(codex.historical, (row) => rates(row, IO)) &&
     overrides(codex.overrides, IO) &&
-    Array.isArray(codex.familyFallback) &&
-    codex.familyFallback.every(
-      (entry: unknown) => isRecord(entry) && pattern(entry.match) && rates(entry, IO),
-    ) &&
+    familyFallbacks(codex.familyFallback) &&
     map(cursor.models, (row) => rates(row, CURSOR)) &&
     map(cursor.fastMultipliers, amount) &&
     Array.isArray(cursor.aliases) &&
     cursor.aliases.every(
       (entry: unknown) =>
         isRecord(entry) && pattern(entry.pattern) && typeof entry.canonical === 'string',
-    )
+    ) &&
+    (mistral === undefined ||
+      (isRecord(mistral) &&
+        map(mistral.models, (row) => rates(row, IO)) &&
+        familyFallbacks(mistral.familyFallback)))
   );
 }
 

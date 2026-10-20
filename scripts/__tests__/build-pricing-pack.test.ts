@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   files.clear();
   const baseline = supplementFromTables();
-  for (const provider of ['claude', 'codex', 'cursor'] as const) {
+  for (const provider of ['claude', 'codex', 'cursor', 'mistral'] as const) {
     files.set(
       `${provider}.json`,
       JSON.stringify({ ...baseline[provider], updatedAt: '2026-01-01' }),

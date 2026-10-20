@@ -1,6 +1,12 @@
 import type { ClaudeFamily } from '../data/modelId.js';
 import { environmentValue } from '../env.js';
-import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
+import type {
+  ClaudePricing,
+  CodexPricing,
+  CursorPricing,
+  MistralPricing,
+  PricingOverride,
+} from './types.js';
 
 interface PricingSupplementClaude {
   models: Record<string, ClaudePricing>;
@@ -25,6 +31,11 @@ interface PricingSupplementCursor {
   aliases: Array<{ pattern: string; canonical: string }>;
 }
 
+interface PricingSupplementMistral {
+  models: Record<string, MistralPricing>;
+  familyFallback: Array<{ match: string } & MistralPricing>;
+}
+
 /**
  * First-party pricing pack: Cursor-native rates, aliases, date overrides,
  * historical Codex rows, and Claude cache multipliers catalogs get wrong.
@@ -37,6 +48,8 @@ export interface PricingSupplement {
   claude: PricingSupplementClaude;
   codex: PricingSupplementCodex;
   cursor: PricingSupplementCursor;
+  /** Absent from packs built before Mistral Vibe support; the bundled table fills in. */
+  mistral?: PricingSupplementMistral;
 }
 
 export interface PricingManifest {

@@ -49,6 +49,9 @@ async function readPricingTables(): Promise<PricingTables> {
     cursor: JSON.parse(
       await readFile(join(TABLES, 'cursor.json'), 'utf8'),
     ) as PricingTables['cursor'],
+    mistral: JSON.parse(
+      await readFile(join(TABLES, 'mistral.json'), 'utf8'),
+    ) as PricingTables['mistral'],
   };
 }
 

@@ -28,6 +28,10 @@
   fill: var(--provider-cursor);
 }
 
+.h-bar--vibe {
+  fill: var(--provider-vibe);
+}
+
 .h-axis,
 .h-stats {
   display: flex;

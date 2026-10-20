@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   path: vi.fn(),
   auth: vi.fn(),
   cursor: vi.fn(),
+  vibe: vi.fn(),
+  vibeSessions: vi.fn(),
 }));
 vi.mock('../../readers/claude.js', () => ({
   getClaudePaths: () => ['claude'],
@@ -22,9 +24,15 @@ vi.mock('../../readers/cursor/auth.js', () => ({
   readCursorAuthState: mocks.auth,
 }));
 vi.mock('../../readers/cursor/index.js', () => ({ readCursorData: mocks.cursor }));
+vi.mock('../../readers/vibe.js', () => ({
+  getVibePaths: () => ['vibe'],
+  listVibeSessionFiles: mocks.vibeSessions,
+  readVibeData: mocks.vibe,
+}));
 import { claudeCodeProvider } from '../claudeCode.js';
 import { codexProvider } from '../codex.js';
 import { cursorProvider } from '../cursor.js';
+import { vibeProvider } from '../vibe.js';
 
 beforeEach(() => vi.resetAllMocks());
 it('delegates local readers and source diagnostics to the selected provider', async () => {
@@ -69,4 +77,24 @@ it('diagnoses missing Cursor DBs, signed-out state and unreadable auth without e
       'merge',
     ),
   ).toBeGreaterThan(0);
+});
+it('counts Vibe sessions for diagnostics and prices Mistral usage', async () => {
+  mocks.vibeSessions.mockResolvedValue([]);
+  await expect(vibeProvider.doctorCheck()).resolves.toMatchObject({ status: 'warn' });
+  mocks.vibeSessions.mockResolvedValue(['a/meta.json', 'b/CURRENT']);
+  expect(await vibeProvider.doctorCheck()).toEqual({
+    status: 'ok',
+    label: 'Mistral Vibe source',
+    detail: '2 session(s) across vibe',
+  });
+  await vibeProvider.reader.readData();
+  expect(mocks.vibe).toHaveBeenCalled();
+  expect(
+    vibeProvider.pricing.priceModelCost(
+      'mistral-large-4',
+      { inputTokens: 1_000_000, outputTokens: 0, cachedInputTokens: 1_000_000 },
+      '2026-10-20',
+      'recompute',
+    ),
+  ).toBeCloseTo(0.136);
 });

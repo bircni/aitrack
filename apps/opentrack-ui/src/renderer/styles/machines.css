@@ -166,6 +166,10 @@
   background: var(--provider-cursor);
 }
 
+.m-part--vibe {
+  background: var(--provider-vibe);
+}
+
 .m-percent {
   min-width: 30px;
   color: var(--ink-2);
