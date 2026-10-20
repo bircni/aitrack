@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-10-18T11:01:53.234Z",
+  "retrievedAt": "2026-10-20T11:33:49.917Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -893,26 +893,12 @@
       "cr": 0.175,
       "cwe": false
     },
-    "openai/gpt-5.2-chat-latest": {
-      "i": 1.75,
-      "o": 14,
-      "cw": 1.75,
-      "cr": 0.175,
-      "cwe": false
-    },
     "openai/gpt-5.2-pro": {
       "i": 21,
       "o": 168,
       "cw": 21,
       "cr": 2.1,
       "cre": false,
-      "cwe": false
-    },
-    "openai/gpt-5.3-chat-latest": {
-      "i": 1.75,
-      "o": 14,
-      "cw": 1.75,
-      "cr": 0.175,
       "cwe": false
     },
     "openai/gpt-5.3-codex": {
