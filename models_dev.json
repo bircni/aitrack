@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-10-20T11:33:49.917Z",
+  "retrievedAt": "2026-10-21T11:46:32.221Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -768,6 +768,13 @@
       "cw": 1.5,
       "cr": 0.15000000000000002,
       "cre": false,
+      "cwe": false
+    },
+    "google/gemini-pro-latest": {
+      "i": 2,
+      "o": 12,
+      "cw": 2,
+      "cr": 0.2,
       "cwe": false
     },
     "openai/gpt-3.5-turbo": {
