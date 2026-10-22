@@ -5,6 +5,7 @@
     "moduleResolution": "Bundler",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": [],
+    "composite": false,
     "noEmit": true,
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
