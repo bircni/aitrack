@@ -1,7 +1,7 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
 
-  import type { ProjectUsages, QuotaProviderKey, Spend } from '../shared/types.js';
+  import type { ProjectUsages, ProviderKey, Spend } from '../shared/types.js';
   import {
     formatPercent,
     PERIOD_LABELS,
@@ -39,7 +39,7 @@
         percent,
         title: `${percent} of ${byCost ? 'spend' : 'tokens'}`,
         parts: entry.providers.map((part) => ({
-          key: part.key as QuotaProviderKey,
+          key: part.key as ProviderKey,
           label: part.label,
           reading: spendReading(part),
           width: (measure(part) / total) * 100,

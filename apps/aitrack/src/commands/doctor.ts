@@ -114,7 +114,7 @@ async function pricingCacheCheck(): Promise<CheckResult> {
   return {
     status: result.failed || result.unverified ? 'warn' : 'ok',
     label: 'Pricing cache',
-    detail: `${String(pricing.claudeModelCount())} Claude, ${String(pricing.codexModelCount())} Codex, ${String(pricing.cursorModelCount())} Cursor — ${result.detail} (updatedAt ${result.updatedAt})${result.unverified ? '; pack has no checksums, content not verified' : ''}`,
+    detail: `${String(pricing.claudeModelCount())} Claude, ${String(pricing.codexModelCount())} Codex, ${String(pricing.cursorModelCount())} Cursor, ${String(pricing.mistralModelCount())} Mistral — ${result.detail} (updatedAt ${result.updatedAt})${result.unverified ? '; pack has no checksums, content not verified' : ''}`,
   };
 }
 

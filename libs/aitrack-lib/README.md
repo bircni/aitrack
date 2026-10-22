@@ -1,7 +1,7 @@
 # aitrack-lib
 
 The library behind [`aitrack`](https://www.npmjs.com/package/aitrack): reading Claude Code,
-Codex and Cursor usage off the local machine, pricing it, merging it across machines, and
+Codex, Cursor and Mistral Vibe usage off the local machine, pricing it, merging it across machines, and
 rendering it as a heatmap, terminal table or receipt.
 
 ```sh

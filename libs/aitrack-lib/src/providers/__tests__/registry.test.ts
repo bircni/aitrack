@@ -11,8 +11,8 @@ import {
 } from '../index.js';
 
 describe('provider registry', () => {
-  it('exposes claude_code, codex and cursor in display order', () => {
-    expect(providerKeys()).toEqual(['claude_code', 'codex', 'cursor']);
+  it('exposes every provider in display order', () => {
+    expect(providerKeys()).toEqual(['claude_code', 'codex', 'cursor', 'vibe']);
   });
 
   it('indexes every provider by key and by each of its aliases', () => {
@@ -29,7 +29,11 @@ describe('provider registry', () => {
   });
 
   it('splits synced from live by which reader the provider carries', () => {
-    expect(syncedProviders().map((p) => p.descriptor.key)).toEqual(['claude_code', 'codex']);
+    expect(syncedProviders().map((p) => p.descriptor.key)).toEqual([
+      'claude_code',
+      'codex',
+      'vibe',
+    ]);
     expect(liveProviders().map((p) => p.descriptor.key)).toEqual(['cursor']);
   });
 

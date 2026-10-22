@@ -146,6 +146,31 @@ describe('PricingStore', () => {
     );
   });
 
+  it('keeps bundled Mistral rates under a newer pack built before them, and takes a pack’s own', async () => {
+    const old = await fixture((supplement) => {
+      delete supplement.mistral;
+    });
+    await old.cache();
+    expect(new PricingStore(old.dir).current().lookupMistral('mistral-large-4')).toEqual({
+      inputPerMillion: 1.36,
+      outputPerMillion: 4.18,
+    });
+
+    const current = await fixture((supplement) => {
+      supplement.mistral?.familyFallback.unshift({
+        match: '^devstral',
+        inputPerMillion: 0.4,
+        outputPerMillion: 2,
+      });
+    });
+    await current.cache();
+    const pricing = new PricingStore(current.dir).current();
+    expect(pricing.lookupMistral('mistral-large-4')?.inputPerMillion).toBe(1.36);
+    expect(
+      pricing.mistralFamilyFallbacks().find(({ match }) => match.test('devstral-2512')),
+    ).toMatchObject({ pricing: { inputPerMillion: 0.4 } });
+  });
+
   it('uses refreshed overrides through the actual provider resolvers', async () => {
     const { dir } = await fixture((supplement) => {
       supplement.claude.overrides['claude-sonnet-4-6'] = [

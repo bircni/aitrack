@@ -2,7 +2,7 @@ import type { MachineFile } from 'aitrack-lib/data/types';
 import type { QuotaResult } from 'aitrack-lib/quota/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AppState, QuotaProviderKey } from '../../shared/types.js';
+import type { AppState, ProviderKey, QuotaProviderKey } from '../../shared/types.js';
 import { EMPTY_PERIOD } from '../../shared/types.js';
 import type { Alert } from '../alerts.js';
 import {
@@ -50,7 +50,7 @@ function harness(
   let now = START;
   const calls: QuotaProviderKey[] = [];
   const pulls: boolean[] = [];
-  const read: QuotaProviderKey[][] = [];
+  const read: ProviderKey[][] = [];
   const reused: Array<MachineFile | undefined> = [];
   const states: AppState[] = [];
   const alerts: Alert[] = [];
@@ -117,10 +117,12 @@ describe('QuotaService', () => {
     expect(h.calls).toEqual(['claude_code', 'codex', 'cursor']);
     expect(h.pulls).toEqual([true]);
     const state = h.service.state();
+    // Vibe has usage only, so it is never asked for limits.
     expect(state.providers.map((provider) => provider.quota?.provider)).toEqual([
       'claude_code',
       'codex',
       'cursor',
+      undefined,
     ]);
     expect(state).toMatchObject({ refreshing: false, machineCount: 2 });
     expect(h.persisted()).toBe(1);
@@ -221,7 +223,7 @@ describe('QuotaService', () => {
 
     h.service.setSettings({ ...DEFAULT_SETTINGS, pullSyncedData: false });
     await h.service.refresh(); // Still inside the failure backoff.
-    expect(h.read).toEqual([['claude_code'], ['claude_code', 'codex', 'cursor']]);
+    expect(h.read).toEqual([['claude_code'], ['claude_code', 'codex', 'cursor', 'vibe']]);
 
     h.service.setSettings({
       ...DEFAULT_SETTINGS,
@@ -323,7 +325,7 @@ describe('QuotaService', () => {
     expect(sync).toHaveBeenCalledTimes(1);
     expect(service.state().syncing).toBe(true);
     expect(loadUsage).toHaveBeenLastCalledWith({
-      providers: ['claude_code', 'codex', 'cursor'],
+      providers: ['claude_code', 'codex', 'cursor', 'vibe'],
       pull: false,
       refreshLive: false,
       localMachine: MACHINE,

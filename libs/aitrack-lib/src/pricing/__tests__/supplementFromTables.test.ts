@@ -8,6 +8,11 @@ function sourceTables(): PricingTables {
     claude: { ...baseline.claude, updatedAt: '2026-01-01' },
     codex: { ...baseline.codex, updatedAt: '2026-02-01T12:00:00Z' },
     cursor: { ...baseline.cursor, updatedAt: '2026-01-15' },
+    mistral: {
+      models: baseline.mistral?.models ?? {},
+      familyFallback: baseline.mistral?.familyFallback ?? [],
+      updatedAt: '2026-01-20',
+    },
   };
 }
 

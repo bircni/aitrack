@@ -38,15 +38,15 @@ Today at a glance (`aitrack usage today`):
 **Preview instantly — no setup required:**
 
 ```sh
-npx aitrack show --tui     # stats table from local Claude/Codex (+ Cursor if available)
+npx aitrack show --tui     # stats table from local Claude/Codex/Vibe (+ Cursor if available)
 npx aitrack usage today    # today's usage, per provider + model
 npx aitrack show           # heatmap PNG from the same local-first read
 ```
 
-Provider-aware commands select Claude Code, Codex, and Cursor by default. To avoid reading Cursor credentials or making a Cursor HTTPS request, choose only the synced providers:
+Provider-aware commands select Claude Code, Codex, Cursor and Mistral Vibe by default. To avoid reading Cursor credentials or making a Cursor HTTPS request, choose only the synced providers:
 
 ```sh
-npx aitrack show --tui --providers claude,codex
+npx aitrack show --tui --providers claude,codex,vibe
 ```
 
 Your local data is staged at `~/.config/aitrack/pending/data/` so a later `init` can adopt it into your repo.
@@ -92,7 +92,7 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 **Usage and export windows:** `today`, `yesterday`, `date <YYYY-MM-DD>`, `range <from> <to>`, `thisweek`, `lastweek`, `week` (rolling 7 days), `thismonth`, `lastmonth`, `month` (rolling 30 days), `last <n>`, `year`, and `all`.
 
-**Provider selection:** `--providers <list>` accepts comma-separated `claude`, `codex`, and `cursor` values and works with `show`, every `usage` window, `export`, and `top`. All three are selected by default. Filtered reports read only selected local providers. Excluding `cursor` prevents the Cursor credential read and HTTPS export request. `show` and sync still read complete local-machine data when staging requires it.
+**Provider selection:** `--providers <list>` accepts comma-separated `claude`, `codex`, `cursor` and `vibe` values and works with `show`, every `usage` window, `export`, and `top`. All are selected by default. Filtered reports read only selected local providers. Excluding `cursor` prevents the Cursor credential read and HTTPS export request. `show` and sync still read complete local-machine data when staging requires it.
 
 **Live data refresh:** Cursor's CSV export is cached at `~/.config/aitrack/cache/cursor.json` (default 6 h, `AITRACK_CURSOR_CACHE_TTL` seconds to change, `AITRACK_NO_CACHE=1` to disable), so `show` / `usage` / `top` no longer hit the network on every run. Pass `--refresh` to `show`, `export`, `top` or any `usage` window to request a fresh fetch. Refresh attempts still honor failure backoff and `Retry-After`. The cache contains an account hash, never a token, and is served only after verifying the current local account. Legacy, mismatched or unverifiable-account exports are rejected. Alternate credential variants are tried only after 401/403 responses; server failures and rate limits stop the request sequence.
 
@@ -182,7 +182,7 @@ A project is the git `origin` of the folder the work happened in, written `owner
 
 ### Cost handling
 
-Claude Code, Codex, and Cursor costs are API-equivalent estimates from per-model list pricing, not subscription charges. Rates live in `libs/aitrack-lib/src/pricing/tables/*.json` so a price change is a JSON edit. Claude estimates account for regular input, cache reads, cache creation, and output. Cache creation uses the 5-minute write rate (1.25× input) unless the transcript splits out 1-hour writes, which are 2× input. Claude 4.6 and later list prices cover the full context window at those base rates, so there is no separate long-context surcharge to apply. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Cursor estimates use the same CSV token buckets (uncached input, cache write, cache read, output) and ignore the export's Cost column, which is plan-included rather than a list price. Cursor CSV rows are aggregates, so long-context rate tiers are not applied. No other table carries a tier either: a context-length surcharge is decided per request, but usage is stored as per-day, per-model sums, and Claude transcripts do not record whether an extended-context mode was on. The tables hold no sourced tier rates (the Claude 4.6+ and Codex rows are flat, and Cursor prices its 1M-context Sonnet as its own `claude-4-sonnet-1m` row), so a tier would have to be invented rather than read from a source; none is applied. Unknown Claude or Codex model IDs that name a known family use that family's rates and emit a warning from `sync`, `show`, `usage`, `top`, and `export`. An id that matches no family stays unpriced, as do unknown Cursor models. When priced and unpriced usage are combined, desktop and terminal totals are marked as partial estimates. JSON includes `hasUnpricedTokens` and `totals.unpricedModels`; `top --json` adds `unpricedModels`; CSV adds `pricing_status` (`complete`, `partial` or `unpriced`) and `unpriced_models`; terminals print an `Unpriced models:` footnote and PDF receipts name them. If stored Claude or Codex estimates are missing or pricing changed, run `aitrack recompute-costs`.
+Claude Code, Codex, Cursor and Mistral Vibe costs are API-equivalent estimates from per-model list pricing, not subscription charges. Rates live in `libs/aitrack-lib/src/pricing/tables/*.json` so a price change is a JSON edit. Claude estimates account for regular input, cache reads, cache creation, and output. Cache creation uses the 5-minute write rate (1.25× input) unless the transcript splits out 1-hour writes, which are 2× input. Claude 4.6 and later list prices cover the full context window at those base rates, so there is no separate long-context surcharge to apply. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Mistral Vibe estimates apply the same 10% cache-read rate to the cached input Vibe records, and price a model by its API name when that has a rate, else by its Vibe alias; unknown `mistral-large`, `-medium`, `-small` and `codestral` ids use their family's rates, and other models (such as retired Devstral releases) stay unpriced. Cursor estimates use the same CSV token buckets (uncached input, cache write, cache read, output) and ignore the export's Cost column, which is plan-included rather than a list price. Cursor CSV rows are aggregates, so long-context rate tiers are not applied. No other table carries a tier either: a context-length surcharge is decided per request, but usage is stored as per-day, per-model sums, and Claude transcripts do not record whether an extended-context mode was on. The tables hold no sourced tier rates (the Claude 4.6+ and Codex rows are flat, and Cursor prices its 1M-context Sonnet as its own `claude-4-sonnet-1m` row), so a tier would have to be invented rather than read from a source; none is applied. Unknown Claude, Codex or Mistral model IDs that name a known family use that family's rates and emit a warning from `sync`, `show`, `usage`, `top`, and `export`. An id that matches no family stays unpriced, as do unknown Cursor models. When priced and unpriced usage are combined, desktop and terminal totals are marked as partial estimates. JSON includes `hasUnpricedTokens` and `totals.unpricedModels`; `top --json` adds `unpricedModels`; CSV adds `pricing_status` (`complete`, `partial` or `unpriced`) and `unpriced_models`; terminals print an `Unpriced models:` footnote and PDF receipts name them. If stored Claude, Codex or Mistral Vibe estimates are missing or pricing changed, run `aitrack recompute-costs`.
 
 ---
 
@@ -206,7 +206,7 @@ Stored at `~/.config/aitrack/config.json`:
 
 `repoUrl` is the git remote used by `init` and `sync`. `machineId` becomes the `data/{machineId}.json` filename; `init` asks for it and defaults to the short hostname. Keep it unique, stable, and valid as a filename on every machine you use. Changing it through the CLI migrates the old pending and synced file without overwriting an existing target.
 
-`claudeProjectsDir` and `codexSessionsDir` are optional comma-separated **additional** source roots. They do not replace the standard locations; aitrack recursively scans the configured, environment, and default roots and deduplicates identical paths. You can also add roots with `AITRACK_CLAUDE_PROJECTS_DIRS` or `AITRACK_CODEX_SESSION_DIRS`.
+`claudeProjectsDir` and `codexSessionsDir` are optional comma-separated **additional** source roots. They do not replace the standard locations; aitrack recursively scans the configured, environment, and default roots and deduplicates identical paths. You can also add roots with `AITRACK_CLAUDE_PROJECTS_DIRS` or `AITRACK_CODEX_SESSION_DIRS`, and Mistral Vibe session roots with `AITRACK_VIBE_SESSION_DIRS`.
 
 `aitrack config list`, `get`, and `set` cover every key shown above, using dotted names for nested settings—for example, `aitrack config set budget.monthly 200`.
 
@@ -236,6 +236,9 @@ A compacted day keeps its `byProject` map (it is small, and not part of the tota
 | Claude Code           | `~/.claude/projects/**/*.jsonl` or `$XDG_CONFIG_HOME/claude/projects/**/*.jsonl`    |
 | Codex                 | `~/.codex/sessions/**/*.jsonl` or `$CODEX_HOME/sessions/**/*.jsonl`                 |
 | Cursor _(local only)_ | local `state.vscdb`, then Cursor's HTTPS CSV export — **never synced to your repo** |
+| Mistral Vibe          | `~/.vibe/logs/session/`, `$VIBE_HOME/logs/session/` or `session_logging.save_dir`   |
+
+Both Vibe session formats are read, and legacy session folders follow `session_logging.session_prefix` from `config.toml`. Vibe records whole-session totals rather than per-request usage, so each session counts on the day of its last activity. Sessions written before Vibe 2.26 store the model with them. Newer sessions store it only when one was picked for that session; otherwise aitrack takes `active_model` from `~/.vibe/config.toml` (or Vibe's default, `mistral-medium-3.5`) the first time it reads the session and remembers it in `~/.config/aitrack/vibe-models.json`, so changing the default later does not relabel past sessions. Sessions from before your first aitrack run get the default at that time.
 
 Default `state.vscdb` locations (override with `CURSOR_STATE_DB_PATH` or `CURSOR_CONFIG_DIR`):
 

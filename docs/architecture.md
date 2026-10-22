@@ -37,7 +37,7 @@ local logs / Cursor export                  other machines
 
 A provider is a descriptor, a heatmap palette, a pricing function and a doctor check, plus either:
 
-- a **synced** reader (`SyncedProvider`): Claude Code and Codex, read from local logs and written to the
+- a **synced** reader (`SyncedProvider`): Claude Code, Codex and Mistral Vibe, read from local logs and written to the
   data repo; or
 - a **live** reader (`LiveProvider`): Cursor, fetched from the account (cached for six hours by default) and never written to git.
 

@@ -1,13 +1,14 @@
 # opentrack desktop guide
 
 A tray (or menu-bar) dashboard for Claude Code, Codex and Cursor: live session and weekly limits
-with reset times and pacing, plus token usage and estimated cost from the same data `aitrack`
-reads — including other machines synced through your aitrack data repo.
+with reset times and pacing, plus token usage and estimated cost (Mistral Vibe included) from the
+same data `aitrack` reads — including other machines synced through your aitrack data repo.
 
 ## What it shows
 
 - **Limits** — Claude Code session / weekly / per-model weekly windows and extra usage; Codex
   session and weekly windows and credits; Cursor total, Auto and API usage and on-demand spend.
+  Mistral Vibe has no limits to show, only usage, and the tray never follows it.
 - **Pacing** — whether each limit is on track to last until it resets, with an even-pace marker
   and alerts when one is almost used up or on pace to run out.
 - **Usage** — today, yesterday, the last 7 / 30 days and all-time per provider, a daily trend
@@ -51,7 +52,7 @@ opentrack reuses the logins your tools already saved and never writes to them:
 Tokens are not refreshed by opentrack: when one expires, the provider shows a message until you
 next use that tool. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
 
-Usage history comes from the local Claude/Codex logs and, while Cursor is enabled, Cursor's CSV
+Usage history comes from the local Claude, Codex and Mistral Vibe logs and, while Cursor is enabled, Cursor's CSV
 usage export, which is downloaded from `CURSOR_WEB_BASE_URL` (`https://cursor.com` by default) with
 the saved Cursor token at most every 6 hours (`AITRACK_CURSOR_CACHE_TTL`) and on each manual
 refresh. A provider turned off in Settings is neither read nor contacted. Usage is merged with the

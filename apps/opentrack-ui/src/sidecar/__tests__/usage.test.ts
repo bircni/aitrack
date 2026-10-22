@@ -17,11 +17,13 @@ describe('summarizeUsage', () => {
             ['2026-04-16', makeDay(20, 10, 0.5, 'claude-sonnet-4-6')],
           ]),
           codex: new Map([['2026-06-12', makeDay(1, 1, 0)]]),
+          vibe: new Map([['2026-06-15', makeDay(7, 3, 0.1, 'mistral-medium-3.5')]]),
         },
         machineData: [],
       },
       now,
     );
+    expect(summary.providers.vibe?.today.tokens).toBe(10);
     const claude = summary.providers.claude_code;
     expect(claude?.today).toEqual({
       tokens: 150,

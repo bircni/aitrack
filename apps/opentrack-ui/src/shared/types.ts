@@ -7,6 +7,15 @@ export type {
   QuotaWindow,
 } from 'aitrack-lib/quota/types';
 
+/** Providers with usage but no live limits. */
+export const USAGE_ONLY_PROVIDERS = ['vibe'] as const;
+
+export type ProviderKey = QuotaProviderKey | (typeof USAGE_ONLY_PROVIDERS)[number];
+
+export function isQuotaProvider(key: ProviderKey): key is QuotaProviderKey {
+  return !(USAGE_ONLY_PROVIDERS as readonly string[]).includes(key);
+}
+
 export interface Spend {
   tokens: number;
   costUSD: number;
@@ -54,7 +63,7 @@ export interface ProviderUsage {
   daily: DailyUsage[];
 }
 
-export type ProviderUsages = Partial<Record<QuotaProviderKey, ProviderUsage>>;
+export type ProviderUsages = Partial<Record<ProviderKey, ProviderUsage>>;
 
 export interface MachineUsage {
   name: string;
@@ -67,7 +76,7 @@ export interface MachineUsage {
 }
 
 export interface ProviderState {
-  key: QuotaProviderKey;
+  key: ProviderKey;
   label: string;
   quota?: QuotaSnapshot;
   quotaError?: QuotaError;
@@ -106,7 +115,7 @@ export interface Settings {
   display: 'used' | 'left';
   resetDisplay: 'relative' | 'absolute';
   /** `label` is filled in by the sidecar from the provider registry; what is saved is ignored. */
-  providers: Array<{ key: QuotaProviderKey; label: string; enabled: boolean }>;
+  providers: Array<{ key: ProviderKey; label: string; enabled: boolean }>;
   launchAtLogin: boolean;
   /** Tauri global-shortcut accelerator (e.g. CommandOrControl+Shift+O), empty for none. */
   globalShortcut: string;

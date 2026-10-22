@@ -120,6 +120,11 @@ export function codexHomeDirs(options: HomeDirOptions = {}): string[] {
   ];
 }
 
+/** Mistral Vibe home directory; Vibe reads only `$VIBE_HOME` when it is set. */
+export function vibeHomeDir(): string {
+  return environmentValue('VIBE_HOME') ?? join(homedir(), '.vibe');
+}
+
 export function resolveSourceRoots(options: {
   envValue?: string;
   configValue?: string;

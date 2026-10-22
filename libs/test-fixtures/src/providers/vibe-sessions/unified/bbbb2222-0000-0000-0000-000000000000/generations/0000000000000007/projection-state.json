@@ -1,0 +1,24 @@
+{
+  "projection_state_version": 1,
+  "session_id": "bbbb2222-0000-0000-0000-000000000000",
+  "snapshot": {
+    "format": "harness.public-session-state/v1",
+    "session": {
+      "id": "bbbb2222-0000-0000-0000-000000000000",
+      "createdAt": 1741690800000,
+      "updatedAt": 1741694400000,
+      "contextUsage": {
+        "cachedInputTokens": 9000,
+        "inputTokens": 10000,
+        "outputTokens": 200,
+        "totalTokens": 10200
+      },
+      "tokenUsage": {
+        "cachedInputTokens": 40000,
+        "inputTokens": 50000,
+        "outputTokens": 1000,
+        "totalTokens": 51000
+      }
+    }
+  }
+}

@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   readDataFile: vi.fn(),
   getClaudePaths: vi.fn(),
   getCodexPaths: vi.fn(),
+  listVibeSessionFiles: vi.fn(),
   getCursorStateDatabasePath: vi.fn(),
   readCursorAuthState: vi.fn(),
   syncPricingPack: vi.fn<typeof import('aitrack-lib/pricing/syncPack').syncPricingPack>(() =>
@@ -50,6 +51,11 @@ vi.mock('aitrack-lib/readers/claude', () => ({
 vi.mock('aitrack-lib/readers/codex', () => ({
   getCodexPaths: mocks.getCodexPaths,
   readCodexData: vi.fn(),
+}));
+vi.mock('aitrack-lib/readers/vibe', () => ({
+  getVibePaths: () => ['/vibe'],
+  listVibeSessionFiles: mocks.listVibeSessionFiles,
+  readVibeData: vi.fn(),
 }));
 vi.mock('aitrack-lib/readers/cursor/auth', () => ({
   getCursorStateDatabasePath: mocks.getCursorStateDatabasePath,
@@ -126,6 +132,7 @@ describe('doctorCommand', () => {
     mocks.isCloned.mockReturnValue(true);
     mocks.getClaudePaths.mockReturnValue(['/claude']);
     mocks.getCodexPaths.mockReturnValue(['/codex']);
+    mocks.listVibeSessionFiles.mockResolvedValue(['/vibe/session_1/meta.json']);
     mocks.getCursorStateDatabasePath.mockReturnValue('/cursor/state.vscdb');
     mocks.readCursorAuthState.mockResolvedValue({ accessToken: 'token' });
   });
@@ -139,6 +146,7 @@ describe('doctorCommand', () => {
     expect(out).toContain('Config: repoUrl=git@example.com:me/data.git, machineId=host');
     expect(out).toContain('Claude Code source: 1 JSONL file(s)');
     expect(out).toContain('Codex source: 1 JSONL file(s)');
+    expect(out).toContain('Mistral Vibe source: 1 session(s) across /vibe');
     expect(out).toContain('Cursor source: auth token found');
     expect(out).toContain('Pricing cache:');
     expect(process.exitCode).toBeUndefined();

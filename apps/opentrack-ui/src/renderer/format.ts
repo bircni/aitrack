@@ -11,9 +11,9 @@ import type {
   ProjectUsageEntry,
   ProjectUsages,
   ProviderState,
+  ProviderKey,
   ProviderUsage,
   QuotaError,
-  QuotaProviderKey,
   QuotaWindow,
   Settings,
   Spend,
@@ -124,7 +124,7 @@ interface HistoryBar {
   /** First day the bar covers; weeks start on Monday. */
   start: string;
   totalUSD: number;
-  parts: Array<{ key: QuotaProviderKey; costUSD: number }>;
+  parts: Array<{ key: ProviderKey; costUSD: number }>;
 }
 
 export interface History {
@@ -138,7 +138,7 @@ export interface History {
   peakUSD: number;
   /** Start of the busiest bar; empty without data. */
   busiest: string;
-  byProvider: Array<{ key: QuotaProviderKey; label: string; costUSD: number }>;
+  byProvider: Array<{ key: ProviderKey; label: string; costUSD: number }>;
 }
 
 /** Stacked cost per day (or week) over the last `range` days, split by provider. */

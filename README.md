@@ -4,7 +4,7 @@
 
 **Your AI coding usage in the terminal and the menu bar.**
 
-Track Claude Code, Codex and Cursor with two apps built on the same usage data:
+Track Claude Code, Codex, Cursor and Mistral Vibe with two apps built on the same usage data:
 **aitrack** for reports and git sync, **opentrack** for live limits and a desktop dashboard.
 
 [![npm version](https://img.shields.io/npm/v/aitrack?color=cb3837&logo=npm)](https://www.npmjs.com/package/aitrack)
@@ -22,7 +22,7 @@ Track Claude Code, Codex and Cursor with two apps built on the same usage data:
 | -------------- | ----------------------------------------- | ------------------------------------------------------ |
 | Where it runs  | Terminal on macOS, Windows and Linux      | macOS menu bar, Windows and Linux system tray          |
 | Main use       | Usage reports, heatmaps, exports and sync | Live limits, reset times, pacing and usage at a glance |
-| Providers      | Claude Code, Codex and Cursor             | Claude Code, Codex and Cursor                          |
+| Providers      | Claude Code, Codex, Cursor, Mistral Vibe  | Limits: Claude Code, Codex, Cursor; usage: all four    |
 | Install        | npm / npx                                 | Download a desktop installer                           |
 | Shared history | Optional git repo you control             | Reads the same history and can sync from the dashboard |
 
@@ -51,7 +51,7 @@ The CLI needs **Node.js 24+**. Git is needed for cross-machine sync.
 - View daily usage by provider and model, or choose a calendar or rolling period.
 - Compare usage with the previous period and rank your busiest days, models or projects.
 - Render PNG heatmaps and export PDF or CSV reports.
-- Inspect machine totals and sync Claude Code and Codex history across computers.
+- Inspect machine totals and sync Claude Code, Codex and Mistral Vibe history across computers.
 
 ```sh
 aitrack usage thismonth --compare
@@ -115,12 +115,12 @@ Use the same remote and a different, stable machine name for each computer. Your
 git credentials handle authentication. The desktop app reads the same configured repo,
 can pull history automatically, and pushes local usage when you press Sync.
 
-Claude Code and Codex history are synced. Cursor usage stays on the current machine.
+Claude Code, Codex and Mistral Vibe history are synced. Cursor usage stays on the current machine.
 You can use both apps locally without setting up a repo.
 
 ## Your data and cost estimates
 
-Claude Code and Codex usage comes from local session logs. Cursor usage comes from its
+Claude Code, Codex and Mistral Vibe usage comes from local session logs. Cursor usage comes from its
 HTTPS usage export using the current machine's saved Cursor login. opentrack also
 requests live limits from each provider using the credentials that provider's tool saved.
 Credentials are never written to your usage repo.
@@ -128,10 +128,10 @@ Credentials are never written to your usage repo.
 Costs are **API-equivalent estimates**, based on model pricing and token/cache counts.
 They show the pay-as-you-go value of your usage, not your subscription bill.
 
-The CLI selects all three providers by default. To skip Cursor credentials and requests:
+The CLI selects all providers by default. To skip Cursor credentials and requests:
 
 ```sh
-aitrack show --tui --providers claude,codex
+aitrack show --tui --providers claude,codex,vibe
 ```
 
 ## Documentation

@@ -2,15 +2,19 @@ import type { PricingSupplement } from './packMeta.js';
 import claudeTable from './tables/claude.json' with { type: 'json' };
 import codexTable from './tables/codex.json' with { type: 'json' };
 import cursorTable from './tables/cursor.json' with { type: 'json' };
+import mistralTable from './tables/mistral.json' with { type: 'json' };
 
 export type PricingTables = {
-  [Provider in 'claude' | 'codex' | 'cursor']: PricingSupplement[Provider] & { updatedAt: string };
+  [Provider in 'claude' | 'codex' | 'cursor' | 'mistral']: NonNullable<
+    PricingSupplement[Provider]
+  > & { updatedAt: string };
 };
 
 const DEFAULT_TABLES: PricingTables = {
   claude: claudeTable,
   codex: codexTable,
   cursor: cursorTable,
+  mistral: mistralTable,
 };
 
 function tableStamp(updatedAt: string): number {
@@ -23,6 +27,7 @@ export function supplementFromTables(tables: PricingTables = DEFAULT_TABLES): Pr
     tableStamp(tables.claude.updatedAt),
     tableStamp(tables.codex.updatedAt),
     tableStamp(tables.cursor.updatedAt),
+    tableStamp(tables.mistral.updatedAt),
   );
   return {
     updatedAt: new Date(updatedAtMs).toISOString(),
@@ -42,6 +47,10 @@ export function supplementFromTables(tables: PricingTables = DEFAULT_TABLES): Pr
       models: structuredClone(tables.cursor.models),
       fastMultipliers: structuredClone(tables.cursor.fastMultipliers),
       aliases: structuredClone(tables.cursor.aliases),
+    },
+    mistral: {
+      models: structuredClone(tables.mistral.models),
+      familyFallback: structuredClone(tables.mistral.familyFallback),
     },
   };
 }

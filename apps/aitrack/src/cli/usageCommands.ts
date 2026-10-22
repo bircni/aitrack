@@ -31,7 +31,8 @@ async function projectFor(dir: string | true | undefined): Promise<ProjectSelect
 }
 
 const PROVIDERS_FLAG = '--providers <list>';
-const PROVIDERS_DESC = 'comma-separated providers to show (claude, codex, cursor); default: all';
+const PROVIDERS_DESC =
+  'comma-separated providers to show (claude, codex, cursor, vibe); default: all';
 const REFRESH_FLAG = '--refresh';
 const REFRESH_DESC = 're-fetch live provider data (Cursor), ignoring the local cache';
 

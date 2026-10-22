@@ -4,9 +4,15 @@ import { claudeCodeProvider } from './claudeCode.js';
 import { codexProvider } from './codex.js';
 import { cursorProvider } from './cursor.js';
 import type { LiveProvider, Provider, SyncedProvider } from './types.js';
+import { vibeProvider } from './vibe.js';
 
 /** In display order. */
-export const PROVIDERS: readonly Provider[] = [claudeCodeProvider, codexProvider, cursorProvider];
+export const PROVIDERS: readonly Provider[] = [
+  claudeCodeProvider,
+  codexProvider,
+  cursorProvider,
+  vibeProvider,
+];
 
 export const PROVIDER_BY_KEY: Record<string, Provider> = Object.fromEntries(
   PROVIDERS.map((provider) => [provider.descriptor.key, provider]),

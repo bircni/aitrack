@@ -11,6 +11,7 @@ import type {
   PeriodUsage,
   ProjectUsageEntry,
   ProjectUsages,
+  ProviderKey,
   ProviderState,
   ProviderUsage,
   QuotaProviderKey,
@@ -19,8 +20,9 @@ import type {
   Settings,
   Spend,
 } from '../shared/types.js';
-import { EMPTY_PERIOD } from '../shared/types.js';
+import { EMPTY_PERIOD, isQuotaProvider } from '../shared/types.js';
 import { type Alert, dueAlerts, type FiredAlerts, pruneFired } from './alerts.js';
+import { PROVIDER_KEYS } from './settings.js';
 import type { UsageSummary } from './usage.js';
 
 export const REFRESH_INTERVAL_MS = 5 * 60_000;
@@ -144,7 +146,7 @@ function readMachineUsage(value: unknown): MachineUsage | undefined {
     timezone: value.timezone,
     lastUpdated: value.lastUpdated,
     current: value.current,
-    providers: providerMap(value.providers, readProviderUsage),
+    providers: providerMap(PROVIDER_KEYS, value.providers, readProviderUsage),
   };
 }
 
@@ -182,13 +184,14 @@ function isSnapshot(value: unknown, key: QuotaProviderKey): value is QuotaSnapsh
   );
 }
 
-function providerMap<T>(
+function providerMap<Key extends ProviderKey, T>(
+  keys: readonly Key[],
   value: unknown,
-  read: (entry: unknown, key: QuotaProviderKey) => T | undefined,
-): Partial<Record<QuotaProviderKey, T>> {
-  const entries: Partial<Record<QuotaProviderKey, T>> = {};
+  read: (entry: unknown, key: Key) => T | undefined,
+): Partial<Record<Key, T>> {
+  const entries: Partial<Record<Key, T>> = {};
   if (!isRecord(value)) return entries;
-  for (const key of QUOTA_PROVIDERS) {
+  for (const key of keys) {
     const entry = read(value[key], key);
     if (entry !== undefined) entries[key] = entry;
   }
@@ -203,9 +206,11 @@ function normalizeCachedState(input: unknown): CachedState {
     ...(isTimestamp(raw.updatedAt) && { updatedAt: raw.updatedAt }),
     ...(isTimestamp(raw.usageUpdatedAt) && { usageUpdatedAt: raw.usageUpdatedAt }),
     ...(typeof raw.pullError === 'string' && { pullError: raw.pullError }),
-    quotas: providerMap(raw.quotas, (entry, key) => (isSnapshot(entry, key) ? entry : undefined)),
+    quotas: providerMap(QUOTA_PROVIDERS, raw.quotas, (entry, key) =>
+      isSnapshot(entry, key) ? entry : undefined,
+    ),
     usage: usage && {
-      providers: providerMap(usage.providers, readProviderUsage),
+      providers: providerMap(PROVIDER_KEYS, usage.providers, readProviderUsage),
       machineCount: isFiniteNumber(usage.machineCount) ? usage.machineCount : 1,
       ...(Array.isArray(usage.machines) && {
         machines: usage.machines
@@ -213,7 +218,7 @@ function normalizeCachedState(input: unknown): CachedState {
           .filter((machine) => machine !== undefined),
       }),
       ...(isRecord(usage.account) && {
-        account: providerMap(usage.account, readProviderUsage),
+        account: providerMap(PROVIDER_KEYS, usage.account, readProviderUsage),
       }),
       ...(readProjects(usage.projects) && { projects: readProjects(usage.projects) }),
     },
@@ -222,7 +227,7 @@ function normalizeCachedState(input: unknown): CachedState {
         (entry): entry is [string, string] => typeof entry[1] === 'string',
       ),
     ),
-    rateLimitedUntil: providerMap(raw.rateLimitedUntil, (entry) =>
+    rateLimitedUntil: providerMap(QUOTA_PROVIDERS, raw.rateLimitedUntil, (entry) =>
       isFiniteNumber(entry) ? entry : undefined,
     ),
   };
@@ -253,7 +258,7 @@ export function loadCachedState(input: unknown): CachedState {
   return version === CACHE_FORMAT ? normalizeCachedState(cache) : normalizeCachedState({});
 }
 
-function providersKey(providers: readonly QuotaProviderKey[]): string {
+function providersKey(providers: readonly ProviderKey[]): string {
   return providers.toSorted().join();
 }
 
@@ -261,7 +266,7 @@ export interface ServiceDeps {
   fetchQuota: (provider: QuotaProviderKey) => Promise<QuotaResult>;
   loadUsage: (options: {
     /** Only enabled providers are read, so a disabled Cursor is never contacted. */
-    providers: QuotaProviderKey[];
+    providers: ProviderKey[];
     pull: boolean;
     refreshLive: boolean;
     /** This machine's logs as a sync just read them, so they are not parsed again. */
@@ -282,7 +287,7 @@ interface ProviderRuntime {
 }
 
 export class QuotaService {
-  private readonly runtime = new Map<QuotaProviderKey, ProviderRuntime>();
+  private readonly runtime = new Map<ProviderKey, ProviderRuntime>();
   private usageRun: Promise<void> | undefined;
   private nextUsageAt = 0;
   /** Sorted providers the last usage load read; a change makes usage due so a re-enabled one shows. */
@@ -324,7 +329,7 @@ export class QuotaService {
       return {
         key,
         label: providerLabel(key),
-        quota: this.cache.quotas[key],
+        quota: isQuotaProvider(key) ? this.cache.quotas[key] : undefined,
         quotaError: runtime?.error,
         retryAt: runtime?.error?.kind === 'rateLimited' ? runtime.nextAttemptAt : undefined,
         usage: this.cache.usage?.providers[key],
@@ -381,12 +386,14 @@ export class QuotaService {
   async refresh(force = false): Promise<void> {
     const now = this.deps.now();
     const providers = this.enabledProviders();
-    const due = providers.filter((key) => {
-      const runtime = this.runtime.get(key);
-      if (runtime?.refreshing) return false;
-      if (runtime?.error?.kind === 'rateLimited') return now >= runtime.nextAttemptAt;
-      return force || now >= (runtime?.nextAttemptAt ?? 0);
-    });
+    const due = providers
+      .filter((key) => isQuotaProvider(key))
+      .filter((key) => {
+        const runtime = this.runtime.get(key);
+        if (runtime?.refreshing) return false;
+        if (runtime?.error?.kind === 'rateLimited') return now >= runtime.nextAttemptAt;
+        return force || now >= (runtime?.nextAttemptAt ?? 0);
+      });
     const usageDue =
       this.usageRun === undefined &&
       !this.syncing &&
@@ -400,7 +407,7 @@ export class QuotaService {
     this.persist();
   }
 
-  private enabledProviders(): QuotaProviderKey[] {
+  private enabledProviders(): ProviderKey[] {
     return this.settings.providers.filter(({ enabled }) => enabled).map(({ key }) => key);
   }
 
@@ -456,7 +463,7 @@ export class QuotaService {
 
   private refreshUsage(
     force: boolean,
-    providers: QuotaProviderKey[],
+    providers: ProviderKey[],
     localMachine?: MachineFile,
   ): Promise<void> {
     const run = this.loadUsage(force, providers, localMachine).finally(() => {
@@ -470,7 +477,7 @@ export class QuotaService {
 
   private async loadUsage(
     force: boolean,
-    providers: QuotaProviderKey[],
+    providers: ProviderKey[],
     localMachine?: MachineFile,
   ): Promise<void> {
     const now = this.deps.now();

@@ -12,6 +12,11 @@ export interface CodexPricing {
   outputPerMillion: number;
 }
 
+export interface MistralPricing {
+  inputPerMillion: number;
+  outputPerMillion: number;
+}
+
 /** Cursor-native models expose rates for all four token buckets. */
 export type CursorPricing = FullModelRates;
 

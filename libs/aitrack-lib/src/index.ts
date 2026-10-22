@@ -27,6 +27,7 @@ export * from './providers/index.js';
 export { getClaudePaths, readClaudeData } from './readers/claude.js';
 export { getCodexPaths, readCodexData } from './readers/codex.js';
 export { type ReadCursorDataOptions, readCursorData } from './readers/cursor/index.js';
+export { getVibePaths, readVibeData } from './readers/vibe.js';
 
 export * from './pricing/resolve.js';
 export * from './pricing/reprice.js';

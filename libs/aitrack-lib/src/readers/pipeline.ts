@@ -14,8 +14,10 @@ export async function parseProviderSources(options: {
   roots: string[];
   parseFile: (filePath: string, fallbacks?: FallbackCollector) => Promise<CachedParse>;
   fallbacks?: FallbackCollector;
+  /** Defaults to every `.jsonl` file under the roots. */
+  listFiles?: (roots: string[]) => Promise<string[]>;
 }): Promise<CachedParse[]> {
-  const files = await listUniqueSourceFiles(options.roots);
+  const files = await (options.listFiles ?? listUniqueSourceFiles)(options.roots);
   const cache = openParseCache(options.cacheName);
 
   const parsed = await mapWithConcurrency(files, async (filePath) => {

@@ -6,7 +6,13 @@ import { type ClaudeFamily } from '../data/modelId.js';
 import { findPricingCatalogRates, type PricingCatalogs } from './catalogs.js';
 import { catalogFromCompact, type ModelRates, type PricingCatalog } from './codecs.js';
 import type { PricingSupplement } from './packMeta.js';
-import type { ClaudePricing, CodexPricing, CursorPricing, PricingOverride } from './types.js';
+import type {
+  ClaudePricing,
+  CodexPricing,
+  CursorPricing,
+  MistralPricing,
+  PricingOverride,
+} from './types.js';
 import { compilePattern } from './validation.js';
 
 function canonicalPricing(value: unknown): unknown {
@@ -46,6 +52,7 @@ export class ModelPricing {
   private readonly catalogs: PricingCatalogs;
   private readonly aliases: CompiledAlias[];
   private readonly codexFamilyFallback: Array<{ match: RegExp; pricing: CodexPricing }>;
+  private readonly mistralFamilyFallback: Array<{ match: RegExp; pricing: MistralPricing }>;
   // Readers price per message, so a model missing from the tables would rescan the catalogs each time.
   private readonly catalogLookups = {
     anthropic: new Map<string, ModelRates | undefined>(),
@@ -72,6 +79,13 @@ export class ModelPricing {
       canonical: rule.canonical,
     }));
     this.codexFamilyFallback = supplement.codex.familyFallback.map((entry) => ({
+      match: compilePattern(entry.match),
+      pricing: {
+        inputPerMillion: entry.inputPerMillion,
+        outputPerMillion: entry.outputPerMillion,
+      },
+    }));
+    this.mistralFamilyFallback = (supplement.mistral?.familyFallback ?? []).map((entry) => ({
       match: compilePattern(entry.match),
       pricing: {
         inputPerMillion: entry.inputPerMillion,
@@ -119,6 +133,14 @@ export class ModelPricing {
     return this.codexFamilyFallback;
   }
 
+  lookupMistral(modelId: string): MistralPricing | undefined {
+    return this.supplement.mistral?.models[modelId];
+  }
+
+  mistralFamilyFallbacks(): Array<{ match: RegExp; pricing: MistralPricing }> {
+    return this.mistralFamilyFallback;
+  }
+
   lookupCursorNative(modelId: string): CursorPricing | undefined {
     return this.supplement.cursor.models[modelId];
   }
@@ -140,6 +162,10 @@ export class ModelPricing {
 
   cursorModelCount(): number {
     return Object.keys(this.supplement.cursor.models).length;
+  }
+
+  mistralModelCount(): number {
+    return Object.keys(this.supplement.mistral?.models ?? {}).length;
   }
 
   private catalogRates(modelId: string, provider: 'anthropic' | 'openai'): ModelRates | undefined {
