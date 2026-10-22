@@ -102,6 +102,12 @@ with AppIndicator support; see the [Linux notes](docs/opentrack.md#linux).
 
 [Desktop guide: limits, credentials, settings and sync](docs/opentrack.md)
 
+## Raycast extension
+
+On macOS, the [Raycast extension](apps/raycast) shows the same live limits and usage from the
+Raycast launcher: **Show Limits** and **Show Usage**. It is not in the Raycast Store yet;
+build it from this repo with `pnpm nx run raycast:dev`.
+
 ## Share history across machines
 
 Create an empty git repository you control, then run the CLI on each machine:
@@ -138,6 +144,7 @@ aitrack show --tui --providers claude,codex
 
 - [CLI guide](docs/cli.md) — commands, reports, configuration, sync and data format.
 - [Desktop guide](docs/opentrack.md) — live limits, credentials and desktop behaviour.
+- [Raycast extension](apps/raycast/README.md) — limits and usage in Raycast.
 - [Library guide](docs/library.md) — use `aitrack-lib` in your own tools.
 - [Architecture](docs/architecture.md) — how the data flows and how the apps fit together.
 - [Contributing](CONTRIBUTING.md) — development setup, project layout, checks and releases.

@@ -1,0 +1,47 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "raycast",
+  "projectType": "application",
+  "sourceRoot": "apps/raycast/src",
+  "targets": {
+    "lint": {},
+    "format:check": {},
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "tsc --build tsconfig.json --emitDeclarationOnly"
+      }
+    },
+    "check:unused": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "knip --workspace aitrack-raycast"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build", "^typecheck"],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "ray build -e dist -o dist"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["^build", "^typecheck"],
+      "continuous": true,
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "ray develop"
+      }
+    },
+    "test": {
+      "configurations": {
+        "ci": {
+          "coverage": true
+        }
+      }
+    }
+  }
+}
