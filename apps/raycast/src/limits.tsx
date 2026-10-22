@@ -1,9 +1,17 @@
 import './libVersion.js';
-import { Action, ActionPanel, Color, Icon, Keyboard, List } from '@raycast/api';
+import {
+  Action,
+  ActionPanel,
+  Color,
+  Icon,
+  Keyboard,
+  List,
+  openExtensionPreferences,
+} from '@raycast/api';
 import { useCachedPromise } from '@raycast/utils';
 import { fmtUSDCost } from 'aitrack-lib/display/format';
 import { providerLabel } from 'aitrack-lib/providers/registry';
-import { fetchQuota, QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
+import { fetchQuota } from 'aitrack-lib/quota/index';
 import { projectPace } from 'aitrack-lib/quota/pacing';
 import type { QuotaProviderKey, QuotaResult, QuotaValue } from 'aitrack-lib/quota/types';
 
@@ -15,6 +23,7 @@ import {
   type Tone,
   windowTone,
 } from './format.js';
+import { type Preferences, preferences } from './preferences.js';
 
 interface ProviderLimits {
   key: QuotaProviderKey;
@@ -23,21 +32,24 @@ interface ProviderLimits {
 
 const TINT: Record<Tone, Color> = { calm: Color.Green, warn: Color.Yellow, crit: Color.Red };
 
-function loadLimits(): Promise<ProviderLimits[]> {
-  return Promise.all(QUOTA_PROVIDERS.map(async (key) => ({ key, result: await fetchQuota(key) })));
+function loadLimits(providers: QuotaProviderKey[]): Promise<ProviderLimits[]> {
+  return Promise.all(providers.map(async (key) => ({ key, result: await fetchQuota(key) })));
 }
 
 function formatValue(value: QuotaValue): string {
   return value.format === 'dollars' ? fmtUSDCost(value.value) : value.value.toLocaleString();
 }
 
-function summary(limits: ProviderLimits[], now: number): string {
+function summary(limits: ProviderLimits[], prefs: Preferences, now: number): string {
   return limits
     .flatMap(({ key, result }) => {
       const label = providerLabel(key);
       if (!result.ok) return [`${label}: ${problemText(result.error)}`];
       return result.snapshot.windows.map((window) =>
-        [`${label} ${window.label}: ${formatLimitValue(window)}`, formatReset(window.resetsAt, now)]
+        [
+          `${label} ${window.label}: ${formatLimitValue(window, prefs.display)}`,
+          formatReset(window.resetsAt, now, prefs.resetDisplay),
+        ]
           .filter(Boolean)
           .join(', '),
       );
@@ -46,7 +58,8 @@ function summary(limits: ProviderLimits[], now: number): string {
 }
 
 export default function Command() {
-  const { data, isLoading, revalidate } = useCachedPromise(loadLimits);
+  const prefs = preferences();
+  const { data, isLoading, revalidate } = useCachedPromise(loadLimits, [prefs.providers]);
   const now = Date.now();
   const actions = (
     <ActionPanel>
@@ -56,12 +69,24 @@ export default function Command() {
         shortcut={Keyboard.Shortcut.Common.Refresh}
         onAction={revalidate}
       />
-      {data && <Action.CopyToClipboard title="Copy Summary" content={summary(data, now)} />}
+      {data && <Action.CopyToClipboard title="Copy Summary" content={summary(data, prefs, now)} />}
+      <Action
+        title="Open Extension Preferences"
+        icon={Icon.Gear}
+        shortcut={{ modifiers: ['cmd'], key: ',' }}
+        onAction={() => void openExtensionPreferences()}
+      />
     </ActionPanel>
   );
 
   return (
     <List isLoading={isLoading}>
+      <List.EmptyView
+        icon={Icon.Gauge}
+        title={prefs.providers.length === 0 ? 'No providers selected' : 'No limits yet'}
+        description="Choose providers in the extension preferences."
+        actions={actions}
+      />
       {data?.map(({ key, result }) => (
         <List.Section
           key={key}
@@ -72,25 +97,17 @@ export default function Command() {
             <>
               {result.snapshot.windows.map((window) => {
                 const pace = projectPace(window, now);
-                const reset = formatReset(window.resetsAt, now);
-                const note = paceLabel(pace, now);
+                const tint = TINT[windowTone(window, pace)];
+                const reset = formatReset(window.resetsAt, now, prefs.resetDisplay);
                 return (
                   <List.Item
                     key={window.id}
                     title={window.label}
-                    icon={{
-                      source: Icon.CircleProgress,
-                      tintColor: TINT[windowTone(window, pace)],
-                    }}
-                    subtitle={note}
+                    icon={{ source: Icon.CircleProgress, tintColor: tint }}
+                    subtitle={paceLabel(pace, now)}
                     accessories={[
                       ...(reset ? [{ text: reset, icon: Icon.Clock }] : []),
-                      {
-                        tag: {
-                          value: formatLimitValue(window),
-                          color: TINT[windowTone(window, pace)],
-                        },
-                      },
+                      { tag: { value: formatLimitValue(window, prefs.display), color: tint } },
                     ]}
                     actions={actions}
                   />

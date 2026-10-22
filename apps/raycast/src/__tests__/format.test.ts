@@ -33,9 +33,11 @@ describe('format', () => {
     expect(formatDuration(2 * HOUR)).toBe('2h');
     expect(formatDuration(2 * HOUR + 90_000)).toBe('2h 2m');
     expect(formatDuration(26 * HOUR)).toBe('1d 2h');
-    expect(formatReset(undefined, NOW)).toBeUndefined();
-    expect(formatReset(new Date(NOW + 30_000).toISOString(), NOW)).toBe('Resets soon');
-    expect(formatReset(new Date(NOW + 3 * HOUR).toISOString(), NOW)).toBe('Resets in 3h');
+    expect(formatReset(undefined, NOW, 'relative')).toBeUndefined();
+    expect(formatReset(new Date(NOW + 30_000).toISOString(), NOW, 'absolute')).toBe('Resets soon');
+    expect(formatReset(new Date(NOW + 3 * HOUR).toISOString(), NOW, 'relative')).toBe(
+      'Resets in 3h',
+    );
   });
 
   it('tones a window by pace, or by fill without one', () => {
@@ -48,13 +50,12 @@ describe('format', () => {
 
   it('labels pace, values and problems', () => {
     expect(paceLabel(level, NOW)).toBeUndefined();
-    expect(paceLabel({ ...level, severity: 'runningOut', runOutAt: NOW + HOUR }, NOW)).toBe(
-      'Runs out in 1h',
-    );
-    expect(formatLimitValue(window)).toBe('42% used');
-    expect(
-      formatLimitValue({ ...window, format: 'dollars', usedValue: 12.5, limitValue: 50 }),
-    ).toBe('$12.50 / $50.00');
+    expect(paceLabel({ ...level, severity: 'spent' }, NOW)).toBe('Limit reached');
+    expect(formatLimitValue(window, 'used')).toBe('42% used');
+    expect(formatLimitValue(window, 'left')).toBe('58% left');
+    const dollars = { ...window, format: 'dollars', usedValue: 12.5, limitValue: 50 } as const;
+    expect(formatLimitValue(dollars, 'used')).toBe('$12.50 / $50.00');
+    expect(formatLimitValue(dollars, 'left')).toBe('$37.50 / $50.00 left');
     expect(problemText({ kind: 'rateLimited', message: '', retryAfterSeconds: 120 })).toBe(
       'Limits paused, back in 2m',
     );

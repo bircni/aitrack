@@ -42,11 +42,129 @@
       "title": "Show Usage",
       "subtitle": "aitrack",
       "description": "Tokens and estimated cost per provider and model.",
-      "mode": "view"
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "defaultPeriod",
+          "type": "dropdown",
+          "required": false,
+          "default": "today",
+          "title": "Default Period",
+          "description": "Period shown when the command opens.",
+          "data": [
+            {
+              "title": "Today",
+              "value": "today"
+            },
+            {
+              "title": "Yesterday",
+              "value": "yesterday"
+            },
+            {
+              "title": "This Week",
+              "value": "thisweek"
+            },
+            {
+              "title": "Last 7 Days",
+              "value": "week"
+            },
+            {
+              "title": "This Month",
+              "value": "thismonth"
+            },
+            {
+              "title": "Last 30 Days",
+              "value": "month"
+            },
+            {
+              "title": "Last 90 Days",
+              "value": "last90"
+            },
+            {
+              "title": "Last Month",
+              "value": "lastmonth"
+            },
+            {
+              "title": "All Time",
+              "value": "all"
+            }
+          ]
+        },
+        {
+          "name": "pullSyncedData",
+          "type": "checkbox",
+          "required": false,
+          "default": true,
+          "title": "Synced Data",
+          "label": "Pull other machines' usage",
+          "description": "git pull the aitrack data repo before loading, like opentrack."
+        }
+      ]
     }
   ],
   "platforms": [
     "macOS"
+  ],
+  "preferences": [
+    {
+      "name": "claude",
+      "type": "checkbox",
+      "required": false,
+      "default": true,
+      "label": "Claude Code",
+      "title": "Providers",
+      "description": "Providers to show in both commands."
+    },
+    {
+      "name": "codex",
+      "type": "checkbox",
+      "required": false,
+      "default": true,
+      "label": "Codex"
+    },
+    {
+      "name": "cursor",
+      "type": "checkbox",
+      "required": false,
+      "default": true,
+      "label": "Cursor"
+    },
+    {
+      "name": "display",
+      "type": "dropdown",
+      "required": false,
+      "default": "used",
+      "title": "Show Limits As",
+      "description": "Show how much of each limit is used, or how much is left.",
+      "data": [
+        {
+          "title": "Used",
+          "value": "used"
+        },
+        {
+          "title": "Left",
+          "value": "left"
+        }
+      ]
+    },
+    {
+      "name": "resetDisplay",
+      "type": "dropdown",
+      "required": false,
+      "default": "absolute",
+      "title": "Reset Times",
+      "description": "Show when a limit resets as a time or as a countdown.",
+      "data": [
+        {
+          "title": "Time",
+          "value": "absolute"
+        },
+        {
+          "title": "Countdown",
+          "value": "relative"
+        }
+      ]
+    }
   ],
   "title": "aitrack"
 }

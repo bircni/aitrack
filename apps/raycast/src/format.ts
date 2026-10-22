@@ -1,8 +1,12 @@
+import { inclusiveDayCount } from 'aitrack-lib/data/calendar';
+import { toLocalDateString } from 'aitrack-lib/data/dayMap';
 import { fmtUSDCost } from 'aitrack-lib/display/format';
 import { clampPercent, type PaceProjection } from 'aitrack-lib/quota/pacing';
 import type { QuotaError, QuotaWindow } from 'aitrack-lib/quota/types';
 
 export type Tone = 'calm' | 'warn' | 'crit';
+export type LimitDisplay = 'used' | 'left';
+export type ResetDisplay = 'relative' | 'absolute';
 
 export function formatDuration(ms: number): string {
   const minutes = Math.max(1, Math.ceil(ms / 60_000));
@@ -14,10 +18,30 @@ export function formatDuration(ms: number): string {
   return `${String(rest)}m`;
 }
 
-export function formatReset(resetsAt: string | undefined, now: number): string | undefined {
+function clock(date: Date): string {
+  return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+/** "19:20" today, "Sun 21:00" within a week, "Oct 16" beyond, as in opentrack. */
+function formatWhen(at: number, now: number): string {
+  const date = new Date(at);
+  const days = inclusiveDayCount(toLocalDateString(new Date(now)), toLocalDateString(date)) - 1;
+  if (days <= 0) return clock(date);
+  if (days < 7) return `${date.toLocaleDateString(undefined, { weekday: 'short' })} ${clock(date)}`;
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+export function formatReset(
+  resetsAt: string | undefined,
+  now: number,
+  mode: ResetDisplay,
+): string | undefined {
   const at = resetsAt === undefined ? Number.NaN : Date.parse(resetsAt);
   if (Number.isNaN(at)) return undefined;
-  return at - now <= 60_000 ? 'Resets soon' : `Resets in ${formatDuration(at - now)}`;
+  if (at - now <= 60_000) return 'Resets soon';
+  return mode === 'relative'
+    ? `Resets in ${formatDuration(at - now)}`
+    : `Resets ${formatWhen(at, now)}`;
 }
 
 /** Same thresholds as opentrack's meters: pace when there is one, otherwise how full it is. */
@@ -43,9 +67,7 @@ export function paceLabel(pace: PaceProjection, now: number): string | undefined
       return 'Tight';
     }
     case 'runningOut': {
-      return pace.runOutAt === null
-        ? 'Will run out'
-        : `Runs out in ${formatDuration(pace.runOutAt - now)}`;
+      return pace.runOutAt === null ? 'Will run out' : `Runs out ${formatWhen(pace.runOutAt, now)}`;
     }
     case 'spent': {
       return 'Limit reached';
@@ -53,13 +75,15 @@ export function paceLabel(pace: PaceProjection, now: number): string | undefined
   }
 }
 
-/** "13% used", or "$12.50 / $50.00" for money windows. */
-export function formatLimitValue(window: QuotaWindow): string {
+/** "13% used" or "87% left"; "$12.50 / $50.00" for money windows. */
+export function formatLimitValue(window: QuotaWindow, display: LimitDisplay): string {
   const { usedValue, limitValue } = window;
   if (window.format === 'dollars' && usedValue !== undefined && limitValue !== undefined) {
-    return `${fmtUSDCost(usedValue)} / ${fmtUSDCost(limitValue)}`;
+    const shown = display === 'used' ? usedValue : Math.max(0, limitValue - usedValue);
+    return `${fmtUSDCost(shown)} / ${fmtUSDCost(limitValue)}${display === 'left' ? ' left' : ''}`;
   }
-  return `${String(Math.round(clampPercent(window.usedPercent)))}% used`;
+  const used = clampPercent(window.usedPercent);
+  return `${String(Math.round(display === 'used' ? used : 100 - used))}% ${display}`;
 }
 
 export function problemText(error: QuotaError): string {
