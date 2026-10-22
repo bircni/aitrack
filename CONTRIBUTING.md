@@ -62,6 +62,7 @@ apps/
     src/
       renderer/      Svelte dashboard and settings
       sidecar/       Provider limits, usage, polling and tray state
+  raycast/            Raycast extension: limits and usage commands
 libs/
   aitrack-lib/        The library: everything that is not the command line
     src/
@@ -116,7 +117,7 @@ configurations and `@nx/vitest` infers test targets; other targets live in each
 first. CLI tests and development use the source paths in its `tsconfig.json`; compiled CLI
 imports resolve through the library's exports to `dist/`.
 
-Projects: `aitrack`, `aitrack-lib`, `opentrack-ui`, `@aitrack/test-fixtures`, `opentrack`
+Projects: `aitrack`, `aitrack-lib`, `opentrack-ui`, `raycast`, `@aitrack/test-fixtures`, `opentrack`
 (Rust) and `repo-tools` (`scripts/`: release tooling, pricing checks, script tests, root
 config checks). Lint is `nx-oxlint:lint` (type-aware for TypeScript); Svelte blocks get the
 supported Oxlint rules and `svelte-check --fail-on-warnings` stays required. Clippy runs

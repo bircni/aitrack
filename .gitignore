@@ -16,3 +16,4 @@ apps/opentrack/gen/
 /.claude/worktrees/
 .stryker-tmp/
 reports/
+apps/raycast/raycast-env.d.ts

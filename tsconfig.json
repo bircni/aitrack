@@ -16,6 +16,9 @@
     },
     {
       "path": "./scripts"
+    },
+    {
+      "path": "./apps/raycast"
     }
   ]
 }

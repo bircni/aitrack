@@ -1,0 +1,52 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "aitrack-raycast",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Live Claude Code, Codex and Cursor limits, token usage and estimated cost.",
+  "categories": [
+    "Developer Tools",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "author": "bircni",
+  "type": "module",
+  "scripts": {
+    "build": "ray build -e dist -o dist",
+    "dev": "ray develop"
+  },
+  "dependencies": {
+    "@raycast/api": "^2.8.2",
+    "@raycast/utils": "^2.3.3",
+    "aitrack-lib": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "@typescript/native": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "react": "19.0.0",
+    "vitest": "catalog:"
+  },
+  "icon": "icon.png",
+  "commands": [
+    {
+      "name": "limits",
+      "title": "Show Limits",
+      "subtitle": "aitrack",
+      "description": "Live session and weekly limits with reset times and pacing.",
+      "mode": "view"
+    },
+    {
+      "name": "usage",
+      "title": "Show Usage",
+      "subtitle": "aitrack",
+      "description": "Tokens and estimated cost per provider and model.",
+      "mode": "view"
+    }
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "title": "aitrack"
+}
