@@ -160,8 +160,8 @@ Commits **must** follow [Conventional Commits](https://www.conventionalcommits.o
 ## Scripts
 
 Common ones (see `package.json` for the rest): `pnpm run validate` (format, lint, typecheck,
-unused-export check, test, build), `validate:affected` (same, scoped to projects changed
-against the base branch), `test`, `test:ci`, `test:smoke`, `check:unused` (knip), `build`,
+unused-export check, test, build), `validate:affected` (same, scoped to the tasks a change
+against the base branch reaches), `test`, `test:ci`, `test:smoke`, `check:unused` (knip), `build`,
 `lint`, `format`, `changelog`.
 
 Scope checks to one project with e.g. `pnpm exec nx run aitrack:test` or

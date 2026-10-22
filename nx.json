@@ -143,12 +143,7 @@
       "cache": true
     }
   },
-  "tui": {
-    "enabled": false
-  },
+  "tui": { "enabled": false },
   "analytics": false,
-  "nxCloudId": "6aa326a3b1ff8cd53a6d2932",
-  "affected": {
-    "legacy": true
-  }
+  "nxCloudId": "6aa326a3b1ff8cd53a6d2932"
 }
