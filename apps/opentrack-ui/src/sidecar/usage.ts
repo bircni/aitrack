@@ -11,7 +11,6 @@ import {
   buildUsageReportsFromLoaded,
   type UsageReport,
 } from 'aitrack-lib/data/usageReport';
-import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 
 import type {
   DailyUsage,
@@ -21,6 +20,7 @@ import type {
   ProviderUsages,
 } from '../shared/types.js';
 import { EMPTY_PERIOD } from '../shared/types.js';
+import { PROVIDER_KEYS } from './settings.js';
 
 /** The History tab's longest range; the sparkline and strips show the last 30 of these. */
 const TREND_DAYS = 90;
@@ -72,7 +72,7 @@ function providerUsages(loaded: LoadedUsageData, now: Date): ProviderUsages {
   const dates = trailingDates(now, TREND_DAYS);
 
   const providers: ProviderUsages = {};
-  for (const key of QUOTA_PROVIDERS) {
+  for (const key of PROVIDER_KEYS) {
     const days = loaded.providerData[key];
     if (!days) continue;
     const daily: DailyUsage[] = dates.map((date) => ({

@@ -5,13 +5,16 @@ import { isRecord } from 'aitrack-lib/data/guards';
 import { providerLabel } from 'aitrack-lib/providers/registry';
 import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 
-import type { QuotaProviderKey, Settings } from '../shared/types.js';
+import { type ProviderKey, type Settings, USAGE_ONLY_PROVIDERS } from '../shared/types.js';
+
+/** In display order. */
+export const PROVIDER_KEYS: readonly ProviderKey[] = [...QUOTA_PROVIDERS, ...USAGE_ONLY_PROVIDERS];
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   display: 'used',
   resetDisplay: 'absolute',
-  providers: QUOTA_PROVIDERS.map((key) => ({ key, label: providerLabel(key), enabled: true })),
+  providers: PROVIDER_KEYS.map((key) => ({ key, label: providerLabel(key), enabled: true })),
   launchAtLogin: false,
   globalShortcut: '',
   notifications: true,
@@ -37,18 +40,18 @@ function bool(value: unknown, fallback: boolean): boolean {
  */
 export function normalizeSettings(input: unknown): Settings {
   const raw = isRecord(input) ? input : {};
-  const seen = new Set<QuotaProviderKey>();
+  const seen = new Set<ProviderKey>();
   const providers: Settings['providers'] = [];
   for (const entry of Array.isArray(raw.providers) ? raw.providers : []) {
     if (!isRecord(entry)) continue;
     const { key, enabled } = entry;
-    if (!QUOTA_PROVIDERS.includes(key as QuotaProviderKey)) continue;
-    const provider = key as QuotaProviderKey;
+    if (!PROVIDER_KEYS.includes(key as ProviderKey)) continue;
+    const provider = key as ProviderKey;
     if (seen.has(provider)) continue;
     seen.add(provider);
     providers.push({ key: provider, label: providerLabel(provider), enabled: bool(enabled, true) });
   }
-  for (const key of QUOTA_PROVIDERS) {
+  for (const key of PROVIDER_KEYS) {
     if (!seen.has(key)) providers.push({ key, label: providerLabel(key), enabled: true });
   }
   const d = DEFAULT_SETTINGS;

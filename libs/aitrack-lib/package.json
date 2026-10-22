@@ -1,7 +1,7 @@
 {
   "name": "aitrack-lib",
   "version": "4.0.0",
-  "description": "Core library behind aitrack: reading Claude Code, Codex & Cursor usage, pricing it, storing it in a git repo and rendering it.",
+  "description": "Core library behind aitrack: reading Claude Code, Codex, Cursor & Mistral Vibe usage, pricing it, storing it in a git repo and rendering it.",
   "keywords": [
     "ai",
     "ai-usage",
@@ -11,9 +11,11 @@
     "cost-tracking",
     "cursor",
     "heatmap",
+    "mistral",
     "openai",
     "token-usage",
-    "usage"
+    "usage",
+    "vibe"
   ],
   "homepage": "https://github.com/bircni/aitrack#readme",
   "bugs": {

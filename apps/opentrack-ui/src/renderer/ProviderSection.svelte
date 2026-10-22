@@ -1,7 +1,12 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
 
-  import type { ProviderState, QuotaProviderKey, Settings } from '../shared/types.js';
+  import {
+    isQuotaProvider,
+    type ProviderState,
+    type QuotaProviderKey,
+    type Settings,
+  } from '../shared/types.js';
   import {
     formatCost,
     formatNumber,
@@ -32,6 +37,7 @@
   let open = $state(false);
 
   const spend = $derived(periodSpend(provider.usage, period));
+  const quotaKey = $derived(isQuotaProvider(provider.key) ? provider.key : undefined);
   const problem = $derived(
     provider.quotaError ? problemLine(provider.quotaError, now, provider.retryAt) : undefined,
   );
@@ -66,9 +72,11 @@
       {#if problem.retry}
         <button class="link" type="button" onclick={onRefresh}>Retry</button>
       {:else}
-        <button class="link" type="button" onclick={() => onOpenDashboard(provider.key)}
-          >Open dashboard</button
-        >
+        {#if quotaKey}
+          <button class="link" type="button" onclick={() => onOpenDashboard(quotaKey)}
+            >Open dashboard</button
+          >
+        {/if}
       {/if}
     </div>
   {/if}
@@ -93,7 +101,7 @@
     </div>
   {/each}
 
-  {#if !provider.quota && !provider.quotaError}
+  {#if quotaKey && !provider.quota && !provider.quotaError}
     <div class="state"><span>Checking limits…</span></div>
   {/if}
 

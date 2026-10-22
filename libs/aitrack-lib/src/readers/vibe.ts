@@ -9,7 +9,7 @@ import type { DayMap } from '../data/types.js';
 import { environmentValue } from '../env.js';
 import { isMissingPathError } from '../errors.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
-import { estimateMistralCostUSD, lookupMistralPricing } from '../pricing/mistral.js';
+import { estimateMistralCostUSD, hasMistralPricing } from '../pricing/mistral.js';
 import type { CachedParse } from './cache.js';
 import { resolveSourceRoots, vibeHomeDir } from './paths.js';
 import { parseProviderSources } from './pipeline.js';
@@ -23,10 +23,10 @@ import {
   type VibeModelLedger,
 } from './vibeModels.js';
 
-export function getVibePaths(): string[] {
+export function getVibePaths(config: VibeConfig = readVibeConfig()): string[] {
   return resolveSourceRoots({
     envValue: environmentValue('AITRACK_VIBE_SESSION_DIRS'),
-    defaults: [join(vibeHomeDir(), 'logs', 'session')],
+    defaults: [config.sessionDir ?? join(vibeHomeDir(), 'logs', 'session')],
   });
 }
 
@@ -41,7 +41,10 @@ async function directoryNames(dir: string): Promise<string[]> {
 }
 
 /** One file per session: a legacy session's `meta.json` or a unified store's `CURRENT` pointer. */
-export async function listVibeSessionFiles(roots: string[]): Promise<string[]> {
+export async function listVibeSessionFiles(
+  roots: string[],
+  prefix = readVibeConfig().sessionPrefix,
+): Promise<string[]> {
   const seen = new Set<string>();
   const files: string[] = [];
   for (const root of roots) {
@@ -52,7 +55,7 @@ export async function listVibeSessionFiles(roots: string[]): Promise<string[]> {
     const unified = names.includes('unified') ? await directoryNames(join(root, 'unified')) : [];
     const candidates = [
       ...names
-        .filter((name) => name.startsWith('session_'))
+        .filter((name) => name.startsWith(`${prefix}_`))
         .map((name) => join(root, name, 'meta.json')),
       ...unified.map((name) => join(root, 'unified', name, 'CURRENT')),
     ];
@@ -110,7 +113,7 @@ function legacySession(meta: Record<string, unknown>): VibeSession {
 /** Vibe 2.26+ sessions: `CURRENT` names the latest snapshot generation. */
 async function unifiedSession(
   currentPath: string,
-  config: () => VibeConfig,
+  config: VibeConfig,
   ledger: VibeModelLedger,
 ): Promise<VibeSession | null> {
   const current = await readJson(currentPath);
@@ -133,8 +136,8 @@ async function unifiedSession(
     date: updatedAt === undefined ? null : tryLocalDateString(updatedAt),
     model:
       pinned === undefined
-        ? ledger.resolve(sessionId, () => configuredVibeModel(config()))
-        : configuredVibeModel(config(), pinned),
+        ? ledger.resolve(sessionId, () => configuredVibeModel(config))
+        : configuredVibeModel(config, pinned),
     ...(cwd !== undefined && { cwd }),
     inputTokens: count(usage.inputTokens),
     outputTokens: count(usage.outputTokens),
@@ -142,12 +145,10 @@ async function unifiedSession(
   };
 }
 
-/** The priced id: the API name when the table knows it (`mistral-large-4`), else the alias. */
+/** The priced id: the API name when it has a rate (`mistral-large-4`), else the alias. */
 function vibeModelId(model: VibeModel): string {
   const name = model.name === undefined ? undefined : stripModelAliasSuffix(model.name);
-  return name !== undefined && lookupMistralPricing(name)
-    ? name
-    : stripModelAliasSuffix(model.alias);
+  return name !== undefined && hasMistralPricing(name) ? name : stripModelAliasSuffix(model.alias);
 }
 
 async function parseVibeFile(
@@ -155,7 +156,7 @@ async function parseVibeFile(
   options: {
     fallbacks: FallbackCollector | undefined;
     resolveProject: ProjectResolver;
-    config: () => VibeConfig;
+    config: VibeConfig;
     ledger: VibeModelLedger;
   },
 ): Promise<CachedParse> {
@@ -192,19 +193,14 @@ async function parseVibeFile(
 
 export async function readVibeData(fallbacks?: FallbackCollector): Promise<DayMap> {
   const resolveProject = createProjectResolver();
-  let config: VibeConfig | undefined;
+  const config = readVibeConfig();
   const ledger = openVibeModelLedger();
   const parsed = await parseProviderSources({
     cacheName: 'vibe',
-    roots: getVibePaths(),
-    listFiles: listVibeSessionFiles,
+    roots: getVibePaths(config),
+    listFiles: (roots) => listVibeSessionFiles(roots, config.sessionPrefix),
     parseFile: (filePath, collector) =>
-      parseVibeFile(filePath, {
-        fallbacks: collector,
-        resolveProject,
-        config: () => (config ??= readVibeConfig()),
-        ledger,
-      }),
+      parseVibeFile(filePath, { fallbacks: collector, resolveProject, config, ledger }),
     fallbacks,
   });
   ledger.save();

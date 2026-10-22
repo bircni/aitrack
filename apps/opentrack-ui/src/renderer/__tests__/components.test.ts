@@ -379,6 +379,7 @@ it('compares machines by share, activity and freshness, with account-wide usage 
     providers: [
       { key: 'claude_code', label: 'Claude Code', refreshing: false },
       { key: 'cursor', label: 'Cursor', refreshing: false },
+      { key: 'vibe', label: 'Mistral Vibe', refreshing: false },
     ],
     machines: [
       {
@@ -420,6 +421,7 @@ it('compares machines by share, activity and freshness, with account-wide usage 
   await settle();
   expect(target.querySelector('.machines')).toBeNull();
   expect(target.textContent).toContain('Checking limits');
+  expect(target.querySelector('.provider--vibe .state')).toBeNull(); // No limits to check.
   expect(target.querySelector<HTMLButtonElement>('.p-head')?.disabled).toBe(true);
   click('.sub-link');
   for (const tab of target.querySelectorAll<HTMLButtonElement>('[role="tab"]')) tab.click();
@@ -701,7 +703,7 @@ it('falls back to automatic tray selection when its provider is disabled and han
           trayProvider: 'cursor',
           providers: DEFAULT_SETTINGS.providers.map((provider) => ({
             ...provider,
-            enabled: false,
+            enabled: provider.key === 'vibe',
           })),
         },
         onPatch: patch,
@@ -710,7 +712,9 @@ it('falls back to automatic tray selection when its provider is disabled and han
     }),
   );
   await settle();
-  expect(target.querySelector<HTMLSelectElement>('#set-tray-provider')?.value).toBe('auto');
+  const tray = target.querySelector<HTMLSelectElement>('#set-tray-provider');
+  expect(tray?.value).toBe('auto');
+  expect([...(tray?.options ?? [])].map((option) => option.value)).toEqual(['auto']);
   expect(target.querySelector('#set-tray-window')).toBeNull();
   expect(target.textContent).toContain('All providers');
   const toggle = target.querySelector<HTMLInputElement>('[aria-label="Show Cursor"]');
@@ -838,7 +842,7 @@ it('guards provider moves at list boundaries even if a disabled control receives
   );
   await settle();
   const first = target.querySelector('[aria-label="Move Claude Code up"]');
-  const last = target.querySelector('[aria-label="Move Cursor down"]');
+  const last = target.querySelector('[aria-label="Move Mistral Vibe down"]');
   first?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   last?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   await settle();

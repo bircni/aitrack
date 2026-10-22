@@ -158,6 +158,10 @@
   --provider-accent: var(--provider-cursor);
 }
 
+.provider--vibe {
+  --provider-accent: var(--provider-vibe);
+}
+
 .p-mark {
   display: grid;
   flex: 0 0 auto;

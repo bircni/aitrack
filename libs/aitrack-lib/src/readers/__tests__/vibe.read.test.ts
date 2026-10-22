@@ -92,6 +92,30 @@ describe('readVibeData', () => {
     });
   });
 
+  it('follows session_logging in config.toml and prices an API name by family', async () => {
+    delete process.env.AITRACK_VIBE_SESSION_DIRS;
+    writeFileSync(
+      join(VIBE_HOME, 'config.toml'),
+      '[session_logging]\nsave_dir = "~/chats"\nsession_prefix = "chat"\n',
+    );
+    mkdirSync(join(TEST_HOME, 'chats', 'chat_1'), { recursive: true });
+    writeFileSync(
+      join(TEST_HOME, 'chats', 'chat_1', 'meta.json'),
+      JSON.stringify({
+        end_time: '2025-03-10T12:00:00Z',
+        config: {
+          active_model: 'compact',
+          models: { compact: { name: 'mistral-small-latest' } },
+        },
+        stats: { session_prompt_tokens: 1_000_000, session_completion_tokens: 0 },
+      }),
+    );
+
+    const days = await readVibeData();
+
+    expect(days.get('2025-03-10')?.byModel['mistral-small']?.costUSD).toBeCloseTo(0.15, 10);
+  });
+
   it('skips sessions that are mid-write, malformed or empty', async () => {
     const root = join(TEST_HOME, 'sessions');
     const unified = join(root, 'unified');

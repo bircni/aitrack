@@ -1,6 +1,6 @@
 # aitrack
 
-Track and visualize your Claude Code, Codex & Cursor usage and cost — heatmaps, stats, and
+Track and visualize your Claude Code, Codex, Cursor & Mistral Vibe usage and cost — heatmaps, stats, and
 multi-machine sync over a git repo you own.
 
 ```sh

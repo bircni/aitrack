@@ -34,6 +34,7 @@ describe('settings', () => {
       { key: 'cursor', label: 'Cursor', enabled: false },
       { key: 'claude_code', label: 'Claude Code', enabled: true },
       { key: 'codex', label: 'Codex', enabled: true },
+      { key: 'vibe', label: 'Mistral Vibe', enabled: true },
     ]);
   });
 

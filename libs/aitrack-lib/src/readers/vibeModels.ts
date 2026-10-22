@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import { parse } from 'smol-toml';
 
@@ -21,6 +22,14 @@ export interface VibeConfig {
   activeModel?: string;
   /** Alias to API name. */
   models: Map<string, string>;
+  /** `session_logging.save_dir`, expanded; unset means Vibe's default. */
+  sessionDir?: string;
+  /** `session_logging.session_prefix`, naming legacy session folders. */
+  sessionPrefix: string;
+}
+
+function expandHome(path: string): string {
+  return resolve(path.replace(/^~(?=$|[/\\])/u, homedir()));
 }
 
 function isVibeModel(value: unknown): value is VibeModel {
@@ -41,7 +50,7 @@ export function readVibeConfig(): VibeConfig {
   try {
     parsed = parse(readFileSync(join(vibeHomeDir(), 'config.toml'), 'utf8'));
   } catch {
-    return { models: new Map() };
+    return { models: new Map(), sessionPrefix: 'session' };
   }
   const models = new Map<string, string>();
   for (const entry of Array.isArray(parsed.models) ? parsed.models : []) {
@@ -50,14 +59,21 @@ export function readVibeConfig(): VibeConfig {
     }
   }
   const activeModel = parsed.active_model;
+  const logging = isRecord(parsed.session_logging) ? parsed.session_logging : {};
+  const { save_dir: saveDir, session_prefix: prefix } = logging;
   return {
     models,
     ...(typeof activeModel === 'string' && activeModel !== '' && { activeModel }),
+    ...(typeof saveDir === 'string' && saveDir !== '' && { sessionDir: expandHome(saveDir) }),
+    sessionPrefix: typeof prefix === 'string' && prefix !== '' ? prefix : 'session',
   };
 }
 
 /** `alias` and `activeModel` are never `""`: Vibe's unpinned value reads as undefined. */
-export function configuredVibeModel(config: VibeConfig, alias?: string): VibeModel {
+export function configuredVibeModel(
+  config: Pick<VibeConfig, 'activeModel' | 'models'>,
+  alias?: string,
+): VibeModel {
   const resolved = alias ?? config.activeModel ?? VIBE_DEFAULT_MODEL_ALIAS;
   const name = config.models.get(resolved);
   return { alias: resolved, ...(name !== undefined && { name }) };

@@ -1,18 +1,19 @@
 <script lang="ts">
-  import type { QuotaProviderKey } from '../shared/types.js';
+  import type { ProviderKey } from '../shared/types.js';
   import claude from './assets/claude.svg?raw';
   import codex from './assets/codex.svg?raw';
   import cursor from './assets/cursor.svg?raw';
+  import vibe from './assets/vibe.svg?raw';
 
   interface Props {
-    provider: QuotaProviderKey;
+    provider: ProviderKey;
     size?: number;
   }
 
   let { provider, size = 17 }: Props = $props();
 
-  // Marks from OpenQuota (MIT); each is a single path.
-  const SOURCES: Record<QuotaProviderKey, string> = { claude_code: claude, codex, cursor };
+  // Marks from OpenQuota (MIT), Vibe's drawn here; each is a single path.
+  const SOURCES: Record<ProviderKey, string> = { claude_code: claude, codex, cursor, vibe };
   const source = $derived(SOURCES[provider]);
   const path = $derived(/ d="([^"]+)"/u.exec(source)?.[1] ?? '');
   const viewBox = $derived(/viewBox="([^"]+)"/u.exec(source)?.[1] ?? '0 0 100 100');
@@ -37,5 +38,9 @@
 
   .provider-icon--claude_code {
     color: var(--provider-claude);
+  }
+
+  .provider-icon--vibe {
+    color: var(--provider-vibe);
   }
 </style>

@@ -2,7 +2,12 @@
   import { errorMessage } from 'aitrack-lib/errors';
   import { onMount } from 'svelte';
 
-  import type { QuotaProviderKey, SettingErrors, Settings } from '../shared/types.js';
+  import {
+    isQuotaProvider,
+    type ProviderKey,
+    type SettingErrors,
+    type Settings,
+  } from '../shared/types.js';
   import { api } from './api.js';
   import Icon from './Icon.svelte';
   import ProviderIcon from './ProviderIcon.svelte';
@@ -25,7 +30,9 @@
   let { settings, update, installing, updateError, onInstallUpdate, onPatch, onBack }: Props =
     $props();
   // The tray falls back to the most used provider when its choice is turned off.
-  const enabled = $derived(settings.providers.filter((provider) => provider.enabled));
+  const trayChoices = $derived(
+    settings.providers.filter(({ key, enabled }) => enabled && isQuotaProvider(key)),
+  );
 
   let errors = $state<SettingErrors>({});
   let version = $state<string | undefined>();
@@ -77,7 +84,7 @@
     return errors[key] === undefined ? undefined : `${key}-error`;
   }
 
-  function toggleProvider(key: QuotaProviderKey, enabled: boolean): void {
+  function toggleProvider(key: ProviderKey, enabled: boolean): void {
     onPatch({
       providers: settings.providers.map((entry) => (entry.key === key ? { ...entry, enabled } : entry)),
     });
@@ -173,12 +180,14 @@
     <span>Tray provider</span>
     <select
       id="set-tray-provider"
-      value={enabled.some(({ key }) => key === settings.trayProvider) ? settings.trayProvider : 'auto'}
+      value={trayChoices.some(({ key }) => key === settings.trayProvider)
+        ? settings.trayProvider
+        : 'auto'}
       onchange={(event) =>
         onPatch({ trayProvider: event.currentTarget.value as Settings['trayProvider'] })}
     >
       <option value="auto">{settings.trayStyle === 'bars' ? 'All providers' : 'Most used'}</option>
-      {#each enabled as provider (provider.key)}
+      {#each trayChoices as provider (provider.key)}
         <option value={provider.key}>{provider.label}</option>
       {/each}
     </select>
