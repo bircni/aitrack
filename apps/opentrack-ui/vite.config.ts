@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
+import { nxReadySignal } from '@nx/vite/plugins/nx-ready-signal.plugin';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
 
@@ -11,7 +12,7 @@ const root = fileURLToPath(new URL('src/renderer/', import.meta.url));
 export default defineConfig({
   root,
   base: './',
-  plugins: [svelte()],
+  plugins: [svelte(), nxReadySignal()],
   resolve: { alias: aitrackLibAlias },
   build: {
     outDir: fileURLToPath(new URL('dist/renderer/', import.meta.url)),

@@ -3,19 +3,13 @@ packages:
   - libs/*
 
 overrides:
-  # nx ships axios <1.20.0 with several high/moderate advisories. Drop once
-  # nx depends on >=1.20.0 itself.
-  'nx>axios': '^1.20.0'
   # brace-expansion 5.0.9 (via nx / minimatch) has DoS advisories fixed in
   # 5.0.12. Keep 2.x alone; only pin the vulnerable 5.x line.
   'brace-expansion@^5.0.0': '5.0.12'
   'brace-expansion@>=4.0.0 <5.0.12': '^5.0.12'
   '@nx/devkit>minimatch': 10.2.6
   'nx>minimatch': 10.2.6
-  # nx pins smol-toml to an exact 1.6.1, which is vulnerable to a denial of
-  # service on malformed TOML. Drop this once nx ships >=1.7.1 itself.
-  'nx>smol-toml': '^1.9.0'
-  # nx 23.3 resolves undici 7.29.0, which has DoS and TLS advisories fixed in
+  # nx 24.0 resolves undici 7.29.0, which has DoS and TLS advisories fixed in
   # 7.29.1. Keep the 8.x line that jsdom uses untouched.
   'undici@>=7.0.0 <7.29.1': '^7.29.1'
 
