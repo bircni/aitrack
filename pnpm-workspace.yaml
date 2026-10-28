@@ -12,6 +12,9 @@ overrides:
   # nx 24.0 resolves undici 7.29.0, which has DoS and TLS advisories fixed in
   # 7.29.1. Keep the 8.x line that jsdom uses untouched.
   'undici@>=7.0.0 <7.29.1': '^7.29.1'
+  # typed-rest-client (via stryker) pins qs 6.15.1, which has DoS advisories
+  # fixed in 6.16.1.
+  'typed-rest-client>qs': ^6.17.0
 
 # Versions every package shares. `catalog:` in a package.json resolves to the
 # entry here, so the toolchain is bumped in one place instead of three — and
