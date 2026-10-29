@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-10-27T12:08:50.547Z",
+  "retrievedAt": "2026-10-29T12:57:46.110Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -606,23 +606,7 @@
       "cre": false,
       "cwe": false
     },
-    "google/gemini-3-pro-image-preview": {
-      "i": 2,
-      "o": 120,
-      "cw": 2,
-      "cr": 0.2,
-      "cre": false,
-      "cwe": false
-    },
     "google/gemini-3.1-flash-image": {
-      "i": 0.5,
-      "o": 60,
-      "cw": 0.5,
-      "cr": 0.05,
-      "cre": false,
-      "cwe": false
-    },
-    "google/gemini-3.1-flash-image-preview": {
       "i": 0.5,
       "o": 60,
       "cw": 0.5,
