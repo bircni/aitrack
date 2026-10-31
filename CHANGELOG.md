@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v4.1.0] - 2026-10-31
+
+
+
+### Bug Fixes
+
+- **aitrack-lib:** Show Claude Max 20x as Ultra and Max 5x as Max (#135)
+
+### Build
+
+- Switch package manager from pnpm to bun (#134)
+
+### CI
+
+- Check out the shared release helpers in the release jobs (#127)
+- Pass the tarball as a file path to npm publish
+
+### Performance
+
+- Parse only the log lines that count, scan cold reads on worker threads (#136)
+
 ## [v4.0.0] - 2026-10-17
 
 
