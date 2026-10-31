@@ -147,7 +147,8 @@ pull requests and `bun audit` against the lockfile, failing on high-severity adv
 Ubuntu runs the affected checks for every project except the Rust shell in one parallel Nx
 run, plus CLI smoke and publish-tarball checks. A `macos-latest` / `windows-latest` /
 `ubuntu-latest` matrix runs opentrack's Rust checks and packaging, skipped on pull requests
-that do not affect `opentrack`; pushes to `main` save the Cargo cache those runs restore (the Linux row installs the WebKitGTK, AppIndicator and
+that do not affect `opentrack`; pushes to `main` save the Cargo cache those runs restore, and CI
+packages build without LTO, which only the Publish workflow keeps (the Linux row installs the WebKitGTK, AppIndicator and
 `libxdo` development packages first) and uploads the NSIS installer, Apple Silicon DMG,
 AppImage and `.deb` as workflow artifacts. `bundle:check` starts the bundled sidecar from the
 DMG, the installer (Windows needs `7z` on `PATH`), the `.deb` (`dpkg-deb`) or the AppImage

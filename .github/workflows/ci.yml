@@ -51,8 +51,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # `nx affected` diffs against the merge base, which a shallow clone
-          # does not have.
+          # does not have; a blobless clone keeps the history without old file contents.
           fetch-depth: 0
+          filter: blob:none
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -90,6 +91,9 @@ jobs:
       NX_NATIVE_COMMAND_RUNNER: ${{ matrix.os == 'windows-latest' && 'false' || 'true' }}
       # Debug info only slows the clippy and test builds; nothing here is debugged.
       CARGO_PROFILE_DEV_DEBUG: 0
+      # These packages only prove the bundle works; Publish keeps the size-tuned profile.
+      CARGO_PROFILE_RELEASE_LTO: false
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
     strategy:
       fail-fast: false
       matrix:
@@ -112,6 +116,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          filter: blob:none
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -150,9 +155,10 @@ jobs:
 
       - name: Install Linux desktop libraries
         if: runner.os == 'Linux' && steps.opentrack.outputs.affected
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
+          version: 1
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         if: steps.opentrack.outputs.affected
