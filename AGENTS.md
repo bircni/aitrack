@@ -8,5 +8,5 @@
 - Fix the cause rather than disabling a linter or weakening a test
 - Write the fewest, fastest tests covering the behaviour, extending an existing one where possible
 - Cover local-calendar-day edge cases with `useTimeZone` / `EXTREME_TIME_ZONES` from `@aitrack/test-fixtures`, not by changing `TZ`
-- Scope checks with `pnpm exec nx run <project>:<target>` when possible; use `pnpm run validate:affected` for branch-scoped validation
-- Run `pnpm run validate` again before committing
+- Scope checks with `bun nx run <project>:<target>` when possible; use `bun run validate:affected` for branch-scoped validation
+- Run `bun run validate` again before committing

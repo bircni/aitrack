@@ -170,16 +170,16 @@ describe('doctorCommand', () => {
   });
 
   it('skips the pricing drift check outside an aitrack checkout', async () => {
-    // The check shells out to `pnpm run pricing:check`, which a published
+    // The check shells out to `bun run pricing:check`, which a published
     // install does not have; any unrelated package.json used to get as far as
-    // a confusing pnpm error.
+    // a confusing bun error.
     mocks.readFileSync.mockReturnValue(JSON.stringify({ name: 'some-other-project' }));
 
     await doctorCommand({ pricingCheck: true });
 
     expect(loggedOutput()).toContain('not an aitrack source checkout');
     expect(mocks.spawnSync).not.toHaveBeenCalledWith(
-      'pnpm',
+      'bun',
       expect.arrayContaining(['pricing:check']),
       expect.anything(),
     );
@@ -256,7 +256,7 @@ describe('doctorCommand', () => {
 
   it('reports pricing check results and cursor read errors', async () => {
     mocks.spawnSync.mockImplementation((command: string, args: string[]) => ({
-      status: command === 'pnpm' && args.includes('pricing:check') ? 1 : 0,
+      status: command === 'bun' && args.includes('pricing:check') ? 1 : 0,
       stderr: 'drift detected',
     }));
     mocks.readCursorAuthState.mockRejectedValue(new Error('locked'));
@@ -267,7 +267,7 @@ describe('doctorCommand', () => {
     const out = loggedOutput();
     expect(out).toMatch(/WARN\s+Claude Code source: EACCES/u);
     expect(out).toContain('Cursor source: locked');
-    expect(out).toContain('Pricing drift: pnpm run pricing:check failed: drift detected');
+    expect(out).toContain('Pricing drift: bun run pricing:check failed: drift detected');
   });
 
   it('prints JSON when requested', async () => {
@@ -299,7 +299,7 @@ describe('doctorCommand', () => {
       JSON.stringify({ name: 'aitrack-workspace', scripts: { 'pricing:check': 'check' } }),
     );
     await doctorCommand({ pricingCheck: true });
-    expect(loggedOutput()).toContain('pnpm run pricing:check did not pass');
+    expect(loggedOutput()).toContain('bun run pricing:check did not pass');
     process.exitCode = undefined;
   });
 

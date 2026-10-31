@@ -25,8 +25,8 @@ function resolveCliEntry(): { command: string; prefixArgs: string[] } {
     }
     return { command: process.execPath, prefixArgs: [entry] };
   }
-  // Spawn node itself rather than the `pnpm` shim: on Windows that shim is
-  // `pnpm.cmd`, which spawnSync refuses to run without a shell (ENOENT).
+  // Spawn node itself rather than a package-manager shim: on Windows those are
+  // `.cmd` files, which spawnSync refuses to run without a shell (ENOENT).
   return { command: process.execPath, prefixArgs: ['--import', 'tsx', 'src/cli.ts'] };
 }
 

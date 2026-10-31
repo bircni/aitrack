@@ -5,7 +5,7 @@ five runs in an isolated temporary home. Baseline is the reader before per-messa
 contributions; Updated is the reader that introduced them. These are synthetic
 local measurements, not guarantees for other machines or storage.
 
-Reproduce with `pnpm exec tsx scripts/benchmark-readers.ts`. Set
+Reproduce with `bun x tsx scripts/benchmark-readers.ts`. Set
 `AITRACK_BENCH_ROOT` to another source checkout to compare implementations; that
 checkout must have its dependencies available. The benchmark makes no network
 requests and removes its temporary home after completion.
