@@ -65,7 +65,7 @@ jobs:
         run: |
           version=$(node -p 'require("./package.json").version')
           for package in aitrack-lib aitrack; do
-            npm publish "packs/$package-$version.tgz" --provenance
+            npm publish "./packs/$package-$version.tgz" --provenance
           done
 
   opentrack:
