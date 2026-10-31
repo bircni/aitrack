@@ -60,7 +60,7 @@
       "outputs": ["{projectRoot}/dist-sidecar/opentrack-sidecar.exe"],
       "options": {
         "cwd": "{projectRoot}",
-        "command": "pnpm exec node ../../scripts/build-opentrack-sea.ts"
+        "command": "node ../../scripts/build-opentrack-sea.ts"
       }
     },
     "test": {

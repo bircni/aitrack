@@ -85,18 +85,11 @@ function optionalOutput(command: string, arguments_: string[]): string | undefin
 
 const REPO_ROOT = new URL('../', import.meta.url);
 
-function readRepoPackage(): { version: string; packageManager?: string } {
-  return JSON.parse(readFileSync(new URL('package.json', REPO_ROOT), 'utf8')) as {
-    version: string;
-    packageManager?: string;
-  };
-}
-
 /**
  * Every package.json the release moves, the workspace root included.
  *
  * `aitrack` and `aitrack-lib` are released in lockstep — the CLI depends on the
- * library by `workspace:*`, which pnpm rewrites to the exact version at publish
+ * library by `workspace:*`, which bun rewrites to the exact version at publish
  * time, so a split version would ship a CLI pinned to a library that was never
  * tagged.
  */
@@ -117,36 +110,26 @@ function getPackageVersion(): string {
 /** Write one exact version into every package, rather than bumping each. */
 function setPackageVersions(version: string, options: RunOptions): void {
   for (const packageFile of VERSIONED_PACKAGES) {
-    run('pnpm', ['version', version, '--no-git-tag-version', '--no-git-checks'], {
+    run('bun', ['pm', 'version', version, '--no-git-tag-version'], {
       ...options,
       cwd: fileURLToPath(new URL(packageFile.replace(/package\.json$/u, ''), REPO_ROOT)),
     });
   }
 }
 
-/** Ask pnpm to calculate a bump in an isolated directory without touching the checkout. */
+/** Ask bun to calculate a bump in an isolated directory without touching the checkout. */
 export function previewVersionBump(currentVersion: string, bump: string): string {
   if (bump === 'none') return currentVersion;
 
   const previewDirectory = mkdtempSync(join(tmpdir(), 'aitrack-release-preview-'));
   const previewPackagePath = join(previewDirectory, 'package.json');
   try {
-    // pnpm resolves `packageManager` by walking up from cwd, so without our own
-    // field it adopts whatever package.json sits above the temp dir — on Windows
-    // that search reaches the user's home directory and can select a different
-    // package manager entirely.
-    const { packageManager } = readRepoPackage();
     writeFileSync(
       previewPackagePath,
-      `${JSON.stringify({
-        name: 'aitrack-release-preview',
-        version: currentVersion,
-        private: true,
-        ...(packageManager === undefined ? {} : { packageManager }),
-      })}\n`,
+      `${JSON.stringify({ name: 'aitrack-release-preview', version: currentVersion, private: true })}\n`,
       'utf8',
     );
-    const result = spawnCommand('pnpm', ['version', bump, '--no-git-tag-version'], {
+    const result = spawnCommand('bun', ['pm', 'version', bump, '--no-git-tag-version'], {
       cwd: previewDirectory,
       encoding: 'utf8',
     });
@@ -157,7 +140,7 @@ export function previewVersionBump(currentVersion: string, bump: string): string
 
     const package_ = JSON.parse(readFileSync(previewPackagePath, 'utf8')) as { version?: unknown };
     if (typeof package_.version !== 'string') {
-      throw new TypeError('pnpm version preview did not produce a package version');
+      throw new TypeError('bun version preview did not produce a package version');
     }
     return package_.version;
   } finally {
@@ -221,18 +204,20 @@ function main(): void {
   ensureCleanGitTree(dryRun);
   const pushRemote = getPushRemote({ allowPlaceholder: dryRun });
 
-  run('pnpm', ['run', 'validate'], options);
+  run('bun', ['run', 'validate'], options);
 
   const currentVersion = getPackageVersion();
   const version = previewVersionBump(currentVersion, bump);
   if (bump !== 'none') {
     setPackageVersions(version, options);
+    // bun.lock records each workspace's version.
+    run('bun', ['install', '--lockfile-only'], options);
   }
   const tag = `v${version}`;
 
   run('git-cliff', ['--config', '.cliff.toml', '--tag', tag, '-o', 'CHANGELOG.md'], options);
 
-  run('git', ['add', ...VERSIONED_PACKAGES, 'pnpm-lock.yaml', 'CHANGELOG.md'], options);
+  run('git', ['add', ...VERSIONED_PACKAGES, 'bun.lock', 'CHANGELOG.md'], options);
   run('git', ['commit', '-m', `chore(release): ${tag}`], options);
   run('git', ['tag', tag], options);
 

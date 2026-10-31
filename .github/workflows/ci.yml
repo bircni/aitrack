@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    # main runs fill the Rust and Nx caches that pull requests restore.
+    branches: [main]
     tags:
       - v*
   pull_request:
@@ -33,14 +35,12 @@ jobs:
         with:
           fail-on-severity: high
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          node-version-file: .node-version
+          bun-version-file: package.json
 
       # Audit reads only the lockfile, so it needs no install.
-      - run: pnpm audit --audit-level=high
+      - run: bun audit --audit-level=high
 
   test:
     name: Check
@@ -51,51 +51,36 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # `nx affected` diffs against the merge base, which a shallow clone
-          # does not have.
+          # does not have; a blobless clone keeps the history without old file contents.
           fetch-depth: 0
+          filter: blob:none
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Set up Rust
         uses: ./.github/actions/setup-rust
 
       - uses: nrwl/nx-set-shas@e602fada7ad5987b0f7b1905e7a99ea1c661514c # v5.1.0
 
-      # The desktop matrix, Linux included, checks the Rust shell with its system libraries.
-      - name: Check formatting
-        run: pnpm nx affected -t format:check --exclude opentrack
+      # One run lets Nx schedule the checks in parallel. The desktop matrix, Linux
+      # included, checks the Rust shell with its system libraries.
+      - name: Format, lint, typecheck, unused, test and build
+        run: bun nx affected -t format:check,lint,typecheck,check:unused,test,build --configuration ci --exclude opentrack
 
-      - name: Lint
-        run: pnpm nx affected -t lint --exclude opentrack
-
-      - name: Typecheck
-        run: pnpm nx affected -t typecheck --exclude opentrack
-
-      - name: Check unused files and dependencies
-        run: pnpm nx affected -t check:unused --exclude opentrack
-
-      - name: Test
-        run: pnpm nx affected -t test --configuration ci --exclude opentrack
-
-      - name: Build
-        run: pnpm nx affected -t build --exclude opentrack
-
-      - name: CLI smoke tests
-        run: pnpm nx affected -t test:smoke
+      # Separate from the unit tests, which would otherwise pick up SMOKE_CLI too.
+      - name: CLI smoke tests and publish tarballs
+        run: bun nx affected -t test:smoke,package:check
         env:
           SMOKE_CLI: dist/cli.js
-
-      - name: Verify publish tarballs
-        run: pnpm nx affected -t package:check
 
   cross-platform:
     name: Check (${{ matrix.os }})
@@ -104,6 +89,11 @@ jobs:
       NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
       # Avoid the native runner's allocation crash after successful Windows tasks.
       NX_NATIVE_COMMAND_RUNNER: ${{ matrix.os == 'windows-latest' && 'false' || 'true' }}
+      # Debug info only slows the clippy and test builds; nothing here is debugged.
+      CARGO_PROFILE_DEV_DEBUG: 0
+      # These packages only prove the bundle works; Publish keeps the size-tuned profile.
+      CARGO_PROFILE_RELEASE_LTO: false
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
     strategy:
       fail-fast: false
       matrix:
@@ -126,57 +116,78 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          filter: blob:none
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Set up Rust
         uses: ./.github/actions/setup-rust
 
-      - name: Install Linux desktop libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
-
       - uses: nrwl/nx-set-shas@e602fada7ad5987b0f7b1905e7a99ea1c661514c # v5.1.0
 
       # The Ubuntu Check job already runs these on Linux.
-      - name: CLI smoke tests
+      - name: CLI smoke tests and publish tarballs
         if: runner.os != 'Linux'
-        run: pnpm nx affected -t test:smoke
+        run: bun nx affected -t test:smoke,package:check
         env:
           SMOKE_CLI: dist/cli.js
 
-      - name: Verify publish tarballs
-        if: runner.os != 'Linux'
-        run: pnpm nx affected -t package:check
+      # A pull request that cannot change the desktop app skips its Rust build.
+      - name: Check whether Opentrack is affected
+        id: opentrack
+        shell: bash
+        run: |
+          affected=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            projects=$(bun nx show projects --affected -p opentrack --json)
+            [[ $projects == *'"opentrack"'* ]] || affected=
+          fi
+          echo "affected=$affected" >> "$GITHUB_OUTPUT"
+
+      - name: Install Linux desktop libraries
+        if: runner.os == 'Linux' && steps.opentrack.outputs.affected
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
+          version: 1
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: steps.opentrack.outputs.affected
+        with:
+          # Pull request caches are visible only to that pull request; main's serve them all.
+          save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
 
       - name: Check Rust formatting
-        run: pnpm nx run opentrack:format:check
+        if: steps.opentrack.outputs.affected
+        run: bun nx run opentrack:format:check
 
       # The Rust shell embeds the renderer and bundles the native Node sidecar;
       # Nx builds those dependencies without running their JS checks or tests.
       - name: Lint Rust
-        run: pnpm nx run opentrack:lint
+        if: steps.opentrack.outputs.affected
+        run: bun nx run opentrack:lint
 
       - name: Test Rust
-        run: pnpm nx run opentrack:test
+        if: steps.opentrack.outputs.affected
+        run: bun nx run opentrack:test
 
       - name: Package and check Opentrack
-        run: pnpm nx run opentrack:bundle:check
+        if: steps.opentrack.outputs.affected
+        run: bun nx run opentrack:bundle:check
         env:
           CARGO_BUILD_JOBS: ${{ matrix.cargo-jobs }}
 
       - name: Upload installer artifact
+        if: steps.opentrack.outputs.affected
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: opentrack-${{ matrix.platform }}
