@@ -58,6 +58,7 @@
     "@types/pdfkit": "^0.17.7",
     "@vitest/coverage-v8": "catalog:",
     "fast-check": "^4.10.2",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

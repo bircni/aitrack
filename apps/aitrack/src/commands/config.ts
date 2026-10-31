@@ -9,16 +9,8 @@ import chalk from 'chalk';
 
 import { UsageError } from '../cli/errors.js';
 import { printJsonCommand } from '../cli/json.js';
+import { CONFIG_KEYS } from './configKeys.js';
 
-export const CONFIG_KEYS = [
-  'repoUrl',
-  'machineId',
-  'claudeProjectsDir',
-  'codexSessionsDir',
-  'budget.monthly',
-  'encryptData',
-  'compactAfterDays',
-] as const;
 type ConfigKey = (typeof CONFIG_KEYS)[number];
 
 function isConfigKey(key: string): key is ConfigKey {

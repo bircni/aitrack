@@ -1,10 +1,8 @@
 import type { ProjectSelector } from 'aitrack-lib/data/project';
 import { USAGE_PERIOD_DEFINITIONS } from 'aitrack-lib/data/usagePeriods';
 import { errorMessage } from 'aitrack-lib/errors';
-import { resolveProjectSelector } from 'aitrack-lib/readers/projectResolver';
 import type { Command } from 'commander';
 
-import { usageCommand } from '../commands/usage.js';
 import { UsageError } from './errors.js';
 import { parseProviders, parseUsageReportOptions } from './parse.js';
 import type { JsonRun } from './program.js';
@@ -23,6 +21,7 @@ interface UsageCommonOptions {
 /** The project of `--dir`, which is the current directory when given without a path. */
 async function projectFor(dir: string | true | undefined): Promise<ProjectSelector | undefined> {
   if (dir === undefined) return undefined;
+  const { resolveProjectSelector } = await import('aitrack-lib/readers/projectResolver');
   try {
     return await resolveProjectSelector(dir === true ? process.cwd() : dir);
   } catch (error) {
@@ -73,6 +72,7 @@ export function registerUsageCommands(
           });
           const run = async (): Promise<void> => {
             const project = await projectFor(options.dir);
+            const { usageCommand } = await import('../commands/usage.js');
             await usageCommand({
               ...reportOptions,
               json: options.json,

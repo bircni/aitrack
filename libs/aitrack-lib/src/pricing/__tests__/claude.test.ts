@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  type ClaudeMessageUsage,
   type ClaudePricing,
-  claudeUsageCounts,
   estimateClaudeCostFromStoredCounts,
   findClaudePricing,
 } from '../claude.js';
+import { type ClaudeMessageUsage, claudeUsageCounts } from '../claudeUsage.js';
 import { createFallbackCollector, type FallbackCollector } from '../fallback.js';
 
 function priced(model: string, usageDate?: string, fallbacks?: FallbackCollector): ClaudePricing {

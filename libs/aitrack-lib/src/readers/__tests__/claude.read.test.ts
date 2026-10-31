@@ -18,18 +18,14 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return {
     ...actual,
+    open: vi.fn(actual.open),
     stat: vi.fn(actual.stat),
     realpath: vi.fn(actual.realpath),
     readdir: vi.fn(actual.readdir),
   };
 });
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs')>();
-  return { ...actual, createReadStream: vi.fn(actual.createReadStream) };
-});
-import { createReadStream } from 'node:fs';
-import { readdir, realpath, stat } from 'node:fs/promises';
+import { open, readdir, realpath, stat } from 'node:fs/promises';
 
 import { getClaudePaths, readClaudeData } from '../claude.js';
 
@@ -117,12 +113,12 @@ describe('readClaudeData', () => {
     }
 
     const cold = await readClaudeData();
-    vi.mocked(createReadStream).mockClear();
+    vi.mocked(open).mockClear();
     const warm = await readClaudeData();
 
     expect(cold.get('2024-01-15')?.inputTokens).toBe(10);
     expect([...warm]).toEqual([...cold]);
-    expect(createReadStream).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('opens each transcript once cold and none warm, with a fixed metadata cost', async () => {
@@ -136,23 +132,23 @@ describe('readClaudeData', () => {
         assistantLine(`own-${String(file)}`, 1, 1),
       ]);
     }
-    vi.mocked(createReadStream).mockClear();
+    vi.mocked(open).mockClear();
     const before = metadata();
     const cold = await readClaudeData();
     const coldCalls = metadata() - before;
     expect(
       vi
-        .mocked(createReadStream)
+        .mocked(open)
         .mock.calls.map(([path]) => path)
         .toSorted((a, b) => String(a).localeCompare(String(b))),
     ).toEqual(Array.from({ length: files }, (_, file) => join(root, `${String(file)}.jsonl`)));
 
-    vi.mocked(createReadStream).mockClear();
+    vi.mocked(open).mockClear();
     const warmBefore = metadata();
     const warm = await readClaudeData();
 
     expect([...warm]).toEqual([...cold]);
-    expect(createReadStream).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
     expect(metadata() - warmBefore).toBe(coldCalls);
   });
 
