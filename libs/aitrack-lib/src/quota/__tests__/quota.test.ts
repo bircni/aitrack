@@ -113,7 +113,7 @@ describe('claude', () => {
       { subscriptionType: 'max', rateLimitTier: 'default_claude_max_5x' },
       NOW,
     );
-    expect(snapshot.plan).toBe('Max 5x');
+    expect(snapshot.plan).toBe('Max');
     expect(snapshot.windows.map((window) => [window.id, window.usedPercent])).toEqual([
       ['session', 12],
       ['weekly', 40],
@@ -147,6 +147,7 @@ describe('claude', () => {
       ),
     ).toEqual({ accessToken: 't', expiresAt: 5, scopes: ['user:profile'] });
     expect(formatClaudePlan('pro')).toBe('Pro');
+    expect(formatClaudePlan('max', 'default_claude_max_20x')).toBe('Ultra');
   });
 
   it('fetches with the saved OAuth token', async () => {

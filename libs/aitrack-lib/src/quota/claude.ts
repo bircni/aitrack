@@ -79,11 +79,13 @@ async function readClaudeCredentials(): Promise<ClaudeCredentials | undefined> {
   return keychain === undefined ? undefined : parseClaudeCredentials(keychain);
 }
 
-/** "pro" + "default_claude_max_5x" → "Pro 5x". */
+/** "pro" + "default_claude_max_5x" → "Pro 5x"; Anthropic now sells Max 5x as Max and Max 20x as Ultra. */
 export function formatClaudePlan(subscription?: string, tier?: string): string | undefined {
   if (subscription === undefined) return undefined;
-  const plan = titleCase(subscription.toLowerCase());
+  const lower = subscription.toLowerCase();
   const multiplier = tier?.split(/[^a-z0-9]/iu).find((part) => /^\d+x$/iu.test(part));
+  if (lower === 'max') return multiplier?.toLowerCase() === '20x' ? 'Ultra' : 'Max';
+  const plan = titleCase(lower);
   return multiplier === undefined ? plan : `${plan} ${multiplier}`;
 }
 
