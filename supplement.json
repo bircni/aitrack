@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-29T12:57:46.128Z",
+  "updatedAt": "2026-10-31T12:24:44.978Z",
   "comment": "First-party pricing from tables/*.json. Catalogs supply additional models.",
   "claude": {
     "models": {
