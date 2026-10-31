@@ -12,6 +12,8 @@ const originalHome = os.homedir;
 const originalStream = fs.createReadStream;
 const originalRead = fs.readFileSync;
 const originalStat = promises.stat;
+const originalStatSync = fs.statSync;
+const originalOpen = promises.open;
 const originalRealpath = promises.realpath;
 const originalReaddir = promises.readdir;
 let streams = 0;
@@ -27,6 +29,23 @@ fs.createReadStream = (...args: Parameters<typeof originalStream>) => {
   });
   return stream;
 };
+promises.open = async (...args: Parameters<typeof originalOpen>) => {
+  streams++;
+  const handle = await originalOpen(...args);
+  const read = handle.read.bind(handle) as (
+    ...readArgs: unknown[]
+  ) => Promise<{ bytesRead: number }>;
+  handle.read = (async (...readArgs: unknown[]) => {
+    const result = await read(...readArgs);
+    bytes += result.bytesRead;
+    return result;
+  }) as typeof handle.read;
+  return handle;
+};
+fs.statSync = ((...args: Parameters<typeof originalStatSync>) => {
+  metadata++;
+  return originalStatSync(...args);
+}) as typeof originalStatSync;
 fs.readFileSync = ((...args: Parameters<typeof originalRead>) => {
   cacheReads++;
   return originalRead(...args);
@@ -65,23 +84,30 @@ try {
     `${readers.href}/paths.ts`
   )) as typeof import('../libs/aitrack-lib/src/readers/paths.js');
   const results = [];
-  for (const overlap of [false, true]) {
-    const root = join(dir, overlap ? 'overlap' : 'unique');
+  for (const corpus of ['unique', 'overlap', 'mixed'] as const) {
+    const overlap = corpus === 'overlap';
+    const root = join(dir, corpus);
     fs.mkdirSync(root);
     process.env.AITRACK_CLAUDE_PROJECTS_DIRS = root;
     for (let file = 0; file < 100; file++) {
+      // Mixed puts a 20 KB tool result before each message, and a cwd on it, as real transcripts do.
       const rows = Array.from({ length: 100 }, (_, message) => {
         const id = overlap && message < 80 ? message : file * 100 + message;
-        return JSON.stringify({
+        const context =
+          corpus === 'mixed'
+            ? `${JSON.stringify({ type: 'user', cwd: root, message: { content: 'x'.repeat(20_000) } })}\n`
+            : '';
+        return `${context}${JSON.stringify({
           type: 'assistant',
           timestamp: '2026-01-15T12:00:00Z',
+          ...(corpus === 'mixed' && { cwd: root }),
           requestId: `r-${String(id)}`,
           message: {
             id: `m-${String(id)}`,
             model: 'claude-sonnet-4-6',
             usage: { input_tokens: 100, output_tokens: 25 },
           },
-        });
+        })}`;
       });
       fs.writeFileSync(
         join(root, `${String(file).padStart(3, '0')}.jsonl`),
@@ -123,7 +149,7 @@ try {
       .find((name) => /^claude(?:-[0-9a-f]+)?\.json$/u.test(name));
     assert.ok(cacheFile, 'the warm runs must write a Claude parse cache');
     results.push({
-      corpus: overlap ? 'overlap' : 'unique',
+      corpus,
       tokens,
       coldMs: median(cold),
       warmMs: median(warm),
@@ -170,6 +196,8 @@ try {
   fs.createReadStream = originalStream;
   fs.readFileSync = originalRead;
   promises.stat = originalStat;
+  promises.open = originalOpen;
+  fs.statSync = originalStatSync;
   promises.realpath = originalRealpath;
   promises.readdir = originalReaddir;
   syncBuiltinESMExports();

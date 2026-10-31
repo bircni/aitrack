@@ -1,6 +1,5 @@
 import { errorMessage } from 'aitrack-lib/errors';
 import { log, routeInfoToStderr } from 'aitrack-lib/output';
-import { recomputeCosts } from 'aitrack-lib/recompute';
 import { Argument, Command, Option } from 'commander';
 
 import {
@@ -8,15 +7,11 @@ import {
   type CompletionShell,
   completionScript,
 } from '../commands/completion.js';
-import { CONFIG_KEYS, configCommand } from '../commands/config.js';
-import { doctorCommand } from '../commands/doctor.js';
+import { CONFIG_KEYS } from '../commands/configKeys.js';
 import type { ExportOptions } from '../commands/export.js';
-import { initCommand } from '../commands/init.js';
-import { installOpentrackCommand } from '../commands/installOpentrack.js';
-import { machinesCommand } from '../commands/machines.js';
 import type { ShowOptions } from '../commands/show.js';
-import { type SyncOptions, syncCommand } from '../commands/sync.js';
-import { topCommand, type TopKind, type TopOptions } from '../commands/top.js';
+import type { SyncOptions } from '../commands/sync.js';
+import type { TopKind, TopOptions } from '../commands/top.js';
 import { cliVersion } from '../version.js';
 import { EXIT_FAILURE, EXIT_USAGE, UsageError } from './errors.js';
 import { printJsonCommand, printJsonError } from './json.js';
@@ -60,6 +55,7 @@ function fail(error: unknown, jsonCommand: string | undefined): void {
   process.exitCode = error instanceof UsageError ? EXIT_USAGE : EXIT_FAILURE; // Not process.exit, which can truncate buffered stdout.
 }
 
+/** Handlers are imported on use, so a command loads only its own modules. */
 export function buildProgram(): Command {
   const program = new Command();
   program.exitOverride((error) => {
@@ -75,7 +71,10 @@ export function buildProgram(): Command {
     .command('init')
     .description('Interactive setup: configure git remote and clone repo')
     .action(() => {
-      runAsync(initCommand);
+      runAsync(async () => {
+        const { initCommand } = await import('../commands/init.js');
+        await initCommand();
+      });
     });
 
   program
@@ -85,7 +84,13 @@ export function buildProgram(): Command {
     .option('--verify', 'exit with an error if commits are still waiting to be pushed afterwards')
     .option('--json', 'print machine-readable JSON')
     .action((options: SyncOptions) => {
-      runAsync(() => syncCommand(options), { command: 'sync', enabled: options.json });
+      runAsync(
+        async () => {
+          const { syncCommand } = await import('../commands/sync.js');
+          await syncCommand(options);
+        },
+        { command: 'sync', enabled: options.json },
+      );
     });
 
   program
@@ -105,7 +110,7 @@ export function buildProgram(): Command {
     .action((options: ShowOptions) => {
       runAsync(
         async () => {
-          const { showCommand } = await import('../commands/show.js'); // Keeps the native canvas binding off other commands' startup.
+          const { showCommand } = await import('../commands/show.js');
           await showCommand(options);
         },
         { command: 'show', enabled: options.json },
@@ -128,7 +133,7 @@ export function buildProgram(): Command {
     .action((period: string | undefined, args: string[], options: ExportOptions) => {
       runAsync(
         async () => {
-          const { exportCommand } = await import('../commands/export.js'); // Keeps pdfkit off other commands' startup.
+          const { exportCommand } = await import('../commands/export.js');
           await exportCommand({ ...options, period, args });
         },
         { command: 'export', enabled: options.json },
@@ -164,7 +169,13 @@ export function buildProgram(): Command {
     .option(REFRESH_FLAG, REFRESH_DESC)
     .option('--json', 'print machine-readable JSON')
     .action((kind: TopKind, options: Omit<TopOptions, 'kind'>) => {
-      runAsync(() => topCommand({ ...options, kind }), { command: 'top', enabled: options.json });
+      runAsync(
+        async () => {
+          const { topCommand } = await import('../commands/top.js');
+          await topCommand({ ...options, kind });
+        },
+        { command: 'top', enabled: options.json },
+      );
     });
 
   program
@@ -174,10 +185,13 @@ export function buildProgram(): Command {
     )
     .option('--json', 'print machine-readable JSON')
     .action((options: { json?: boolean }) => {
-      runAsync(() => machinesCommand({ json: options.json }), {
-        command: 'machines',
-        enabled: options.json,
-      });
+      runAsync(
+        async () => {
+          const { machinesCommand } = await import('../commands/machines.js');
+          await machinesCommand({ json: options.json });
+        },
+        { command: 'machines', enabled: options.json },
+      );
     });
 
   program
@@ -193,6 +207,7 @@ export function buildProgram(): Command {
     .action((options: { replaceLocal?: boolean; json?: boolean }) => {
       runAsync(
         async () => {
+          const { recomputeCosts } = await import('aitrack-lib/recompute');
           const { changed, pushed } = await recomputeCosts({ replaceLocal: options.replaceLocal });
           if (options.json) printJsonCommand('recompute-costs', { changed, pushed });
         },
@@ -206,10 +221,13 @@ export function buildProgram(): Command {
     .option('--pricing-check', 'run the pricing drift script from a source checkout')
     .option('--json', 'print machine-readable JSON')
     .action((options: { pricingCheck?: boolean; json?: boolean }) => {
-      runAsync(() => doctorCommand({ pricingCheck: options.pricingCheck, json: options.json }), {
-        command: 'doctor',
-        enabled: options.json,
-      });
+      runAsync(
+        async () => {
+          const { doctorCommand } = await import('../commands/doctor.js');
+          await doctorCommand({ pricingCheck: options.pricingCheck, json: options.json });
+        },
+        { command: 'doctor', enabled: options.json },
+      );
     });
 
   program
@@ -221,10 +239,13 @@ export function buildProgram(): Command {
     )
     .option('--json', 'print machine-readable JSON')
     .action((options: { dir?: string; json?: boolean }) => {
-      runAsync(() => installOpentrackCommand({ dir: options.dir, json: options.json }), {
-        command: 'install-opentrack',
-        enabled: options.json,
-      });
+      runAsync(
+        async () => {
+          const { installOpentrackCommand } = await import('../commands/installOpentrack.js');
+          await installOpentrackCommand({ dir: options.dir, json: options.json });
+        },
+        { command: 'install-opentrack', enabled: options.json },
+      );
     });
 
   program
@@ -245,7 +266,8 @@ export function buildProgram(): Command {
     .option('--json', 'print machine-readable JSON')
     .action((options: { json?: boolean }) => {
       runAsync(
-        () => {
+        async () => {
+          const { configCommand } = await import('../commands/config.js');
           configCommand({ action: 'list', ...(options.json && { json: true }) });
         },
         { command: 'config', enabled: options.json },
@@ -258,7 +280,8 @@ export function buildProgram(): Command {
     .option('--json', 'print machine-readable JSON')
     .action((key: string, options: { json?: boolean }) => {
       runAsync(
-        () => {
+        async () => {
+          const { configCommand } = await import('../commands/config.js');
           configCommand({ action: 'get', key, ...(options.json && { json: true }) });
         },
         { command: 'config', enabled: options.json },
@@ -269,7 +292,8 @@ export function buildProgram(): Command {
     .command('set <key> <value>')
     .description(`Set a configuration value (keys: ${CONFIG_KEYS.join(', ')})`)
     .action((key: string, value: string) => {
-      runAsync(() => {
+      runAsync(async () => {
+        const { configCommand } = await import('../commands/config.js');
         configCommand({ action: 'set', key, value });
       });
     });

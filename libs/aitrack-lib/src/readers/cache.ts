@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, rmSync, type Stats, statSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { writeFileAtomic } from '../atomicWrite.js';
-import { isFiniteNumber, isOptionalString, isRecord } from '../data/guards.js';
+import { OPTIONAL_TOKEN_NUMBER_FIELDS } from '../constants.js';
+import { isFiniteNumber, isRecord } from '../data/guards.js';
 import type { DayEntry, DayMap, TokenCounts } from '../data/types.js';
 import { isTokenCounts } from '../data/validate.js';
 import { environmentValue } from '../env.js';
@@ -14,7 +14,7 @@ import { machineTimezone } from '../timezone.js';
 import { packageVersion } from '../version.js';
 
 /** Bump when the cached shape or baked-in cost changes; old caches are rebuilt, not migrated. */
-const CACHE_FORMAT = 5;
+const CACHE_FORMAT = 6;
 
 const STALE_SIBLING_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -40,12 +40,113 @@ export interface CachedParse {
   messages?: CachedMessage[];
 }
 
+/**
+ * Messages as one flat row per message over a string table, a fraction of the
+ * size of objects to parse. A key slot indexes `keys`, or the table as -(i+1).
+ */
+interface EncodedMessages {
+  strings: string[];
+  rows: Array<number | null>;
+}
+
+const COUNT_FIELDS = [
+  'inputTokens',
+  'outputTokens',
+  ...OPTIONAL_TOKEN_NUMBER_FIELDS,
+] as const satisfies ReadonlyArray<keyof TokenCounts>;
+const KEY = 0;
+const DATE = 1;
+const MODEL = 2;
+const PROJECT = 3;
+const CWD = 4;
+const COUNTS = 5;
+const UNPRICED = COUNTS + COUNT_FIELDS.length;
+const STRIDE = UNPRICED + 1;
+
 interface CacheEntry {
   mtimeMs: number;
   size: number;
   days: Record<string, DayEntry>;
   keys: string[];
-  messages?: CachedMessage[];
+  /** JSON of `EncodedMessages`, left unparsed until a merge needs it. */
+  messages?: string;
+}
+
+function encodeMessages(messages: CachedMessage[], keys: string[]): EncodedMessages {
+  const strings: string[] = [];
+  const indexes = new Map<string, number>();
+  const intern = (value: string): number => {
+    let index = indexes.get(value);
+    if (index === undefined) {
+      index = strings.push(value) - 1;
+      indexes.set(value, index);
+    }
+    return index;
+  };
+  const keyIndexes = new Map(keys.map((key, index) => [key, index]));
+  const rows: Array<number | null> = [];
+  for (const { key, date, model, project, cwd, counts } of messages) {
+    rows.push(
+      key === undefined ? null : (keyIndexes.get(key) ?? -intern(key) - 1),
+      intern(date),
+      intern(model),
+      intern(project),
+      cwd === undefined ? null : intern(cwd),
+    );
+    for (const field of COUNT_FIELDS) rows.push(counts[field] ?? null);
+    rows.push(counts.hasUnpricedTokens ? 1 : null);
+  }
+  return { strings, rows };
+}
+
+function decodeMessages({ strings, rows }: EncodedMessages, keys: string[]): CachedMessage[] {
+  const text = (index: number | null | undefined): string => strings[index ?? -1] ?? '';
+  const messages: CachedMessage[] = [];
+  for (let at = 0; at < rows.length; at += STRIDE) {
+    const counts: TokenCounts = { inputTokens: 0, outputTokens: 0 };
+    for (const [offset, field] of COUNT_FIELDS.entries()) {
+      const value = rows[at + COUNTS + offset];
+      if (value !== null && value !== undefined) counts[field] = value;
+    }
+    if (rows[at + UNPRICED] === 1) counts.hasUnpricedTokens = true;
+    const key = rows[at + KEY] ?? null;
+    const cwd = rows[at + CWD] ?? null;
+    messages.push({
+      ...(key !== null && { key: key >= 0 ? (keys[key] ?? '') : text(-key - 1) }),
+      date: text(rows[at + DATE]),
+      model: text(rows[at + MODEL]),
+      counts,
+      project: text(rows[at + PROJECT]),
+      ...(cwd !== null && { cwd: text(cwd) }),
+    });
+  }
+  return messages;
+}
+
+function isIndex(value: unknown, length: number): boolean {
+  return Number.isInteger(value) && (value as number) >= 0 && (value as number) < length;
+}
+
+function isEncodedMessages(value: unknown, keyCount: number): value is EncodedMessages {
+  if (!isRecord(value) || !Array.isArray(value.strings) || !Array.isArray(value.rows)) return false;
+  const { strings, rows } = value as { strings: unknown[]; rows: unknown[] };
+  if (!strings.every((text) => typeof text === 'string') || rows.length % STRIDE !== 0) {
+    return false;
+  }
+  for (let at = 0; at < rows.length; at += STRIDE) {
+    const key = rows[at + KEY];
+    const isKey =
+      key === null || isIndex(key, keyCount) || isIndex(-(key as number) - 1, strings.length);
+    const isText = [DATE, MODEL, PROJECT].every((slot) => isIndex(rows[at + slot], strings.length));
+    const cwd = rows[at + CWD];
+    if (!isKey || !isText || (cwd !== null && !isIndex(cwd, strings.length))) return false;
+    for (let slot = COUNTS; slot < UNPRICED; slot++) {
+      const count = rows[at + slot];
+      if (!isFiniteNumber(count) && (slot < COUNTS + 2 || count !== null)) return false;
+    }
+    if (rows[at + UNPRICED] !== null && rows[at + UNPRICED] !== 1) return false;
+  }
+  return true;
 }
 
 function isCountsRecord(value: unknown): boolean {
@@ -66,22 +167,38 @@ function isCacheEntry(value: unknown): value is CacheEntry {
   if (!Array.isArray(value.keys) || !value.keys.every((key) => typeof key === 'string')) {
     return false;
   }
-  if (
-    value.messages !== undefined &&
-    (!Array.isArray(value.messages) ||
-      !value.messages.every(
-        (message) =>
-          isRecord(message) &&
-          isOptionalString(message.key) &&
-          typeof message.date === 'string' &&
-          typeof message.model === 'string' &&
-          typeof message.project === 'string' &&
-          isOptionalString(message.cwd) &&
-          isTokenCounts(message.counts),
-      ))
-  )
-    return false;
+  if (value.messages !== undefined && typeof value.messages !== 'string') return false;
   return isRecord(value.days) && Object.values(value.days).every((day) => isDayEntry(day));
+}
+
+function parseMessages(json: string, keys: string[]): CachedMessage[] | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return undefined;
+  }
+  return isEncodedMessages(parsed, keys.length) ? decodeMessages(parsed, keys) : undefined;
+}
+
+/** Decoded per stored entry, so a long-lived process decodes a file's messages once. */
+const decodedMessages = new WeakMap<CacheEntry, CachedMessage[] | undefined>();
+
+/**
+ * Messages are decoded on first use: only a file sharing keys with an earlier
+ * one needs them. A corrupt blob reads as absent, so the file's days count as a whole.
+ */
+function toParse(entry: CacheEntry): CachedParse {
+  const { days, keys, messages } = entry;
+  const parse = { days: new Map(Object.entries(days)), keys };
+  if (messages === undefined) return parse;
+  return {
+    ...parse,
+    get messages() {
+      if (!decodedMessages.has(entry)) decodedMessages.set(entry, parseMessages(messages, keys));
+      return decodedMessages.get(entry);
+    },
+  };
 }
 
 interface MemoizedCache {
@@ -115,8 +232,9 @@ function fileStamp(filePath: string): FileStamp | null {
   }
 }
 
+/** Synchronous: a stat answers from the inode cache in microseconds, far under an async round trip. */
 function statStamp(filePath: string): Promise<FileStamp | null> {
-  return stat(filePath).then(toStamp, () => null);
+  return Promise.resolve(fileStamp(filePath));
 }
 
 function remember(name: string, path: string, entries: Record<string, CacheEntry>): void {
@@ -195,15 +313,22 @@ export interface ParseCache {
   /** The cached parse for `filePath`, or null when absent or stale. */
   lookup: (filePath: string) => Promise<CachedParse | null>;
   record: (filePath: string, parse: CachedParse) => Promise<void>;
+  /** Total size of the files looked up and missed so far. */
+  missedBytes: () => number;
   /** Persist. Entries never looked up this run are dropped, so deleted logs age out. */
   save: () => void;
 }
 
 /** A cache that stores nothing, used when AITRACK_NO_CACHE is set. */
 function disabledCache(): ParseCache {
+  let missedBytes = 0;
   return {
-    lookup: () => Promise.resolve(null),
+    lookup(filePath) {
+      missedBytes += fileStamp(filePath)?.size ?? 0;
+      return Promise.resolve(null);
+    },
     record: () => Promise.resolve(),
+    missedBytes: () => missedBytes,
     save: () => undefined,
   };
 }
@@ -230,11 +355,7 @@ export function openParseCache(name: string): ParseCache {
         return null;
       }
       next[filePath] = entry;
-      return {
-        days: new Map(Object.entries(entry.days)),
-        keys: entry.keys,
-        ...(entry.messages && { messages: entry.messages }),
-      };
+      return toParse(entry);
     },
 
     async record(filePath, parse) {
@@ -245,8 +366,16 @@ export function openParseCache(name: string): ParseCache {
         ...stamp,
         days: Object.fromEntries(parse.days),
         keys: parse.keys,
-        ...(parse.messages && { messages: parse.messages }),
+        ...(parse.messages && {
+          messages: JSON.stringify(encodeMessages(parse.messages, parse.keys)),
+        }),
       };
+    },
+
+    missedBytes() {
+      let total = 0;
+      for (const { size } of missed.values()) total += size;
+      return total;
     },
 
     save() {

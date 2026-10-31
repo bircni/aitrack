@@ -20,8 +20,9 @@ local logs / Cursor export                  other machines
    PDF, CSV)                                       (JSON for the dashboard)
 ```
 
-- **Readers** turn provider logs into a `DayMap`: local calendar day → token counts per model. Each
-  parsed transcript is cached by path, size and modification time.
+- **Readers** turn provider logs into a `DayMap`: local calendar day → token counts per model. Only
+  lines that can count are parsed, and a large cold read is scanned on worker threads. Each parsed
+  transcript is cached by path, size and modification time. See [reader benchmarks](reader-benchmarks.md).
 - **Projects**: each message is attributed to the `owner/repo` of its git origin (Codex records it;
   for Claude Code the transcript's `cwd` is resolved with `git remote get-url origin`). Day entries
   carry an optional `byProject` map, written to machine files without a schema bump. Working

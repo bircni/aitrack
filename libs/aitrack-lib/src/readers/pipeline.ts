@@ -1,30 +1,36 @@
-import type { FallbackCollector } from '../pricing/fallback.js';
 import { type CachedParse, openParseCache } from './cache.js';
 import { mapWithConcurrency } from './concurrency.js';
 import { listUniqueSourceFiles } from './paths.js';
+import { type ScanKind, type ScanResult, scanEach } from './scanPool.js';
 
 /**
- * Read every source file for one provider, using the mtime/size cache.
- * Cache hits skip parseFile; recordPricingFallbacks covers them.
+ * Read every source file for one provider, using the mtime/size cache. Files
+ * the cache misses are scanned (in workers for a large batch), then priced and
+ * attributed here by `finish`.
  */
-export async function parseProviderSources(options: {
-  /** Cache namespace, e.g. 'claude'. */
-  cacheName: string;
+export async function parseProviderSources<K extends ScanKind>(options: {
+  /** Scanner and cache namespace. */
+  kind: K;
   /** Directories to search for source files. */
   roots: string[];
-  parseFile: (filePath: string, fallbacks?: FallbackCollector) => Promise<CachedParse>;
-  fallbacks?: FallbackCollector;
+  finish: (scan: ScanResult<K>) => Promise<CachedParse>;
 }): Promise<CachedParse[]> {
   const files = await listUniqueSourceFiles(options.roots);
-  const cache = openParseCache(options.cacheName);
+  const cache = openParseCache(options.kind);
 
-  const parsed = await mapWithConcurrency(files, async (filePath) => {
-    const cached = await cache.lookup(filePath);
-    if (cached) return cached;
-    const fresh = await options.parseFile(filePath, options.fallbacks);
-    await cache.record(filePath, fresh);
-    return fresh;
-  });
+  const sources = await mapWithConcurrency(files, async (filePath) => ({
+    filePath,
+    parse: await cache.lookup(filePath),
+  }));
+  const missed = sources.filter((source) => source.parse === null);
+  await mapWithConcurrency(
+    scanEach(options.kind, missed, cache.missedBytes()),
+    async ({ source, scan }) => {
+      const parse = await options.finish(await scan());
+      source.parse = parse;
+      await cache.record(source.filePath, parse);
+    },
+  );
   cache.save();
-  return parsed;
+  return sources.map(({ parse }) => parse).filter((parse) => parse !== null);
 }

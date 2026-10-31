@@ -262,18 +262,29 @@ it('keeps a file per pricing key, the newest other key and a fresh unkeyed file'
   rmSync(TEST_HOME, { recursive: true, force: true });
 });
 
-it('rejects corrupted message contributions and rebuilds only the affected entry', async () => {
+it('rejects corrupted entries and reads a corrupted message blob as absent', async () => {
   mkdirSync(TEST_HOME, { recursive: true });
   writeFileSync(SOURCE, 'line\n');
   const cache = openParseCache('claude');
-  const message = {
-    key: 'k',
-    date: '2024-01-15',
-    model: 'm',
-    counts: { inputTokens: 10, outputTokens: 1, costUSD: 2 },
-    project: 'o/r',
-  };
-  await cache.record(SOURCE, { days: days(10), keys: ['k'], messages: [message] });
+  const messages = [
+    {
+      key: 'k',
+      date: '2024-01-15',
+      model: 'm',
+      counts: { inputTokens: 10, outputTokens: 1, costUSD: 2 },
+      project: 'o/r',
+    },
+    {
+      key: 'not-in-keys',
+      date: '2024-01-16',
+      model: 'm',
+      counts: { inputTokens: 3, outputTokens: 0, rawInputTokens: 3, hasUnpricedTokens: true },
+      project: '(no remote)',
+      cwd: '/work',
+    },
+    { date: '2024-01-16', model: 'n', counts: { inputTokens: 1, outputTokens: 1 }, project: 'o/r' },
+  ];
+  await cache.record(SOURCE, { days: days(10), keys: ['k'], messages });
   cache.save();
   const cacheFile = cacheFilePath();
   const raw: unknown = JSON.parse(readFileSync(cacheFile, 'utf8'));
@@ -306,24 +317,33 @@ it('rejects corrupted message contributions and rebuilds only the affected entry
     writeFileSync(cacheFile, JSON.stringify({ ...stored, entries: { [SOURCE]: bad } }));
     await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
   }
-  for (const bad of [
-    null,
-    { ...message, key: 1 },
-    { ...message, date: null },
-    { ...message, model: null },
-    { ...message, project: null },
-    { ...message, cwd: 1 },
-    { ...message, counts: { inputTokens: 1, outputTokens: 2, hasUnpricedTokens: 'bad' } },
-    { ...message, counts: { inputTokens: 1, outputTokens: 2, costUSD: null } },
-  ]) {
+  const entry = (stored.entries[SOURCE] ?? {}) as Record<string, unknown>;
+  writeFileSync(cacheFile, JSON.stringify(stored));
+  const intact = await openParseCache('claude').lookup(SOURCE);
+  expect(intact?.messages).toEqual(messages);
+  const encoded = JSON.parse(String(entry.messages)) as { strings: string[]; rows: unknown[] };
+  const blobs = [
+    '{not json',
+    ...(
+      [
+        [0, 9],
+        [1, 'date'],
+        [4, -1],
+        [5, null],
+        [6, 'tokens'],
+        [7, 'raw'],
+        [12, 2],
+      ] as const
+    ).map(([slot, value]) => JSON.stringify({ ...encoded, rows: encoded.rows.with(slot, value) })),
+  ];
+  for (const blob of blobs) {
     writeFileSync(
       cacheFile,
-      JSON.stringify({
-        ...stored,
-        entries: { [SOURCE]: { mtimeMs: 1, size: 1, keys: [], days: {}, messages: [bad] } },
-      }),
+      JSON.stringify({ ...stored, entries: { [SOURCE]: { ...entry, messages: blob } } }),
     );
-    await expect(openParseCache('claude').lookup(SOURCE)).resolves.toBeNull();
+    const hit = await openParseCache('claude').lookup(SOURCE);
+    expect(hit?.days.get('2024-01-15')?.inputTokens).toBe(10);
+    expect(hit?.messages).toBeUndefined();
   }
   rmSync(TEST_HOME, { recursive: true, force: true });
 });
