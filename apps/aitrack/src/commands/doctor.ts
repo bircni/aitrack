@@ -119,7 +119,7 @@ async function pricingCacheCheck(): Promise<CheckResult> {
 }
 
 function pricingCheck(): CheckResult {
-  // The script exists only in a source checkout; elsewhere pnpm would fail confusingly.
+  // The script exists only in a source checkout; elsewhere bun would fail confusingly.
   if (!isAitrackCheckout(process.cwd())) {
     return {
       status: 'warn',
@@ -129,15 +129,15 @@ function pricingCheck(): CheckResult {
     };
   }
 
-  const run = runCommand('pnpm', ['run', 'pricing:check'], process.cwd());
+  const run = runCommand('bun', ['run', 'pricing:check'], process.cwd());
   return run.ok
-    ? { status: 'ok', label: 'Pricing drift', detail: 'pnpm run pricing:check passed' }
+    ? { status: 'ok', label: 'Pricing drift', detail: 'bun run pricing:check passed' }
     : {
         status: 'warn',
         label: 'Pricing drift',
         detail: run.output
-          ? `pnpm run pricing:check failed: ${run.output}`
-          : 'pnpm run pricing:check did not pass; run from the aitrack repo root and inspect its output',
+          ? `bun run pricing:check failed: ${run.output}`
+          : 'bun run pricing:check did not pass; run from the aitrack repo root and inspect its output',
       };
 }
 

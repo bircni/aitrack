@@ -13,10 +13,25 @@
     "type": "git",
     "url": "git+https://github.com/bircni/aitrack.git"
   },
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "libs/*"
+    ],
+    "catalog": {
+      "@types/node": "^26.6.5",
+      "@typescript/native": "npm:typescript@^7.0.2",
+      "@vitest/coverage-v8": "^5.0.5",
+      "chalk": "^6.0.1",
+      "tsx": "^4.23.15",
+      "typescript": "npm:@typescript/typescript6@^6.0.2",
+      "vitest": "^5.0.5"
+    }
+  },
   "type": "module",
   "scripts": {
     "build": "nx run-many -t build",
-    "dev": "nx run aitrack:build && pnpm --filter aitrack exec tsx src/cli.ts",
+    "dev": "nx run aitrack:build && cd apps/aitrack && tsx src/cli.ts",
     "lint": "nx run-many -t lint",
     "format": "oxfmt",
     "format:check": "nx run-many -t format:check",
@@ -66,11 +81,28 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
+  "overrides": {
+    "@nx/devkit": {
+      "minimatch": "10.2.6"
+    },
+    "nx": {
+      "minimatch": "10.2.6",
+      "undici": "^7.30.1"
+    },
+    "typed-rest-client": {
+      "qs": "^6.17.0"
+    }
+  },
   "simple-git-hooks": {
-    "commit-msg": "pnpm exec commitlint --edit \"$1\""
+    "commit-msg": "bun x commitlint --edit \"$1\""
   },
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "pnpm@12.16.1+sha512.091d1dee7927575661b25dab3c2ae31cafc1c54d6b71ed6a6600cf0c1cb10434a447eae14015f1b23e2e6bedeed79df94a932e2164d2832280dce3fb32f656d1"
+  "packageManager": "bun@1.4.4",
+  "trustedDependencies": [
+    "esbuild",
+    "simple-git-hooks",
+    "nx"
+  ]
 }

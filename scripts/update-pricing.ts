@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-/** Compare local pricing with live catalogs. Run `pnpm run pricing:check`. */
+/** Compare local pricing with live catalogs. Run `bun run pricing:check`. */
 
 import { resolve } from 'node:path';
 
@@ -102,7 +102,7 @@ export async function checkPricing(): Promise<number> {
   console.log('');
   if (totalDrift > 0) {
     console.log(
-      `${String(totalDrift)} model(s) drift from catalogs — update tables/*.json or run: pnpm run pricing:update -- --write`,
+      `${String(totalDrift)} model(s) drift from catalogs — update tables/*.json or run: bun run pricing:update --write`,
     );
   } else if (totalUnverified > 0) {
     console.log(
