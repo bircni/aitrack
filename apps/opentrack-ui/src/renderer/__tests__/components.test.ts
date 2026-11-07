@@ -330,6 +330,7 @@ describe('desktop commands and settings', () => {
     await settle();
     expect(document.activeElement).toBe(target.querySelector('h1'));
     expect(scroller.scrollTop).toBe(0);
+    expect(target.querySelector('[aria-label="Compact view"]')).toBeNull(); // It would size the window for Settings.
 
     const select = target.querySelector('#set-theme');
     if (!select) throw new Error('missing select');
@@ -344,6 +345,10 @@ describe('desktop commands and settings', () => {
     expect(document.activeElement).toBe(target.querySelector('[aria-label="Settings"]'));
     expect(mocks.api.hideWindow).not.toHaveBeenCalled();
 
+    escape();
+    expect(mocks.api.hideWindow).toHaveBeenCalledTimes(1);
+    listener('onSettings')({ ...DEFAULT_SETTINGS, alwaysOnTop: true });
+    await settle();
     escape();
     expect(mocks.api.hideWindow).toHaveBeenCalledTimes(1);
   });
@@ -1015,9 +1020,14 @@ it('compact view shows the session limit of each chosen provider in full-view or
 });
 
 it.each([
-  ['the service is down', true, undefined],
-  ['the provider failed', false, { kind: 'network' as const, message: 'offline' }],
-])('compact view marks limits cached while %s', async (_, serviceDown, quotaError) => {
+  ['the service is down', true, undefined, undefined],
+  [
+    'the provider failed, and says why',
+    false,
+    { kind: 'network' as const, message: 'offline' },
+    'Could not reach the service',
+  ],
+])('compact view marks limits cached while %s', async (_, serviceDown, quotaError, problem) => {
   const provider = { ...sessionProvider('claude_code', 'Claude Code', 20), quotaError };
   mountCompact(
     { ...state, providers: [provider] },
@@ -1029,6 +1039,7 @@ it.each([
   expect(target.querySelector('[role="meter"]')?.getAttribute('aria-valuetext')).toContain(
     'cached',
   );
+  expect(target.querySelector('.state')?.textContent).toBe(problem);
 });
 
 it.each([

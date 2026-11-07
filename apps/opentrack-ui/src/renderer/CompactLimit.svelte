@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { AppState, Settings } from '../shared/types.js';
-  import { toggledDisplay, toggledResetDisplay } from './format.js';
+  import { problemLine, toggledDisplay, toggledResetDisplay } from './format.js';
   import LimitMeter from './LimitMeter.svelte';
-  import ProviderIcon from './ProviderIcon.svelte';
+  import ProviderHeading from './ProviderHeading.svelte';
 
   interface Props {
     appState: AppState;
@@ -25,13 +25,10 @@
   {#each chosen as provider (provider.key)}
     {@const session = provider.quota?.windows.find(({ id }) => id === 'session')}
     <div class="provider provider--{provider.key}">
-      <header class="c-head">
-        <span class="p-mark"><ProviderIcon provider={provider.key} size={18} /></span>
-        <span class="p-identity">
-          <span class="p-name">{provider.label}</span>
-          {#if provider.quota?.plan}<span class="p-plan">{provider.quota.plan}</span>{/if}
-        </span>
-      </header>
+      <header class="c-head"><ProviderHeading {provider} /></header>
+      {#if provider.quotaError}
+        <div class="state">{problemLine(provider.quotaError, now, provider.retryAt).text}</div>
+      {/if}
       {#if session}
         <LimitMeter
           window={session}
@@ -41,7 +38,7 @@
           onToggleUsage={() => onPatch(toggledDisplay(settings))}
           onToggleReset={() => onPatch(toggledResetDisplay(settings))}
         />
-      {:else}
+      {:else if !provider.quotaError}
         <p class="empty">No session limit yet.</p>
       {/if}
     </div>

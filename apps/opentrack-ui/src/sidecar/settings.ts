@@ -72,7 +72,7 @@ export function normalizeSettings(input: unknown): Settings {
     launchAtLogin: bool(raw.launchAtLogin, d.launchAtLogin),
     globalShortcut: typeof raw.globalShortcut === 'string' ? raw.globalShortcut.trim() : '',
     notifications: bool(raw.notifications, d.notifications),
-    alwaysOnTop: bool(raw.alwaysOnTop, d.alwaysOnTop),
+    alwaysOnTop: bool(raw.alwaysOnTop, raw.windowMode === 'floating'), // A pinned window stays on top.
     compact: bool(raw.compact, d.compact),
     pullSyncedData: bool(raw.pullSyncedData, d.pullSyncedData),
     trayProvider: pick(raw.trayProvider, ['auto', ...QUOTA_PROVIDERS], d.trayProvider),

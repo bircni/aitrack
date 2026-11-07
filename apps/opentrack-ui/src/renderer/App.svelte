@@ -145,7 +145,7 @@
     if (target instanceof HTMLSelectElement) return;
     if (target instanceof HTMLInputElement && target.type === 'text') return;
     if (screen === 'settings') screen = 'dashboard';
-    else api.hideWindow();
+    else if (!settings?.alwaysOnTop) api.hideWindow(); // A window kept on top is meant to stay.
   }
 
   function updateNow(): void {
@@ -293,7 +293,7 @@
   <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
   <header class="titlebar" bind:this={titlebar} data-tauri-drag-region>
     <span class="title" data-tauri-drag-region>opentrack</span>
-    {#if settings}
+    {#if settings && screen === 'dashboard'}
       <button
         class="icon"
         class:active={settings.compact}

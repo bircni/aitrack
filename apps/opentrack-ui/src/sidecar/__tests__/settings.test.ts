@@ -36,6 +36,8 @@ describe('settings', () => {
     expect(settings.notifications).toBe(true);
     expect(settings.trayStyle).toBe('icon');
     expect(settings.trayColored).toBe(true);
+    expect(settings.alwaysOnTop).toBe(false);
+    expect(normalizeSettings({ windowMode: 'floating' }).alwaysOnTop).toBe(true);
     expect(settings.providers).toEqual([
       { key: 'cursor', label: 'Cursor', enabled: false, compact: true },
       { key: 'codex', label: 'Codex', enabled: true, compact: false },

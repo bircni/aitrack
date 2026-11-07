@@ -12,7 +12,7 @@ const GAP: i32 = 6;
 /// Where the popup goes: centred on the tray icon, on whichever side of it the
 /// taskbar leaves room, and always inside the work area.
 pub fn popup_bounds(tray: Rect, work: Rect, width: i32, height: i32) -> Rect {
-    let height = height.min((f64::from(work.height) * 0.85).floor() as i32);
+    let height = max_height(height, work);
     let width = width.min(work.width);
     let tray_cx = tray.x + tray.width / 2;
     let tray_cy = tray.y + tray.height / 2;
@@ -38,6 +38,16 @@ pub fn popup_bounds(tray: Rect, work: Rect, width: i32, height: i32) -> Rect {
     }
 
     Rect { x: x.clamp(work.x, work_right - width), y: y.clamp(work.y, work_bottom - height), width, height }
+}
+
+fn max_height(height: i32, work: Rect) -> i32 {
+    height.min((f64::from(work.height) * 0.85).floor() as i32)
+}
+
+/// A new height for a window whose top is at `top`, which moves up only as far as the work area needs.
+pub fn grown_bounds(top: i32, height: i32, work: Rect) -> (i32, i32) {
+    let height = max_height(height, work);
+    (top.min(work.y + work.height - height).max(work.y), height)
 }
 
 /// A stand-in tray in the right-hand corner, above or below the work area, for a popup opened
@@ -89,5 +99,12 @@ mod tests {
     fn caps_the_height_at_85_percent_of_the_work_area() {
         let work = Rect { height: 600, ..WORK };
         assert_eq!(popup_bounds(tray(0, 700, 1), work, 320, 640).height, 510);
+        assert_eq!(grown_bounds(0, 640, work), (0, 510));
+    }
+
+    #[test]
+    fn a_grown_window_moves_up_only_to_stay_in_the_work_area() {
+        assert_eq!(grown_bounds(100, 600, WORK), (100, 600));
+        assert_eq!(grown_bounds(700, 600, WORK), (440, 600));
     }
 }

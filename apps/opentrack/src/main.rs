@@ -302,13 +302,15 @@ fn main() {
             let config =
                 app.config().app.windows.iter().find(|window| window.label == MAIN_WINDOW).ok_or("no main window")?;
             let window = WebviewWindowBuilder::from_config(&handle, config)?.build()?;
-            let closing = window.clone();
-            // Quitting is the tray's job; Alt+F4, the taskbar's Close and the title bar's close only dismiss the window.
-            window.on_window_event(move |event| {
-                if let WindowEvent::CloseRequested { api, .. } = event {
+            let events = window.clone();
+            window.on_window_event(move |event| match event {
+                WindowEvent::Focused(false) => events.app_handle().state::<Panel>().on_blur(),
+                // Quitting is the tray's job; Alt+F4, the taskbar's Close and the title bar's close only dismiss the window.
+                WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
-                    let _ = closing.hide();
+                    let _ = events.hide();
                 }
+                _ => {}
             });
             if let Some(screen) = handle.state::<Panel>().take_deferred_show() {
                 show(&handle, screen);
