@@ -1,13 +1,26 @@
 import type { DayMap } from '../../data/types.js';
 import { errorMessage } from '../../errors.js';
 import { log } from '../../output.js';
+import { currentModelPricing } from '../../pricing/store.js';
 import { QuotaFailure } from '../../quota/http.js';
+import { machineTimezone } from '../../timezone.js';
 import { fetchCursorUsageCsv, getCursorStateDatabasePath, readCursorAuthState } from './auth.js';
 import { cursorCacheAgeSeconds, readCursorCache, writeCursorCache } from './cache.js';
 import { aggregateCursorCsvToDayMap } from './csv.js';
 import { cursorAccountId } from './jwt.js';
 
 let retry: { key: string; until: number; serverUntil: number } | undefined;
+
+let lastAggregate: { csv: string; rules: string; days: DayMap } | undefined;
+
+/** The export changes every few hours and a long-lived process reads it far more often. */
+function aggregateCachedCsv(csv: string): DayMap {
+  const rules = `${currentModelPricing().fingerprint}\0${machineTimezone()}`;
+  if (lastAggregate?.csv !== csv || lastAggregate.rules !== rules) {
+    lastAggregate = { csv, rules, days: aggregateCursorCsvToDayMap(csv) };
+  }
+  return structuredClone(lastAggregate.days); // Callers own what they get.
+}
 
 export interface ReadCursorDataOptions {
   /**
@@ -47,7 +60,7 @@ export async function readCursorData(options: ReadCursorDataOptions = {}): Promi
   const accountId = cursorAccountId(authState.accessToken);
   const stored = readCursorCache();
   const cached = stored?.accountId === accountId ? stored : null;
-  const fromCache = () => (cached ? aggregateCursorCsvToDayMap(cached.csv) : new Map());
+  const fromCache = (): DayMap => (cached ? aggregateCachedCsv(cached.csv) : new Map());
   const retryKey = `${databasePath}:${accountId}`;
   const isForced = maxAgeSeconds === undefined || maxAgeSeconds <= 0;
   // A forced refresh skips the local backoff floor but still honors a server Retry-After.

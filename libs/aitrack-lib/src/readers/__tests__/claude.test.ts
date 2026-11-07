@@ -17,6 +17,19 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
+function opusMessage(id: string, speed: string) {
+  return {
+    type: 'assistant',
+    timestamp: localTimestamp('2026-11-01'),
+    requestId: id,
+    message: {
+      id,
+      model: 'claude-opus-5-5',
+      usage: { input_tokens: 1_000_000, output_tokens: 0, speed },
+    },
+  };
+}
+
 describe('parseClaudeFile', () => {
   it('parses a basic assistant message', async () => {
     const file = join(tmpDir, 'a.jsonl');
@@ -44,6 +57,16 @@ describe('parseClaudeFile', () => {
       outputTokens: 50,
     });
     expect(day?.byModel['claude-3-5-sonnet-20241022']?.costUSD).toBeCloseTo(0.00105);
+  });
+
+  it('keeps fast messages in their own priced row, so a recompute can reprice them', async () => {
+    const file = join(tmpDir, 'fast.jsonl');
+    writeJsonl(file, [opusMessage('a', 'standard'), opusMessage('b', 'fast')]);
+
+    const { days } = await parseClaudeFile(file);
+    const byModel = days.get('2026-11-01')?.byModel;
+    expect(byModel?.['claude-opus-5-5']?.costUSD).toBeCloseTo(4);
+    expect(byModel?.['claude-opus-5-5-fast']?.costUSD).toBeCloseTo(8);
   });
 
   it('strips -latest suffix from model names', async () => {

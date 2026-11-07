@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, rmSync, type Stats, statSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { writeFileAtomic } from '../atomicWrite.js';
@@ -14,9 +14,12 @@ import { machineTimezone } from '../timezone.js';
 import { packageVersion } from '../version.js';
 
 /** Bump when the cached shape or baked-in cost changes; old caches are rebuilt, not migrated. */
-const CACHE_FORMAT = 6;
+const CACHE_FORMAT = 7;
 
 const STALE_SIBLING_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** A transcript written this recently is likely to be appended to again. */
+const ACTIVE_FILE_MS = 10 * 60 * 1000;
 
 export interface CachedMessage {
   key?: string;
@@ -104,21 +107,23 @@ function decodeMessages({ strings, rows }: EncodedMessages, keys: string[]): Cac
   const messages: CachedMessage[] = [];
   for (let at = 0; at < rows.length; at += STRIDE) {
     const counts: TokenCounts = { inputTokens: 0, outputTokens: 0 };
-    for (const [offset, field] of COUNT_FIELDS.entries()) {
-      const value = rows[at + COUNTS + offset];
+    let slot = at + COUNTS; // Per message and field, so nothing here allocates per field.
+    for (const field of COUNT_FIELDS) {
+      const value = rows[slot++];
       if (value !== null && value !== undefined) counts[field] = value;
     }
     if (rows[at + UNPRICED] === 1) counts.hasUnpricedTokens = true;
-    const key = rows[at + KEY] ?? null;
-    const cwd = rows[at + CWD] ?? null;
-    messages.push({
-      ...(key !== null && { key: key >= 0 ? (keys[key] ?? '') : text(-key - 1) }),
+    const message: CachedMessage = {
       date: text(rows[at + DATE]),
       model: text(rows[at + MODEL]),
       counts,
       project: text(rows[at + PROJECT]),
-      ...(cwd !== null && { cwd: text(cwd) }),
-    });
+    };
+    const key = rows[at + KEY] ?? null;
+    if (key !== null) message.key = key >= 0 ? (keys[key] ?? '') : text(-key - 1);
+    const cwd = rows[at + CWD] ?? null;
+    if (cwd !== null) message.cwd = text(cwd);
+    messages.push(message);
   }
   return messages;
 }
@@ -137,7 +142,10 @@ function isEncodedMessages(value: unknown, keyCount: number): value is EncodedMe
     const key = rows[at + KEY];
     const isKey =
       key === null || isIndex(key, keyCount) || isIndex(-(key as number) - 1, strings.length);
-    const isText = [DATE, MODEL, PROJECT].every((slot) => isIndex(rows[at + slot], strings.length));
+    const isText =
+      isIndex(rows[at + DATE], strings.length) &&
+      isIndex(rows[at + MODEL], strings.length) &&
+      isIndex(rows[at + PROJECT], strings.length);
     const cwd = rows[at + CWD];
     if (!isKey || !isText || (cwd !== null && !isIndex(cwd, strings.length))) return false;
     for (let slot = COUNTS; slot < UNPRICED; slot++) {
@@ -215,26 +223,18 @@ const memoized = new Map<string, MemoizedCache>();
 /** Pruned once per file per process: whoever writes a new sibling prunes on its own first save. */
 const prunedPaths = new Set<string>();
 
-interface FileStamp {
+export interface FileStamp {
   mtimeMs: number;
   size: number;
 }
 
-function toStamp({ mtimeMs, size }: Stats): FileStamp {
-  return { mtimeMs, size };
-}
-
-function fileStamp(filePath: string): FileStamp | null {
+export function fileStamp(filePath: string): FileStamp | null {
   try {
-    return toStamp(statSync(filePath));
+    const { mtimeMs, size } = statSync(filePath);
+    return { mtimeMs, size };
   } catch {
     return null;
   }
-}
-
-/** Synchronous: a stat answers from the inode cache in microseconds, far under an async round trip. */
-function statStamp(filePath: string): Promise<FileStamp | null> {
-  return Promise.resolve(fileStamp(filePath));
 }
 
 function remember(name: string, path: string, entries: Record<string, CacheEntry>): void {
@@ -288,6 +288,13 @@ function cacheFileName(name: string, pricingFingerprint: string): string {
   return `${name}-${key}.json`;
 }
 
+function pruneOnce(name: string, fileName: string): void {
+  const path = join(CACHE_DIR, fileName);
+  if (prunedPaths.has(path)) return;
+  prunedPaths.add(path);
+  pruneSiblings(name, fileName);
+}
+
 /** Keeps the newest other keyed file, which another live writer (CLI or app) refreshes on each save. */
 function pruneSiblings(name: string, current: string): void {
   const keyed = new RegExp(`^${name}-[0-9a-f]+\\.json$`, 'u');
@@ -311,8 +318,8 @@ function pruneSiblings(name: string, current: string): void {
 
 export interface ParseCache {
   /** The cached parse for `filePath`, or null when absent or stale. */
-  lookup: (filePath: string) => Promise<CachedParse | null>;
-  record: (filePath: string, parse: CachedParse) => Promise<void>;
+  lookup: (filePath: string, stamp?: FileStamp | null) => CachedParse | null;
+  record: (filePath: string, parse: CachedParse) => void;
   /** Total size of the files looked up and missed so far. */
   missedBytes: () => number;
   /** Persist. Entries never looked up this run are dropped, so deleted logs age out. */
@@ -323,31 +330,44 @@ export interface ParseCache {
 function disabledCache(): ParseCache {
   let missedBytes = 0;
   return {
-    lookup(filePath) {
-      missedBytes += fileStamp(filePath)?.size ?? 0;
-      return Promise.resolve(null);
+    lookup(filePath, stamp = fileStamp(filePath)) {
+      missedBytes += stamp?.size ?? 0;
+      return null;
     },
-    record: () => Promise.resolve(),
+    record: () => undefined,
     missedBytes: () => missedBytes,
     save: () => undefined,
   };
+}
+
+/**
+ * Only live transcripts changed, and rescanning them next run costs less than
+ * rewriting all of history for entries their next append invalidates.
+ */
+function isCheaperToRescan(recorded: readonly FileStamp[], cacheFile: FileStamp | null): boolean {
+  if (!cacheFile) return false;
+  const activeSince = Date.now() - ACTIVE_FILE_MS;
+  let recordedBytes = 0;
+  for (const { mtimeMs, size } of recorded) {
+    if (mtimeMs < activeSince) return false;
+    recordedBytes += size;
+  }
+  return recordedBytes < cacheFile.size;
 }
 
 /** Per-file parse cache validated by mtime and size; one file per provider because readers run concurrently. */
 export function openParseCache(name: string): ParseCache {
   if (environmentValue('AITRACK_NO_CACHE')) return disabledCache();
 
-  const pricingFingerprint = currentModelPricing().fingerprint;
-  const fileName = cacheFileName(name, pricingFingerprint);
+  const fileName = cacheFileName(name, currentModelPricing().fingerprint);
   const cachePath = join(CACHE_DIR, fileName);
   const previous = loadCacheFile(name, cachePath);
   const next: Record<string, CacheEntry> = {};
   const missed = new Map<string, FileStamp>();
-  let isRecorded = false;
+  const recorded: FileStamp[] = [];
 
   return {
-    async lookup(filePath) {
-      const stamp = await statStamp(filePath);
+    lookup(filePath, stamp = fileStamp(filePath)) {
       if (!stamp) return null;
       const entry = previous[filePath];
       if (entry?.mtimeMs !== stamp.mtimeMs || entry.size !== stamp.size) {
@@ -358,10 +378,10 @@ export function openParseCache(name: string): ParseCache {
       return toParse(entry);
     },
 
-    async record(filePath, parse) {
-      const stamp = missed.get(filePath) ?? (await statStamp(filePath));
+    record(filePath, parse) {
+      const stamp = missed.get(filePath) ?? fileStamp(filePath);
       if (!stamp) return; // Vanished mid-run; nothing to key the entry on.
-      isRecorded = true;
+      recorded.push(stamp);
       next[filePath] = {
         ...stamp,
         days: Object.fromEntries(parse.days),
@@ -380,16 +400,75 @@ export function openParseCache(name: string): ParseCache {
 
     save() {
       const isEvicted = Object.keys(previous).some((filePath) => !(filePath in next));
-      if (!isRecorded && !isEvicted) return;
+      if (recorded.length === 0 && !isEvicted) return;
+      const isUpdate = !isEvicted && Object.keys(previous).length > 0;
+      if (isUpdate && isCheaperToRescan(recorded, fileStamp(cachePath))) {
+        remember(name, cachePath, next); // A long-lived process keeps what it scanned.
+        return;
+      }
       try {
         writeFileAtomic(cachePath, JSON.stringify({ timezone: machineTimezone(), entries: next }));
       } catch {
         return; // A read-only home or full disk must not fail the command the cache only speeds up.
       }
       remember(name, cachePath, next);
-      if (prunedPaths.has(cachePath)) return;
-      prunedPaths.add(cachePath);
-      pruneSiblings(name, fileName);
+      pruneOnce(name, fileName);
+    },
+  };
+}
+
+export interface MergedSnapshot {
+  read: () => DayMap | null;
+  write: (days: DayMap) => void;
+}
+
+const NO_SNAPSHOT: MergedSnapshot = { read: () => null, write: () => undefined };
+
+/**
+ * One provider's merged result for an exact list of source files, so an
+ * unchanged corpus costs a stat per file rather than re-parsing the parse cache
+ * and re-deduping every message. Read fresh each time: callers own what they get.
+ */
+export function openMergedSnapshot(
+  name: string,
+  files: readonly string[],
+  stamps: ReadonlyArray<FileStamp | null>,
+): MergedSnapshot {
+  if (environmentValue('AITRACK_NO_CACHE')) return NO_SNAPSHOT;
+
+  const snapshotName = `${name}-merged`;
+  const fileName = cacheFileName(snapshotName, currentModelPricing().fingerprint);
+  const path = join(CACHE_DIR, fileName);
+  const hash = createHash('sha256').update(machineTimezone());
+  for (const [index, file] of files.entries()) {
+    const stamp = stamps[index];
+    hash.update(`\0${file}\0${String(stamp?.mtimeMs)}\0${String(stamp?.size)}`);
+  }
+  const sources = hash.digest('hex');
+
+  return {
+    read() {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(readFileSync(path, 'utf8'));
+      } catch {
+        return null; // Missing or unreadable only costs a merge.
+      }
+      if (!isRecord(parsed) || parsed.sources !== sources || !isRecord(parsed.days)) return null;
+      const days = Object.entries(parsed.days);
+      return days.every(([, day]) => isDayEntry(day))
+        ? new Map(days as Array<[string, DayEntry]>)
+        : null;
+    },
+
+    write(days) {
+      if (files.length === 0) return;
+      try {
+        writeFileAtomic(path, JSON.stringify({ sources, days: Object.fromEntries(days) }));
+      } catch {
+        return; // As with the parse cache, only ever a speed-up.
+      }
+      pruneOnce(snapshotName, fileName);
     },
   };
 }

@@ -1,6 +1,6 @@
 import { environmentValue } from '../../env.js';
 import { parseRetryAfter, QuotaFailure } from '../../quota/http.js';
-import { decodeJwtPayload } from './jwt.js';
+import { jwtSubject } from './jwt.js';
 
 const CURSOR_WEB_BASE_URL_ENV = 'CURSOR_WEB_BASE_URL';
 const CURSOR_SESSION_COOKIE_NAME = 'WorkosCursorSessionToken';
@@ -36,8 +36,7 @@ interface FetchAttempt {
 function getCursorFetchAttempts(accessToken: string, preferShape?: string): FetchAttempt[] {
   const attempts: FetchAttempt[] = [];
   const seen = new Set<string>();
-  const sub = decodeJwtPayload(accessToken)?.sub;
-  const subject = typeof sub === 'string' ? sub.trim() : undefined;
+  const subject = jwtSubject(accessToken);
   const cookieValues = [accessToken];
   if (subject) cookieValues.push(`${subject}::${accessToken}`);
 

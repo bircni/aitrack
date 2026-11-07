@@ -4,6 +4,7 @@ import { getCursorStateDatabasePath, readCursorAuthState } from '../readers/curs
 import { cursorCacheTtlSeconds } from '../readers/cursor/cache.js';
 import { readCursorData } from '../readers/cursor/index.js';
 import type { CheckResult } from './checkResult.js';
+import { PROVIDER_DESCRIPTORS } from './descriptors.js';
 import type { LiveProvider } from './types.js';
 
 async function cursorCheck(): Promise<CheckResult> {
@@ -31,12 +32,7 @@ async function cursorCheck(): Promise<CheckResult> {
 }
 
 export const cursorProvider: LiveProvider = {
-  descriptor: {
-    key: 'cursor',
-    label: 'Cursor',
-    aliases: ['cursor'],
-    costLabel: 'Est. cost',
-  },
+  descriptor: PROVIDER_DESCRIPTORS.cursor,
   heatmap: {
     light: ['#ebedf0', '#fde8c8', '#f8a855', '#e56b10', '#8b2e00'],
     dark: ['#1e1e24', '#3a1800', '#7a3200', '#c45a00', '#f08820'],

@@ -5,15 +5,11 @@ import {
 import { getClaudePaths, readClaudeData } from '../readers/claude.js';
 import { sourceCheck } from '../readers/paths.js';
 import type { CheckResult } from './checkResult.js';
+import { PROVIDER_DESCRIPTORS } from './descriptors.js';
 import type { SyncedProvider } from './types.js';
 
 export const claudeCodeProvider: SyncedProvider = {
-  descriptor: {
-    key: 'claude_code',
-    label: 'Claude Code',
-    aliases: ['claude', 'claude-code', 'claude_code', 'claudecode'],
-    costLabel: 'Est. cost',
-  },
+  descriptor: PROVIDER_DESCRIPTORS.claude_code,
   heatmap: {
     light: ['#ebedf0', '#fde8cf', '#fbba77', '#e87820', '#b04b10'],
     dark: ['#1e1e24', '#3d1a06', '#7c3610', '#c4621a', '#f08030'],

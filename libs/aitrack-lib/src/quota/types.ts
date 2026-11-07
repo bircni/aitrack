@@ -1,5 +1,6 @@
-/** Providers with a live quota endpoint. Keys match the provider registry. */
-export type QuotaProviderKey = 'claude_code' | 'codex' | 'cursor';
+import type { QuotaProviderKey } from '../providers/descriptors.js';
+
+export type { QuotaProviderKey };
 
 export type QuotaFormat = 'percent' | 'dollars' | 'count';
 

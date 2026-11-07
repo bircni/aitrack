@@ -1,7 +1,12 @@
 import { join } from 'node:path';
 
 import { tryLoadConfig } from '../config.js';
-import { addModelUsage, type Attribution, getOrCreateDay, mergeDayMaps } from '../data/dayMap.js';
+import {
+  addModelUsage,
+  type Attribution,
+  getOrCreateDay,
+  mergeAllDayMaps,
+} from '../data/dayMap.js';
 import { normalizeRemoteUrl } from '../data/project.js';
 import type { DayMap } from '../data/types.js';
 import { environmentValue } from '../env.js';
@@ -10,7 +15,7 @@ import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedParse } from './cache.js';
 import { type CodexScan, scanCodexFile, type SessionTotals } from './codexScan.js';
 import { codexHomeDirs, resolveSourceRoots } from './paths.js';
-import { parseProviderSources } from './pipeline.js';
+import { readProviderDays } from './pipeline.js';
 import { attributeCwd, createProjectResolver, type ProjectResolver } from './projectResolver.js';
 
 export function getCodexPaths(): string[] {
@@ -45,7 +50,8 @@ export async function parseSessionFile(
 
 function addSessionResult(
   allDays: DayMap,
-  result: SessionResult,
+  result: SessionTotals,
+  attribution: Attribution,
   fallbacks?: FallbackCollector,
 ): void {
   const { dateStr, model, inputTokens, outputTokens, cachedInputTokens } = result;
@@ -67,7 +73,7 @@ function addSessionResult(
       cachedInputTokens,
       ...(cost !== undefined && { costUSD: cost }),
     },
-    result.attribution,
+    attribution,
   );
 }
 
@@ -83,19 +89,16 @@ async function finishCodexScan(
   const days: DayMap = new Map();
   if (scan.sessions.length === 0) return { days, keys: [] }; // No git call for a file without usage.
   const attribution = await attributeScan(scan, resolveProject);
-  for (const result of scan.sessions) addSessionResult(days, { ...result, attribution }, fallbacks);
+  for (const result of scan.sessions) addSessionResult(days, result, attribution, fallbacks);
   return { days, keys: [] };
 }
 
-export async function readCodexData(fallbacks?: FallbackCollector): Promise<DayMap> {
+export function readCodexData(fallbacks?: FallbackCollector): Promise<DayMap> {
   const resolveProject = createProjectResolver();
-  const parsed = await parseProviderSources({
+  return readProviderDays({
     kind: 'codex',
     roots: getCodexPaths(),
     finish: (scan) => finishCodexScan(scan, fallbacks, resolveProject),
+    merge: (parsed) => mergeAllDayMaps(parsed.map(({ days }) => days)),
   });
-
-  const allDays: DayMap = new Map();
-  for (const entry of parsed) mergeDayMaps(allDays, entry.days);
-  return allDays;
 }
