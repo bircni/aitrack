@@ -1,8 +1,10 @@
 # Reader benchmark
 
-Measured on 2026-10-31, Linux x64 (4 vCPUs), Node v26.8.2. Baseline is `main` before the
-filtered scan, worker threads and compact parse cache; Updated is the reader that introduced
-them. These are synthetic local measurements, not guarantees for other machines or storage.
+The first two tables were measured on 2026-10-31, Linux x64 (4 vCPUs), Node v26.8.2. Baseline is
+`main` before the filtered scan, worker threads and compact parse cache; Updated is the reader that
+introduced them. [Later changes](#later-changes) were measured on another machine and are not
+comparable with them. All of these are synthetic local measurements, not guarantees for other
+machines or storage.
 
 ## End to end
 
@@ -54,10 +56,43 @@ Both versions open each transcript once cold and none warm, and read the same by
   `"token_count"`, `"turn_context"` or `"session_meta"` for Codex). State that other lines carry
   (Claude's `cwd`, Codex's timestamp) is read from the last such line, and only when the
   counted line lacks it.
-- **One thread.** A cold read of more than 32 MB is scanned on up to eight worker threads.
+- **One thread.** A cold read is scanned on one worker per 24 MiB of files to read, up to four and
+  no more than the files or cores available, so it takes at least 48 MiB across two files to leave
+  the main thread. The main thread prices every result, so more workers add CPU and memory, not speed.
   Pricing, project attribution and the cache stay on the main thread. The opentrack sidecar is
   bundled without a worker file and scans in-thread.
 - **Parse cache size.** Per-message contributions are stored as flat rows over a string table
   and parsed only when a file shares message ids with an earlier one.
+- **Warm reads.** A provider's merged result is kept in its own snapshot, reused while the source
+  list, sizes and modification times match. The parse cache is not rewritten when only files active
+  in the last 10 minutes changed and rescanning them is cheaper than the write.
 - **Startup.** Commands load their modules when they run, compiled code is cached across runs,
-  and `node:sqlite` loads only when Cursor's database is opened.
+  `node:sqlite` loads only when Cursor's database is opened, and canvas and pdfkit load only when
+  a PNG or PDF is rendered.
+
+## Later changes
+
+Measured on 2026-11-06 on Apple Silicon (14 cores), Node v26.8.2, with other work running on the
+machine, so treat small differences as noise. Everything is synthetic. Corpus: 1,800 generated
+transcripts (1.7 GB), whole process through the readers. The runs were repeated and the medians
+kept, except the single-file row. The import row is its own measurement, the median of 7.
+
+| Measurement                           |  Before |   After |
+| ------------------------------------- | ------: | ------: |
+| Warm read, wall                       |  159 ms |   74 ms |
+| Warm read, RSS                        |  259 MB |   88 MB |
+| Active session, wall                  |  204 ms |  178 ms |
+| Active session, RSS                   |  326 MB |  264 MB |
+| Cold read, wall (8 vs 4 workers)      |  954 ms |  974 ms |
+| Cold read, CPU (8 vs 4 workers)       | 3805 ms | 3344 ms |
+| Cold read, RSS (8 vs 4 workers)       |  703 MB |  603 MB |
+| 9.5 MB transcript with no `cwd`, cold |  24.0 s |  150 ms |
+| Import of the package root, compiled  |  115 ms |   44 ms |
+
+The sidecar's in-thread scan yields to its event loop every 4 MB: a cold read of a 6.7 GB synthetic
+corpus (1,500 transcripts plus one 1 GB file) under `--optimize-for-size` took 3.0-3.9 s with a worst
+stall of 30-44 ms.
+
+Small corpora saw no meaningful change in warm reads. In `scripts/benchmark-readers.ts`, warm reads
+(unique / overlapping / mixed) went from 1.9 / 1.9 / 1.2 ms to 0.8 / 0.8 / 0.7 ms and cold reads from
+27.6 / 22.4 / 58.9 ms to 26.3 / 22.2 / 52.4 ms; those before and after runs were not interleaved.
