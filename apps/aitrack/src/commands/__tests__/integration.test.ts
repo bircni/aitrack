@@ -2,7 +2,12 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { localTimestamp, writeJsonl } from '@aitrack/test-fixtures';
+import {
+  localTimestamp,
+  makeMachineFile,
+  makeProviderDay,
+  writeJsonl,
+} from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted runs before module loading, so TEST_HOME is available in vi.mock factories below
@@ -21,12 +26,21 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => TEST_HOME };
 });
 
-import { localMachineId, saveConfig } from 'aitrack-lib/config';
+import { localMachineId, readConfig, saveConfig } from 'aitrack-lib/config';
 import type { MachineFile } from 'aitrack-lib/data/types';
-import { commitAndPush, LOCAL_REPO, readDataFile } from 'aitrack-lib/git';
+import { loadMergedProviderData } from 'aitrack-lib/data/usageData';
+import {
+  commitAndPush,
+  LOCAL_REPO,
+  migrateMachineDataFiles,
+  readDataFile,
+  writePendingMachineFile,
+} from 'aitrack-lib/git';
+import { differingOrigin } from 'aitrack-lib/git/remote';
 import { syncData } from 'aitrack-lib/sync';
 
-import { showCommand } from '../show.js';
+import { setConfig } from '../config.js';
+import { initCommand } from '../init.js';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -49,6 +63,12 @@ function writeClaudeData(lines: object[]): void {
   const projectDir = join(TEST_HOME, 'claude', 'projects', 'test-project');
   mkdirSync(projectDir, { recursive: true });
   writeJsonl(join(projectDir, 'history.jsonl'), lines);
+}
+
+function readConfigFile(): { repoUrl: string } {
+  const loaded = readConfig();
+  if (loaded.status !== 'ok') throw new Error(`no config: ${loaded.status}`);
+  return loaded.config;
 }
 
 function commitCount(): number {
@@ -218,13 +238,87 @@ describe('integration', { timeout: 60_000 }, () => {
 
   it('sync with no AI data exits cleanly without committing anything', async () => {
     // no JSONL files → readClaudeData/readCodexData return empty Maps → early return
-    await expect(syncData().then((result) => typeof result.message)).resolves.toBe('string');
+    await expect(syncData()).resolves.toMatchObject({
+      message: expect.stringContaining('No local data found') as string,
+      pushed: false,
+    });
 
     const dataDir = join(LOCAL_REPO, 'data');
     expect(existsSync(dataDir)).toBe(false);
   });
 
-  it('show merges data from multiple machines into a single heatmap', async () => {
+  it('never leaves repoUrl and the clone on different remotes, and warns but still syncs if they are', async () => {
+    const newRemote = join(TEST_HOME, 'new.git');
+    mkdirSync(newRemote);
+    execSync('git init --bare', { cwd: newRemote, stdio: 'pipe' });
+    const oldRemote = join(TEST_HOME, 'origin.git');
+
+    expect(() => {
+      setConfig('repoUrl', newRemote);
+    }).toThrow('aitrack init --repo');
+    expect(readConfigFile().repoUrl).toBe(oldRemote);
+    expect(differingOrigin(oldRemote)).toBeNull();
+
+    // A hand edit: scheduled syncs keep working, on the clone's remote.
+    saveConfig({ repoUrl: newRemote });
+    const stderr = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await syncData();
+    expect(stderr.mock.calls.flat().join('\n')).toContain(`pushes to ${oldRemote}`);
+    stderr.mockRestore();
+
+    // What the warning offers for keeping the clone's history.
+    execSync(`git remote set-url origin "${newRemote}"`, { cwd: LOCAL_REPO, stdio: 'pipe' });
+    setConfig('repoUrl', newRemote);
+    expect(differingOrigin(newRemote)).toBeNull();
+  });
+
+  it('renames a machine whose file was adopted but never committed', () => {
+    const dataDir = join(LOCAL_REPO, 'data');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(join(dataDir, 'first.json'), JSON.stringify(makeMachineFile('first', {})));
+
+    migrateMachineDataFiles('first', 'second');
+
+    expect(readDataFile(join(dataDir, 'second.json'))?.hostname).toBe('second');
+    expect(existsSync(join(dataDir, 'first.json'))).toBe(false);
+    const staged = execSync('git status --porcelain data/', { cwd: LOCAL_REPO, encoding: 'utf8' });
+    expect(staged.trim()).toBe('A  data/second.json');
+  });
+
+  it('stages both sides when renaming a committed machine file', () => {
+    const dataDir = join(LOCAL_REPO, 'data');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(join(dataDir, 'first.json'), JSON.stringify(makeMachineFile('first', {})));
+    execSync('git add data && git commit -qm first', { cwd: LOCAL_REPO, stdio: 'pipe' });
+
+    migrateMachineDataFiles('first', 'second');
+
+    const staged = execSync('git diff --cached --name-status --no-renames', {
+      cwd: LOCAL_REPO,
+      encoding: 'utf8',
+    });
+    expect(staged.trim().split('\n').toSorted()).toEqual([
+      'A\tdata/second.json',
+      'D\tdata/first.json',
+    ]);
+  });
+
+  it('init adopts staged usage under a custom machine name into a fresh clone', async () => {
+    rmSync(LOCAL_REPO, { recursive: true, force: true });
+    writePendingMachineFile(
+      makeMachineFile(localMachineId(), {
+        '2024-06-01': { claude_code: makeProviderDay(10, 5, undefined, 'claude-opus-4-8') },
+      }),
+    );
+
+    await initCommand({ repo: join(TEST_HOME, 'origin.git'), machine: 'renamed' });
+
+    expect(readDataFile(join(LOCAL_REPO, 'data', 'renamed.json'))?.hostname).toBe('renamed');
+    expect(existsSync(join(LOCAL_REPO, 'data', `${localMachineId()}.json`))).toBe(false);
+    expect(readConfigFile().repoUrl).toBe(join(TEST_HOME, 'origin.git'));
+  });
+
+  it('merges local logs and synced machines from a real clone', async () => {
     // Simulate a second machine's JSON already in the repo
     const dataDir = join(LOCAL_REPO, 'data');
     mkdirSync(dataDir, { recursive: true });
@@ -251,10 +345,13 @@ describe('integration', { timeout: 60_000 }, () => {
     writeClaudeData([assistantLine('msg1', localTimestamp('2024-06-01'), 1000, 500)]);
     await syncData();
 
-    const outputPath = join(TEST_HOME, 'merged.png');
-    await showCommand({ output: outputPath, open: false, providers: ['claude_code', 'codex'] });
+    const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
 
-    // PNG magic bytes: 89 50 4E 47
-    expect([...readFileSync(outputPath).subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect(loaded?.zonedSources.map((source) => source.hostname).toSorted()).toEqual(
+      [localMachineId(), 'other-machine'].toSorted(),
+    );
+    const days = loaded?.providerData.claude_code;
+    expect(days?.get('2024-06-01')?.inputTokens).toBe(1000);
+    expect(days?.get('2024-06-10')?.inputTokens).toBe(3000);
   });
 });

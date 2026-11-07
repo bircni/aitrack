@@ -37,6 +37,6 @@ describe('cli parse helpers', () => {
 
   it('defaults the usage report period to month', () => {
     expect(parseUsageReportOptions({})).toEqual({ period: 'month' });
-    expect(() => parseUsageReportOptions({ period: 'decade' })).toThrow('Invalid period');
+    expect(() => parseUsageReportOptions({ period: 'decade' })).toThrow('Invalid window');
   });
 });

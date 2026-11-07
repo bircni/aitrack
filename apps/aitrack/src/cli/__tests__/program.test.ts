@@ -1,3 +1,4 @@
+import { CommanderError } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -10,7 +11,9 @@ const mocks = vi.hoisted(() => ({
   topCommand: vi.fn(),
   machinesCommand: vi.fn(),
   recomputeCosts: vi.fn(),
-  configCommand: vi.fn(),
+  listConfig: vi.fn(),
+  getConfig: vi.fn(),
+  setConfig: vi.fn(),
   installOpentrackCommand: vi.fn(),
   resolveProjectSelector: vi.fn(),
 }));
@@ -32,10 +35,12 @@ vi.mock('../../commands/installOpentrack.js', () => ({
 }));
 vi.mock('../../commands/config.js', () => ({
   CONFIG_KEYS: ['repoUrl', 'machineId', 'claudeProjectsDir', 'codexSessionsDir'],
-  configCommand: mocks.configCommand,
+  listConfig: mocks.listConfig,
+  getConfig: mocks.getConfig,
+  setConfig: mocks.setConfig,
 }));
 
-import { buildProgram, runAsync } from '../program.js';
+import { buildProgram, runAsync, runCli } from '../program.js';
 
 /** Parse user-level args (no node/script prefix) through a fresh program. */
 async function run(...arguments_: string[]): Promise<void> {
@@ -108,7 +113,6 @@ describe('buildProgram', () => {
         tui: true,
         dark: true,
         providers: ['claude_code', 'codex'],
-        output: 'aitrack.png',
         year: 2026,
       }),
     );
@@ -196,28 +200,29 @@ describe('buildProgram', () => {
     expect(mocks.topCommand).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });
 
+  it('lists every window in export --help', () => {
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    buildProgram()
+      .commands.find((command) => command.name() === 'export')
+      ?.outputHelp();
+    const output = write.mock.calls.map(([chunk]) => String(chunk)).join('');
+    write.mockRestore();
+    expect(output).toContain('[window]');
+    expect(output).toContain('range <from> <to>');
+    expect(output).toContain('last <n>');
+  });
+
   it('wires the config subcommands', async () => {
     await run('config', 'list');
-    expect(mocks.configCommand).toHaveBeenCalledWith({ action: 'list' });
+    expect(mocks.listConfig).toHaveBeenCalledWith(undefined);
     await run('config', 'get', 'repoUrl', '--json');
-    expect(mocks.configCommand).toHaveBeenCalledWith({
-      action: 'get',
-      key: 'repoUrl',
-      json: true,
-    });
+    expect(mocks.getConfig).toHaveBeenCalledWith('repoUrl', true);
     await run('config', 'set', 'machineId', 'box');
-    expect(mocks.configCommand).toHaveBeenCalledWith({
-      action: 'set',
-      key: 'machineId',
-      value: 'box',
-    });
+    expect(mocks.setConfig).toHaveBeenCalledWith('machineId', 'box');
   });
 
   describe('validation exits non-zero', () => {
     beforeEach(() => {
-      vi.spyOn(process, 'exit').mockImplementation(() => {
-        throw new Error('exit');
-      });
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       process.exitCode = undefined;
     });
@@ -232,8 +237,74 @@ describe('buildProgram', () => {
     });
 
     it('exits 2 for commander argument errors', async () => {
-      await expect(run('top', 'weeks')).rejects.toThrow('exit');
-      expect(vi.spyOn(process, 'exit')).toHaveBeenCalledWith(2);
+      await expect(run('top', 'weeks')).rejects.toThrow(CommanderError);
+      expect(process.exitCode).toBe(2);
+    });
+
+    it.each([
+      [['top', '--json', '--sort', 'bogus'], 'top', "option '--sort <field>' argument 'bogus'"],
+      [['usage', 'today', '--json', '--bogus'], 'usage', "unknown option '--bogus'"],
+      [['machines', '--json', 'extra'], 'machines', 'too many arguments'],
+      [['bogus', '--json'], 'aitrack', "unknown command 'bogus'"],
+    ])('keeps parser failure %j machine-readable', async (argv, command, error) => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      await expect(buildProgram(argv).parseAsync(argv, { from: 'user' })).rejects.toThrow(
+        CommanderError,
+      );
+      expect(process.exitCode).toBe(2);
+      expect(log).toHaveBeenCalledTimes(1);
+      const document = JSON.parse(String(log.mock.calls[0]?.[0])) as Record<string, string>;
+      expect(document.command).toBe(command);
+      expect(document.error).toContain(error);
+      expect(document.error).not.toMatch(/^error:/u);
+    });
+
+    it('ignores a --json past the -- separator, and sets the exit code from the real entry point', () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const { argv } = process;
+      process.argv = ['node', 'aitrack', 'top', 'x', '--', '--json'];
+      try {
+        runCli();
+      } finally {
+        process.argv = argv;
+      }
+      expect(process.exitCode).toBe(2);
+      expect(log).not.toHaveBeenCalled();
+      expect(write.mock.calls.join('')).toContain('error:');
+      write.mockRestore();
+    });
+
+    it('refuses --compare on a window with no previous period, before loading anything', async () => {
+      expect(await runAndSettle('usage', 'all', '--compare')).toBe(2);
+      expect(mocks.usageCommand).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [['--short', '--json'], '--short is ignored with --json.'],
+      [['--short', '--compare'], '--compare is ignored with --short.'],
+      [['--short', '--compare', '--json'], '--short is ignored with --json.'],
+    ])('runs usage %j with a note on stderr', async (flags, note) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      expect(await runAndSettle('usage', 'today', ...flags)).toBeUndefined();
+      expect(warn.mock.calls.join('')).toBe(note);
+      expect(mocks.usageCommand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          short: true,
+          ...(flags.includes('--json') && { json: true }),
+          ...(flags.includes('--compare') && { compare: true }),
+        }),
+      );
+    });
+
+    it('still writes -o - to a file of that name, and says so', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await run('export', 'today', '-o', '-');
+      await run('show', '-o', '-');
+      expect(mocks.exportCommand.mock.calls[0]?.[0]).toMatchObject({ output: '-' });
+      expect(mocks.showCommand.mock.calls[0]?.[0]).toMatchObject({ output: '-' });
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(warn.mock.calls[0]?.[0]).toContain('cannot write to stdout');
     });
 
     it('prints a JSON error document in --json mode', async () => {
@@ -252,14 +323,14 @@ describe('buildProgram', () => {
     });
 
     it('rejects --watch below the minimum and with --json', async () => {
-      await expect(run('usage', 'today', '--watch', '2')).rejects.toThrow('exit');
+      await expect(run('usage', 'today', '--watch', '2')).rejects.toThrow(CommanderError);
       expect(await runAndSettle('usage', 'today', '--watch', '--json')).toBe(2);
       expect(mocks.usageCommand).not.toHaveBeenCalled();
     });
 
     it('rejects malformed options and arguments', async () => {
-      await expect(run('show', '--year', '2026junk')).rejects.toThrow('exit');
-      await expect(run('top', 'weeks')).rejects.toThrow('exit');
+      await expect(run('show', '--year', '2026junk')).rejects.toThrow(CommanderError);
+      await expect(run('top', 'weeks')).rejects.toThrow(CommanderError);
       expect(mocks.showCommand).not.toHaveBeenCalled();
       expect(mocks.topCommand).not.toHaveBeenCalled();
     });

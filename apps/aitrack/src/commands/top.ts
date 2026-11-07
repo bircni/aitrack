@@ -1,8 +1,9 @@
-import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
 import {
-  type DayEntryAccumulator,
-  type ModelAccumulator,
-  type ProjectAccumulator,
+  isUsageNotConfigured,
+  usageEmptyMessage,
+  usageEmptyWindowMessage,
+} from 'aitrack-lib/data/emptyState';
+import {
   topDays,
   topModels,
   topProjects,
@@ -10,24 +11,17 @@ import {
   type TopSort,
   unpricedTopModels,
 } from 'aitrack-lib/data/topUsage';
-import {
-  loadMergedProviderData,
-  usageEmptyMessage,
-  usageEmptyWindowMessage,
-} from 'aitrack-lib/data/usageData';
-import { fmt, fmtUSD, unpricedFootnote } from 'aitrack-lib/display/format';
+import { loadMergedProviderData } from 'aitrack-lib/data/usageData';
+import { fmt, fmtUSDCost, unpricedFootnote } from 'aitrack-lib/display/format';
 import { displayModelName } from 'aitrack-lib/display/modelNames';
-import {
-  defaultTableStyle,
-  renderTerminalTable,
-  type TerminalTableColumn,
-} from 'aitrack-lib/display/terminalTable';
+import { renderTerminalTable, type TerminalTableColumn } from 'aitrack-lib/display/terminalTable';
 import { log } from 'aitrack-lib/output';
 import { warnAboutPricingFallbacks } from 'aitrack-lib/pricing/scan';
 import { providerLabel } from 'aitrack-lib/providers/index';
 import chalk from 'chalk';
 
-import { printJsonCommand } from '../cli/json.js';
+import { UsageError } from '../cli/errors.js';
+import { printEmptyResult, printJsonCommand } from '../cli/json.js';
 
 export type TopKind = 'days' | 'models' | 'projects';
 
@@ -47,11 +41,11 @@ export interface TopOptions {
   json?: boolean;
 }
 
-function windowSuffix({ year, since, until }: TopOptions): string {
+function windowDescription({ year, since, until }: TopOptions): string | undefined {
   const parts: string[] = [];
   if (year !== undefined) parts.push(String(year));
   if (since !== undefined || until !== undefined) parts.push(`${since ?? '…'} → ${until ?? '…'}`);
-  return parts.length === 0 ? '' : ` (${parts.join(', ')})`;
+  return parts.length === 0 ? undefined : parts.join(', ');
 }
 
 interface Row {
@@ -62,53 +56,17 @@ interface Row {
   cost: string;
 }
 
-interface TopJsonItem {
-  rank: number;
-  tokens: number;
-  costUSD: number | null;
-  [key: string]: unknown;
-}
-
-function topColumns(labelHeader: string, subHeader: string): Array<TerminalTableColumn<Row>> {
-  return [
-    { header: '#', align: 'right', cell: (r) => r.rank },
-    { header: labelHeader, align: 'left', cell: (r) => r.label },
-    { header: subHeader, align: 'left', cell: (r) => r.sub },
-    { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
-    { header: 'Cost', align: 'right', cell: (r) => r.cost },
-  ];
-}
-
-function dayToRow(d: DayEntryAccumulator, index: number): Row {
-  const providerKey = topProviderKey(d.byProvider);
-  return {
-    rank: String(index + 1),
-    label: d.date,
-    sub: providerKey ? providerLabel(providerKey) : '',
-    tokens: fmt(d.tokens),
-    cost: fmtUSD(d.cost),
-  };
-}
-
-function modelToRow(m: ModelAccumulator, index: number): Row {
-  return {
-    rank: String(index + 1),
-    label: displayModelName(m.model, { effort: true }),
-    sub: m.provider,
-    tokens: fmt(m.tokens),
-    cost: fmtUSD(m.cost),
-  };
-}
-
-function projectToRow(p: ProjectAccumulator, index: number): Row {
-  const providerKey = topProviderKey(p.byProvider);
-  return {
-    rank: String(index + 1),
-    label: p.project,
-    sub: providerKey ? providerLabel(providerKey) : '',
-    tokens: fmt(p.tokens),
-    cost: fmtUSD(p.cost),
-  };
+/** One ranked kind; `json` holds each item's fields besides `rank`, in their published order. */
+interface TopView<T> {
+  noun: string;
+  labelHeader: string;
+  subHeader: string;
+  items: T[];
+  label: (item: T) => string;
+  sub: (item: T) => string;
+  json: (item: T) => Record<string, unknown>;
+  unpriced?: string[];
+  notes?: string[];
 }
 
 function topJsonEnvelope(options: TopOptions): Record<string, unknown> {
@@ -122,42 +80,62 @@ function topJsonEnvelope(options: TopOptions): Record<string, unknown> {
   };
 }
 
-function renderTopOutput<T>(
+function renderTop<T extends { tokens: number; cost: number | null }>(
   options: TopOptions,
-  title: string,
-  items: T[],
-  toJsonItem: (item: T, index: number) => TopJsonItem,
-  toRow: (item: T, index: number) => Row,
-  columns: Array<TerminalTableColumn<Row>>,
-  unpriced: string[],
-  notes: string[] = [],
+  view: TopView<T>,
 ): void {
+  const { items, unpriced = [], notes = [] } = view;
+  const window = windowDescription(options);
+  const emptyMessage = items.length === 0 ? usageEmptyWindowMessage(window) : undefined;
+
   if (options.json) {
     printJsonCommand('top', {
       ...topJsonEnvelope(options),
-      items: items.map((item, index) => toJsonItem(item, index)),
+      items: items.map((item, index) => ({ rank: index + 1, ...view.json(item) })),
       ...(unpriced.length > 0 && { unpricedModels: unpriced }),
       ...(notes.length > 0 && { notes }),
+      ...(emptyMessage !== undefined && { message: emptyMessage }),
     });
     return;
   }
 
-  if (items.length === 0) {
-    log.info(usageEmptyWindowMessage());
+  if (emptyMessage !== undefined) {
+    log.info(emptyMessage);
     return;
   }
 
-  const rows = items.map((item, index) => toRow(item, index));
-  log.info(chalk.bold(title));
-  log.info(renderTerminalTable(rows, columns, { style: defaultTableStyle() }));
+  const columns: Array<TerminalTableColumn<Row>> = [
+    { header: '#', align: 'right', cell: (r) => r.rank },
+    { header: view.labelHeader, align: 'left', cell: (r) => r.label },
+    { header: view.subHeader, align: 'left', cell: (r) => r.sub },
+    { header: 'Tokens', align: 'right', cell: (r) => r.tokens },
+    { header: 'Cost', align: 'right', cell: (r) => r.cost },
+  ];
+  const rows = items.map((item, index) => ({
+    rank: String(index + 1),
+    label: view.label(item),
+    sub: view.sub(item),
+    tokens: fmt(item.tokens),
+    cost: item.cost === null ? '—' : fmtUSDCost(item.cost),
+  }));
+  const suffix = window === undefined ? '' : ` (${window})`;
+  log.info(chalk.bold(`Top ${String(options.limit)} ${view.noun} by ${options.sort}${suffix}`));
+  log.info(renderTerminalTable(rows, columns));
   const footnote = unpricedFootnote(unpriced);
   if (footnote !== null) log.info(chalk.dim(footnote));
   for (const note of notes) log.info(chalk.dim(note));
 }
 
+function topProviderName(byProvider: Record<string, number>): string {
+  const key = topProviderKey(byProvider);
+  return key ? providerLabel(key) : '';
+}
+
 export async function topCommand(options: TopOptions): Promise<void> {
   if (options.since !== undefined && options.until !== undefined && options.since > options.until) {
-    throw new Error(`--since "${options.since}" must not be after --until "${options.until}".`);
+    throw new UsageError(
+      `--since "${options.since}" must not be after --until "${options.until}".`,
+    );
   }
 
   const loaded = await loadMergedProviderData({
@@ -166,49 +144,52 @@ export async function topCommand(options: TopOptions): Promise<void> {
   });
 
   if (!loaded) {
-    const message = usageEmptyMessage(isUsageNotConfigured());
-    if (options.json) {
-      printJsonCommand('top', { ...topJsonEnvelope(options), items: [], message });
-    } else {
-      log.info(message);
-    }
+    printEmptyResult(
+      'top',
+      options.json,
+      usageEmptyMessage(isUsageNotConfigured(), options.providers),
+      {
+        ...topJsonEnvelope(options),
+        items: [],
+      },
+    );
     return;
   }
 
   warnAboutPricingFallbacks(loaded.providerData);
 
   const filter = { year: options.year, start: options.since, end: options.until };
-  const suffix = windowSuffix(options);
 
   if (options.kind === 'days') {
     const items = topDays(loaded.providerData, options.limit, options.sort, filter);
-    renderTopOutput(
-      options,
-      `Top ${String(options.limit)} days by ${options.sort}${suffix}`,
+    renderTop(options, {
+      noun: 'days',
+      labelHeader: 'Date',
+      subHeader: 'Top provider',
       items,
-      (d, index) => ({
-        rank: index + 1,
+      label: (d) => d.date,
+      sub: (d) => topProviderName(d.byProvider),
+      json: (d) => ({
         date: d.date,
         tokens: d.tokens,
         costUSD: d.cost,
         topProvider: topProviderKey(d.byProvider),
         byProvider: d.byProvider,
       }),
-      dayToRow,
-      topColumns('Date', 'Top provider'),
-      unpricedTopModels(items),
-    );
+      unpriced: unpricedTopModels(items),
+    });
     return;
   }
 
   if (options.kind === 'projects') {
-    const items = topProjects(loaded.providerData, options.limit, options.sort, filter);
-    renderTopOutput(
-      options,
-      `Top ${String(options.limit)} projects by ${options.sort}${suffix}`,
-      items,
-      (p, index) => ({
-        rank: index + 1,
+    renderTop(options, {
+      noun: 'projects',
+      labelHeader: 'Project',
+      subHeader: 'Top provider',
+      items: topProjects(loaded.providerData, options.limit, options.sort, filter),
+      label: (p) => p.project,
+      sub: (p) => topProviderName(p.byProvider),
+      json: (p) => ({
         project: p.project,
         unattributed: p.unattributed,
         tokens: p.tokens,
@@ -216,21 +197,20 @@ export async function topCommand(options: TopOptions): Promise<void> {
         topProvider: topProviderKey(p.byProvider),
         byProvider: p.byProvider,
       }),
-      projectToRow,
-      topColumns('Project', 'Top provider'),
-      [],
-      [PROJECTS_NOTE],
-    );
+      notes: [PROJECTS_NOTE],
+    });
     return;
   }
 
   const items = topModels(loaded.providerData, options.limit, options.sort, filter);
-  renderTopOutput(
-    options,
-    `Top ${String(options.limit)} models by ${options.sort}${suffix}`,
+  renderTop(options, {
+    noun: 'models',
+    labelHeader: 'Model',
+    subHeader: 'Provider',
     items,
-    (m, index) => ({
-      rank: index + 1,
+    label: (m) => displayModelName(m.model, { effort: true }),
+    sub: (m) => m.provider,
+    json: (m) => ({
       providerKey: m.providerKey,
       provider: m.provider,
       model: m.model,
@@ -238,8 +218,6 @@ export async function topCommand(options: TopOptions): Promise<void> {
       costUSD: m.cost,
       days: m.days,
     }),
-    modelToRow,
-    topColumns('Model', 'Provider'),
-    unpricedTopModels(items),
-  );
+    unpriced: unpricedTopModels(items),
+  });
 }

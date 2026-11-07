@@ -1,15 +1,16 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { type ConfigLoad, readConfig, resolveMachineId } from 'aitrack-lib/config';
 import { findDuplicateMachineDays } from 'aitrack-lib/data/duplicateMachines';
 import { isRecord } from 'aitrack-lib/data/guards';
 import { INIT_HINT } from 'aitrack-lib/data/messages';
-import type { MachineFile } from 'aitrack-lib/data/types';
 import { pad } from 'aitrack-lib/display/format';
 import { errorMessage } from 'aitrack-lib/errors';
 import { isCloned, listDataFiles, LOCAL_REPO, readDataFile } from 'aitrack-lib/git';
+import { GitCommandError, isRebaseInProgress, runGitAsync } from 'aitrack-lib/git/exec';
+import { differingOrigin, originMismatchMessage, redactUrl } from 'aitrack-lib/git/remote';
 import { log } from 'aitrack-lib/output';
 import {
   type CheckResult,
@@ -20,6 +21,8 @@ import {
 import chalk from 'chalk';
 
 import { printJsonCommand } from '../cli/json.js';
+
+const GIT_CHECK_TIMEOUT_MS = 10_000;
 
 interface DoctorOptions {
   pricingCheck?: boolean;
@@ -62,33 +65,6 @@ function runCommand(command: string, arguments_: string[], cwd?: string): Comman
     .join('\n')
     .trim();
   return { ok: result.status === 0, output };
-}
-
-function commandCheck(
-  label: string,
-  command: string,
-  arguments_: string[],
-  options: {
-    cwd?: string;
-    okStatus?: CheckStatus;
-    failStatus?: CheckStatus;
-    okDetail: string | ((output: string) => string);
-    failDetail: string | ((output: string) => string);
-  },
-): CheckResult {
-  const run = runCommand(command, arguments_, options.cwd);
-  const detail = run.ok
-    ? typeof options.okDetail === 'function'
-      ? options.okDetail(run.output)
-      : options.okDetail
-    : typeof options.failDetail === 'function'
-      ? options.failDetail(run.output)
-      : options.failDetail;
-  return {
-    status: run.ok ? (options.okStatus ?? 'ok') : (options.failStatus ?? 'fail'),
-    label,
-    detail,
-  };
 }
 
 /** Whether `directory` is the aitrack repo, which is what carries the script. */
@@ -142,9 +118,19 @@ function pricingCheck(): CheckResult {
 }
 
 export function duplicateMachineCheck(): CheckResult {
-  const machines = listDataFiles()
-    .map((filePath) => readDataFile(filePath))
-    .filter((machine): machine is MachineFile => machine !== null);
+  const unreadable: string[] = [];
+  const machines = listDataFiles().flatMap((filePath) => {
+    const machine = readDataFile(filePath);
+    if (machine === null) unreadable.push(basename(filePath));
+    return machine === null ? [] : [machine];
+  });
+  if (unreadable.length > 0) {
+    return {
+      status: 'warn',
+      label: 'Machine identities',
+      detail: `skipped unreadable machine file(s), left out of every report: ${unreadable.join(', ')}`,
+    };
+  }
 
   const duplicates = findDuplicateMachineDays(machines);
   if (duplicates.days.length === 0) {
@@ -170,7 +156,7 @@ function configCheck(loaded: ConfigLoad): CheckResult {
     return {
       status: 'ok',
       label: 'Config',
-      detail: `repoUrl=${loaded.config.repoUrl || '(empty)'}, machineId=${resolveMachineId(loaded.config)}`,
+      detail: `repoUrl=${redactUrl(loaded.config.repoUrl) || '(empty)'}, machineId=${resolveMachineId(loaded.config)}`,
     };
   }
   if (loaded.status === 'invalid') {
@@ -200,6 +186,47 @@ async function providerCheck(provider: Provider): Promise<CheckResult> {
   }
 }
 
+/** `git` errors carry the command; these details name it in their own words. */
+async function gitCheck(
+  label: string,
+  args: string[],
+  failStatus: CheckStatus,
+  okDetail: string,
+  failed: (output: string) => string,
+): Promise<CheckResult> {
+  try {
+    await runGitAsync(args, { timeoutMs: GIT_CHECK_TIMEOUT_MS });
+    return { status: 'ok', label, detail: okDetail };
+  } catch (error) {
+    const output = error instanceof GitCommandError ? error.output : errorMessage(error);
+    return { status: failStatus, label, detail: failed(output) };
+  }
+}
+
+function originCheck(loaded: ConfigLoad): CheckResult[] {
+  if (loaded.status !== 'ok') return [];
+  const origin = differingOrigin(loaded.config.repoUrl);
+  if (origin === null) return [];
+  return [
+    {
+      status: 'warn',
+      label: 'Remote',
+      detail: originMismatchMessage(origin, loaded.config.repoUrl),
+    },
+  ];
+}
+
+function rebaseCheck(): CheckResult[] {
+  if (!isRebaseInProgress()) return [];
+  return [
+    {
+      status: 'warn',
+      label: 'Rebase',
+      detail: `an interrupted rebase is in progress in ${LOCAL_REPO}; the next sync aborts it`,
+    },
+  ];
+}
+
 async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
   const loadedConfig = readConfig();
   const checks: CheckResult[] = [];
@@ -209,12 +236,13 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
     label: 'Node.js',
     detail: `${process.version} (requires >=24)`,
   });
-  checks.push(
-    commandCheck('git', 'git', ['--version'], {
-      okDetail: 'available on PATH',
-      failDetail: 'not available on PATH',
-    }),
-  );
+  // Not runGit: that one runs inside the clone, which may not exist yet.
+  const isGitAvailable = runCommand('git', ['--version']).ok;
+  checks.push({
+    status: isGitAvailable ? 'ok' : 'fail',
+    label: 'git',
+    detail: isGitAvailable ? 'available on PATH' : 'not available on PATH',
+  });
   checks.push(configCheck(loadedConfig));
   const isRepoCloned = isCloned();
   checks.push({
@@ -224,31 +252,32 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
   });
 
   if (isRepoCloned) {
-    checks.push(duplicateMachineCheck());
-    checks.push(
-      commandCheck('Repo health', 'git', ['status', '--short'], {
-        cwd: LOCAL_REPO,
-        okDetail: 'git status succeeded',
-        failDetail: (output) =>
-          output ? `git status failed: ${output}` : 'git status failed in local repo',
-      }),
-    );
-    checks.push(
-      commandCheck('Remote push', 'git', ['push', '--dry-run'], {
-        cwd: LOCAL_REPO,
-        okStatus: 'ok',
-        failStatus: 'warn',
-        okDetail: 'git push --dry-run succeeded',
-        failDetail: (output) =>
-          output
-            ? `git push --dry-run failed: ${output}`
-            : 'git push --dry-run failed; check remote access and branch tracking',
-      }),
-    );
+    checks.push(duplicateMachineCheck(), ...originCheck(loadedConfig), ...rebaseCheck());
   }
 
-  checks.push(...(await Promise.all(PROVIDERS.map((provider) => providerCheck(provider)))));
-  checks.push(await pricingCacheCheck());
+  // Independent, so a slow network costs its longest wait rather than the sum.
+  const [repoChecks, providerChecks, pricing] = await Promise.all([
+    isRepoCloned
+      ? Promise.all([
+          gitCheck('Repo health', ['status', '--short'], 'fail', 'git status succeeded', (output) =>
+            output ? `git status failed: ${output}` : 'git status failed in local repo',
+          ),
+          gitCheck(
+            'Remote push',
+            ['push', '--dry-run'],
+            'warn',
+            'git push --dry-run succeeded',
+            (output) =>
+              output
+                ? `git push --dry-run failed: ${output}`
+                : 'git push --dry-run failed; check remote access and branch tracking',
+          ),
+        ])
+      : [],
+    Promise.all(PROVIDERS.map((provider) => providerCheck(provider))),
+    pricingCacheCheck(),
+  ]);
+  checks.push(...repoChecks, ...providerChecks, pricing);
   if (options.pricingCheck) checks.push(pricingCheck());
 
   return checks;
@@ -256,16 +285,10 @@ async function collectChecks(options: DoctorOptions): Promise<CheckResult[]> {
 
 export async function doctorCommand(options: DoctorOptions = {}): Promise<void> {
   const checks = await collectChecks(options);
+  const hasFailures = checks.some((check) => check.status === 'fail');
 
   if (options.json) {
-    printJsonCommand('doctor', {
-      checks: checks.map((check) => ({
-        status: check.status,
-        label: check.label,
-        detail: check.detail,
-      })),
-      hasFailures: checks.some((check) => check.status === 'fail'),
-    });
+    printJsonCommand('doctor', { checks, hasFailures });
   } else {
     log.info(chalk.bold('aitrack doctor'));
     for (const check of checks) {
@@ -273,7 +296,5 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
     }
   }
 
-  if (checks.some((check) => check.status === 'fail')) {
-    process.exitCode = 1;
-  }
+  if (hasFailures) process.exitCode = 1;
 }

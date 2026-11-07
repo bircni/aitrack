@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -32,14 +32,21 @@ function resolveCliEntry(): { command: string; prefixArgs: string[] } {
 
 const home = mkdtempSync(join(tmpdir(), 'aitrack-smoke-'));
 
-function runCli(arguments_: string[]): CliRun {
+function runCli(
+  arguments_: string[],
+  {
+    nodeArgs = [],
+    env = { FORCE_COLOR: '0' },
+  }: { nodeArgs?: string[]; env?: NodeJS.ProcessEnv } = {},
+): CliRun {
   const { command, prefixArgs } = resolveCliEntry();
-  const result = spawnSync(command, [...prefixArgs, ...arguments_], {
+  const { FORCE_COLOR: _inherited, NO_COLOR: _alsoInherited, ...inherited } = process.env;
+  const result = spawnSync(command, [...nodeArgs, ...prefixArgs, ...arguments_], {
     cwd: packageRoot,
     encoding: 'utf8',
     env: {
-      ...process.env,
-      FORCE_COLOR: '0',
+      ...inherited,
+      ...env,
       HOME: home,
       USERPROFILE: home,
       XDG_CONFIG_HOME: home,
@@ -59,6 +66,33 @@ function runCli(arguments_: string[]): CliRun {
 describe('CLI smoke', () => {
   afterAll(() => {
     rmSync(home, { recursive: true, force: true });
+  });
+
+  // Sources have no scanWorker.js beside them, and a worker that fails falls back without a sign.
+  it.runIf(process.env.SMOKE_CLI)('scans on a worker thread from the built library', () => {
+    const transcript = join(home, 'scan.jsonl');
+    writeFileSync(
+      transcript,
+      `${JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-01-15T12:00:00Z',
+        requestId: 'r',
+        message: { id: 'm', model: 'm', usage: { input_tokens: 1, output_tokens: 1 } },
+      })}\n`,
+    );
+    const script = `
+      import { ScanPool, scanWorkerEntry } from 'aitrack-lib/readers/scanPool';
+      const pool = new ScanPool(scanWorkerEntry(), 2);
+      const messages = await pool.scan('claude', process.argv[1]);
+      console.log(JSON.stringify({ messages: messages.length, workers: pool.running.size, broken: pool.isBroken }));
+      await pool.close();
+    `;
+    const result = spawnSync(process.execPath, ['-e', script, transcript], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+    });
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual({ messages: 1, workers: 2, broken: false });
   });
 
   it('prints --version', () => {
@@ -81,6 +115,31 @@ describe('CLI smoke', () => {
     const { status, stderr } = runCli(['top', 'weeks']);
     expect(status).toBe(2);
     expect(stderr).toContain('Allowed choices are days, models');
+  });
+
+  it('keeps a --json parser failure machine-readable', () => {
+    const { status, stdout } = runCli(['top', 'weeks', '--json']);
+    expect(status).toBe(2);
+    expect(JSON.parse(stdout)).toMatchObject({ command: 'top' });
+  });
+
+  it('says what init needs without a terminal, instead of exit 0 with nothing written', () => {
+    const { status, stderr } = runCli(['init']);
+    expect(status).toBe(2);
+    expect(stderr).toContain('--repo');
+  });
+
+  it('honours NO_COLOR on a terminal', () => {
+    // Chalk asks tty.isatty; a pipe would hide the difference.
+    const nodeArgs = [
+      '--import',
+      "data:text/javascript,import tty from 'node:tty'; tty.isatty = () => true;",
+    ];
+    expect(runCli(['config', 'set', 'compactAfterDays', '30']).status).toBe(0);
+    expect(runCli(['config', 'list'], { nodeArgs, env: {} }).stdout).toContain('\u001B[');
+    expect(runCli(['config', 'list'], { nodeArgs, env: { NO_COLOR: '1' } }).stdout).not.toContain(
+      '\u001B[',
+    );
   });
 
   it('refuses --watch without a terminal', () => {

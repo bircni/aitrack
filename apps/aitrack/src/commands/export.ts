@@ -25,18 +25,24 @@ export async function exportCommand(options: ExportOptions): Promise<void> {
     ...(options.refresh !== undefined && { refreshLive: options.refresh }),
   });
 
+  const format = options.csv ? 'csv' : 'pdf';
   if (!report || report.rowCount === 0) {
-    const message = emptyReportMessage(report);
+    const message = emptyReportMessage(report, options.providers);
     if (options.json) {
-      printJsonCommand('export', { path: null, rowCount: 0, ...(message !== null && { message }) });
+      printJsonCommand('export', {
+        path: null,
+        format,
+        rowCount: 0,
+        windowLabel: report?.windowLabel ?? null,
+        ...(message !== null && { message }),
+      });
     } else if (message !== null) {
       log.info(message);
     }
     return;
   }
 
-  const output = options.output ?? `aitrack-receipt.${options.csv ? 'csv' : 'pdf'}`;
-  const format = options.csv ? 'csv' : 'pdf';
+  const output = options.output ?? `aitrack-receipt.${format}`;
   writeFileSync(
     output,
     options.csv ? renderUsageReportCsv(report) : await renderReceiptPdf(report),

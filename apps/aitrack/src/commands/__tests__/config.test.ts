@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   saveConfig: vi.fn(),
   resolveMachineId: vi.fn(),
   migrateMachineDataFiles: vi.fn(),
+  isCloned: vi.fn(),
+  cloneOriginUrl: vi.fn(),
 }));
 
 vi.mock('aitrack-lib/config', () => ({
@@ -16,21 +18,26 @@ vi.mock('aitrack-lib/config', () => ({
   resolveMachineId: mocks.resolveMachineId,
 }));
 vi.mock('aitrack-lib/git', () => ({
+  LOCAL_REPO: '/repo',
   migrateMachineDataFiles: mocks.migrateMachineDataFiles,
+  isCloned: mocks.isCloned,
+  cloneOriginUrl: mocks.cloneOriginUrl,
 }));
 
-import { configCommand } from '../config.js';
+import { UsageError } from '../../cli/errors.js';
+import { getConfig, listConfig, setConfig } from '../config.js';
 
 function okConfig(config: Config): void {
   mocks.readConfig.mockReturnValue({ status: 'ok', config });
 }
 
-describe('configCommand', () => {
+describe('config', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.migrateMachineDataFiles.mockReset();
     mocks.resolveMachineId.mockReturnValue('resolved-host');
     mocks.readConfig.mockReturnValue({ status: 'missing' });
+    mocks.isCloned.mockReturnValue(false);
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
@@ -42,7 +49,7 @@ describe('configCommand', () => {
   describe('list', () => {
     it('prints all keys and the resolved machineId', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git' });
-      configCommand({ action: 'list' });
+      listConfig();
       const out = loggedOutput();
       expect(out).toContain('repoUrl = git@example.com:me/d.git');
       expect(out).toContain('machineId =');
@@ -54,7 +61,7 @@ describe('configCommand', () => {
 
     it('prints the values as JSON', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git', budget: { monthlyUSD: 50 } });
-      configCommand({ action: 'list', json: true });
+      listConfig(true);
       expect(JSON.parse(loggedOutput())).toEqual({
         command: 'config',
         action: 'list',
@@ -73,7 +80,7 @@ describe('configCommand', () => {
 
     it('prints a hint when no config exists', () => {
       mocks.readConfig.mockReturnValue({ status: 'missing' });
-      configCommand({ action: 'list' });
+      listConfig();
       expect(loggedOutput()).toContain('aitrack init');
     });
   });
@@ -81,13 +88,13 @@ describe('configCommand', () => {
   describe('get', () => {
     it('prints a single value', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git' });
-      configCommand({ action: 'get', key: 'repoUrl' });
+      getConfig('repoUrl');
       expect(loggedOutput()).toBe('git@example.com:me/d.git');
     });
 
     it('prints a value as JSON, null when unset', () => {
       okConfig({ repoUrl: 'x' });
-      configCommand({ action: 'get', key: 'repoUrl', json: true });
+      getConfig('repoUrl', true);
       expect(JSON.parse(loggedOutput())).toEqual({
         command: 'config',
         action: 'get',
@@ -95,25 +102,25 @@ describe('configCommand', () => {
         value: 'x',
       });
       vi.mocked(console.log).mockClear();
-      configCommand({ action: 'get', key: 'machineId', json: true });
+      getConfig('machineId', true);
       expect(JSON.parse(loggedOutput())).toMatchObject({ key: 'machineId', value: null });
     });
 
     it('prints empty for an unset value', () => {
       okConfig({ repoUrl: 'x' });
-      configCommand({ action: 'get', key: 'machineId' });
+      getConfig('machineId');
       expect(loggedOutput()).toBe('');
     });
 
     it('prints the configured monthly budget', () => {
       okConfig({ repoUrl: 'x', budget: { monthlyUSD: 200 } });
-      configCommand({ action: 'get', key: 'budget.monthly' });
+      getConfig('budget.monthly');
       expect(loggedOutput()).toBe('200');
     });
 
     it('rejects an unknown key', () => {
       expect(() => {
-        configCommand({ action: 'get', key: 'nope' });
+        getConfig('nope');
       }).toThrow('Unknown config key');
     });
   });
@@ -121,11 +128,7 @@ describe('configCommand', () => {
   describe('set', () => {
     it('updates an existing config', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git' });
-      configCommand({
-        action: 'set',
-        key: 'claudeProjectsDir',
-        value: '/tmp/claude-a,/tmp/claude-b',
-      });
+      setConfig('claudeProjectsDir', '/tmp/claude-a,/tmp/claude-b');
       expect(mocks.saveConfig).toHaveBeenCalledWith({
         repoUrl: 'git@example.com:me/d.git',
         claudeProjectsDir: '/tmp/claude-a,/tmp/claude-b',
@@ -136,7 +139,7 @@ describe('configCommand', () => {
     it('creates a config when none exists and warns about empty repoUrl', () => {
       mocks.readConfig.mockReturnValue({ status: 'missing' });
       const warn = vi.spyOn(console, 'warn');
-      configCommand({ action: 'set', key: 'machineId', value: 'work-laptop' });
+      setConfig('machineId', 'work-laptop');
       expect(mocks.migrateMachineDataFiles).toHaveBeenCalledWith('resolved-host', 'work-laptop');
       expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: '', machineId: 'work-laptop' });
       expect(warn).toHaveBeenCalled();
@@ -149,7 +152,7 @@ describe('configCommand', () => {
       });
       mocks.resolveMachineId.mockReturnValue('old-pc');
 
-      configCommand({ action: 'set', key: 'machineId', value: '  Work Laptop_01.2  ' });
+      setConfig('machineId', '  Work Laptop_01.2  ');
 
       expect(mocks.migrateMachineDataFiles).toHaveBeenCalledWith('old-pc', 'Work Laptop_01.2');
       expect(mocks.saveConfig).toHaveBeenCalledWith({
@@ -161,7 +164,7 @@ describe('configCommand', () => {
     it('sets budget.monthly as a positive dollar amount under budget.monthlyUSD', () => {
       okConfig({ repoUrl: 'git@example.com:me/d.git' });
 
-      configCommand({ action: 'set', key: 'budget.monthly', value: '149.99' });
+      setConfig('budget.monthly', '149.99');
 
       expect(mocks.saveConfig).toHaveBeenCalledWith({
         repoUrl: 'git@example.com:me/d.git',
@@ -171,22 +174,22 @@ describe('configCommand', () => {
 
     it.each(['0', '-5', 'lots'])('rejects a non-positive budget.monthly value %j', (value) => {
       expect(() => {
-        configCommand({ action: 'set', key: 'budget.monthly', value });
+        setConfig('budget.monthly', value);
       }).toThrow('budget.monthly');
       expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
     it('sets encryptData and compactAfterDays, and clears compaction with "off"', () => {
       okConfig({ repoUrl: 'x' });
-      configCommand({ action: 'set', key: 'encryptData', value: 'true' });
+      setConfig('encryptData', 'true');
       expect(mocks.saveConfig).toHaveBeenLastCalledWith({ repoUrl: 'x', encryptData: true });
 
       okConfig({ repoUrl: 'x' });
-      configCommand({ action: 'set', key: 'compactAfterDays', value: '365' });
+      setConfig('compactAfterDays', '365');
       expect(mocks.saveConfig).toHaveBeenLastCalledWith({ repoUrl: 'x', compactAfterDays: 365 });
 
       okConfig({ repoUrl: 'x', compactAfterDays: 365 });
-      configCommand({ action: 'set', key: 'compactAfterDays', value: 'off' });
+      setConfig('compactAfterDays', 'off');
       expect(mocks.saveConfig).toHaveBeenLastCalledWith({ repoUrl: 'x' });
     });
 
@@ -196,14 +199,14 @@ describe('configCommand', () => {
       ['encryptData', 'yes'],
     ])('rejects %s = %j', (key, value) => {
       expect(() => {
-        configCommand({ action: 'set', key, value });
+        setConfig(key, value);
       }).toThrow(key);
       expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
     it('rejects an unsafe machineId before migration or save', () => {
       expect(() => {
-        configCommand({ action: 'set', key: 'machineId', value: '../escape' });
+        setConfig('machineId', '../escape');
       }).toThrow('Machine name');
       expect(mocks.migrateMachineDataFiles).not.toHaveBeenCalled();
       expect(mocks.saveConfig).not.toHaveBeenCalled();
@@ -220,7 +223,7 @@ describe('configCommand', () => {
       });
 
       expect(() => {
-        configCommand({ action: 'set', key: 'machineId', value: 'new-pc' });
+        setConfig('machineId', 'new-pc');
       }).toThrow('already exists');
 
       expect(mocks.saveConfig).not.toHaveBeenCalled();
@@ -229,22 +232,85 @@ describe('configCommand', () => {
     it('refuses to overwrite an invalid config', () => {
       mocks.readConfig.mockReturnValue({ status: 'invalid', reason: 'not valid JSON' });
       expect(() => {
-        configCommand({ action: 'set', key: 'repoUrl', value: 'x' });
+        setConfig('repoUrl', 'x');
       }).toThrow('Config at /config.json is not valid JSON');
       expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
     it('rejects an unknown key', () => {
       expect(() => {
-        configCommand({ action: 'set', key: 'nope', value: 'x' });
+        setConfig('nope', 'x');
       }).toThrow('Unknown config key');
       expect(mocks.saveConfig).not.toHaveBeenCalled();
     });
 
-    it('requires a value', () => {
+    it.each([
+      ['encryptData', 'maybe'],
+      ['compactAfterDays', '1e3'],
+      ['compactAfterDays', '0x10'],
+      ['machineId', '../escape'],
+    ])('reports %s = %j as a usage error', (key, value) => {
       expect(() => {
-        configCommand({ action: 'set', key: 'repoUrl', value: undefined });
-      }).toThrow('A value is required');
+        setConfig(key, value);
+      }).toThrow(UsageError);
+      expect(mocks.saveConfig).not.toHaveBeenCalled();
+    });
+
+    it('clears a monthly budget with "off", naming it cleared', () => {
+      okConfig({ repoUrl: 'x', budget: { monthlyUSD: 200 } });
+      setConfig('budget.monthly', 'off');
+      expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: 'x' });
+      expect(loggedOutput()).toContain('Cleared budget.monthly.');
+    });
+
+    describe('repoUrl with a clone', () => {
+      beforeEach(() => {
+        okConfig({ repoUrl: 'old-url' });
+        mocks.isCloned.mockReturnValue(true);
+        mocks.cloneOriginUrl.mockReturnValue('old-url');
+      });
+
+      it('refuses a URL the clone does not push to, leaving the config alone', () => {
+        expect(() => {
+          setConfig('repoUrl', 'new-url');
+        }).toThrow(UsageError);
+        expect(() => {
+          setConfig('repoUrl', 'new-url');
+        }).toThrow('aitrack init --repo');
+        expect(mocks.saveConfig).not.toHaveBeenCalled();
+      });
+
+      it('allows clearing it, which claims no remote', () => {
+        setConfig('repoUrl', '');
+        expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: '' });
+      });
+
+      it("accepts the clone's remote written another way", () => {
+        mocks.cloneOriginUrl.mockReturnValue('git@github.com:me/d.git');
+        setConfig('repoUrl', 'https://github.com/me/d');
+        expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: 'https://github.com/me/d' });
+      });
+
+      it("accepts the clone's own origin, once git was told about the move", () => {
+        mocks.cloneOriginUrl.mockReturnValue('new-url');
+        setConfig('repoUrl', 'new-url');
+        expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: 'new-url' });
+      });
+
+      it('redacts credentials from the echo but not from get', () => {
+        const url = 'https://me:s3cret@example.test/d.git';
+        mocks.cloneOriginUrl.mockReturnValue(url);
+        setConfig('repoUrl', url);
+        expect(loggedOutput()).toContain('https://***@example.test/d.git');
+        expect(loggedOutput()).not.toContain('s3cret');
+        okConfig({ repoUrl: url });
+        vi.mocked(console.log).mockClear();
+        listConfig();
+        expect(loggedOutput()).not.toContain('s3cret');
+        vi.mocked(console.log).mockClear();
+        getConfig('repoUrl');
+        expect(loggedOutput()).toContain('s3cret');
+      });
     });
   });
 });

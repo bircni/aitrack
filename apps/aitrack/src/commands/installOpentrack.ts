@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { isRecord } from 'aitrack-lib/data/guards';
 import { log } from 'aitrack-lib/output';
 
+import { UsageError } from '../cli/errors.js';
 import { printJsonCommand } from '../cli/json.js';
 import { OPENTRACK_PUBLIC_KEY, verifyMinisign } from '../minisign.js';
 
@@ -101,7 +102,6 @@ function installMacApp(archive: Buffer, dir: string): string {
 
 /** Renamed over the old file, so a running copy keeps its own until it restarts. */
 function installAppImage(appImage: Buffer, dir: string): string {
-  mkdirSync(dir, { recursive: true });
   const destination = join(dir, APPIMAGE_NAME);
   const staging = join(dir, `.${APPIMAGE_NAME}.download`);
   try {
@@ -128,15 +128,14 @@ function reportInstalled(
   options: InstallOpentrackOptions,
   version: string,
   path: string | null,
+  nextStep = 'It updates itself from now on. If it was running, quit and reopen it.',
 ): void {
   if (options.json) {
     printJsonCommand('install-opentrack', { version, path });
     return;
   }
   log.info(`Installed opentrack ${version}${path === null ? '' : ` to ${path}`}.`);
-  if (path !== null) {
-    log.info('It updates itself from now on. If it was running, quit and reopen it.');
-  }
+  if (path !== null) log.info(nextStep);
 }
 
 export async function installOpentrackCommand(
@@ -144,10 +143,14 @@ export async function installOpentrackCommand(
 ): Promise<void> {
   const target = updaterTarget();
   if (process.platform === 'win32' && options.dir !== undefined) {
-    throw new Error(
+    throw new UsageError(
       '--dir applies to macOS and Linux only; the Windows installer chooses its own folder.',
     );
   }
+  const defaultDir =
+    process.platform === 'linux' ? join(homedir(), '.local', 'bin') : '/Applications';
+  const dir = options.dir ?? defaultDir;
+  if (process.platform !== 'win32') mkdirSync(dir, { recursive: true }); // Before a download that a bad folder would waste.
   const release = await latestRelease(target);
   log.info(`Downloading opentrack ${release.version}...`);
   const file = await download(release.url);
@@ -161,11 +164,13 @@ export async function installOpentrackCommand(
     return;
   }
   if (process.platform === 'linux') {
-    const path = installAppImage(file, options.dir ?? join(homedir(), '.local', 'bin'));
-    log.info(`Installed opentrack ${release.version} to ${path}.`);
-    log.info('Run it to start opentrack; Settings can launch it at login. It updates itself.');
+    reportInstalled(
+      options,
+      release.version,
+      installAppImage(file, dir),
+      'Run it to start opentrack; Settings can launch it at login. It updates itself.',
+    );
     return;
   }
-  const path = installMacApp(file, options.dir ?? '/Applications');
-  reportInstalled(options, release.version, path);
+  reportInstalled(options, release.version, installMacApp(file, dir));
 }

@@ -11,13 +11,9 @@ import {
   type UsageReportOptions,
   type UsageReportTotals,
 } from 'aitrack-lib/data/usageReport';
-import { fmt, fmtUSD, fmtUSDCost, unpricedFootnote } from 'aitrack-lib/display/format';
+import { fmt, fmtUSDCost, unpricedFootnote } from 'aitrack-lib/display/format';
 import { displayModelName } from 'aitrack-lib/display/modelNames';
-import {
-  defaultTableStyle,
-  renderTerminalTable,
-  type TerminalTableColumn,
-} from 'aitrack-lib/display/terminalTable';
+import { renderTerminalTable, type TerminalTableColumn } from 'aitrack-lib/display/terminalTable';
 import { log } from 'aitrack-lib/output';
 import chalk from 'chalk';
 
@@ -40,7 +36,7 @@ function priceCell(
   value: Pick<UsageReportTotals, 'hasCost' | 'costUSD' | 'hasUnpricedTokens'>,
 ): string {
   return value.hasCost
-    ? `${fmtUSD(value.costUSD)}${value.hasUnpricedTokens ? ' (partial)' : ''}`
+    ? `${fmtUSDCost(value.costUSD)}${value.hasUnpricedTokens ? ' (partial)' : ''}`
     : '—';
 }
 
@@ -93,9 +89,7 @@ function renderUsageReport(report: UsageReport): void {
   log.info(chalk.bold(`aitrack usage ${report.windowLabel}`));
   if (report.project) log.info(chalk.bold(`Project: ${report.project.label}`));
   log.info(
-    renderTerminalTable([...rows, totalRow], columns, {
-      style: defaultTableStyle(),
-      bodyRows: rows,
+    renderTerminalTable(rows, columns, {
       footerRow: totalRow,
       footerStyle: chalk.bold.cyan,
     }),
@@ -131,16 +125,12 @@ function renderComparison(report: UsageComparisonReport): void {
     log.info('Cost comparison is a partial estimate: some usage is unpriced.');
   }
   log.info(
-    renderTerminalTable(
-      summaryRows,
-      [
-        { header: 'Metric', align: 'left', cell: (r) => r.metric },
-        { header: 'Current', align: 'right', cell: (r) => r.current },
-        { header: 'Previous', align: 'right', cell: (r) => r.previous },
-        { header: 'Change', align: 'right', cell: (r) => r.change },
-      ],
-      { style: defaultTableStyle() },
-    ),
+    renderTerminalTable(summaryRows, [
+      { header: 'Metric', align: 'left', cell: (r) => r.metric },
+      { header: 'Current', align: 'right', cell: (r) => r.current },
+      { header: 'Previous', align: 'right', cell: (r) => r.previous },
+      { header: 'Change', align: 'right', cell: (r) => r.change },
+    ]),
   );
 
   const movementRows = comparison.models
@@ -159,16 +149,12 @@ function renderComparison(report: UsageComparisonReport): void {
   log.info('');
   log.info(chalk.bold('Per-model movement'));
   log.info(
-    renderTerminalTable(
-      movementRows,
-      [
-        { header: 'Provider', align: 'left', cell: (r) => r.provider },
-        { header: 'Model', align: 'left', cell: (r) => r.model },
-        { header: 'Tokens Δ', align: 'right', cell: (r) => r.tokens },
-        { header: 'Cost Δ', align: 'right', cell: (r) => r.cost },
-      ],
-      { style: defaultTableStyle() },
-    ),
+    renderTerminalTable(movementRows, [
+      { header: 'Provider', align: 'left', cell: (r) => r.provider },
+      { header: 'Model', align: 'left', cell: (r) => r.model },
+      { header: 'Tokens Δ', align: 'right', cell: (r) => r.tokens },
+      { header: 'Cost Δ', align: 'right', cell: (r) => r.cost },
+    ]),
   );
 }
 
@@ -201,13 +187,13 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   const budget = report ? resolveBudgetStatus(options, report) : null;
 
   if (options.json) {
-    const message = emptyReportMessage(report);
+    const message = emptyReportMessage(report, options.providers);
     printJsonCommand('usage', {
       windowLabel: report?.windowLabel ?? null,
       providers: report?.providers ?? [],
       totals: report?.totals ?? emptyUsageTotals(),
       rowCount: report?.rowCount ?? 0,
-      ...(comparisonReport !== null && { comparison: comparisonReport.comparison }),
+      ...(options.compare && { comparison: comparisonReport?.comparison ?? null }),
       ...(budget !== null && { budget }),
       ...(report?.timezoneNote !== undefined && { timezoneNote: report.timezoneNote }),
       ...(report?.project !== undefined && { project: report.project }),
@@ -223,7 +209,7 @@ export async function usageCommand(options: UsageOptions): Promise<void> {
   }
 
   if (!report || report.rowCount === 0) {
-    const message = emptyReportMessage(report);
+    const message = emptyReportMessage(report, options.providers);
     if (message !== null) log.info(message);
     renderProjectNotes(report);
     return;

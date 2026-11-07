@@ -1,6 +1,7 @@
 import type { ProjectSelector } from 'aitrack-lib/data/project';
 import { USAGE_PERIOD_DEFINITIONS } from 'aitrack-lib/data/usagePeriods';
 import { errorMessage } from 'aitrack-lib/errors';
+import { log } from 'aitrack-lib/output';
 import type { Command } from 'commander';
 
 import { UsageError } from './errors.js';
@@ -61,17 +62,22 @@ export function registerUsageCommands(
       const options = command.opts<UsageCommonOptions>();
       // Parsed inside runAsync so a bad argument exits like every other failure.
       runAsync(
-        () => {
+        async () => {
           if (options.watch !== undefined && options.json) {
             throw new UsageError('--watch cannot be combined with --json.');
+          }
+          if (options.short && options.json) log.warn('--short is ignored with --json.');
+          else if (options.short && options.compare) log.warn('--compare is ignored with --short.');
+          if (options.compare && def.period === 'all') {
+            throw new UsageError('--compare needs a finite window; "all" has no previous period.');
           }
           const reportOptions = parseUsageReportOptions({
             period: def.period,
             args: command.args,
             providers: options.providers,
           });
+          const project = await projectFor(options.dir); // Once: resolving spawns git, too much for each --watch tick.
           const run = async (): Promise<void> => {
-            const project = await projectFor(options.dir);
             const { usageCommand } = await import('../commands/usage.js');
             await usageCommand({
               ...reportOptions,
