@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   open: vi.fn(),
+  get: vi.fn((key: string) =>
+    key === 'cursorAuth/accessToken' ? { value: 'access-token' } : { value: 'refresh-token' },
+  ),
   backup: vi.fn((_source: unknown, _path: unknown) => Promise.resolve(1)),
 }));
 
@@ -18,10 +21,7 @@ vi.mock('node:sqlite', () => ({
       mocks.open(path);
     }
     prepare() {
-      return {
-        get: (key: string) =>
-          key === 'cursorAuth/accessToken' ? { value: 'access-token' } : { value: 'refresh-token' },
-      };
+      return { get: mocks.get };
     }
     close() {
       // nothing to release in the fake
@@ -36,6 +36,7 @@ let databasePath: string;
 
 beforeEach(() => {
   mocks.open.mockReset();
+  mocks.get.mockClear();
   mocks.backup.mockReset();
   mocks.backup.mockResolvedValue(1);
   directory = mkdtempSync(join(tmpdir(), 'aitrack-cursor-state-'));
@@ -48,12 +49,13 @@ afterEach(() => {
 });
 
 describe('readCursorAuthState', () => {
-  it('reads the tokens straight from the database when it is not locked', async () => {
+  it('reads the access token straight from the database when it is not locked', async () => {
     const [state, concurrent] = await Promise.all([
       readCursorAuthState(databasePath),
       readCursorAuthState(databasePath),
     ]);
-    expect(state).toEqual({ accessToken: 'access-token', refreshToken: 'refresh-token' });
+    expect(state).toEqual({ accessToken: 'access-token' });
+    expect(mocks.get.mock.calls).toEqual([['cursorAuth/accessToken']]); // Never touches a secret it has no use for.
     expect(concurrent).toBe(state);
     expect(mocks.open).toHaveBeenCalledTimes(1);
     expect(mocks.backup).not.toHaveBeenCalled();
@@ -69,7 +71,6 @@ describe('readCursorAuthState', () => {
 
     await expect(readCursorAuthState(databasePath)).resolves.toEqual({
       accessToken: 'access-token',
-      refreshToken: 'refresh-token',
     });
 
     expect(mocks.backup).toHaveBeenCalledTimes(1);

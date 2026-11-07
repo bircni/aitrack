@@ -8,14 +8,13 @@ import type { QuotaProviderKey, QuotaResult, QuotaSnapshot } from './types.js';
 export type * from './types.js';
 export { projectPace, type PaceProjection, type PaceSeverity } from './pacing.js';
 
-/** In display order. */
+export { QUOTA_PROVIDERS } from '../providers/descriptors.js';
+
 const FETCHERS: Record<QuotaProviderKey, (now: Date) => Promise<QuotaSnapshot>> = {
   claude_code: fetchClaudeQuota,
   codex: fetchCodexQuota,
   cursor: fetchCursorQuota,
 };
-
-export const QUOTA_PROVIDERS = Object.keys(FETCHERS) as readonly QuotaProviderKey[];
 
 /** Never throws, so one signed-out provider does not take the others down. */
 export async function fetchQuota(

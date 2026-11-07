@@ -9,7 +9,7 @@ import type { FallbackCollector } from '../pricing/fallback.js';
 import type { CachedMessage, CachedParse } from './cache.js';
 import { scanClaudeFile, type ScannedClaudeMessage } from './claudeScan.js';
 import { claudeHomeDirs, resolveSourceRoots } from './paths.js';
-import { parseProviderSources } from './pipeline.js';
+import { readProviderDays } from './pipeline.js';
 import { attributeCwd, createProjectResolver, type ProjectResolver } from './projectResolver.js';
 
 export function getClaudePaths(): string[] {
@@ -95,12 +95,12 @@ export function mergeClaudeParsed(parsed: CachedParse[]): DayMap {
   return allDays;
 }
 
-export async function readClaudeData(fallbacks?: FallbackCollector): Promise<DayMap> {
+export function readClaudeData(fallbacks?: FallbackCollector): Promise<DayMap> {
   const resolveProject = createProjectResolver();
-  const parsed = await parseProviderSources({
+  return readProviderDays({
     kind: 'claude',
     roots: getClaudePaths(),
     finish: (scanned) => finishClaudeScan(scanned, fallbacks, resolveProject),
+    merge: mergeClaudeParsed,
   });
-  return mergeClaudeParsed(parsed);
 }

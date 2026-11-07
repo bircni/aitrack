@@ -79,7 +79,6 @@ describe('readCursorData', () => {
   ])('returns an empty map when the access token is %s', async (_label, accessToken) => {
     const databasePath = join(tmpDir, 'state.vscdb');
     createStateDatabase(databasePath, {
-      'cursorAuth/refreshToken': 'refresh',
       ...(accessToken !== undefined && { 'cursorAuth/accessToken': accessToken }),
     });
     process.env.CURSOR_STATE_DB_PATH = databasePath;

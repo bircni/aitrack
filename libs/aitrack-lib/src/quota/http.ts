@@ -76,6 +76,12 @@ export async function requestJson(
   return { body, headers: response.headers };
 }
 
+export function assertNotExpired(expiresAt: number | undefined, now: Date, message: string): void {
+  if (expiresAt !== undefined && expiresAt <= now.getTime()) {
+    throw new QuotaFailure('expired', message);
+  }
+}
+
 export function record(value: unknown): Record<string, unknown> | undefined {
   return isRecord(value) ? value : undefined;
 }

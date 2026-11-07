@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { decodeJwtPayload, jwtExpiryMs } from '../readers/cursor/jwt.js';
 import { codexHomeDirs } from '../readers/paths.js';
 import {
+  assertNotExpired,
   instantValue,
   numberValue,
   QuotaFailure,
@@ -189,9 +190,7 @@ export async function fetchCodexQuota(now = new Date()): Promise<QuotaSnapshot> 
   if (!credentials) {
     throw new QuotaFailure('noCredentials', 'No Codex login found. Run `codex login`.');
   }
-  if (credentials.expiresAt !== undefined && credentials.expiresAt <= now.getTime()) {
-    throw new QuotaFailure('expired', 'Codex login expired. Run Codex to refresh it.');
-  }
+  assertNotExpired(credentials.expiresAt, now, 'Codex login expired. Run Codex to refresh it.');
   const headers: Record<string, string> = {
     Accept: 'application/json',
     Authorization: `Bearer ${credentials.accessToken}`,
