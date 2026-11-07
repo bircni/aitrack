@@ -40,7 +40,7 @@ describe('settings', () => {
   it('round-trips through disk and tolerates a corrupt file', async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'opentrack-'));
     const path = join(tmpDir, 'nested', 'settings.json');
-    await writeJsonFile(path, {
+    writeJsonFile(path, {
       ...DEFAULT_SETTINGS,
       theme: 'dark',
       trayStyle: 'bars',

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { clampPercent, projectPace } from 'aitrack-lib/quota/pacing';
+  import { clampPercent, type PaceProjection, projectPace } from 'aitrack-lib/quota/pacing';
 
-  import { meterTone } from '../shared/pace.js';
+  import { hasReset, meterTone } from '../shared/pace.js';
   import type { QuotaWindow, Settings } from '../shared/types.js';
   import { fillPercent, formatLimitValue, formatReset, paceLabel } from './format.js';
 
@@ -9,19 +9,33 @@
     window: QuotaWindow;
     settings: Settings;
     now: number;
+    /** These numbers are cached, so nothing should be projected from them. */
+    stale?: boolean;
     onToggleUsage: () => void;
     onToggleReset: () => void;
   }
 
-  let { window, settings, now, onToggleUsage, onToggleReset }: Props = $props();
+  let { window, settings, now, stale = false, onToggleUsage, onToggleReset }: Props = $props();
 
-  const pace = $derived(projectPace(window, now));
+  const NO_PACE: PaceProjection = {
+    severity: 'level',
+    projectedUsedPercent: null,
+    evenPacePercent: null,
+    runOutAt: null,
+  };
+  const past = $derived(hasReset(window, now));
+  const pace = $derived(stale || past ? NO_PACE : projectPace(window, now));
   const label = $derived(paceLabel(pace, now));
   const reset = $derived(formatReset(window.resetsAt, now, settings.resetDisplay));
   const value = $derived(formatLimitValue(window, settings.display));
   const valueLabel = $derived(`${window.label} ${value}, show used or left`);
   const resetLabel = $derived(`${reset ?? ''}, show time or countdown`);
   const meterLabel = $derived(`${window.label} ${settings.display}`);
+  const meterText = $derived(
+    [value, past ? 'reset passed' : stale ? 'cached' : label?.toLowerCase()]
+      .filter(Boolean)
+      .join(', '),
+  );
   const tick = $derived(
     label === undefined || pace.evenPacePercent === null
       ? null
@@ -31,7 +45,7 @@
   );
 </script>
 
-<div class="limit tone-{meterTone(window, pace)}">
+<div class="limit tone-{past ? 'calm' : meterTone(window, pace)}" class:past>
   <div class="l-row">
     <span class="l-name">{window.label}</span>
     <button
@@ -49,7 +63,7 @@
     aria-valuemin={0}
     aria-valuemax={100}
     aria-valuenow={Math.round(fillPercent(window, settings.display))}
-    aria-valuetext={value}
+    aria-valuetext={meterText}
   >
     <div class="fill" style:width="{fillPercent(window, settings.display)}%"></div>
     {#if tick !== null}

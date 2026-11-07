@@ -28,6 +28,22 @@
   fill: var(--provider-cursor);
 }
 
+.h-swatch {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background: var(--provider-codex);
+}
+
+.h-swatch--claude_code {
+  background: var(--provider-claude);
+}
+
+.h-swatch--cursor {
+  background: var(--provider-cursor);
+}
+
 .h-axis,
 .h-stats {
   display: flex;

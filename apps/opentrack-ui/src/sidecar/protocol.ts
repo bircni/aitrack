@@ -32,10 +32,25 @@ export type SidecarMessage =
   | { event: 'alert'; data: { title: string; body: string } }
   | { event: 'tray'; data: TrayImage };
 
+export function serializeMessage(message: SidecarMessage): string {
+  return `${JSON.stringify(message)}\n`;
+}
+
+/** Writes each state unless it is the one last written; a refresh often ends by repeating itself. */
+export function stateWriter(write: (line: string) => void): (state: AppState) => void {
+  let last: string | undefined;
+  return (state) => {
+    const line = serializeMessage({ event: 'state', data: state });
+    if (line === last) return;
+    last = line;
+    write(line);
+  };
+}
+
 export interface HandlerContext {
   service: Pick<QuotaService, 'state' | 'refresh' | 'sync'>;
   settings: () => Settings;
-  saveSettings: (settings: Settings) => Promise<Settings>;
+  saveSettings: (settings: Settings) => Settings;
 }
 
 export function parseRequest(line: string): SidecarRequest | undefined {

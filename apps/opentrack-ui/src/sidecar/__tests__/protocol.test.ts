@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AppState } from '../../shared/types.js';
-import { type HandlerContext, handleRequest, parseRequest } from '../protocol.js';
+import { type HandlerContext, handleRequest, parseRequest, stateWriter } from '../protocol.js';
 import { DEFAULT_SETTINGS } from '../settings.js';
 
 function context() {
   const saved: unknown[] = [];
-  const state: AppState = { providers: [], refreshing: false, machineCount: 1, syncing: false };
+  const state: AppState = { providers: [], refreshing: false, syncing: false };
   const service = {
     state: () => state,
     refresh: vi.fn(() => Promise.resolve()),
@@ -17,13 +17,30 @@ function context() {
     settings: () => DEFAULT_SETTINGS,
     saveSettings: (settings) => {
       saved.push(settings);
-      return Promise.resolve(settings);
+      return settings;
     },
   };
   return { saved, service, state, handler };
 }
 
 describe('sidecar protocol', () => {
+  it('writes a state only when it differs from the last one', () => {
+    const lines: string[] = [];
+    const writeState = stateWriter((line) => {
+      lines.push(line);
+    });
+    const { state } = context();
+    writeState(state);
+    writeState({ ...state });
+    writeState({ ...state, refreshing: true });
+    writeState(state);
+    expect(lines.map((line) => (JSON.parse(line) as { data: AppState }).data.refreshing)).toEqual([
+      false,
+      true,
+      false,
+    ]);
+  });
+
   it('parses requests and rejects anything else', () => {
     expect(parseRequest('{"id":1,"method":"getState"}')).toEqual({
       id: 1,

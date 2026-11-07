@@ -15,12 +15,16 @@
   --raised: #f1f1f3;
   --ink: #18181b;
   --ink-2: #5f6068;
-  --ink-3: #747780;
+  --ink-3: #6a6d76;
   --rule: #ececef;
   --track: #e4e4e8;
   --meter: #2a2a2f;
   --warn: #b97800;
   --crit: #d8432f;
+  /* Darker than the fills: small text needs 4.5:1, a meter does not. */
+  --warn-text: #946000;
+  --crit-text: #c23a27;
+  --ok: #27876d;
   --focus: #2f6fe4;
   --edge: rgba(0, 0, 0, 0.08);
   --provider-claude: #c96442;
@@ -45,6 +49,9 @@
     --meter: #e9e9ec;
     --warn: #f5b945;
     --crit: #ff7a66;
+    --warn-text: #f5b945;
+    --crit-text: #ff7a66;
+    --ok: #65c3a3;
     --focus: #8ab4ff;
     --edge: rgba(255, 255, 255, 0.07);
     --provider-claude: #d97757;

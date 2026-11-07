@@ -4,13 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   AppState,
-  OpentrackApi,
+  DailyUsage,
   PeriodUsage,
   ProviderUsage,
   Settings,
 } from '../../shared/types.js';
 import { EMPTY_PERIOD } from '../../shared/types.js';
 import { DEFAULT_SETTINGS } from '../../sidecar/settings.js';
+import type { api } from '../api.js';
 
 const mocks = vi.hoisted(() => ({
   api: {
@@ -32,6 +33,9 @@ const mocks = vi.hoisted(() => ({
     availableUpdate: vi.fn(),
     onUpdate: vi.fn(),
     installUpdate: vi.fn(),
+    serviceStatus: vi.fn(),
+    onServiceStatus: vi.fn(),
+    hideWindow: vi.fn(),
   },
 }));
 vi.mock('../api.js', () => mocks);
@@ -48,7 +52,6 @@ const state: AppState = {
   providers: [],
   refreshing: false,
   syncing: false,
-  machineCount: 1,
 };
 async function settle(): Promise<void> {
   for (let i = 0; i < 8; i++) {
@@ -68,19 +71,31 @@ function change(selector: string, value?: string): void {
   if (input && value !== undefined) input.value = value;
   input?.dispatchEvent(new Event('change', { bubbles: true }));
 }
+function escape(from: Element | Window = window): void {
+  from.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+}
 function handlers() {
   return { onRefresh: vi.fn(), onSync: vi.fn(), onOpenDashboard: vi.fn() };
 }
-function listener<K extends 'onState' | 'onSettings' | 'onScreen' | 'onSettingErrors' | 'onUpdate'>(
-  name: K,
-): Parameters<OpentrackApi[K]>[0] {
-  return mocks.api[name].mock.calls[0]?.[0] as Parameters<OpentrackApi[K]>[0];
+function listener<
+  K extends
+    | 'onState'
+    | 'onSettings'
+    | 'onScreen'
+    | 'onSettingErrors'
+    | 'onUpdate'
+    | 'onServiceStatus',
+>(name: K): Parameters<(typeof api)[K]>[0] {
+  return mocks.api[name].mock.calls[0]?.[0] as Parameters<(typeof api)[K]>[0];
 }
 function spent(tokens: number, costUSD: number, model: string): PeriodUsage {
   const hasCost = costUSD > 0;
   return { tokens, costUSD, hasCost, models: [{ model, tokens, costUSD, hasCost }] };
 }
-function usage(period: PeriodUsage, daily = [{ date: '2026-06-01', costUSD: 0 }]): ProviderUsage {
+function usage(
+  period: PeriodUsage,
+  daily: DailyUsage[] = [{ date: '2026-06-01', costUSD: 0 }],
+): ProviderUsage {
   return {
     today: period,
     yesterday: EMPTY_PERIOD,
@@ -124,12 +139,14 @@ beforeEach(() => {
   mocks.api.settingErrors.mockResolvedValue({});
   mocks.api.availableUpdate.mockResolvedValue(null);
   mocks.api.appVersion.mockResolvedValue('3.1.0');
+  mocks.api.serviceStatus.mockResolvedValue({ state: 'running', message: null });
   for (const name of [
     'onState',
     'onSettings',
     'onScreen',
     'onSettingErrors',
     'onUpdate',
+    'onServiceStatus',
   ] as const) {
     mocks.api[name].mockReturnValue(vi.fn());
   }
@@ -178,7 +195,10 @@ describe('desktop commands and settings', () => {
     expect(mocks.api.saveSettings).toHaveBeenLastCalledWith(
       expect.objectContaining({ windowMode: 'floating' }),
     );
-    click('[aria-label="Close with the tray again"]');
+    expect(target.querySelector('[aria-label="Keep open"]')?.getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    click('[aria-label="Keep open"]');
     await settle();
     expect(mocks.api.saveSettings).toHaveBeenLastCalledWith(
       expect.objectContaining({ windowMode: 'popup' }),
@@ -204,7 +224,7 @@ describe('desktop commands and settings', () => {
     mocks.api.getState.mockRejectedValue(new Error('offline'));
     mounted.push(mount(App, { target }));
     await settle();
-    expect(target.textContent).toContain('Loading');
+    expect(target.textContent).not.toContain('Loading');
     expect(target.textContent).toContain('Could not load dashboard: offline');
     click('[aria-label="Refresh"]');
     await settle();
@@ -223,20 +243,193 @@ describe('desktop commands and settings', () => {
     onState({ ...state, syncing: true });
     await settle();
     expect(target.textContent).toContain('Syncing');
-    const live = () => target.querySelector('[role="status"][aria-live="polite"]')?.textContent;
-    expect(live()).toBe('Syncing…');
-    onState({ ...state, syncResult: { ok: true, message: 'Synced 2 files' } });
+    const onScreen = listener('onScreen');
+    onScreen('settings');
     await settle();
-    expect(live()).toBe('Synced 2 files');
+    expect(target.querySelector('h1')?.textContent).toBe('Settings');
+  });
+
+  it('shows the down banner once pushed state has replaced a failed first load', async () => {
+    mocks.api.getState.mockRejectedValue(new Error('did not respond'));
+    mocks.api.getSettings.mockRejectedValue(new Error('did not respond'));
+    mounted.push(mount(App, { target }));
+    await settle();
+    listener('onSettings')(DEFAULT_SETTINGS);
+    listener('onState')(state);
+    listener('onServiceStatus')({ state: 'down', message: 'Stopped. See /x/sidecar.log' });
+    await settle();
+    expect(target.querySelector('[role="alert"]')?.textContent).toContain(
+      'Showing the last numbers. Stopped. See /x/sidecar.log',
+    );
+  });
+
+  it('announces only runs the user started, and says how they ended', async () => {
+    mounted.push(mount(App, { target }));
+    await settle();
+    const onState = listener('onState');
+    const live = () => target.querySelector('[role="status"][aria-live="polite"]')?.textContent;
+    onState({ ...state, refreshing: true });
+    await settle();
+    onState({ ...state });
+    await settle();
+    expect(live()).toBe('');
+
+    const failing = [
+      {
+        key: 'codex' as const,
+        label: 'Codex',
+        refreshing: false,
+        quotaError: { kind: 'network' as const, message: 'offline' },
+      },
+    ];
+    click('[aria-label="Refresh"]');
+    onState({ ...state, refreshing: true });
+    await settle();
+    expect(live()).toBe('Updating…');
+    onState({ ...state, providers: failing, usageError: 'unreadable' });
+    await settle();
+    expect(live()).toBe('Refresh finished, usage could not be read, Codex limits unavailable');
+    click('[aria-label="Refresh"]');
     onState({ ...state, refreshing: true });
     await settle();
     onState({ ...state });
     await settle();
     expect(live()).toBe('Usage updated');
-    const onScreen = listener('onScreen');
-    onScreen('settings');
+
+    click('[aria-label="Sync this machine"]');
+    onState({ ...state, syncing: true });
     await settle();
-    expect(target.querySelector('h1')?.textContent).toBe('Settings');
+    expect(live()).toBe('Syncing…');
+    onState({ ...state, syncResult: { ok: false, message: 'no remote' } });
+    await settle();
+    expect(live()).toBe('Sync failed: no remote');
+    click('[aria-label="Sync this machine"]');
+    onState({ ...state, syncing: true });
+    await settle();
+    onState({ ...state, syncResult: { ok: true, message: 'Synced 2 files' } });
+    await settle();
+    expect(live()).toBe('Synced 2 files');
+    expect(target.querySelector('.foot')?.textContent).toContain('Synced 2 files');
+  });
+
+  it('moves focus and resets scroll between screens, and handles Escape', async () => {
+    mounted.push(mount(App, { target }));
+    await settle();
+    const scroller = target.querySelector<HTMLElement>('.scroll');
+    if (!scroller) throw new Error('missing scroll area');
+    scroller.scrollTop = 300;
+    click('[aria-label="Settings"]');
+    await settle();
+    expect(document.activeElement).toBe(target.querySelector('h1'));
+    expect(scroller.scrollTop).toBe(0);
+
+    const select = target.querySelector('#set-theme');
+    if (!select) throw new Error('missing select');
+    escape(select); // Could be closing the select's list.
+    await settle();
+    expect(target.querySelector('h1')).not.toBeNull();
+    expect(mocks.api.hideWindow).not.toHaveBeenCalled();
+
+    escape();
+    await settle();
+    expect(target.querySelector('h1')).toBeNull();
+    expect(document.activeElement).toBe(target.querySelector('[aria-label="Settings"]'));
+    expect(mocks.api.hideWindow).not.toHaveBeenCalled();
+
+    escape();
+    expect(mocks.api.hideWindow).toHaveBeenCalledTimes(1);
+    click('[aria-label="Keep open"]');
+    await settle();
+    escape(); // A pinned window stays until it is unpinned.
+    expect(mocks.api.hideWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('cues content below the fold until it is scrolled to, and shows a save error', async () => {
+    mounted.push(mount(App, { target }));
+    await settle();
+    const scroller = target.querySelector<HTMLElement>('.scroll');
+    if (!scroller) throw new Error('missing scroll area');
+    Object.defineProperty(scroller, 'scrollHeight', { value: 900 });
+    Object.defineProperty(scroller, 'clientHeight', { value: 600 });
+    expect(target.querySelector('.scroll-more')).toBeNull();
+    scroller.dispatchEvent(new Event('scroll'));
+    await settle();
+    expect(target.querySelector('.scroll-more')).not.toBeNull();
+    scroller.scrollTop = 300;
+    scroller.dispatchEvent(new Event('scroll'));
+    await settle();
+    expect(target.querySelector('.scroll-more')).toBeNull();
+
+    mocks.api.saveSettings.mockRejectedValueOnce(new Error('disk full'));
+    click('[aria-label="Keep open"]');
+    await settle();
+    expect(target.textContent).toContain('Could not save settings: disk full');
+    expect(scroller.scrollTop).toBe(0);
+  });
+
+  it('tells a down service apart: banner, old limits, no commands, reload on recovery', async () => {
+    const now = Date.now();
+    mocks.api.serviceStatus.mockResolvedValue({
+      state: 'down',
+      message: 'Stopped. See /x/sidecar.log',
+    });
+    mocks.api.getState.mockResolvedValue({
+      ...state,
+      providers: [
+        {
+          key: 'codex',
+          label: 'Codex',
+          refreshing: false,
+          quota: {
+            provider: 'codex',
+            fetchedAt: new Date(now).toISOString(),
+            values: [],
+            windows: [
+              {
+                id: 'session',
+                label: 'Session',
+                usedPercent: 40,
+                periodSeconds: 18_000,
+                resetsAt: new Date(now + 3600_000).toISOString(),
+                format: 'percent',
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const first = mount(App, { target });
+    await settle();
+    expect(target.querySelector('[role="alert"]')?.textContent).toContain(
+      'Showing the last numbers. Stopped. See /x/sidecar.log',
+    );
+    expect(target.querySelector('.foot')?.textContent).toContain('Background service stopped');
+    expect(target.querySelector<HTMLButtonElement>('[aria-label="Refresh"]')?.disabled).toBe(true);
+    expect(target.querySelector('.tick')).toBeNull();
+    expect(target.querySelector('[role="meter"]')?.getAttribute('aria-valuetext')).toBe(
+      '40%, cached',
+    );
+    const onStatus = listener('onServiceStatus');
+    onStatus({ state: 'running', message: null });
+    await settle();
+    expect(target.querySelector('[role="alert"]')).toBeNull();
+    expect(target.querySelector('.tick')).not.toBeNull();
+    expect(mocks.api.getState).toHaveBeenCalledTimes(1);
+    await unmount(first);
+
+    // Nothing loaded while it was down: the load banner is the one way out, and recovery retries it.
+    mocks.api.getState.mockReset().mockRejectedValueOnce(new Error('The service stopped'));
+    mocks.api.getState.mockResolvedValue(state);
+    mocks.api.serviceStatus.mockResolvedValue({ state: 'down', message: 'The service stopped' });
+    mocks.api.onServiceStatus.mockClear();
+    mounted.push(mount(App, { target }));
+    await settle();
+    expect(target.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    expect(target.textContent).toContain('Could not load dashboard: The service stopped');
+    listener('onServiceStatus')({ state: 'running', message: null });
+    await settle();
+    expect(target.textContent).not.toContain('Could not load dashboard');
+    expect(target.querySelector('.summary')).not.toBeNull();
   });
 
   it('delivers provider reorder, toggles, display preferences and setting errors', async () => {
@@ -299,7 +492,6 @@ it('shows partial costs and cached ages, exposes provider controls and operation
   const now = Date.parse('2026-06-01T12:00:00Z');
   const appState: AppState = {
     ...state,
-    machineCount: 2,
     pullError: 'Pull unavailable',
     usageError: 'Read unavailable',
     usageUpdatedAt: new Date(now - 600_000).toISOString(),
@@ -344,7 +536,9 @@ it('shows partial costs and cached ages, exposes provider controls and operation
         settings: DEFAULT_SETTINGS,
         now,
         period: 'today',
+        view: 'providers',
         onPeriod: period,
+        onView: vi.fn(),
         onPatch: patch,
         ...handlers(),
         onRefresh: refresh,
@@ -375,7 +569,6 @@ it('compares machines by share, activity and freshness, with account-wide usage 
   const now = Date.parse('2026-06-01T12:00:00Z');
   const appState: AppState = {
     ...state,
-    machineCount: 3,
     providers: [
       { key: 'claude_code', label: 'Claude Code', refreshing: false },
       { key: 'cursor', label: 'Cursor', refreshing: false },
@@ -440,14 +633,14 @@ it('compares machines by share, activity and freshness, with account-wide usage 
   const machinesView = mount(Dashboard, { target, props: { ...props, view: 'machines' } });
   await settle();
   const names = [...target.querySelectorAll('.m-name')].map((name) => name.textContent.trim());
-  // By spend; Codex is turned off, so desk's $9 of it does not count.
+  // By cost; Codex is turned off, so desk's $9 of it does not count.
   expect(names).toEqual(['desk', 'laptop This machine', 'Cursor account', 'idle']);
   expect([...target.querySelectorAll('.m-percent')].map((cell) => cell.textContent)).toEqual([
     '75%',
     '25%',
   ]);
   expect(target.textContent).toContain('Live · not synced yet');
-  expect(target.textContent).toContain('Synced 10d 0h ago');
+  expect(target.textContent).toContain('Synced 10d 0h ago · stale');
   expect(target.querySelectorAll('.m-dot.stale')).toHaveLength(2);
   expect(target.textContent).toContain('there');
   expect(target.textContent).toContain('Account-wide');
@@ -485,7 +678,7 @@ it('compares machines by share, activity and freshness, with account-wide usage 
     await settle();
     expect(target.textContent).not.toContain('there');
     expect(target.textContent).not.toContain('Cursor account');
-    expect(target.textContent).toContain('aitrack init');
+    expect(target.textContent).toContain('npx aitrack init');
     await unmount(view);
   }
 });
@@ -520,7 +713,14 @@ it('lists projects by share with a provider split, the unattributed remainder la
   const props = {
     appState: {
       ...state,
-      providers: [{ key: 'claude_code' as const, label: 'Claude Code', refreshing: false }],
+      providers: [
+        {
+          key: 'cursor' as const,
+          label: 'Cursor',
+          refreshing: false,
+          usage: usage(EMPTY_PERIOD, []),
+        },
+      ],
       projects,
     },
     settings: DEFAULT_SETTINGS,
@@ -570,21 +770,46 @@ it('lists projects by share with a provider split, the unattributed remainder la
   await settle();
   expect(target.querySelector('.m-share')?.getAttribute('title')).toContain('of tokens');
   await unmount(unpriced);
-  const empty = mount(Dashboard, {
+  const none = mount(Dashboard, {
     target,
     props: {
       ...props,
       period: 'month' as const,
-      appState: { ...props.appState, projects: undefined },
+      appState: {
+        ...props.appState,
+        projects,
+        providers: [{ ...props.appState.providers[0], key: 'codex' as const, label: 'Codex' }],
+      },
     },
   });
   await settle();
-  expect(target.textContent).toContain('No project usage 30 days.');
+  expect(target.textContent).toContain('No project usage in the last 30 days.');
+  expect(target.textContent).not.toContain('from the next sync');
+  await unmount(none);
+  const empty = mount(Dashboard, {
+    target,
+    props: { ...props, appState: { ...props.appState, projects: undefined } },
+  });
+  await settle();
   expect(target.textContent).toContain('from the next sync or refresh onward');
   await unmount(empty);
+  // Cursor is off, so there is nothing to explain about it.
+  const noCursor = mount(Dashboard, {
+    target,
+    props: {
+      ...props,
+      appState: {
+        ...props.appState,
+        providers: [{ ...props.appState.providers[0], key: 'codex' as const, label: 'Codex' }],
+      },
+    },
+  });
+  await settle();
+  expect(target.textContent).not.toContain('Cursor is not attributed');
+  await unmount(noCursor);
 });
 
-it('charts spend history by provider and switches range and grouping', async () => {
+it('charts cost history by provider and switches range and grouping', async () => {
   const days = Array.from({ length: 40 }, (_, index) => ({
     date: new Date(Date.UTC(2026, 4, 1 + index)).toISOString().slice(0, 10),
     costUSD: index === 10 ? 20 : 1,
@@ -616,7 +841,12 @@ it('charts spend history by provider and switches range and grouping', async () 
   await settle();
   expect(target.querySelectorAll('.h-bar')).toHaveLength(30);
   expect(target.textContent).toContain('peak $20.00');
-  expect(target.textContent).toContain('2026-05-11'); // the busiest day
+  expect(target.textContent).toContain('May 11');
+  expect(target.querySelector('.h-chart')?.getAttribute('aria-label')).toContain(
+    'peak $20.00 on May 11',
+  );
+  expect(target.querySelector('.h-swatch--claude_code')).not.toBeNull();
+  expect(target.querySelector('.h-chart title')?.textContent).toContain('(Claude Code $20.00)');
 
   const [thirty, ninety, , week] = target.querySelectorAll<HTMLButtonElement>('.h-controls button');
   ninety?.click();
@@ -630,11 +860,25 @@ it('charts spend history by provider and switches range and grouping', async () 
 
   const empty = mount(Dashboard, {
     target,
-    props: { ...props, appState: { ...appState, providers: appState.providers.slice(1) } },
+    props: {
+      ...props,
+      appState: {
+        ...appState,
+        providers: [{ ...appState.providers[1], usage: usage(spent(5, 0, 'x'), []) }],
+      },
+    },
   });
   await settle();
   expect(target.textContent).toContain('No priced usage');
   await unmount(empty);
+  const offToHistory = mount(Dashboard, {
+    target,
+    props: { ...props, appState: { ...appState, providers: [] } },
+  });
+  await settle();
+  expect(target.textContent).toContain('No providers are turned on. Choose some in Settings.');
+  expect(target.querySelector('.history')).toBeNull();
+  await unmount(offToHistory);
 });
 
 it('renders remaining quotas with and without reset metadata and delivers toggles', async () => {
@@ -673,7 +917,9 @@ it('renders remaining quotas with and without reset metadata and delivers toggle
         settings: { ...DEFAULT_SETTINGS, display: 'left', resetDisplay: 'relative' },
         now: Date.now(),
         period: 'all',
+        view: 'providers',
         onPeriod: () => {},
+        onView: () => {},
         onPatch: patch,
         ...handlers(),
       },
@@ -713,7 +959,7 @@ it('falls back to automatic tray selection when its provider is disabled and han
   expect(target.querySelector<HTMLSelectElement>('#set-tray-provider')?.value).toBe('auto');
   expect(target.querySelector('#set-tray-window')).toBeNull();
   expect(target.textContent).toContain('All providers');
-  const toggle = target.querySelector<HTMLInputElement>('[aria-label="Show Cursor"]');
+  const toggle = target.querySelector<HTMLInputElement>('[aria-label="Track Cursor"]');
   if (!toggle) throw new Error('missing provider control');
   toggle.checked = true;
   toggle.dispatchEvent(new Event('change', { bubbles: true }));
@@ -753,7 +999,7 @@ it('updates quota meters and settings controls when the sidecar pushes new value
   await settle();
   const meter = target.querySelector('[role="meter"]');
   expect(meter?.getAttribute('aria-valuenow')).toBe('60');
-  expect(meter?.getAttribute('aria-valuetext')).toBe('60% left');
+  expect(meter?.getAttribute('aria-valuetext')).toBe('60% left, on pace');
   onState({
     ...state,
     providers: [
@@ -875,7 +1121,25 @@ it('retries failed operations separately from command delivery', async () => {
   click('[role="alert"] button');
   await settle();
   expect(mocks.api.sync).toHaveBeenCalledTimes(2);
+  // A sign-in problem: the text says what to do, and the website cannot fix it.
+  expect(target.textContent).toContain('signed out');
+  expect(target.querySelector('.state button')?.textContent).toBe('Retry');
+  expect(target.textContent).not.toContain('Open dashboard');
+  listener('onState')({
+    ...state,
+    providers: [
+      {
+        key: 'cursor',
+        label: 'Cursor',
+        refreshing: false,
+        retryAt: Date.now() + 3_600_000,
+        quotaError: { kind: 'rateLimited', message: 'HTTP 429' },
+      },
+    ],
+  });
+  await settle();
   mocks.api.openDashboard.mockRejectedValueOnce(new Error('opener denied'));
+  expect(target.querySelector('.state button')?.textContent).toBe('Open dashboard');
   click('.state button');
   await settle();
   expect(mocks.api.openDashboard).toHaveBeenCalledWith('cursor');
@@ -899,6 +1163,9 @@ it('offers a found update and retries a failed install', async () => {
   await settle();
   expect(target.textContent).toContain('Installing opentrack 3.1.0');
   expect(mocks.api.installUpdate).toHaveBeenCalledTimes(2);
+  onUpdate(null);
+  await settle();
+  expect(target.textContent).not.toContain('3.1.0');
 });
 
 it('fits the window to the unrounded height of the content and footer', async () => {
@@ -938,4 +1205,224 @@ it('shows the version and checks for and installs updates from settings', async 
   await settle();
   expect(mocks.api.installUpdate).toHaveBeenCalledTimes(1);
   expect(target.textContent).toContain('Installing 3.2.0');
+});
+
+it('does not state $0.00 as fact before usage is known, and guides an empty first run', async () => {
+  const provider = { key: 'codex' as const, label: 'Codex', refreshing: false };
+  const props = {
+    settings: DEFAULT_SETTINGS,
+    now: Date.now(),
+    period: 'today' as const,
+    view: 'providers' as const,
+    onPeriod: vi.fn(),
+    onView: vi.fn(),
+    onPatch: vi.fn(),
+    ...handlers(),
+  };
+  const show = async (
+    appState: AppState,
+    view: 'providers' | 'history' | 'projects' = 'providers',
+  ) => {
+    const dashboard = mount(Dashboard, { target, props: { ...props, view, appState } });
+    await settle();
+    const text = target.textContent;
+    const amount = target.querySelector('.amount')?.textContent.trim();
+    await unmount(dashboard);
+    return { text, amount };
+  };
+  const base = { ...state, providers: [provider] };
+  for (const appState of [base, { ...base, refreshing: true }]) {
+    const { text, amount } = await show(appState);
+    expect(amount).toBe('—');
+    expect(text).toContain('Reading usage…');
+    expect(text).not.toContain('$0.00');
+  }
+  const failed = await show({ ...base, usageError: 'disk gone' });
+  expect(failed.amount).toBe('—');
+  expect(failed.text).toContain('Usage could not be read');
+  expect(failed.text).toContain('disk gone');
+  const empty = await show({
+    ...base,
+    usageEmpty: true,
+    usageUpdatedAt: new Date().toISOString(),
+  });
+  expect(empty.amount).toBe('—');
+  expect(empty.text).toContain('No usage found yet');
+  expect(empty.text).toContain('Use Codex, then refresh');
+  expect(empty.text).toContain('npx aitrack init');
+  for (const view of ['history', 'projects'] as const) {
+    const tab = await show({ ...base, refreshing: true }, view);
+    expect(tab.text).toContain('Reading usage…');
+    expect(tab.text).not.toContain('No priced usage');
+    expect(tab.text).not.toContain('No project usage');
+  }
+  const zero = await show({
+    ...base,
+    providers: [{ ...provider, usage: usage(EMPTY_PERIOD, []) }],
+  });
+  expect(zero.amount).toBe('$0.00');
+});
+
+it('mutes a limit whose reset has passed and stops projecting from cached numbers', async () => {
+  const now = Date.now();
+  const window = {
+    id: 'session',
+    label: 'Session',
+    usedPercent: 92,
+    periodSeconds: 18_000,
+    format: 'percent' as const,
+  };
+  const props = {
+    settings: DEFAULT_SETTINGS,
+    now,
+    onToggleUsage: () => {},
+    onToggleReset: () => {},
+  };
+  const past = mount(LimitMeter, {
+    target,
+    props: {
+      ...props,
+      window: { ...window, resetsAt: new Date(now - 9 * 3600_000).toISOString() },
+    },
+  });
+  await settle();
+  expect(target.textContent).toContain('Reset passed, waiting for new data');
+  expect(target.textContent).not.toContain('Resets soon');
+  expect(target.querySelector('.limit')?.className).toContain('past');
+  expect(target.querySelector('.limit')?.className).toContain('tone-calm');
+  expect(target.querySelector('[role="meter"]')?.getAttribute('aria-valuetext')).toBe(
+    '92%, reset passed',
+  );
+  await unmount(past);
+  const ahead = { ...window, usedPercent: 50, resetsAt: new Date(now + 3600_000).toISOString() };
+  const live = mount(LimitMeter, { target, props: { ...props, window: ahead } });
+  await settle();
+  expect(target.querySelector('.tick')).not.toBeNull();
+  expect(target.querySelector('.l-pace')?.textContent).toBe('On pace');
+  await unmount(live);
+  const cached = mount(LimitMeter, { target, props: { ...props, window: ahead, stale: true } });
+  await settle();
+  expect(target.querySelector('.tick')).toBeNull();
+  expect(target.querySelector('.l-pace')).toBeNull();
+  await unmount(cached);
+});
+
+it('marks days and machines that are not fully priced, with names readable in full', async () => {
+  const now = Date.parse('2026-06-01T12:00:00Z');
+  const daily = [
+    { date: '2026-05-30', costUSD: 10 },
+    { date: '2026-05-31', costUSD: 2 },
+    { date: '2026-06-01', costUSD: 0, hasUnpricedTokens: true },
+  ];
+  const appState: AppState = {
+    ...state,
+    providers: [
+      {
+        key: 'claude_code',
+        label: 'Claude Code',
+        refreshing: false,
+        usage: usage(spent(9, 0, 'long-model'), daily),
+      },
+    ],
+    machines: [
+      {
+        name: 'a-long-machine-name',
+        timezone: 'UTC',
+        lastUpdated: '',
+        current: true,
+        providers: { claude_code: usage(spent(9, 1, 'long-model'), daily) },
+      },
+    ],
+  };
+  const props = {
+    appState,
+    settings: DEFAULT_SETTINGS,
+    now,
+    period: 'today' as const,
+    onPeriod: vi.fn(),
+    onView: vi.fn(),
+    onPatch: vi.fn(),
+    ...handlers(),
+  };
+  const machines = mount(Dashboard, { target, props: { ...props, view: 'machines' } });
+  await settle();
+  const cells = [...target.querySelectorAll<HTMLElement>('.m-cell')];
+  // The library's thresholds: 20% of the peak is level 2.
+  expect(cells.map((cell) => cell.dataset.level)).toEqual(['4', '2', '1']);
+  expect(cells[2]?.title).toBe('Jun 1 · Not priced');
+  expect(target.querySelector('.m-strip')?.getAttribute('aria-label')).toContain(
+    'peak $10.00 on May 30',
+  );
+  expect(target.querySelector('.m-name-text')?.getAttribute('title')).toBe('a-long-machine-name');
+  click('.m-head');
+  await settle();
+  expect(target.querySelector('.d-model span')?.getAttribute('title')).toBe('long-model');
+  await unmount(machines);
+  const history = mount(Dashboard, { target, props: { ...props, view: 'history' } });
+  await settle();
+  expect(target.querySelector('.h-stats')?.textContent).toContain('Total (partial)$12.00');
+  expect(target.querySelector('.history .summary-provider-value')?.textContent).toContain(
+    '(partial)',
+  );
+  await unmount(history);
+  // Only unpriced days for one provider: it stays listed, with no price and no fake zero.
+  const tokensOnly = mount(Dashboard, {
+    target,
+    props: {
+      ...props,
+      view: 'history',
+      appState: {
+        ...appState,
+        providers: [
+          ...appState.providers,
+          {
+            key: 'cursor',
+            label: 'Cursor',
+            refreshing: false,
+            usage: usage(spent(9, 0, 'auto'), [
+              { date: '2026-06-01', costUSD: 0, hasUnpricedTokens: true },
+            ]),
+          },
+        ],
+      },
+    },
+  });
+  await settle();
+  const chips = [...target.querySelectorAll('.history .summary-provider-value')];
+  expect(chips.map((chip) => chip.textContent)).toEqual(['$12.00 (partial)', '— (partial)']);
+  [...target.querySelectorAll<HTMLButtonElement>('[aria-label="Group by"] button')].at(1)?.click();
+  await settle();
+  expect(target.querySelector('.h-stats')?.textContent).toContain('Busiest week');
+  expect(target.querySelector('.h-chart title')?.textContent).toContain('Week of');
+  await unmount(tokensOnly);
+});
+
+it('keeps the history range and grouping across a visit to Settings', async () => {
+  const daily = Array.from({ length: 40 }, (_, index) => ({
+    date: new Date(Date.UTC(2026, 4, 1 + index)).toISOString().slice(0, 10),
+    costUSD: 1,
+  }));
+  mocks.api.getState.mockResolvedValue({
+    ...state,
+    providers: [
+      { key: 'codex', label: 'Codex', refreshing: false, usage: usage(spent(9, 1, 'x'), daily) },
+    ],
+  });
+  mounted.push(mount(App, { target }));
+  await settle();
+  click('#tab-history');
+  await settle();
+  const pressed = () =>
+    target.querySelector('[aria-label="Range"] [aria-pressed="true"]')?.textContent;
+  target.querySelectorAll<HTMLButtonElement>('[aria-label="Range"] button')[1]?.click();
+  await settle();
+  expect(pressed()).toBe('90 days');
+  click('[aria-label="Settings"]');
+  await settle();
+  click('[aria-label="Back"]');
+  await settle();
+  expect(pressed()).toBe('90 days');
+  expect(target.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(
+    'tab-history',
+  );
 });

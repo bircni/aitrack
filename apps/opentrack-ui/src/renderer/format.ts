@@ -1,10 +1,12 @@
 import { mondayOfWeek } from 'aitrack-lib/data/calendar';
+import { INIT_HINT } from 'aitrack-lib/data/messages';
 import { isStaleSync } from 'aitrack-lib/data/staleSync';
 import { fmt } from 'aitrack-lib/display/format';
 import { clampPercent, type PaceProjection } from 'aitrack-lib/quota/pacing';
 
 import { formatWhen } from '../shared/pace.js';
 import type {
+  AppState,
   DailyUsage,
   MachineUsage,
   PeriodUsage,
@@ -20,8 +22,6 @@ import type {
 } from '../shared/types.js';
 import { EMPTY_PERIOD } from '../shared/types.js';
 
-export { fmt as formatTokens };
-
 const locale = (): string => navigator.language;
 
 export function formatCost(value: number): string {
@@ -32,6 +32,26 @@ export function formatCost(value: number): string {
 /** Zero under `prefers-reduced-motion`, so expanding a section just appears. */
 export function slideDuration(): number {
   return matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160;
+}
+
+/** The CLI's K/M/B shape, with the decimal separator of the system language. */
+export function formatTokens(value: number): string {
+  const text = fmt(value);
+  const number = /^[\d.]+/u.exec(text)?.[0] ?? text;
+  const digits = number.split('.')[1]?.length ?? 0;
+  const mantissa = new Intl.NumberFormat(locale(), {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Number(number));
+  return `${mantissa}${text.slice(number.length)}`;
+}
+
+/** "May 11" for a `YYYY-MM-DD` calendar day; noon, so no zone or DST change can move the day. */
+export function formatDay(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(locale(), {
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 export function formatNumber(value: number): string {
@@ -54,23 +74,50 @@ export const PERIOD_LABELS: Record<Period, string> = {
   all: 'All time',
 };
 
+const PERIOD_FIELD = {
+  today: 'today',
+  week: 'last7Days',
+  month: 'last30Days',
+  all: 'allTime',
+} as const satisfies Record<Period, keyof ProjectUsages>;
+
 export function periodSpend(usage: ProviderUsage | undefined, period: Period): PeriodUsage {
-  if (!usage) return EMPTY_PERIOD;
-  if (period === 'today') return usage.today;
-  if (period === 'month') return usage.last30Days;
-  if (period === 'all') return usage.allTime;
-  return usage.last7Days;
+  return usage ? usage[PERIOD_FIELD[period]] : EMPTY_PERIOD;
 }
 
 export function periodProjects(
   projects: ProjectUsages | undefined,
   period: Period,
 ): ProjectUsageEntry[] {
-  if (!projects) return [];
-  if (period === 'today') return projects.today;
-  if (period === 'month') return projects.last30Days;
-  if (period === 'all') return projects.allTime;
-  return projects.last7Days;
+  return projects ? projects[PERIOD_FIELD[period]] : [];
+}
+
+/** Whether there are usage numbers to show at all; zero is only a fact once they exist. */
+export type UsageAvailability = 'ready' | 'loading' | 'failed' | 'empty' | 'off';
+
+export function usageAvailability(
+  state: Pick<AppState, 'providers' | 'refreshing' | 'usageError' | 'usageEmpty'>,
+): UsageAvailability {
+  if (state.providers.length === 0) return 'off';
+  if (state.usageEmpty && !state.usageError) return 'empty';
+  if (state.providers.some((provider) => provider.usage)) return 'ready';
+  if (state.refreshing) return 'loading';
+  return state.usageError ? 'failed' : 'loading';
+}
+
+export const USAGE_NOTES: Record<Exclude<UsageAvailability, 'ready'>, string> = {
+  loading: 'Reading usage…',
+  failed: 'Usage could not be read',
+  empty: 'No usage found yet',
+  off: 'No providers are turned on',
+};
+
+/** The next step when a load found nothing to read. */
+export function emptyUsageGuidance(providers: Array<Pick<ProviderState, 'label'>>): string {
+  const tools = new Intl.ListFormat('en', { type: 'disjunction' }).format(
+    providers.map((provider) => provider.label),
+  );
+  return `Use ${tools}, then refresh. To add your other machines, run \`${INIT_HINT}\`.`;
 }
 
 /** Unpriced tokens are not free, so their cost is a dash rather than $0.00. */
@@ -85,7 +132,7 @@ export function spendLabel(spend: Spend): string {
 }
 
 export function spendReading(spend: Spend): string {
-  const tokens = `${fmt(spend.tokens)} tokens`;
+  const tokens = `${formatTokens(spend.tokens)} tokens`;
   return spend.hasCost ? `${spendLabel(spend)} · ${tokens}` : tokens;
 }
 
@@ -96,25 +143,42 @@ export function totalSpend(usages: Array<ProviderUsage | undefined>, period: Per
       costUSD: total.costUSD + spend.costUSD,
       tokens: total.tokens + spend.tokens,
       hasCost: total.hasCost || spend.hasCost,
-      ...(total.hasUnpricedTokens || spend.hasUnpricedTokens || (spend.tokens > 0 && !spend.hasCost)
-        ? { hasUnpricedTokens: true }
-        : {}),
+      ...(total.hasUnpricedTokens || spend.hasUnpricedTokens ? { hasUnpricedTokens: true } : {}),
     };
   }, EMPTY_PERIOD);
 }
 
+/** Shares follow cost while anything is priced, so an unpriced row does not look free. */
+export function shareBasis(spends: Spend[]): {
+  byCost: boolean;
+  measure: (spend: Spend) => number;
+  total: number;
+} {
+  const byCost = spends.some((spend) => spend.costUSD > 0);
+  const measure = (spend: Spend): number => (byCost ? spend.costUSD : spend.tokens);
+  return { byCost, measure, total: spends.reduce((sum, spend) => sum + measure(spend), 0) };
+}
+
 /** The sidecar keeps 90 days; the sparkline and machine strips show the latest `days`. */
 export function combinedDaily(usages: Array<ProviderUsage | undefined>, days = 30): DailyUsage[] {
-  const byDate = new Map<string, number>();
+  const byDate = new Map<string, DailyUsage>();
   for (const usage of usages) {
     for (const day of usage?.daily ?? []) {
-      byDate.set(day.date, (byDate.get(day.date) ?? 0) + day.costUSD);
+      const total = byDate.get(day.date);
+      byDate.set(day.date, {
+        date: day.date,
+        costUSD: (total?.costUSD ?? 0) + day.costUSD,
+        ...([total, day].some((entry) => entry?.hasUnpricedTokens) && { hasUnpricedTokens: true }),
+      });
     }
   }
-  return [...byDate]
-    .map(([date, costUSD]) => ({ date, costUSD }))
-    .toSorted((a, b) => a.date.localeCompare(b.date))
-    .slice(-days);
+  return [...byDate.values()].toSorted((a, b) => a.date.localeCompare(b.date)).slice(-days);
+}
+
+/** A day's cost, marked when part or all of its tokens have no price. */
+export function dayCostLabel(day: DailyUsage): string {
+  if (!day.hasUnpricedTokens) return formatCost(day.costUSD);
+  return day.costUSD > 0 ? `${formatCost(day.costUSD)} (partial)` : 'Not priced';
 }
 
 export type HistoryRange = 30 | 90;
@@ -124,7 +188,14 @@ interface HistoryBar {
   /** First day the bar covers; weeks start on Monday. */
   start: string;
   totalUSD: number;
-  parts: Array<{ key: QuotaProviderKey; costUSD: number }>;
+  parts: Array<{ key: QuotaProviderKey; label: string; costUSD: number }>;
+}
+
+interface HistoryProvider {
+  key: QuotaProviderKey;
+  label: string;
+  costUSD: number;
+  hasUnpricedTokens: boolean;
 }
 
 export interface History {
@@ -138,7 +209,9 @@ export interface History {
   peakUSD: number;
   /** Start of the busiest bar; empty without data. */
   busiest: string;
-  byProvider: Array<{ key: QuotaProviderKey; label: string; costUSD: number }>;
+  byProvider: HistoryProvider[];
+  /** Some day in range has tokens without a price, so the totals are partial. */
+  hasUnpricedTokens: boolean;
 }
 
 /** Stacked cost per day (or week) over the last `range` days, split by provider. */
@@ -161,7 +234,7 @@ export function buildHistory(
       bar.totalUSD += day.costUSD;
       const part = bar.parts.find((entry) => entry.key === provider.key);
       if (part) part.costUSD += day.costUSD;
-      else bar.parts.push({ key: provider.key, costUSD: day.costUSD });
+      else bar.parts.push({ key: provider.key, label: provider.label, costUSD: day.costUSD });
     }
   }
   const list = [...bars.values()].toSorted((a, b) => a.start.localeCompare(b.start));
@@ -170,6 +243,18 @@ export function buildHistory(
     (best, bar) => (bar.totalUSD > (best?.totalUSD ?? 0) ? bar : best),
     undefined,
   );
+  const byProvider = providers
+    .map(({ key, label, usage }) => {
+      const days = (usage?.daily ?? []).filter((day) => inRange.has(day.date));
+      return {
+        key,
+        label,
+        costUSD: days.reduce((sum, day) => sum + day.costUSD, 0),
+        hasUnpricedTokens: days.some((day) => day.hasUnpricedTokens),
+      };
+    })
+    .filter((part) => part.costUSD > 0 || part.hasUnpricedTokens)
+    .toSorted((a, b) => b.costUSD - a.costUSD);
   return {
     bars: list,
     totalUSD,
@@ -178,21 +263,14 @@ export function buildHistory(
     to: dates.at(-1) ?? '',
     peakUSD: peak?.totalUSD ?? 0,
     busiest: peak?.start ?? '',
-    byProvider: providers
-      .map(({ key, label, usage }) => ({
-        key,
-        label,
-        costUSD: (usage?.daily ?? [])
-          .filter((day) => inRange.has(day.date))
-          .reduce((sum, day) => sum + day.costUSD, 0),
-      }))
-      .filter((part) => part.costUSD > 0)
-      .toSorted((a, b) => b.costUSD - a.costUSD),
+    byProvider,
+    hasUnpricedTokens: byProvider.some((part) => part.hasUnpricedTokens),
   };
 }
 
 /** "$115", ".70" and "", so the cents can be set quieter; currencies written after the number fill `tail`. */
 export function splitAmount(value: number): { whole: string; cents: string; tail: string } {
+  if (value > 0 && value < 0.01) return { whole: formatCost(value), cents: '', tail: '' };
   const parts = new Intl.NumberFormat(locale(), {
     style: 'currency',
     currency: 'USD',
@@ -224,6 +302,7 @@ export function formatReset(
 ): string | undefined {
   const at = resetsAt === undefined ? Number.NaN : Date.parse(resetsAt);
   if (Number.isNaN(at)) return undefined;
+  if (at <= now) return 'Reset passed, waiting for new data';
   if (at - now <= 60_000) return 'Resets soon';
   return mode === 'relative'
     ? `Resets in ${formatDuration(at - now)}`
@@ -271,45 +350,71 @@ export function formatLimitValue(window: QuotaWindow, display: Settings['display
 
 export interface ProblemLine {
   text: string;
-  /** Offer a retry: the problem may clear on its own. */
-  retry: boolean;
+  /** `dashboard` while a retry could not help: the provider's site still shows the limits. */
+  action: 'retry' | 'dashboard';
 }
 
 export function problemLine(error: QuotaError, now: number, retryAt?: number): ProblemLine {
   switch (error.kind) {
-    case 'noCredentials': {
-      return { text: 'Not signed in on this PC', retry: false };
+    // The library's wording names the command or app that fixes it; opentrack only reads those logins.
+    case 'noCredentials':
+    case 'expired': {
+      return { text: error.message, action: 'retry' };
     }
-    case 'expired':
     case 'auth': {
-      return { text: 'Sign-in expired, open the app to renew it', retry: true };
+      return { text: `${error.message}. Sign in again with that tool.`, action: 'retry' };
     }
     case 'rateLimited': {
-      return {
-        text:
-          retryAt !== undefined && retryAt > now
-            ? `Limits paused, back in ${formatDuration(retryAt - now)}`
-            : 'Limits paused',
-        retry: true,
-      };
+      // The service skips a rate-limited provider until then, whatever a refresh asks.
+      return retryAt !== undefined && retryAt > now
+        ? {
+            text: `Rate limited by the provider, retrying in ${formatDuration(retryAt - now)}`,
+            action: 'dashboard',
+          }
+        : { text: 'Rate limited by the provider', action: 'retry' };
     }
     case 'network': {
-      return { text: 'Could not reach the service', retry: true };
+      return { text: 'Could not reach the service', action: 'retry' };
     }
     case 'invalidResponse': {
-      return { text: 'Limits unavailable right now', retry: true };
+      return { text: 'Limits unavailable right now', action: 'retry' };
     }
   }
 }
 
-/** "Updated just now" / "Updated 3m ago" for the footer. */
+/** Floored, unlike a countdown: 61 s ago is "1m ago", not "2m". */
+function formatAgo(age: number): string {
+  return age < 60_000 ? 'just now' : `${formatDuration(Math.floor(age / 60_000) * 60_000)} ago`;
+}
+
 export function formatUpdated(updatedAt: string | undefined, now: number): string {
   if (updatedAt === undefined) return 'Not updated yet';
-  const age = now - Date.parse(updatedAt);
-  // Floored, unlike a countdown: 61 s ago is "1m ago", not "2m".
-  return age < 60_000
-    ? 'Updated just now'
-    : `Updated ${formatDuration(Math.floor(age / 60_000) * 60_000)} ago`;
+  return `Updated ${formatAgo(now - Date.parse(updatedAt))}`;
+}
+
+/**
+ * The footer's freshness: how old the oldest limits are, because `updatedAt` also advances on local
+ * usage reads, which work offline. Signed-out providers hold no limits, so they cannot age this.
+ */
+export function freshnessLine(
+  state: Pick<AppState, 'providers' | 'quotaUpdatedAt' | 'updatedAt'>,
+  now: number,
+): string {
+  if (state.quotaUpdatedAt) return formatUpdated(state.quotaUpdatedAt, now);
+  const expected = state.providers.filter((p) => p.quotaError?.kind !== 'noCredentials');
+  return expected.length > 0 && expected.every((p) => p.quotaError)
+    ? 'Limits unavailable'
+    : formatUpdated(state.updatedAt, now);
+}
+
+/** What a finished refresh achieved, for the screen-reader status line. */
+export function refreshOutcome(state: Pick<AppState, 'providers' | 'usageError'>): string {
+  const failed = state.providers.filter((p) => p.quotaError).map((p) => p.label);
+  const problems = [
+    ...(state.usageError ? ['usage could not be read'] : []),
+    ...(failed.length > 0 ? [`${failed.join(', ')} limits unavailable`] : []),
+  ];
+  return problems.length > 0 ? `Refresh finished, ${problems.join(', ')}` : 'Usage updated';
 }
 
 export interface Sparkline {
@@ -355,10 +460,10 @@ export function syncStatus(
       : { text: 'Never synced', stale: true };
   }
   const age = Math.max(0, now - at);
-  const ago = age < 60_000 ? 'just now' : `${formatDuration(age)} ago`;
-  return machine.current
-    ? { text: `Live · synced ${ago}`, stale: false }
-    : { text: `Synced ${ago}`, stale: isStaleSync(machine.lastUpdated, now) };
+  const ago = formatAgo(age);
+  if (machine.current) return { text: `Live · synced ${ago}`, stale: false };
+  const stale = isStaleSync(machine.lastUpdated, now);
+  return { text: `Synced ${ago}${stale ? ' · stale' : ''}`, stale };
 }
 
 /** "07:42" on that machine's clock, or nothing when it shares this one's zone. */
@@ -374,10 +479,4 @@ export function zoneClock(timezone: string, now: number): string | undefined {
   } catch {
     return undefined; // Not an IANA zone, e.g. a file from a machine that recorded none.
   }
-}
-
-/** 0 for an idle day, then 1–4 by quartile of `max`, like the aitrack heatmap. */
-export function heatLevel(value: number, max: number): number {
-  if (value <= 0 || max <= 0) return 0;
-  return Math.min(4, Math.ceil((value / max) * 4));
 }

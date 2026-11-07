@@ -31,12 +31,17 @@ it('delivers every shell command and preserves operation arguments and delivery 
   expect(mocks.invoke).toHaveBeenCalledWith('install_update');
   expect(mocks.invoke).toHaveBeenCalledWith('save_settings', { settings: DEFAULT_SETTINGS });
   expect(mocks.invoke).toHaveBeenCalledWith('open_dashboard', { provider: 'cursor' });
+  await api.serviceStatus();
+  expect(mocks.invoke).toHaveBeenCalledWith('service_status');
   mocks.invoke.mockRejectedValue(new Error('disconnected'));
   await expect(api.refresh()).rejects.toThrow('disconnected');
   await expect(api.sync()).rejects.toThrow('disconnected');
   api.fitHeight(100);
   await Promise.resolve();
   expect(mocks.invoke).toHaveBeenCalledWith('fit_height', { height: 100 });
+  api.hideWindow();
+  await Promise.resolve();
+  expect(mocks.invoke).toHaveBeenCalledWith('hide_window');
 });
 
 it('delivers event payloads and releases asynchronous subscriptions safely', async () => {
@@ -49,16 +54,18 @@ it('delivers event payloads and releases asynchronous subscriptions safely', asy
     api.onScreen(callback),
     api.onSettingErrors(callback),
     api.onUpdate(callback),
+    api.onServiceStatus(callback),
   ];
   for (const call of mocks.listen.mock.calls) {
     const handler = call[1] as (event: { payload: unknown }) => void;
     handler({ payload: 'payload' });
   }
-  expect(callback).toHaveBeenCalledTimes(5);
+  expect(callback).toHaveBeenCalledTimes(6);
   expect(mocks.listen).toHaveBeenCalledWith('setting-errors', expect.any(Function));
+  expect(mocks.listen).toHaveBeenCalledWith('service-status', expect.any(Function));
   for (const release of releases) release();
   await flush();
-  expect(stop).toHaveBeenCalledTimes(5);
+  expect(stop).toHaveBeenCalledTimes(6);
   mocks.listen.mockRejectedValue(new Error('closed'));
   const release = api.onScreen(callback);
   await flush(); // Lets an unhandled rejection surface.

@@ -1,17 +1,18 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
+import { writeFileAtomic } from 'aitrack-lib/atomicWrite';
 import { isRecord } from 'aitrack-lib/data/guards';
+import { isProviderKey, type ProviderKey, providerKeys } from 'aitrack-lib/providers/descriptors';
 import { providerLabel } from 'aitrack-lib/providers/registry';
 import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 
-import type { QuotaProviderKey, Settings } from '../shared/types.js';
+import type { Settings } from '../shared/types.js';
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   display: 'used',
   resetDisplay: 'absolute',
-  providers: QUOTA_PROVIDERS.map((key) => ({ key, label: providerLabel(key), enabled: true })),
+  providers: providerKeys().map((key) => ({ key, label: providerLabel(key), enabled: true })),
   launchAtLogin: false,
   globalShortcut: '',
   notifications: true,
@@ -37,18 +38,16 @@ function bool(value: unknown, fallback: boolean): boolean {
  */
 export function normalizeSettings(input: unknown): Settings {
   const raw = isRecord(input) ? input : {};
-  const seen = new Set<QuotaProviderKey>();
+  const seen = new Set<ProviderKey>();
   const providers: Settings['providers'] = [];
   for (const entry of Array.isArray(raw.providers) ? raw.providers : []) {
     if (!isRecord(entry)) continue;
     const { key, enabled } = entry;
-    if (!QUOTA_PROVIDERS.includes(key as QuotaProviderKey)) continue;
-    const provider = key as QuotaProviderKey;
-    if (seen.has(provider)) continue;
-    seen.add(provider);
-    providers.push({ key: provider, label: providerLabel(provider), enabled: bool(enabled, true) });
+    if (!isProviderKey(key) || seen.has(key)) continue;
+    seen.add(key);
+    providers.push({ key, label: providerLabel(key), enabled: bool(enabled, true) });
   }
-  for (const key of QUOTA_PROVIDERS) {
+  for (const key of providerKeys()) {
     if (!seen.has(key)) providers.push({ key, label: providerLabel(key), enabled: true });
   }
   const d = DEFAULT_SETTINGS;
@@ -77,23 +76,8 @@ export async function readJsonFile(path: string): Promise<unknown> {
   }
 }
 
-const pendingWrites = new Map<string, Promise<void>>();
-
-/**
- * Write-then-rename so a crash mid-write never leaves a truncated file, queued
- * per path so overlapping writes share the temp file safely and the last call wins.
- */
-export function writeJsonFile(path: string, value: unknown): Promise<void> {
-  const contents = `${JSON.stringify(value, null, 2)}\n`; // Now, before the caller mutates it.
-  const write = async () => {
-    await mkdir(dirname(path), { recursive: true });
-    const temporary = `${path}.${String(process.pid)}.tmp`;
-    await writeFile(temporary, contents);
-    await rename(temporary, path);
-  };
-  const next = (pendingWrites.get(path) ?? Promise.resolve()).then(write, write);
-  pendingWrites.set(path, next);
-  return next;
+export function writeJsonFile(path: string, value: unknown): void {
+  writeFileAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 export async function loadSettings(path: string): Promise<Settings> {

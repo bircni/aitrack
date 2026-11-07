@@ -13,8 +13,8 @@
   flex: 1;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 4px 8px;
+  gap: 4px;
+  padding: 4px 5px;
   border: 0;
   border-radius: 7px;
   color: var(--ink-2);
@@ -33,23 +33,19 @@
 
 .tab-count {
   min-width: 16px;
-  padding: 0 5px;
+  padding: 0 4px;
   border-radius: 8px;
   background: var(--track);
-  color: var(--ink-2);
+  color: var(--ink);
   font-size: 10.5px;
   line-height: 16px;
 }
 
+/* minmax(0, ...): an auto column would grow with a long unwrapped name, past the card. */
 .machine {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
-  margin: 0 12px 10px;
-  padding: 14px;
-  border: 1px solid var(--edge);
-  border-radius: 14px;
-  background: var(--card);
-  box-shadow: var(--card-shadow);
 }
 
 .m-head {
@@ -87,6 +83,7 @@
 .m-identity {
   display: grid;
   min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
 }
 
@@ -94,38 +91,41 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  overflow: hidden;
   font-weight: 650;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* In its own box: a flex container's text cannot ellipsize, and the badge must stay in view. */
+.m-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .m-badge {
+  flex: 0 0 auto;
   padding: 0 5px;
   border-radius: 5px;
   background: color-mix(in srgb, var(--focus) 12%, var(--card));
-  color: var(--focus);
+  color: color-mix(in srgb, var(--focus) 80%, var(--ink));
   font-size: 10px;
   font-weight: 600;
   line-height: 15px;
 }
 
 .m-meta {
-  display: flex;
-  align-items: center;
-  overflow: hidden;
   color: var(--ink-2);
   font-size: 11px;
-  white-space: nowrap;
 }
 
 .m-dot {
+  display: inline-block;
   width: 6px;
   height: 6px;
-  flex: 0 0 auto;
   margin-right: 5px;
+  vertical-align: 1px;
   border-radius: 50%;
-  background: var(--provider-codex);
+  background: var(--ok);
 }
 
 .m-dot.stale {
@@ -133,7 +133,9 @@
 }
 
 .m-cost {
+  flex: 0 0 auto;
   margin-left: auto;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
 }

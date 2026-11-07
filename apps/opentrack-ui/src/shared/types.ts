@@ -1,3 +1,5 @@
+import type { ProjectUsage } from 'aitrack-lib/data/types';
+import type { ProviderKey } from 'aitrack-lib/providers/descriptors';
 import type { QuotaError, QuotaProviderKey, QuotaSnapshot } from 'aitrack-lib/quota/types';
 
 export type {
@@ -25,12 +27,8 @@ export interface PeriodUsage extends Spend {
 
 export const EMPTY_PERIOD: PeriodUsage = { tokens: 0, costUSD: 0, hasCost: false, models: [] };
 
-export interface ProjectUsageEntry extends Spend {
-  /** `owner/repo`, `(no remote)`, or `(unattributed)` for what no project explains. */
-  project: string;
-  unattributed?: boolean;
-  providers: Array<Spend & { key: string; label: string }>;
-}
+/** `project` is `owner/repo`, `(no remote)`, or `(unattributed)` for what no project explains. */
+export type ProjectUsageEntry = ProjectUsage;
 
 /** Projects per period, by cost; the unattributed remainder comes last. */
 export interface ProjectUsages {
@@ -43,6 +41,8 @@ export interface ProjectUsages {
 export interface DailyUsage {
   date: string;
   costUSD: number;
+  /** Part of the day has no price, so `costUSD` is only what could be priced. */
+  hasUnpricedTokens?: boolean;
 }
 
 export interface ProviderUsage {
@@ -54,7 +54,7 @@ export interface ProviderUsage {
   daily: DailyUsage[];
 }
 
-export type ProviderUsages = Partial<Record<QuotaProviderKey, ProviderUsage>>;
+export type ProviderUsages = Partial<Record<ProviderKey, ProviderUsage>>;
 
 export interface MachineUsage {
   name: string;
@@ -67,11 +67,11 @@ export interface MachineUsage {
 }
 
 export interface ProviderState {
-  key: QuotaProviderKey;
+  key: ProviderKey;
   label: string;
   quota?: QuotaSnapshot;
   quotaError?: QuotaError;
-  /** Epoch ms when a rate-limited provider is tried again. */
+  /** Epoch ms a provider-declared retry-after ends; a refresh cannot retry its limits before then. */
   retryAt?: number;
   usage?: ProviderUsage;
   refreshing: boolean;
@@ -80,8 +80,6 @@ export interface ProviderState {
 export interface AppState {
   providers: ProviderState[];
   refreshing: boolean;
-  /** Machines contributing to the usage totals, this one included. */
-  machineCount: number;
   machines?: MachineUsage[];
   /** Usage read from a provider account (Cursor) rather than from any machine. */
   accountUsage?: ProviderUsages;
@@ -91,6 +89,10 @@ export interface AppState {
   pullError?: string;
   usageUpdatedAt?: string;
   updatedAt?: string;
+  /** Oldest `quota.fetchedAt` of the enabled providers; `updatedAt` also moves on local usage reads. */
+  quotaUpdatedAt?: string;
+  /** A usage load finished and found no tokens at all, rather than not having run or having failed. */
+  usageEmpty?: boolean;
   syncing: boolean;
   /** The last sync's outcome, success or failure. */
   syncResult?: { ok: boolean; message: string };
@@ -106,7 +108,7 @@ export interface Settings {
   display: 'used' | 'left';
   resetDisplay: 'relative' | 'absolute';
   /** `label` is filled in by the sidecar from the provider registry; what is saved is ignored. */
-  providers: Array<{ key: QuotaProviderKey; label: string; enabled: boolean }>;
+  providers: Array<{ key: ProviderKey; label: string; enabled: boolean }>;
   launchAtLogin: boolean;
   /** Tauri global-shortcut accelerator (e.g. CommandOrControl+Shift+O), empty for none. */
   globalShortcut: string;

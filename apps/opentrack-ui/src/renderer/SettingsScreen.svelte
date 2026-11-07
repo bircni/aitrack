@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { INIT_HINT } from 'aitrack-lib/data/messages';
   import { errorMessage } from 'aitrack-lib/errors';
   import { onMount } from 'svelte';
 
@@ -21,6 +22,9 @@
     onPatch: (patch: Partial<Settings>) => void;
     onBack: () => void;
   }
+
+  type SelectKey = 'theme' | 'display' | 'resetDisplay' | 'trayWindow' | 'trayStyle';
+  type SwitchKey = 'trayColored' | 'notifications' | 'pullSyncedData';
 
   let { settings, update, installing, updateError, onInstallUpdate, onPatch, onBack }: Props =
     $props();
@@ -84,17 +88,48 @@
   }
 </script>
 
-{#snippet rowLabel(label: string, key: keyof SettingErrors)}
+{#snippet rowLabel(label: string, key: keyof SettingErrors, hint?: string)}
   <span class="row-text"
-    >{label}{#if errors[key]}<small id="{key}-error" class="row-error">{errors[key]}</small>{/if}</span
+    >{label}{#if hint}<small>{hint}</small>{/if}{#if errors[key]}<small id="{key}-error" class="row-error"
+        >{errors[key]}</small
+      >{/if}</span
   >
+{/snippet}
+
+{#snippet selectRow(key: SelectKey, id: string, label: string, options: Array<[string, string]>)}
+  <label class="row" for={id}>
+    <span>{label}</span>
+    <select
+      {id}
+      value={settings[key]}
+      onchange={(event) => onPatch({ [key]: event.currentTarget.value } as Partial<Settings>)}
+    >
+      {#each options as [value, text] (value)}
+        <option {value}>{text}</option>
+      {/each}
+    </select>
+  </label>
+{/snippet}
+
+{#snippet switchRow(key: SwitchKey, id: string, label: string, hint?: string)}
+  <label class="row" for={id}>
+    <span class="row-text">{label}{#if hint}<small>{hint}</small>{/if}</span>
+    <input
+      {id}
+      class="switch"
+      type="checkbox"
+      role="switch"
+      checked={settings[key]}
+      onchange={(event) => onPatch({ [key]: event.currentTarget.checked })}
+    />
+  </label>
 {/snippet}
 
 <header class="s-head">
   <button class="icon" type="button" aria-label="Back" onclick={onBack}
     ><Icon name="back" size={16} /></button
   >
-  <h1>Settings</h1>
+  <h1 tabindex="-1">Settings</h1>
 </header>
 
 <section class="group" aria-labelledby="g-providers">
@@ -123,52 +158,31 @@
           class="switch"
           type="checkbox"
           role="switch"
-          aria-label="Show {provider.label}"
+          aria-label="Track {provider.label}"
           checked={provider.enabled}
           onchange={(event) => toggleProvider(provider.key, event.currentTarget.checked)}
         />
       </span>
     </div>
   {/each}
+  <p class="row row-note">A provider turned off is not read or contacted.</p>
 </section>
 
 <section class="group" aria-labelledby="g-display">
   <h2 id="g-display">Display</h2>
-  <label class="row" for="set-theme">
-    <span>Theme</span>
-    <select
-      id="set-theme"
-      value={settings.theme}
-      onchange={(event) => onPatch({ theme: event.currentTarget.value as Settings['theme'] })}
-    >
-      <option value="system">System</option>
-      <option value="light">Light</option>
-      <option value="dark">Dark</option>
-    </select>
-  </label>
-  <label class="row" for="set-display">
-    <span>Limits show</span>
-    <select
-      id="set-display"
-      value={settings.display}
-      onchange={(event) => onPatch({ display: event.currentTarget.value as Settings['display'] })}
-    >
-      <option value="used">Used</option>
-      <option value="left">Left</option>
-    </select>
-  </label>
-  <label class="row" for="set-reset">
-    <span>Reset times</span>
-    <select
-      id="set-reset"
-      value={settings.resetDisplay}
-      onchange={(event) =>
-        onPatch({ resetDisplay: event.currentTarget.value as Settings['resetDisplay'] })}
-    >
-      <option value="absolute">Clock time</option>
-      <option value="relative">Countdown</option>
-    </select>
-  </label>
+  {@render selectRow('theme', 'set-theme', 'Theme', [
+    ['system', 'System'],
+    ['light', 'Light'],
+    ['dark', 'Dark'],
+  ])}
+  {@render selectRow('display', 'set-display', 'Limits show', [
+    ['used', 'Used'],
+    ['left', 'Left'],
+  ])}
+  {@render selectRow('resetDisplay', 'set-reset', 'Reset times', [
+    ['absolute', 'Clock time'],
+    ['relative', 'Countdown'],
+  ])}
   <label class="row" for="set-tray-provider">
     <span>Tray provider</span>
     <select
@@ -184,68 +198,33 @@
     </select>
   </label>
   {#if settings.trayStyle === 'icon'}
-    <label class="row" for="set-tray-window">
-      <span>Tray limit</span>
-      <select
-        id="set-tray-window"
-        value={settings.trayWindow}
-        onchange={(event) =>
-          onPatch({ trayWindow: event.currentTarget.value as Settings['trayWindow'] })}
-      >
-        <option value="highest">Most used</option>
-        <option value="session">Session</option>
-        <option value="weekly">Weekly</option>
-      </select>
-    </label>
+    {@render selectRow('trayWindow', 'set-tray-window', 'Tray limit', [
+      ['highest', 'Most used'],
+      ['session', 'Session'],
+      ['weekly', 'Weekly'],
+    ])}
   {/if}
-  <label class="row" for="set-tray-style">
-    <span>Tray style</span>
-    <select
-      id="set-tray-style"
-      value={settings.trayStyle}
-      onchange={(event) => onPatch({ trayStyle: event.currentTarget.value as Settings['trayStyle'] })}
-    >
-      <option value="icon">Icon</option>
-      <option value="bars">Bars</option>
-    </select>
-  </label>
-  <label class="row" for="set-tray-colored">
-    <span>Colored tray icon</span>
-    <input
-      id="set-tray-colored"
-      class="switch"
-      type="checkbox"
-      role="switch"
-      checked={settings.trayColored}
-      onchange={(event) => onPatch({ trayColored: event.currentTarget.checked })}
-    />
-  </label>
+  {@render selectRow('trayStyle', 'set-tray-style', 'Tray style', [
+    ['icon', 'Icon'],
+    ['bars', 'Bars'],
+  ])}
+  {@render switchRow('trayColored', 'set-tray-colored', 'Colored tray icon')}
 </section>
 
 <section class="group" aria-labelledby="g-general">
   <h2 id="g-general">General</h2>
-  <label class="row" for="set-alerts">
-    <span class="row-text">Alerts<small>When a limit is almost used up or will run out</small></span>
-    <input
-      id="set-alerts"
-      class="switch"
-      type="checkbox"
-      role="switch"
-      checked={settings.notifications}
-      onchange={(event) => onPatch({ notifications: event.currentTarget.checked })}
-    />
-  </label>
-  <label class="row" for="set-pull">
-    <span class="row-text">Include other machines<small>Pulls your aitrack data repo</small></span>
-    <input
-      id="set-pull"
-      class="switch"
-      type="checkbox"
-      role="switch"
-      checked={settings.pullSyncedData}
-      onchange={(event) => onPatch({ pullSyncedData: event.currentTarget.checked })}
-    />
-  </label>
+  {@render switchRow(
+    'notifications',
+    'set-alerts',
+    'Alerts',
+    'When a limit is almost used up or will run out',
+  )}
+  {@render switchRow(
+    'pullSyncedData',
+    'set-pull',
+    'Include other machines',
+    `Pulls your aitrack data repo. Set one up with ${INIT_HINT}`,
+  )}
   <label class="row" for="set-login">
     {@render rowLabel('Start at login', 'launchAtLogin')}
     <input
@@ -259,12 +238,16 @@
       onchange={(event) => onPatch({ launchAtLogin: event.currentTarget.checked })}
     />
   </label>
-  <label class="row" for="set-shortcut">
-    {@render rowLabel('Shortcut', 'globalShortcut')}
+  <label class="row row-stacked" for="set-shortcut">
+    {@render rowLabel(
+      'Open/close shortcut',
+      'globalShortcut',
+      'For example CommandOrControl+Shift+O',
+    )}
     <input
       id="set-shortcut"
       type="text"
-      placeholder="Ctrl+Shift+U"
+      placeholder="None"
       aria-invalid={errors.globalShortcut !== undefined}
       aria-describedby={describedBy('globalShortcut')}
       value={settings.globalShortcut}

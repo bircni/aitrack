@@ -1,6 +1,14 @@
 <script lang="ts">
   import type { AppState, DashboardView, QuotaProviderKey, Settings } from '../shared/types.js';
-  import { formatUpdated, type Period } from './format.js';
+  import {
+    emptyUsageGuidance,
+    formatUpdated,
+    type HistoryBucket,
+    type HistoryRange,
+    type Period,
+    USAGE_NOTES,
+    usageAvailability,
+  } from './format.js';
   import History from './History.svelte';
   import Machines from './Machines.svelte';
   import Projects from './Projects.svelte';
@@ -13,6 +21,9 @@
     now: number;
     period: Period;
     view: DashboardView;
+    historyRange?: HistoryRange;
+    historyBucket?: HistoryBucket;
+    serviceDown?: boolean;
     onPeriod: (period: Period) => void;
     onView: (view: DashboardView) => void;
     onPatch: (patch: Partial<Settings>) => void;
@@ -27,6 +38,9 @@
     now,
     period,
     view,
+    historyRange = $bindable(30),
+    historyBucket = $bindable('day'),
+    serviceDown = false,
     onPeriod,
     onView,
     onPatch,
@@ -36,11 +50,9 @@
   }: Props = $props();
 
   const machines = $derived(appState.machines ?? []);
-  const showMachines = $derived(view === 'machines' && machines.length > 0);
-  const showHistory = $derived(view === 'history');
-  const showProjects = $derived(view === 'projects');
+  const availability = $derived(usageAvailability(appState));
   const active = $derived<DashboardView>(
-    showHistory ? 'history' : showProjects ? 'projects' : showMachines ? 'machines' : 'providers',
+    view === 'machines' && machines.length === 0 ? 'providers' : view,
   );
   const tabs = $derived<Array<{ view: DashboardView; label: string; count?: number }>>([
     { view: 'providers', label: 'Providers' },
@@ -66,12 +78,16 @@
 
 <Summary
   providers={appState.providers}
-  machineCount={appState.machineCount}
+  machineCount={machines.length}
+  {availability}
   {period}
   {onPeriod}
   onMachines={machines.length > 1 ? () => onView('machines') : undefined}
 />
 
+{#if availability === 'empty'}
+  <p class="banner">{emptyUsageGuidance(appState.providers)}</p>
+{/if}
 {#if appState.pullError}
   <p class="banner" role="status">
     {appState.pullError}
@@ -94,13 +110,17 @@
   </p>
 {/if}
 
-{#if appState.providers.length > 0}
+{#if availability === 'off'}
+  <p class="empty">{USAGE_NOTES.off}. Choose some in Settings.</p>
+{:else}
   <div class="tabs" role="tablist" aria-label="Usage view" tabindex="-1" onkeydown={onTabKey}>
     {#each tabs as tab (tab.view)}
       <button
+        id="tab-{tab.view}"
         type="button"
         role="tab"
         aria-selected={active === tab.view}
+        aria-controls="usage-panel"
         tabindex={active === tab.view ? 0 : -1}
         onclick={() => onView(tab.view)}
         >{tab.label}{#if tab.count !== undefined}
@@ -108,24 +128,39 @@
       >
     {/each}
   </div>
-{/if}
 
-{#if showHistory}
-  <History providers={appState.providers} />
-{:else if showProjects}
-  <Projects projects={appState.projects} {period} />
-{:else if showMachines}
-  <Machines
-    {machines}
-    accountUsage={appState.accountUsage}
-    providers={appState.providers}
-    {period}
-    {now}
-  />
-{:else}
-  {#each appState.providers as provider (provider.key)}
-    <ProviderSection {provider} {settings} {now} {period} {onPatch} {onRefresh} {onOpenDashboard} />
-  {:else}
-    <p class="empty">No providers are turned on. Choose some in Settings.</p>
-  {/each}
+  <div id="usage-panel" role="tabpanel" aria-labelledby="tab-{active}">
+    {#if active === 'providers'}
+      {#each appState.providers as provider (provider.key)}
+        <ProviderSection
+          {provider}
+          {settings}
+          {now}
+          {period}
+          {serviceDown}
+          {onPatch}
+          {onRefresh}
+          {onOpenDashboard}
+        />
+      {/each}
+    {:else if active === 'machines'}
+      <Machines
+        {machines}
+        accountUsage={appState.accountUsage}
+        providers={appState.providers}
+        {period}
+        {now}
+      />
+    {:else if availability !== 'ready'}
+      <p class="empty">{USAGE_NOTES[availability]}.</p>
+    {:else if active === 'history'}
+      <History providers={appState.providers} bind:range={historyRange} bind:bucket={historyBucket} />
+    {:else}
+      <Projects
+        projects={appState.projects}
+        {period}
+        cursorEnabled={appState.providers.some((provider) => provider.key === 'cursor')}
+      />
+    {/if}
+  </div>
 {/if}
