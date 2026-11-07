@@ -12,7 +12,11 @@ it('distinguishes setup, missing usage and empty calendar windows', () => {
   mocks.isCloned.mockReturnValue(true);
   expect(isUsageNotConfigured()).toBe(false);
   expect(usageEmptyMessage(true)).toContain('init');
+  expect(usageEmptyMessage(true)).toContain('doctor');
   expect(usageEmptyMessage()).toContain('sync');
+  expect(usageEmptyMessage(false, ['cursor', 'codex'])).toBe(
+    'No usage found for Cursor, Codex. Run: npx aitrack doctor to see which sources were checked.',
+  );
   expect(usageEmptyWindowMessage('today')).toBe('No usage recorded for today.');
   expect(usageEmptyWindowMessage()).toBe('No usage recorded.');
 });

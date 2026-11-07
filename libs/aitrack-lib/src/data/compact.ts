@@ -1,5 +1,6 @@
 import { resolveModelCost } from '../pricing/resolve.js';
 import { shiftDate } from './calendar.js';
+import { ALL_MODELS } from './project.js';
 import type { MachineFile, ProviderDay } from './types.js';
 
 /**
@@ -7,6 +8,11 @@ import type { MachineFile, ProviderDay } from './types.js';
  * byModel to sum to totals, so a lone entry mirroring them keeps those readers working.
  */
 export const COMPACTED_MODEL = '(compacted)';
+
+/** A row that stands for several models, so there is no model to name or to price. */
+export function isSyntheticModel(model: string): boolean {
+  return model === COMPACTED_MODEL || model === ALL_MODELS;
+}
 
 export function isCompactedDay(day: ProviderDay): boolean {
   const models = Object.keys(day.byModel);

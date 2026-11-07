@@ -16,11 +16,15 @@ interface FixtureTokenCounts {
 
 interface FixtureDayEntry extends FixtureTokenCounts {
   byModel: Record<string, FixtureTokenCounts>;
+  byProject?: Record<string, FixtureTokenCounts>;
+  byCwd?: Record<string, FixtureTokenCounts>;
 }
 
 interface FixtureProviderDay {
   byModel: Record<string, FixtureTokenCounts>;
   totals: FixtureTokenCounts;
+  byProject?: Record<string, FixtureTokenCounts>;
+  byCwd?: Record<string, FixtureTokenCounts>;
 }
 
 interface FixtureMachineFile {
@@ -110,6 +114,42 @@ export function makeMachineFile(
     lastUpdated: 'now',
     days,
     ...overrides,
+  };
+}
+
+const LIVE_PROVIDERS = new Set(['cursor']);
+
+function currentZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/**
+ * What the loader returns for this already-merged data: one machine in the current zone holding the
+ * synced providers, with the live ones kept apart.
+ */
+export function loadedFrom(providerData: Record<string, Map<string, FixtureDayEntry>>) {
+  const days: FixtureMachineFile['days'] = {};
+  const liveProviderData: Record<string, Map<string, FixtureDayEntry>> = {};
+  for (const [providerKey, dayMap] of Object.entries(providerData)) {
+    if (LIVE_PROVIDERS.has(providerKey)) {
+      liveProviderData[providerKey] = dayMap;
+      continue;
+    }
+    for (const [date, { byModel, byProject, byCwd, ...totals }] of dayMap) {
+      (days[date] ??= {})[providerKey] = {
+        byModel,
+        totals,
+        ...(byProject && { byProject }),
+        ...(byCwd && { byCwd }),
+      };
+    }
+  }
+  return {
+    providerData,
+    liveProviderData,
+    zonedSources: [
+      { hostname: 'host', timezone: currentZone(), lastUpdated: '', current: true, days },
+    ],
   };
 }
 

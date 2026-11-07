@@ -108,6 +108,9 @@ function parseRangeArgs(args: string[]): UsagePeriodArgs {
   return { from, to };
 }
 
+/** A century: beyond it the window leaves the calendar range, and `usage all` is what is meant. */
+const MAX_LAST_DAYS = 36_500;
+
 function parseLastArgs(args: string[]): UsagePeriodArgs {
   const [n, ...rest] = args;
   if (n === undefined || rest.length > 0) {
@@ -116,6 +119,11 @@ function parseLastArgs(args: string[]): UsagePeriodArgs {
   const parsed = parsePositiveInteger(n);
   if (parsed === null) {
     throw new Error(`Invalid number of days: "${n}". Expected a positive integer.`);
+  }
+  if (parsed > MAX_LAST_DAYS) {
+    throw new Error(
+      `Too many days: "${n}". The most is ${String(MAX_LAST_DAYS)}; use "all" for everything.`,
+    );
   }
   return { n: parsed };
 }

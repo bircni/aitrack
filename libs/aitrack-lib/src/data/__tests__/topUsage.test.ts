@@ -94,3 +94,13 @@ it('lists the unpriced models of days and of model rows once, sorted', () => {
     'c',
   ]);
 });
+
+it('names no model for a compacted day that could not be priced', () => {
+  const day = {
+    inputTokens: 10,
+    outputTokens: 0,
+    byModel: { '(compacted)': { inputTokens: 10, outputTokens: 0 } },
+  };
+  const data = { claude_code: new Map([['2026-01-01', day]]) };
+  expect(topDays(data, 1, 'tokens')[0]?.unpricedModels).toEqual([]);
+});

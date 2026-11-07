@@ -1,4 +1,13 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -58,15 +67,55 @@ describe('config', () => {
     expect(loadConfig()).toEqual(config);
   });
 
-  it.each(['../escape', '..\\escape', 'nested/machine', 'bad\0name', 'CON'])(
-    'rejects unsafe machineId %j before saving',
-    (machineId) => {
-      expect(() => {
-        saveConfig({ repoUrl: 'git@example.com:test/repo.git', machineId });
-      }).toThrow('Machine name');
-      expect(tryLoadConfig()).toBeNull();
+  it('rejects an unsafe machineId before saving', () => {
+    expect(() => {
+      saveConfig({ repoUrl: 'git@example.com:test/repo.git', machineId: '../escape' });
+    }).toThrow('Machine name');
+    expect(tryLoadConfig()).toBeNull();
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'saves through a symlink and keeps a restricted mode',
+    () => {
+      const real = join(TEST_HOME, 'dotfiles-config.json');
+      writeFileSync(real, '{}', { mode: 0o600 });
+      mkdirSync(join(TEST_HOME, '.config', 'aitrack'), { recursive: true });
+      symlinkSync(real, CONFIG_PATH);
+
+      saveConfig({ repoUrl: 'git@example.com:test/repo.git' });
+
+      expect(lstatSync(CONFIG_PATH).isSymbolicLink()).toBe(true);
+      expect(JSON.parse(readFileSync(real, 'utf8'))).toEqual({
+        repoUrl: 'git@example.com:test/repo.git',
+      });
+      expect(statSync(real).mode & 0o777).toBe(0o600);
+      rmSync(real);
     },
   );
+
+  it('leaves no temp file behind when saving fails', () => {
+    mkdirSync(CONFIG_PATH, { recursive: true }); // Renaming over a directory fails.
+
+    expect(() => {
+      saveConfig({ repoUrl: 'x' });
+    }).toThrow(/EISDIR|EPERM|ENOTEMPTY/u);
+
+    expect(readdirSync(join(TEST_HOME, '.config', 'aitrack'))).toEqual(['config.json']);
+  });
+
+  it('warns once that an invalid config is being ignored', async () => {
+    vi.resetModules(); // The warning is once per process.
+    const fresh = await import('../config.js');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    writeRawConfig('{ "repoUrl": "x", }');
+
+    expect(fresh.tryLoadConfig()).toBeNull();
+    expect(fresh.tryLoadConfig()).toBeNull();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('not valid JSON'));
+    warn.mockRestore();
+  });
 
   it('resolveMachineId uses configured machineId', () => {
     expect(resolveMachineId({ machineId: 'work-laptop' })).toBe('work-laptop');

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   writeFileSync: vi.fn(),
   copyFileSync: vi.fn(),
   rmSync: vi.fn(),
+  renameSync: vi.fn(),
 }));
 
 vi.mock('child_process', () => ({ spawnSync: mocks.spawnSync, execFile: mocks.execFile }));
@@ -45,9 +46,11 @@ vi.mock('fs', () => ({
   writeFileSync: mocks.writeFileSync,
   copyFileSync: mocks.copyFileSync,
   rmSync: mocks.rmSync,
+  renameSync: mocks.renameSync,
 }));
 vi.mock('os', () => ({ homedir: () => '/home/test' }));
 
+import type { ProviderDay } from '../data/types.js';
 import {
   adoptPendingDataFiles,
   cloneOriginUrl,
@@ -68,7 +71,7 @@ import {
   writeMachineFile,
   writePendingMachineFile,
 } from '../git.js';
-import { isRebaseInProgress, pushWithRetry, runGit, runGitAsync } from '../git/exec.js';
+import { commitStagedData, pushWithRetry, runGit, runGitAsync } from '../git/exec.js';
 import { withRepoLock } from '../git/lock.js';
 
 const APP = join('/home/test', '.config', 'aitrack');
@@ -112,6 +115,8 @@ describe('git helpers', () => {
     vi.clearAllMocks();
     mocks.spawnSync.mockReset().mockReturnValue({ status: 0 });
     mocks.execFile.mockReset();
+    mocks.existsSync.mockReset();
+    mocks.readFileSync.mockReset();
   });
 
   it('detects, clones, and removes the local data repository', () => {
@@ -242,16 +247,17 @@ describe('git helpers', () => {
     expect(await hasUnpushedCommits()).toBe(false);
   });
 
-  it('pushes commits stranded by an earlier failed push, asking for the upstream once', async () => {
+  it('pushes commits stranded by an earlier failed push', async () => {
     asyncGitReplies(
-      // hasUpstream, rev-list, push
+      // hasUpstream, rev-list, hasUpstream, push
       { status: 0, stdout: 'origin/main' },
       { status: 0, stdout: '2\n' },
+      { status: 0, stdout: 'origin/main' },
       { status: 0 },
     );
 
     expect(await pushPendingCommits()).toBe(true);
-    expect(mocks.execFile).toHaveBeenCalledTimes(3);
+    expect(mocks.execFile).toHaveBeenCalledTimes(4);
     expect(mocks.execFile).toHaveBeenLastCalledWith(
       'git',
       ['push'],
@@ -304,36 +310,6 @@ describe('git helpers', () => {
     );
   });
 
-  // A conflicted rebase left behind would break every later command; the rebase error must survive the abort.
-  it.each([
-    ['succeeds', 0],
-    ['fails too', 1],
-  ])('aborts a conflicted rebase and reports it when the abort %s', async (_label, abortStatus) => {
-    asyncGitReplies(
-      // pull --ff-only rejects the diverged branch
-      { status: 1, stderr: 'Not possible to fast-forward' },
-      // ls-remote
-      { status: 0, stdout: 'refs/heads/main' },
-      // hasUnpushedCommits: hasUpstream, then rev-list
-      { status: 0, stdout: 'origin/main' },
-      { status: 0, stdout: '1\n' },
-      // pull --rebase hits a conflict
-      { status: 1, stderr: 'could not apply' },
-      { status: abortStatus, stderr: 'abort failed' },
-    );
-    // isRebaseInProgress reads .git/rebase-merge from disk, not git.
-    mocks.existsSync.mockImplementation((path: string) => path.includes('rebase-'));
-
-    await expect(pull()).rejects.toThrow('git pull --rebase --quiet failed');
-
-    expect(mocks.execFile).toHaveBeenLastCalledWith(
-      'git',
-      ['rebase', '--abort'],
-      expect.anything(),
-      expect.any(Function),
-    );
-  });
-
   it('surfaces a fast-forward failure that no local commit explains', async () => {
     asyncGitReplies(
       { status: 1, stderr: 'some other failure' },
@@ -371,7 +347,7 @@ describe('git helpers', () => {
     );
 
     expect(await commitDataChanges('recompute costs')).toBe(false);
-    expect(mocks.execFile.mock.calls[0]?.[1]).toEqual(['add', 'data/']);
+    expect(mocks.execFile.mock.calls[0]?.[1]).toEqual(['add', '--', 'data/']);
   });
 
   it('commits every staged data file when recomputing costs across machines', async () => {
@@ -387,8 +363,83 @@ describe('git helpers', () => {
       { status: 0 },
     );
 
-    expect(await commitDataChanges('recompute costs')).toBe(true);
+    expect(await commitDataChanges('recompute costs', ['data/host.json', 'data/laptop.json'])).toBe(
+      true,
+    );
+    expect(mocks.execFile.mock.calls[0]?.[1]).toEqual([
+      'add',
+      '--',
+      ':(literal)data/host.json',
+      ':(literal)data/laptop.json',
+    ]);
     expect(mocks.execFile.mock.calls[2]?.[1]).toEqual(['commit', '-m', 'recompute costs']);
+  });
+
+  it.each([
+    ['succeeds', 0],
+    ['fails too', 1],
+  ])('reports the rebase error when the abort %s', async (_label, abortStatus) => {
+    asyncGitReplies(
+      // pull --ff-only rejects the diverged branch
+      { status: 1, stderr: 'Not possible to fast-forward' },
+      // ls-remote
+      { status: 0, stdout: 'refs/heads/main' },
+      // hasUnpushedCommits: hasUpstream, then rev-list
+      { status: 0, stdout: 'origin/main' },
+      { status: 0, stdout: '1\n' },
+      // pull --rebase stops, with nothing unmerged to resolve
+      { status: 1, stderr: 'could not apply' },
+      { status: 0, stdout: '' },
+      { status: abortStatus, stderr: 'abort failed' },
+    );
+    // No rebase yet when pull() first looks; isRebaseInProgress reads .git, not git.
+    mocks.existsSync
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(false)
+      .mockImplementation((path: string) => path.includes('rebase-'));
+
+    await expect(pull()).rejects.toThrow(/Could not merge .*could not apply/su);
+
+    expect(mocks.execFile.mock.lastCall?.[1]).toEqual(['rebase', '--abort']);
+  });
+
+  it.each([
+    ['an options argument', (options: { timeoutMs: number }) => pushWithRetry(options)],
+    [
+      'the older conflict form',
+      (options: { timeoutMs: number }) => pushWithRetry(undefined, options),
+    ],
+    [
+      'the older conflict form with contents',
+      (options: { timeoutMs: number }) =>
+        pushWithRetry({ path: 'data/a.json', contents: '{}' }, options, true),
+    ],
+    [
+      'commitStagedData with options',
+      (options: { timeoutMs: number }) => commitStagedData('sync: a', options),
+    ],
+    [
+      'commitStagedData in the older form',
+      (options: { timeoutMs: number }) => commitStagedData('sync: a', undefined, options),
+    ],
+  ])('keeps the timeout through %s', async (label, push) => {
+    asyncGitReplies(
+      ...(label.startsWith('commitStagedData')
+        ? [{ status: 0, stdout: 'data/a.json' }, { status: 0 }]
+        : []),
+      { status: 0, stdout: 'origin/main' },
+      { status: 0 },
+    );
+
+    await push({ timeoutMs: 5000 });
+
+    const [, args, spawnOptions] = mocks.execFile.mock.lastCall as [
+      string,
+      string[],
+      { env: Record<string, string> },
+    ];
+    expect(args).toEqual(['push']);
+    expect(spawnOptions.env.GIT_TERMINAL_PROMPT).toBe('0');
   });
 
   it('commits a staged deletion instead of failing to read the file back', async () => {
@@ -412,11 +463,6 @@ describe('git helpers', () => {
 
     expect(await commitAndPush('host')).toBe(true);
     expect(mocks.readFileSync).not.toHaveBeenCalled();
-
-    // These two are not reset in beforeEach, and a throwing readFileSync would
-    // leak into every test after this one.
-    mocks.existsSync.mockReset();
-    mocks.readFileSync.mockReset();
   });
 
   it('surfaces commit failures when there are staged data changes', async () => {
@@ -484,6 +530,61 @@ describe('git helpers', () => {
     ).toHaveLength(2);
   });
 
+  it('gives up after a bounded number of rejected pushes', async () => {
+    const rejected = { status: 1, stderr: ' ! [rejected] main -> main (fetch first)' };
+    asyncGitReplies(
+      { status: 0, stdout: 'origin/main\n' },
+      rejected,
+      { status: 0 },
+      rejected,
+      { status: 0 },
+      rejected,
+    );
+
+    await expect(pushWithRetry()).rejects.toThrow('fetch first');
+    expect(
+      mocks.execFile.mock.calls.filter((call) => Array.isArray(call[1]) && call[1][0] === 'push'),
+    ).toHaveLength(3);
+  });
+
+  it('treats a stale-info rejection as non-fast-forward', async () => {
+    asyncGitReplies(
+      { status: 0, stdout: 'origin/main\n' },
+      { status: 1, stderr: ' ! [rejected] main -> main (stale info)' },
+      { status: 0 },
+      { status: 0 },
+    );
+
+    await pushWithRetry();
+    expect(mocks.execFile).toHaveBeenCalledTimes(4);
+  });
+
+  it('appends to git config passed through the environment instead of replacing it', async () => {
+    vi.stubEnv('GIT_CONFIG_COUNT', '1');
+    vi.stubEnv('GIT_CONFIG_KEY_0', 'credential.helper');
+    vi.stubEnv('GIT_CONFIG_VALUE_0', 'ci');
+    try {
+      mocks.spawnSync.mockReturnValue({ status: 0, stdout: '' });
+      asyncGitReplies({ status: 0 });
+      runGit(['status']);
+      await runGitAsync(['status']);
+      for (const options of [
+        mocks.spawnSync.mock.calls[0]?.[2],
+        mocks.execFile.mock.calls[0]?.[2],
+      ]) {
+        expect((options as { env: NodeJS.ProcessEnv }).env).toMatchObject({
+          GIT_CONFIG_COUNT: '2',
+          GIT_CONFIG_KEY_0: 'credential.helper',
+          GIT_CONFIG_VALUE_0: 'ci',
+          GIT_CONFIG_KEY_1: 'commit.gpgsign',
+          GIT_CONFIG_VALUE_1: 'false',
+        });
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('checks literal git status only for a bracketed machine target', async () => {
     asyncGitReplies({ status: 0, stdout: '?? data/new-host[1].json\n' });
 
@@ -517,15 +618,38 @@ describe('git helpers', () => {
     expect(readDataFile(file)).toEqual(makeMachineFile('host'));
   });
 
-  it('writes a machine file through the store, creating the parent directory', () => {
+  it('writes a machine file through a temp file, creating the parent directory', () => {
     writeMachineFile('/repo/data/host.json', makeMachineFile('host'));
 
     expect(mocks.mkdirSync).toHaveBeenCalledWith('/repo/data', { recursive: true });
-    expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      '/repo/data/host.json',
-      expect.stringContaining('"hostname": "host"'),
-      'utf8',
-    );
+    const [temporary, contents] = mocks.writeFileSync.mock.calls[0] as [string, string];
+    expect(temporary).not.toBe('/repo/data/host.json');
+    expect(contents).toContain('"hostname": "host"');
+    expect(mocks.renameSync).toHaveBeenCalledWith(temporary, '/repo/data/host.json');
+  });
+
+  it.each([
+    ['a token count that is not a number', { inputTokens: 'oops', outputTokens: 1 }],
+    ['a token count JSON turns into null', { inputTokens: Infinity, outputTokens: 1 }],
+  ])('refuses to write a machine file with %s', (_label, counts) => {
+    const day = { byModel: { model: counts }, totals: counts } as unknown as ProviderDay;
+    const invalid = makeMachineFile('host', { '2026-01-01': { codex: day } });
+
+    expect(() => {
+      writeMachineFile('/repo/data/host.json', invalid);
+    }).toThrow('Refusing to write invalid host.json');
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('skips staging a machine file that fails validation, so the report still renders', () => {
+    const counts = { inputTokens: 'oops', outputTokens: 1 };
+    const day = { byModel: { model: counts }, totals: counts } as unknown as ProviderDay;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    writePendingMachineFile(makeMachineFile('host', { '2026-01-01': { codex: day } }));
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Refusing to write'));
   });
 
   it('writes and lists pending machine files for a legitimate custom id', () => {
@@ -535,10 +659,9 @@ describe('git helpers', () => {
     writePendingMachineFile(makeMachineFile('Work Laptop_01.2'));
 
     expect(mocks.mkdirSync).toHaveBeenCalled();
-    expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining(join('pending', 'data', 'Work Laptop_01.2.json')),
+    expect(mocks.renameSync).toHaveBeenCalledWith(
       expect.any(String),
-      'utf8',
+      expect.stringContaining(join('pending', 'data', 'Work Laptop_01.2.json')),
     );
     expect(listPendingDataFiles()).toHaveLength(1);
   });
@@ -556,6 +679,7 @@ describe('git helpers', () => {
     mocks.readFileSync.mockReturnValue(
       JSON.stringify({ hostname: 'old', lastUpdated: 'now', days: {} }),
     );
+    mocks.spawnSync.mockReturnValue({ status: 0, stdout: 'data/old.json\n' });
 
     migrateMachineDataFiles('old', 'Work Laptop_01.2');
 
@@ -774,35 +898,6 @@ it('surfaces git failures including stdout-only diagnostics', () => {
   mocks.spawnSync.mockReturnValue({ status: 0, stdout: ' clean ' });
   expect(runGit(['status'])).toBe('clean');
 });
-it('recovers an own-file rebase conflict and aborts unrelated concurrent conflicts', async () => {
-  mocks.execFile.mockReset();
-  mocks.existsSync.mockReturnValue(true);
-  asyncGitReplies(
-    { status: 1, stderr: 'non-fast-forward' },
-    { status: 1, stderr: 'conflict' },
-    { status: 0, stdout: 'data/host.json\n' },
-    { status: 0 },
-    { status: 0 },
-    { status: 0 },
-  );
-  await pushWithRetry({ path: 'data/host.json', contents: 'snapshot' }, {}, true);
-  expect(mocks.writeFileSync).toHaveBeenCalledWith(
-    join('/home/test/.config/aitrack/repo', 'data/host.json'),
-    'snapshot',
-    'utf8',
-  );
-  mocks.execFile.mockReset();
-  asyncGitReplies(
-    { status: 1, stderr: 'fetch first' },
-    { status: 1, stderr: 'conflict' },
-    { status: 0, stdout: 'unrelated.txt\n' },
-    { status: 1 },
-  );
-  await expect(pushWithRetry(undefined, {}, true)).rejects.toThrow('could not be replayed safely');
-  expect(isRebaseInProgress()).toBe(true);
-  mocks.existsSync.mockReturnValue(false);
-  expect(isRebaseInProgress()).toBe(false);
-});
 it('rejects asynchronous git failures with non-numeric exit codes', async () => {
   mocks.execFile.mockImplementationOnce(
     (
@@ -817,4 +912,18 @@ it('rejects asynchronous git failures with non-numeric exit codes', async () => 
     },
   );
   await expect(runGitAsync(['status'])).rejects.toThrow('exit code null: not found');
+  mocks.existsSync.mockReturnValueOnce(true);
+  mocks.execFile.mockImplementationOnce(
+    (
+      _command: string,
+      _args: string[],
+      _options: unknown,
+      callback: (...values: unknown[]) => void,
+    ) => {
+      queueMicrotask(() => {
+        callback(Object.assign(new Error('missing'), { code: 'ENOENT' }), '', '');
+      });
+    },
+  );
+  await expect(runGitAsync(['status'])).rejects.toThrow('git was not found on PATH');
 });

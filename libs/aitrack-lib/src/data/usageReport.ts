@@ -3,16 +3,19 @@ import { warnAboutPricingFallbacks } from '../pricing/scan.js';
 import { orderedProviderKeys, providerLabel } from '../providers/index.js';
 import { calendarDateInTimeZone, machineTimezone, UNKNOWN_TIMEZONE } from '../timezone.js';
 import { aggregateModelsByDayMap } from './aggregate.js';
+import { isSyntheticModel } from './compact.js';
 import { toLocalDateString } from './dayMap.js';
 import { isUsageNotConfigured, usageEmptyMessage, usageEmptyWindowMessage } from './emptyState.js';
-import { ALL_MODELS, type ProjectSelector, projectSelectorLabel } from './project.js';
+import { type ProjectSelector, projectSelectorLabel } from './project.js';
 import { aggregateProjects, type ProjectBreakdown, projectProviderData } from './projectUsage.js';
 import { compareByCostThenTokens } from './sort.js';
 import type { ProviderData } from './types.js';
 import {
-  type LoadedUsageData,
   loadMergedProviderData,
   providerDataForWindows,
+  type UsageDataInput,
+  zonedUsageData,
+  type ZonedUsageData,
   type ZonedUsageSource,
 } from './usageData.js';
 import {
@@ -130,11 +133,11 @@ function todayForZone(timezone: string, now: Date): string {
 
 /** The viewer's zone, then every other recorded machine zone; empty when there are no others. */
 export function machineZones(
-  sources: ReadonlyArray<Pick<ZonedUsageSource, 'timezone'>> | undefined,
+  sources: ReadonlyArray<Pick<ZonedUsageSource, 'timezone'>> = [],
 ): string[] {
   const viewer = machineTimezone();
   const others = new Set(
-    (sources ?? [])
+    sources
       .map((source) => source.timezone)
       .filter(
         (timezone) => timezone !== '' && timezone !== UNKNOWN_TIMEZONE && timezone !== viewer,
@@ -148,7 +151,7 @@ export function timezoneWindowNote(
   sources: ZonedUsageSource[] | undefined,
   period: UsagePeriod,
 ): string | undefined {
-  if (!sources || !periodAnchorsOnToday(period)) return undefined;
+  if (!periodAnchorsOnToday(period)) return undefined;
   const zones = machineZones(sources);
   if (zones.length === 0) return undefined;
   return `This window follows each machine's own timezone (${zones.join(', ')}).`;
@@ -156,7 +159,7 @@ export function timezoneWindowNote(
 
 function withTimezoneNote(
   report: UsageReport,
-  sources: ZonedUsageSource[] | undefined,
+  sources: ZonedUsageSource[],
   period: UsagePeriod,
 ): UsageReport {
   const timezoneNote = timezoneWindowNote(sources, period);
@@ -175,8 +178,14 @@ export function emptyUsageTotals(): UsageReportTotals {
   };
 }
 
+/** Each source's window is then the viewer's, so the loader's merge already holds every report's data. */
+function sourcesShareViewerToday(sources: ZonedUsageSource[], now: Date): boolean {
+  const today = viewerToday(now);
+  return sources.every((source) => todayForZone(source.timezone, now) === today);
+}
+
 function windowedProviderData(
-  loaded: LoadedUsageData,
+  loaded: ZonedUsageData,
   options: UsageReportOptions,
   kind: 'current' | 'previous',
   now: Date,
@@ -190,7 +199,9 @@ function windowedProviderData(
           computeUsageWindow(options, labelToday, now),
           labelToday,
         );
-  if (!loaded.zonedSources) return { providerData: loaded.providerData, window: labelWindow };
+  if (sourcesShareViewerToday(loaded.zonedSources, now)) {
+    return { providerData: loaded.providerData, window: labelWindow };
+  }
 
   const providerData = providerDataForWindows(loaded, (timezone) => {
     const today = todayForZone(timezone, now);
@@ -208,14 +219,14 @@ function projectScope(
   selector: ProjectSelector,
   providerData: ProviderData,
   window: UsageWindow,
-  sources: ZonedUsageSource[] | undefined,
+  sources: ZonedUsageSource[],
 ): UsageProjectScope {
   const notes = ['Cursor usage is not attributed to projects and is excluded.'];
   if (selector.kind === 'dir') {
     notes.push(
       'This folder has no git remote: matched by working directory on this machine only, so other machines are not included.',
     );
-  } else if ((sources?.length ?? 0) > 1) {
+  } else if (sources.length > 1) {
     notes.push('Other machines count only for days they synced with project data.');
   }
   const unattributed = aggregateProjects(providerData, window).unattributed?.tokens ?? 0;
@@ -233,7 +244,7 @@ function scopedData(providerData: ProviderData, options: UsageReportOptions): Pr
 }
 
 function reportFromData(
-  loaded: LoadedUsageData,
+  loaded: ZonedUsageData,
   providerData: ProviderData,
   window: UsageWindow,
   options: UsageReportOptions,
@@ -280,8 +291,7 @@ function buildUsageReportFromData(providerData: ProviderData, window: UsageWindo
         ...(agg.hasUnpricedTokens && { hasUnpricedTokens: true }),
       });
       hasUnpricedTokens ||= agg.hasUnpricedTokens === true;
-      // A project row has no model split, so there is no model to name.
-      if (agg.hasUnpricedTokens && model !== ALL_MODELS) unpriced.add(model);
+      if (agg.hasUnpricedTokens && !isSyntheticModel(model)) unpriced.add(model);
       subtotalTokens += tokens;
       totals.inputTokens += agg.inputTokens;
       totals.outputTokens += agg.outputTokens;
@@ -394,79 +404,43 @@ export async function buildUsageReport(
   if (!loaded) return null;
 
   warnAboutPricingFallbacks(loaded.providerData);
-  return buildUsageReportFromLoaded(loaded, options, now);
+  return reportForWindow(loaded, options, now);
 }
 
-/** One window's report from data already loaded, so several windows share one read. */
-export function buildUsageReportFromLoaded(
-  loaded: LoadedUsageData,
-  options: UsageReportOptions,
-  now = new Date(),
-): UsageReport {
+function reportForWindow(loaded: ZonedUsageData, options: UsageReportOptions, now: Date) {
   const { providerData, window } = windowedProviderData(loaded, options, 'current', now);
   return reportFromData(loaded, providerData, window, options);
 }
 
-/**
- * Several windows' data from one load. When every source's calendar is on the
- * viewer's date, each window is the same for every source, so one merge over
- * their combined span serves all of them.
- */
-function windowedProviderDataList(
-  loaded: LoadedUsageData,
-  optionsList: UsageReportOptions[],
-  now: Date,
-): Array<{ providerData: ProviderData; window: UsageWindow; options: UsageReportOptions }> {
-  const { zonedSources } = loaded;
-  const labelToday = viewerToday(now);
-  const zones = new Set([
-    machineTimezone(),
-    ...(zonedSources ?? []).map((source) => source.timezone),
-  ]);
-  if (
-    optionsList.length === 0 ||
-    (zonedSources && [...zones].some((timezone) => todayForZone(timezone, now) !== labelToday))
-  ) {
-    return optionsList.map((options) => ({
-      ...windowedProviderData(loaded, options, 'current', now),
-      options,
-    }));
-  }
-
-  const windows = optionsList.map((options) => ({
-    options,
-    window: computeUsageWindow(options, labelToday, now),
-  }));
-  const span = {
-    start: windows.reduce(
-      (min, { window }) => (window.start < min ? window.start : min),
-      ALL_TIME.end,
-    ),
-    end: windows.reduce((max, { window }) => (window.end > max ? window.end : max), ALL_TIME.start),
-  };
-  const providerData = providerDataForWindows(loaded, () => span);
-  return windows.map(({ options, window }) => ({ providerData, window, options }));
+/** One window's report from data already loaded, so several windows share one read. */
+export function buildUsageReportFromLoaded(
+  input: UsageDataInput,
+  options: UsageReportOptions,
+  now = new Date(),
+): UsageReport {
+  return reportForWindow(zonedUsageData(input), options, now);
 }
 
 export function buildUsageReportsFromLoaded(
-  loaded: LoadedUsageData,
+  input: UsageDataInput,
   optionsList: UsageReportOptions[],
   now = new Date(),
 ): UsageReport[] {
-  return windowedProviderDataList(loaded, optionsList, now).map(
-    ({ providerData, window, options }) => reportFromData(loaded, providerData, window, options),
-  );
+  const loaded = zonedUsageData(input);
+  return optionsList.map((options) => reportForWindow(loaded, options, now));
 }
 
 /** Per-project usage for the same windows (and so the same numbers) as `buildUsageReportsFromLoaded`. */
 export function buildProjectBreakdownsFromLoaded(
-  loaded: LoadedUsageData,
+  input: UsageDataInput,
   optionsList: UsageReportOptions[],
   now = new Date(),
 ): ProjectBreakdown[] {
-  return windowedProviderDataList(loaded, optionsList, now).map(({ providerData, window }) =>
-    aggregateProjects(providerData, window),
-  );
+  const loaded = zonedUsageData(input);
+  return optionsList.map((options) => {
+    const { providerData, window } = windowedProviderData(loaded, options, 'current', now);
+    return aggregateProjects(providerData, window);
+  });
 }
 
 export async function buildUsageComparison(
@@ -490,8 +464,11 @@ export async function buildUsageComparison(
   return { current, previous, comparison: compareUsageReports(current, previous) };
 }
 
-export function emptyReportMessage(report: UsageReport | null): string | null {
-  if (!report) return usageEmptyMessage(isUsageNotConfigured());
+export function emptyReportMessage(
+  report: UsageReport | null,
+  providers?: readonly string[],
+): string | null {
+  if (!report) return usageEmptyMessage(isUsageNotConfigured(), providers);
   if (report.rowCount === 0) return usageEmptyWindowMessage(report.windowLabel);
   return null;
 }
