@@ -323,6 +323,17 @@ mod tests {
             (sidecar, seen)
         }
 
+        /// A busy process answers late rather than never, so a fixed sleep would race a slow runner.
+        async fn ping_when_free(sidecar: &Sidecar) -> Value {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                match sidecar.request("ping", Value::Null).await {
+                    Err(error) if error == UNRESPONSIVE && Instant::now() < deadline => {}
+                    reply => return reply.unwrap(),
+                }
+            }
+        }
+
         const FAST: Timings = Timings {
             request: Duration::from_secs(10),
             hang: Duration::from_secs(60),
@@ -376,8 +387,7 @@ mod tests {
             tauri::async_runtime::block_on(async {
                 let first = sidecar.request("ping", Value::Null).await.unwrap();
                 assert_eq!(sidecar.request("stall", Value::Null).await, Err(UNRESPONSIVE.into()));
-                tokio::time::sleep(Duration::from_millis(400)).await;
-                assert_eq!(sidecar.request("ping", Value::Null).await.unwrap(), first);
+                assert_eq!(ping_when_free(&sidecar).await, first);
             });
         }
 
@@ -388,8 +398,7 @@ mod tests {
             tauri::async_runtime::block_on(async {
                 let first = sidecar.request("ping", Value::Null).await.unwrap();
                 assert_eq!(sidecar.request("work", Value::Null).await, Err(UNRESPONSIVE.into()));
-                tokio::time::sleep(Duration::from_millis(1800)).await;
-                assert_eq!(sidecar.request("ping", Value::Null).await.unwrap(), first);
+                assert_eq!(ping_when_free(&sidecar).await, first);
             });
         }
 
