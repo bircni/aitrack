@@ -713,6 +713,7 @@ function sessionProvider(key: 'claude' | 'codex', label: string, usedPercent: nu
           usedPercent,
           format: 'percent' as const,
           periodSeconds: 18_000,
+          resetsAt: new Date(Date.now() + 3_600_000).toISOString(),
         },
         {
           id: 'weekly',
@@ -767,6 +768,59 @@ it('compact view asks for a choice when no provider is picked', async () => {
   await settle();
   expect(target.textContent).toContain('Choose providers for the compact view in Settings.');
   expect(target.querySelector('[role="meter"]')).toBeNull();
+});
+
+it('compact view shows a missing session limit, the plan, toggles and a note for providers not loaded', async () => {
+  const patch = vi.fn<(value: Partial<Settings>) => void>();
+  const bare = sessionProvider('claude', 'Claude', 0);
+  const noSession = { ...bare, quota: { ...bare.quota, plan: 'Max', windows: [] } };
+  mounted.push(
+    mount(CompactLimit, {
+      target,
+      props: {
+        appState: { ...state, providers: [noSession] },
+        settings: { ...DEFAULT_SETTINGS, compactProviders: ['claude'] },
+        now: Date.now(),
+        onPatch: patch,
+      },
+    }),
+  );
+  await settle();
+  expect(target.textContent).toContain('No session limit yet.');
+  expect(target.textContent).toContain('Max');
+  const first = mounted.pop();
+  if (first) await unmount(first);
+  mounted.push(
+    mount(CompactLimit, {
+      target,
+      props: {
+        appState: { ...state, providers: [sessionProvider('claude', 'Claude', 20)] },
+        settings: { ...DEFAULT_SETTINGS, compactProviders: ['codex'] },
+        now: Date.now(),
+        onPatch: patch,
+      },
+    }),
+  );
+  await settle();
+  expect(target.textContent).toContain('turned off or not loaded yet');
+  const second = mounted.pop();
+  if (second) await unmount(second);
+  mounted.push(
+    mount(CompactLimit, {
+      target,
+      props: {
+        appState: { ...state, providers: [sessionProvider('claude', 'Claude', 20)] },
+        settings: { ...DEFAULT_SETTINGS, compactProviders: ['claude'] },
+        now: Date.now(),
+        onPatch: patch,
+      },
+    }),
+  );
+  await settle();
+  click('[title="Show used or left"]');
+  click('[title="Show time or countdown"]');
+  expect(patch).toHaveBeenCalledWith({ display: 'left' });
+  expect(patch).toHaveBeenCalledWith({ resetDisplay: 'relative' });
 });
 
 it('falls back to automatic tray selection when its provider is disabled and handles unavailable setting errors', async () => {
