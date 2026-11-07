@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 use crate::position::{corner_tray, popup_bounds, Rect};
 
@@ -36,8 +36,18 @@ impl Panel {
     }
 
     pub fn set_floating(&self, window: &WebviewWindow, floating: bool) {
-        self.state.lock().unwrap().floating = floating;
+        let (entered, content_height) = {
+            let mut state = self.state.lock().unwrap();
+            let entered = floating && !state.floating;
+            state.floating = floating;
+            (entered, state.content_height)
+        };
         let _ = window.set_skip_taskbar(!floating);
+        let _ = window.set_resizable(floating);
+        // Only on entry, so settings re-sent later never undo a size the user chose.
+        if entered {
+            let _ = window.set_size(LogicalSize::new(WIDTH, content_height));
+        }
     }
 
     pub fn on_blur(&self, window: &WebviewWindow) {
@@ -104,17 +114,10 @@ impl Panel {
             state.content_height = height.ceil();
             state.floating
         };
+        // A floating window is sized by the user, so its content scrolls instead of resizing it.
         if !floating {
             self.place(window);
-            return;
         }
-        let scale = window.scale_factor().unwrap_or(1.0);
-        let cap = window
-            .current_monitor()
-            .ok()
-            .flatten()
-            .map_or(f64::MAX, |monitor| f64::from(monitor.work_area().size.height) * 0.85);
-        let _ = window.set_size(PhysicalSize::new((WIDTH * scale).round(), (height * scale).min(cap).round()));
     }
 
     fn place(&self, window: &WebviewWindow) {

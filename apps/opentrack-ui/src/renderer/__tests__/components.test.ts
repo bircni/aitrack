@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('../api.js', () => mocks);
 import App from '../App.svelte';
+import CompactLimit from '../CompactLimit.svelte';
 import Dashboard from '../Dashboard.svelte';
 import LimitMeter from '../LimitMeter.svelte';
 import SettingsScreen from '../SettingsScreen.svelte';
@@ -686,6 +687,71 @@ it('renders remaining quotas with and without reset metadata and delivers toggle
   expect(patch).toHaveBeenCalledWith({ resetDisplay: 'absolute' });
   expect(target.textContent).toContain('Unscheduled');
   expect(target.querySelector('.spark')).toBeNull();
+});
+
+function sessionProvider(key: 'claude' | 'codex', label: string, usedPercent: number) {
+  return {
+    key,
+    label,
+    refreshing: false,
+    usage: usage(EMPTY_PERIOD, []),
+    quota: {
+      provider: key,
+      fetchedAt: new Date().toISOString(),
+      values: [],
+      windows: [
+        {
+          id: 'session',
+          label: 'Session',
+          usedPercent,
+          format: 'percent' as const,
+          periodSeconds: 18_000,
+        },
+        {
+          id: 'weekly',
+          label: 'Weekly',
+          usedPercent: 1,
+          format: 'percent' as const,
+          periodSeconds: 604_800,
+        },
+      ],
+    },
+  };
+}
+
+it('compact view shows only the followed or most-used session limit and can return to full view', async () => {
+  const patch = vi.fn<(value: Partial<Settings>) => void>();
+  const appState = {
+    ...state,
+    providers: [sessionProvider('claude', 'Claude', 20), sessionProvider('codex', 'Codex', 70)],
+  };
+  mounted.push(
+    mount(CompactLimit, {
+      target,
+      props: { appState, settings: { ...DEFAULT_SETTINGS }, now: Date.now(), onPatch: patch },
+    }),
+  );
+  await settle();
+  expect(target.textContent).toContain('Codex');
+  expect(target.textContent).not.toContain('Weekly');
+  expect(target.querySelectorAll('[role="meter"]')).toHaveLength(1);
+  click('button.link');
+  expect(patch).toHaveBeenCalledWith({ compact: false });
+  const first = mounted.pop();
+  if (first) await unmount(first);
+  mounted.push(
+    mount(CompactLimit, {
+      target,
+      props: {
+        appState,
+        settings: { ...DEFAULT_SETTINGS, trayProvider: 'claude' },
+        now: Date.now(),
+        onPatch: patch,
+      },
+    }),
+  );
+  await settle();
+  expect(target.textContent).toContain('Claude');
 });
 
 it('falls back to automatic tray selection when its provider is disabled and handles unavailable setting errors', async () => {

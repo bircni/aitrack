@@ -57,6 +57,8 @@ fn apply_settings(app: &AppHandle, settings: &Value) {
         };
         let _ = window.set_theme(theme);
         app.state::<Panel>().set_floating(&window, text("windowMode") == "floating");
+        let on_top = settings.get("alwaysOnTop").and_then(Value::as_bool) == Some(true);
+        let _ = window.set_always_on_top(on_top);
     }
     let mut errors = Map::new();
     // A dev build registering itself to start at login would outlive the checkout.

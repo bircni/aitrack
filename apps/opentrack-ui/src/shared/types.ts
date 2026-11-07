@@ -112,6 +112,10 @@ export interface Settings {
   globalShortcut: string;
   notifications: boolean;
   windowMode: 'popup' | 'floating';
+  /** Only for the floating window: keeps it above other windows. */
+  alwaysOnTop: boolean;
+  /** Shows only the session limit of the followed provider. */
+  compact: boolean;
   /** `git pull` the aitrack data repo so other machines' usage stays current. */
   pullSyncedData: boolean;
   /** The provider the tray icon follows; `auto` takes the most used one. */

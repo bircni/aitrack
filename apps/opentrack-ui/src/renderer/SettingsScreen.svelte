@@ -235,6 +235,28 @@
       onchange={(event) => onPatch({ notifications: event.currentTarget.checked })}
     />
   </label>
+  <label class="row" for="set-compact">
+    <span class="row-text">Compact view<small>Show only the session limit</small></span>
+    <input
+      id="set-compact"
+      class="switch"
+      type="checkbox"
+      role="switch"
+      checked={settings.compact}
+      onchange={(event) => onPatch({ compact: event.currentTarget.checked })}
+    />
+  </label>
+  <label class="row" for="set-on-top">
+    <span class="row-text">Always on top<small>Keeps the kept-open window above others</small></span>
+    <input
+      id="set-on-top"
+      class="switch"
+      type="checkbox"
+      role="switch"
+      checked={settings.alwaysOnTop}
+      onchange={(event) => onPatch({ alwaysOnTop: event.currentTarget.checked })}
+    />
+  </label>
   <label class="row" for="set-pull">
     <span class="row-text">Include other machines<small>Pulls your aitrack data repo</small></span>
     <input

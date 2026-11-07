@@ -10,6 +10,7 @@
     Settings,
   } from '../shared/types.js';
   import { api } from './api.js';
+  import CompactLimit from './CompactLimit.svelte';
   import Dashboard from './Dashboard.svelte';
   import { formatUpdated, type Period } from './format.js';
   import Icon from './Icon.svelte';
@@ -233,6 +234,8 @@
             onPatch={patch}
             onBack={() => (screen = 'dashboard')}
           />
+        {:else if settings.compact}
+          <CompactLimit {appState} {settings} {now} onPatch={patch} />
         {:else}
           <Dashboard
             {appState}
