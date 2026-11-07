@@ -6,13 +6,17 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  writeFileSync,
 } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, join } from 'node:path';
 
+import { writeFileAtomic } from '../atomicWrite.js';
 import { tryLoadConfig } from '../config.js';
 import type { MachineFile } from '../data/types.js';
-import { type MachineFileValidationOptions, parseMachineFile } from '../data/validate.js';
+import {
+  checkMachineFile,
+  type MachineFileValidationOptions,
+  parseMachineFile,
+} from '../data/validate.js';
 import { machineDataFilename, machineIdValidationError } from '../machineId.js';
 import { log } from '../output.js';
 import { DATA_DIR, PENDING_DATA_DIR } from '../paths.js';
@@ -56,18 +60,52 @@ export function serializeMachineFile(
   return encryptText(json, passphrase);
 }
 
-/** Write a machine file, creating its parent directory if needed. */
+/** A file aitrack's own validator would reject: pushed, it would stop this machine's sync and drop it from every report. */
+export class InvalidMachineFileError extends Error {
+  constructor(filePath: string, reason: string) {
+    super(`Refusing to write invalid ${basename(filePath)}: ${reason}. Nothing was written.`);
+    this.name = 'InvalidMachineFileError';
+  }
+}
+
+/** Over the JSON form, the one readers get: `Infinity` is only wrong once it has become `null`. */
+function assertWritable(
+  filePath: string,
+  machine: MachineFile,
+  validation: MachineFileValidationOptions,
+): void {
+  const { diagnostics, machine: valid } = checkMachineFile(
+    JSON.parse(JSON.stringify(machine)),
+    filePath,
+    validation,
+  );
+  if (valid) return;
+  const skipped = diagnostics.find((diagnostic) => diagnostic.kind === 'file-skipped');
+  throw new InvalidMachineFileError(
+    filePath,
+    skipped?.kind === 'file-skipped' ? skipped.reason : 'it failed validation',
+  );
+}
+
+/** Atomic, so a crash or full disk cannot truncate it; replaces a symlink instead of writing through one a repo committed. */
 export function writeMachineFile(
   filePath: string,
   machine: MachineFile,
   encrypt = isEncryptionEnabled(),
+  validation: MachineFileValidationOptions = {},
 ): void {
-  mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, serializeMachineFile(machine, encrypt), 'utf8');
+  assertWritable(filePath, machine, validation);
+  writeFileAtomic(filePath, serializeMachineFile(machine, encrypt));
 }
 
+/** Staging serves a report that must still render, so a bad file is not worth failing it over. */
 export function writePendingMachineFile(machine: MachineFile): void {
-  writeMachineFile(machineFilePath(PENDING_DATA_DIR, machine.hostname), machine);
+  try {
+    writeMachineFile(machineFilePath(PENDING_DATA_DIR, machine.hostname), machine);
+  } catch (error) {
+    if (!(error instanceof InvalidMachineFileError)) throw error;
+    log.warn(error.message);
+  }
 }
 
 export function listPendingDataFiles(): string[] {

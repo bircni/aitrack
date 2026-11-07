@@ -1,8 +1,9 @@
 import { OPTIONAL_TOKEN_NUMBER_FIELDS } from '../constants.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
 import { syncedProviders } from '../providers/index.js';
-import { machineTimezone } from '../timezone.js';
-import { isCompactedDay } from './compact.js';
+import { machineTimezone, UNKNOWN_TIMEZONE } from '../timezone.js';
+import { shiftDate } from './calendar.js';
+import { compactDays, isCompactedDay } from './compact.js';
 import { CURRENT_SCHEMA_VERSION } from './schema.js';
 import type { DayMap, MachineFile, ProviderDay, TokenCounts } from './types.js';
 
@@ -134,6 +135,96 @@ export function mergePersistedDays(
     );
   }
   return days;
+}
+
+/** UTC-12 to UTC+14: the furthest a timezone change can move a message's calendar date. */
+const MAX_ZONE_SHIFT_DAYS = 2;
+
+function providerDates(days: MachineFile['days'], providerKey: string): string[] {
+  return Object.keys(days)
+    .filter((date) => days[date]?.[providerKey] !== undefined)
+    .toSorted();
+}
+
+function tokensInRange(
+  days: MachineFile['days'],
+  providerKey: string,
+  dates: string[],
+  from: string,
+  to: string,
+): number {
+  let tokens = 0;
+  for (const date of dates) {
+    const day = days[date]?.[providerKey];
+    if (day && date >= from && date <= to) tokens += dayTokens(day);
+  }
+  return tokens;
+}
+
+/**
+ * The persisted days to merge with after this machine changed timezone. The logs re-bucket
+ * messages near midnight onto a neighbouring day, and the per-day ratchet would then count them on
+ * both. A provider's days the logs fully explain are dropped so the fresh ones replace them; if the
+ * logs hold fewer tokens they were pruned, and the ratchet stays because losing history is worse.
+ */
+export function rebucketPersistedDays(
+  persisted: MachineFile,
+  fresh: MachineFile,
+): MachineFile['days'] {
+  if (
+    persisted.timezone === fresh.timezone ||
+    persisted.timezone === UNKNOWN_TIMEZONE ||
+    persisted.timezone === ''
+  ) {
+    return persisted.days;
+  }
+  const providerKeys = new Set(Object.values(persisted.days).flatMap((day) => Object.keys(day)));
+  const dropFrom = new Map<string, string>();
+  for (const providerKey of providerKeys) {
+    const persistedDates = providerDates(persisted.days, providerKey);
+    const freshDates = providerDates(fresh.days, providerKey);
+    const [firstPersisted] = persistedDates;
+    const [firstFresh] = freshDates;
+    const lastPersisted = persistedDates.at(-1);
+    if (firstPersisted === undefined || firstFresh === undefined || lastPersisted === undefined) {
+      continue;
+    }
+    // Older history means the oldest logged day may be partial, so it keeps the ratchet too.
+    const earliest = firstPersisted < firstFresh ? firstPersisted : firstFresh;
+    const from =
+      earliest < shiftDate(firstFresh, -MAX_ZONE_SHIFT_DAYS) ? shiftDate(firstFresh, 1) : earliest;
+    const to = shiftDate(lastPersisted, MAX_ZONE_SHIFT_DAYS);
+    const persistedTokens = tokensInRange(persisted.days, providerKey, persistedDates, from, to);
+    const freshTokens = tokensInRange(fresh.days, providerKey, freshDates, from, to);
+    if (freshTokens >= persistedTokens) dropFrom.set(providerKey, from);
+  }
+  if (dropFrom.size === 0) return persisted.days;
+
+  const days: MachineFile['days'] = {};
+  for (const [date, providers] of Object.entries(persisted.days)) {
+    const kept = Object.entries(providers).filter(([providerKey]) => {
+      const from = dropFrom.get(providerKey);
+      return from === undefined || date < from;
+    });
+    if (kept.length > 0) days[date] = Object.fromEntries(kept);
+  }
+  return days;
+}
+
+/** The stable order a machine file is written in. */
+export function canonicalDays(days: MachineFile['days']): MachineFile['days'] {
+  return mergePersistedDays(days, {});
+}
+
+/** What a write path stores for this machine: the logs over what is persisted, then the compaction setting. */
+export function outgoingDays(
+  persisted: MachineFile['days'] | null,
+  fresh: MachineFile['days'],
+  compactAfterDays: number | undefined,
+  today: string,
+): MachineFile['days'] {
+  const merged = mergePersistedDays(persisted, fresh);
+  return compactAfterDays === undefined ? merged : compactDays(merged, compactAfterDays, today);
 }
 
 /**

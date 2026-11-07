@@ -11,10 +11,13 @@ export {
   isCloned,
   pull,
   pushPendingCommits,
+  readCommittedFile,
   removeLocalClone,
+  replaceLocalClone,
 } from './git/repo.js';
 export {
   adoptPendingDataFiles,
+  InvalidMachineFileError,
   listDataFiles,
   listPendingDataFiles,
   readDataFile,

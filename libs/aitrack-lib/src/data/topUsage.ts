@@ -5,6 +5,7 @@ import {
   dateInFilter,
   hasUnpricedUsage,
 } from './aggregate.js';
+import { isSyntheticModel } from './compact.js';
 import { aggregateProjects, type ProjectUsage } from './projectUsage.js';
 import { compareByCostThenTokens } from './sort.js';
 import type { DayMap, ProviderData } from './types.js';
@@ -62,7 +63,11 @@ export function topDays(
       accumulator.tokens += dayTokens;
       accumulator.byProvider[providerKey] = (accumulator.byProvider[providerKey] ?? 0) + dayTokens;
       for (const [model, counts] of Object.entries(day.byModel)) {
-        if (hasUnpricedUsage(counts) && !accumulator.unpricedModels.includes(model)) {
+        if (
+          hasUnpricedUsage(counts) &&
+          !isSyntheticModel(model) &&
+          !accumulator.unpricedModels.includes(model)
+        ) {
           accumulator.unpricedModels.push(model);
         }
       }

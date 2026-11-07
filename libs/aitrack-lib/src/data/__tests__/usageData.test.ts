@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { makeMachineFile, makeProviderDay } from '@aitrack/test-fixtures';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   tryLoadConfig: vi.fn(),
@@ -26,11 +30,13 @@ vi.mock(import('../localData.js'), async (importOriginal) => ({
   buildLocalMachineFile: mocks.buildLocalMachineFile,
 }));
 
+import { ENCRYPTION_PASSPHRASE_ENV } from '../../store/encryption.js';
 import type { DayEntry, ProviderDay } from '../types.js';
 import {
   loadMergedProviderData,
   loadPersistedMachines,
   loadReportedMachines,
+  machineUsageTotals,
   mergeProviderDay,
   providerDataForWindows,
 } from '../usageData.js';
@@ -210,6 +216,46 @@ describe('loadMergedProviderData', () => {
     expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
   });
 
+  describe('reading machine files in a long-lived process', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aitrack-machines-'));
+    const file = join(dir, 'other.json');
+    afterAll(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('re-reads a file only when it changed or the passphrase did', () => {
+      mocks.listDataFiles.mockReturnValue([file]);
+      mocks.readDataFile.mockImplementation(() => makeMachineFile('other'));
+      vi.stubEnv(ENCRYPTION_PASSPHRASE_ENV, 'first');
+      writeFileSync(file, '{}');
+
+      loadPersistedMachines();
+      loadPersistedMachines();
+      expect(mocks.readDataFile).toHaveBeenCalledTimes(1);
+
+      vi.stubEnv(ENCRYPTION_PASSPHRASE_ENV, 'second');
+      loadPersistedMachines();
+      expect(mocks.readDataFile).toHaveBeenCalledTimes(2);
+
+      writeFileSync(file, '{ }');
+      loadPersistedMachines();
+      expect(mocks.readDataFile).toHaveBeenCalledTimes(3);
+    });
+
+    it('remembers a file that did not parse, until it changes', () => {
+      mocks.listDataFiles.mockReturnValue([file]);
+      mocks.readDataFile.mockReturnValue(null);
+      writeFileSync(file, 'broken');
+
+      expect(loadPersistedMachines()).toEqual([]);
+      expect(loadPersistedMachines()).toEqual([]);
+      expect(mocks.readDataFile).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('when configured and cloned', () => {
     beforeEach(() => {
       mocks.tryLoadConfig.mockReturnValue({
@@ -243,7 +289,7 @@ describe('loadMergedProviderData', () => {
 
       expect(events).toEqual(['ready', 'read']);
       expect(mocks.buildLocalMachineFile).not.toHaveBeenCalled();
-      expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['other']);
+      expect(loaded?.zonedSources.map((machine) => machine.hostname)).toEqual(['other']);
     });
 
     it('merges git data from other machines and overlays fresh local read', async () => {
@@ -279,8 +325,8 @@ describe('loadMergedProviderData', () => {
       expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
       // ...but a persisted day the local logs no longer reach is kept.
       expect(loaded?.providerData.codex?.get('2024-01-03')?.inputTokens).toBe(7);
-      expect(loaded?.machineData).toHaveLength(2);
-      expect(loaded?.machineData.map((machine) => machine.lastUpdated)).toEqual([
+      expect(loaded?.zonedSources).toHaveLength(2);
+      expect(loaded?.zonedSources.map((machine) => machine.lastUpdated)).toEqual([
         'synced-other',
         'synced-host',
       ]);
@@ -313,9 +359,12 @@ describe('loadMergedProviderData', () => {
       expect(loaded?.providerData.codex?.get('2024-01-01')?.inputTokens).toBe(10);
       // Replaced, not summed: 20 rather than the persisted 10 + fresh 20.
       expect(loaded?.providerData.codex?.get('2024-01-02')?.inputTokens).toBe(20);
-      expect(loaded?.machineData.map((machine) => machine.hostname)).toEqual(['work-host', 'host']);
+      expect(loaded?.zonedSources.map((machine) => machine.hostname)).toEqual([
+        'work-host',
+        'host',
+      ]);
       expect(
-        loaded?.zonedSources?.map(({ hostname, lastUpdated, current }) => ({
+        loaded?.zonedSources.map(({ hostname, lastUpdated, current }) => ({
           hostname,
           lastUpdated,
           current,
@@ -339,7 +388,7 @@ describe('loadMergedProviderData', () => {
       const loaded = await loadMergedProviderData({ providers: ['claude_code'] });
 
       expect(loaded?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(30);
-      expect(loaded?.machineData).toEqual([
+      expect(loaded?.zonedSources).toEqual([
         expect.objectContaining({ hostname: 'host', lastUpdated: 'last-sync' }),
       ]);
     });
@@ -362,6 +411,78 @@ describe('loadMergedProviderData', () => {
 
       // Display has to agree with sync, which keeps the larger persisted day.
       expect(loaded?.providerData.claude_code?.get('2024-01-02')?.inputTokens).toBe(900_000);
+    });
+
+    it('ignores a live provider day inside a synced file', async () => {
+      mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
+      mocks.readDataFile.mockReturnValue(
+        makeMachineFile('other', {
+          '2024-01-01': { claude_code: makeProviderDay(1, 0), cursor: makeProviderDay(9, 0) },
+        }),
+      );
+
+      const loaded = await loadMergedProviderData({ providers: ['claude_code', 'codex'] });
+      const unfiltered = await loadMergedProviderData({ localMachine: makeMachineFile('host') });
+
+      expect(loaded?.providerData.cursor).toBeUndefined();
+      expect(unfiltered?.providerData.claude_code?.get('2024-01-01')?.inputTokens).toBe(1);
+      expect(unfiltered?.providerData.cursor?.has('2024-01-01')).not.toBe(true);
+    });
+
+    it('counts a message once after this machine moved timezone, and labels it with the new one', async () => {
+      mocks.listDataFiles.mockReturnValue(['/repo/data/host.json']);
+      mocks.readDataFile.mockReturnValue(
+        makeMachineFile('host', { '2024-01-01': { claude_code: makeProviderDay(100, 0) } }),
+      );
+      mocks.buildLocalMachineFile.mockResolvedValue(
+        makeMachineFile(
+          'host',
+          { '2024-01-02': { claude_code: makeProviderDay(100, 0) } },
+          { timezone: 'Asia/Tokyo' },
+        ),
+      );
+
+      const loaded = await loadMergedProviderData({ providers: ['claude_code'] });
+
+      expect([...(loaded?.providerData.claude_code?.keys() ?? [])]).toEqual(['2024-01-02']);
+      expect(loaded?.zonedSources[0]?.timezone).toBe('Asia/Tokyo');
+    });
+  });
+});
+
+describe('machineUsageTotals', () => {
+  it('prices a stored day without a cost the way usage does', () => {
+    const totals = machineUsageTotals(
+      makeMachineFile('box', {
+        '2026-01-03': { codex: makeProviderDay(1, 0, 0.5) },
+        '2026-01-01': {
+          claude_code: makeProviderDay(1_000_000, 1_000_000, undefined, 'claude-sonnet-4-6'),
+        },
+        '2026-01-02': { claude_code: makeProviderDay(0, 0), cursor: makeProviderDay(9, 0) },
+      }),
+    );
+    expect(totals).toEqual({
+      inputTokens: 1_000_001,
+      outputTokens: 1_000_000,
+      costUSD: 18.5,
+      days: 2,
+      firstDay: '2026-01-01',
+      lastDay: '2026-01-03',
+      providers: ['claude_code', 'codex'],
+    });
+  });
+
+  it('reports no cost and flags the tokens when nothing could be priced', () => {
+    const totals = machineUsageTotals(
+      makeMachineFile('box', { '2026-01-01': { codex: makeProviderDay(5, 0) } }),
+    );
+    expect(totals).toMatchObject({ costUSD: null, hasUnpricedTokens: true });
+    expect(machineUsageTotals(makeMachineFile('box'))).toMatchObject({
+      costUSD: null,
+      days: 0,
+      firstDay: null,
+      lastDay: null,
+      providers: [],
     });
   });
 });
@@ -397,6 +518,22 @@ describe('loadReportedMachines', () => {
     expect(machines[0]?.lastUpdated).toBe('last-sync');
     expect(machines[0]?.days['2024-01-01']?.claude_code?.totals.inputTokens).toBe(10);
     expect(machines[0]?.days['2024-01-02']?.claude_code?.totals.inputTokens).toBe(40);
+  });
+
+  it('shows this machine from its logs before sync is set up', async () => {
+    mocks.tryLoadConfig.mockReturnValue(null);
+    mocks.isCloned.mockReturnValue(false);
+    mocks.listDataFiles.mockClear();
+    mocks.buildLocalMachineFile.mockResolvedValue(
+      makeMachineFile('host', { '2024-01-02': { claude_code: makeProviderDay(40, 0) } }),
+    );
+
+    const machines = await loadReportedMachines();
+
+    expect(machines.map((machine) => [machine.hostname, machine.lastUpdated])).toEqual([
+      ['host', ''],
+    ]);
+    expect(mocks.listDataFiles).not.toHaveBeenCalled();
   });
 
   it('includes local-only usage as not yet synced', async () => {

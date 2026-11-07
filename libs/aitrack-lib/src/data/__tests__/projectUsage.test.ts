@@ -111,5 +111,23 @@ describe('projectProviderData', () => {
     const inside = projectProviderData(DATA, { kind: 'dir', dir: '/work/loose' });
     expect(inside.claude_code?.get('2026-06-01')?.inputTokens).toBe(40);
     expect(projectProviderData(DATA, { kind: 'dir', dir: '/work/lo' })).toEqual({});
+    expect(
+      projectProviderData(
+        {
+          claude_code: new Map([
+            [
+              '2026-01-01',
+              {
+                inputTokens: 1,
+                outputTokens: 0,
+                byModel: {},
+                byCwd: { '/work/..scratch': { inputTokens: 1, outputTokens: 0 } },
+              },
+            ],
+          ]),
+        },
+        { kind: 'dir', dir: '/work' },
+      ).claude_code?.size,
+    ).toBe(1);
   });
 });

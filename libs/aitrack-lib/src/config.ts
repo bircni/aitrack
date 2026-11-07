@@ -1,12 +1,14 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { hostname } from 'node:os';
 
+import { writeFileAtomic } from './atomicWrite.js';
 import type { Config } from './configTypes.js';
 import { isFiniteNumber, isOptionalString, isRecord } from './data/guards.js';
 import { INIT_HINT, NO_CONFIG_MESSAGE } from './data/messages.js';
 import { errorMessage, isMissingPathError } from './errors.js';
 import { normalizeMachineId } from './machineId.js';
-import { APP_DIR, CONFIG_PATH } from './paths.js';
+import { log } from './output.js';
+import { CONFIG_PATH } from './paths.js';
 
 function validateBudget(value: unknown): NonNullable<Config['budget']> | null {
   if (!isRecord(value)) return null;
@@ -108,9 +110,17 @@ export function loadConfig(): Config {
   throw new Error(NO_CONFIG_MESSAGE);
 }
 
+let warnedInvalidConfig = false;
+
+/** A report still renders without the config, but it undercounts, so say why once. */
 export function tryLoadConfig(): Config | null {
   const loaded = readConfig();
-  return loaded.status === 'ok' ? loaded.config : null;
+  if (loaded.status === 'ok') return loaded.config;
+  if (loaded.status === 'invalid' && !warnedInvalidConfig) {
+    warnedInvalidConfig = true;
+    log.warn(`${invalidConfigMessage(loaded.reason)} Ignoring it for now.`);
+  }
+  return null;
 }
 
 export function saveConfig(config: Config): void {
@@ -118,8 +128,19 @@ export function saveConfig(config: Config): void {
     ...config,
     ...(config.machineId !== undefined && { machineId: normalizeMachineId(config.machineId) }),
   };
-  mkdirSync(APP_DIR, { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf8');
+  // The link target and mode are the user's: dotfile managers link this file, and a repoUrl can hold a token.
+  const target = existingConfigFile();
+  writeFileAtomic(target?.path ?? CONFIG_PATH, JSON.stringify(normalized, null, 2), target?.mode);
+}
+
+function existingConfigFile(): { path: string; mode: number } | null {
+  try {
+    const path = realpathSync(CONFIG_PATH);
+    return { path, mode: statSync(path).mode & 0o777 };
+  } catch (error) {
+    if (isMissingPathError(error)) return null;
+    throw error;
+  }
 }
 
 // Short hostname: the FQDN changes per network and would fork the machine's identity.

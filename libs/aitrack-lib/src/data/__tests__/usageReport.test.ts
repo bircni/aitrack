@@ -1,4 +1,4 @@
-import { EXTREME_TIME_ZONES, makeDay, useTimeZone } from '@aitrack/test-fixtures';
+import { EXTREME_TIME_ZONES, loadedFrom, makeDay, useTimeZone } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -12,7 +12,7 @@ vi.mock('../usageData.js', async (importOriginal) => {
 
 import { UNKNOWN_TIMEZONE, machineTimezone } from '../../timezone.js';
 import type { DayEntry } from '../types.js';
-import type { LoadedUsageData, ZonedUsageSource } from '../usageData.js';
+import { mergeUsageSources, type UsageDataInput, type ZonedUsageSource } from '../usageData.js';
 import {
   buildProjectBreakdownsFromLoaded,
   buildUsageComparison,
@@ -71,10 +71,9 @@ describe('buildUsageReport', () => {
   });
 
   it('returns rowCount 0 when data exists but nothing falls in the window', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: { claude_code: new Map([['2020-01-01', makeDay(100, 20, 1)]]) },
-      machineData: [],
-    });
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({ claude_code: new Map([['2020-01-01', makeDay(100, 20, 1)]]) }),
+    );
     const report = await buildUsageReport({ period: 'today' });
     expect(report).not.toBeNull();
     expect(report?.rowCount).toBe(0);
@@ -82,8 +81,8 @@ describe('buildUsageReport', () => {
   });
 
   it('aggregates per-model rows, subtotals, and totals', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           [
             TODAY,
@@ -98,9 +97,8 @@ describe('buildUsageReport', () => {
             },
           ],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     const report = await buildUsageReport({ period: 'today' });
     expect(report?.rowCount).toBe(2);
@@ -116,8 +114,8 @@ describe('buildUsageReport', () => {
   });
 
   it('forwards cached input so the usage table can show the cache discount', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         codex: new Map([
           [
             TODAY,
@@ -137,9 +135,8 @@ describe('buildUsageReport', () => {
             },
           ],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     const report = await buildUsageReport({ period: 'today' });
     expect(report?.providers[0]?.rows[0]).toMatchObject({
@@ -152,26 +149,24 @@ describe('buildUsageReport', () => {
   });
 
   it('marks rows without cost as hasCost false', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: { claude_code: new Map([[TODAY, makeDay(500, 100)]]) },
-      machineData: [],
-    });
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({ claude_code: new Map([[TODAY, makeDay(500, 100)]]) }),
+    );
     const report = await buildUsageReport({ period: 'today' });
     expect(report?.providers[0]?.rows[0]?.hasCost).toBe(false);
     expect(report?.totals.hasCost).toBe(false);
   });
 
   it('compares totals and per-model movement using one data load', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-06-08', makeDay(100, 0, 1, 'shared')],
           ['2026-06-15', makeDay(200, 0, 3, 'shared')],
         ]),
         codex: new Map([['2026-06-08', makeDay(50, 0, undefined, 'removed')]]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     const result = await buildUsageComparison({ period: 'thisweek' });
 
@@ -198,16 +193,15 @@ describe('buildUsageReport', () => {
   });
 
   it('orders comparison rows by cost then token movement and flags cost and unpriced models', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      machineData: [],
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-06-15', dayOf({ A: [80, 20, 1], B: [30, 10, 5], C: [20, 10], F: [6, 4, 0.5] })],
           ['2026-06-14', dayOf({ A: [80, 20, 1], B: [5, 5, 1], D: [20, 10], G: [5, 5, 0.25] })],
         ]),
         codex: new Map([['2026-06-15', dayOf({ E: [400, 100] })]]),
-      },
-    });
+      }),
+    );
 
     const result = await buildUsageComparison({ period: 'today' });
 
@@ -252,15 +246,14 @@ describe('buildUsageReport', () => {
   });
 
   it('leaves unpriced and cost flags off when every model is priced', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      machineData: [],
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-06-15', makeDay(10, 10, 1, 'm')],
           ['2026-06-14', makeDay(10, 10, 1, 'm')],
         ]),
-      },
-    });
+      }),
+    );
     const result = await buildUsageComparison({ period: 'today' });
     expect(result?.current.totals.hasUnpricedTokens).toBeUndefined();
     expect(result?.current.providers[0]?.hasUnpricedTokens).toBeUndefined();
@@ -274,15 +267,14 @@ describe('buildUsageReport', () => {
   ])(
     'flags comparison totals when only the %s window has unpriced tokens',
     async (_w, now, before) => {
-      mocks.loadMergedProviderData.mockResolvedValue({
-        machineData: [],
-        providerData: {
+      mocks.loadMergedProviderData.mockResolvedValue(
+        loadedFrom({
           claude_code: new Map([
             ['2026-06-15', now],
             ['2026-06-14', before],
           ]),
-        },
-      });
+        }),
+      );
       const result = await buildUsageComparison({ period: 'today' });
       expect(result?.comparison.totals.hasUnpricedTokens).toBe(true);
       expect(result?.comparison.models[0]?.hasUnpricedTokens).toBe(true);
@@ -304,10 +296,9 @@ describe('buildUsageReport', () => {
   });
 
   it('rejects comparison for all-time usage', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: { claude_code: new Map([[TODAY, makeDay(100, 20, 1)]]) },
-      machineData: [],
-    });
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({ claude_code: new Map([[TODAY, makeDay(100, 20, 1)]]) }),
+    );
 
     await expect(buildUsageComparison({ period: 'all' })).rejects.toThrow(
       'does not have a comparable previous period',
@@ -322,17 +313,15 @@ describe('buildUsageReport', () => {
     });
 
     it('includes each machine on its own local today', async () => {
-      mocks.loadMergedProviderData.mockResolvedValue({
-        providerData: {},
-        machineData: [],
-        zonedSources: [
+      mocks.loadMergedProviderData.mockResolvedValue(
+        mergeUsageSources([
           zoned('UTC', { '2026-06-15': claudeDay(10) }),
           zoned('America/Los_Angeles', {
             '2026-06-14': claudeDay(7),
             '2026-06-15': claudeDay(100),
           }),
-        ],
-      });
+        ]),
+      );
 
       const report = await buildUsageReport({ period: 'today' });
 
@@ -341,17 +330,15 @@ describe('buildUsageReport', () => {
     });
 
     it('compares against the previous day of each machine', async () => {
-      mocks.loadMergedProviderData.mockResolvedValue({
-        providerData: {},
-        machineData: [],
-        zonedSources: [
+      mocks.loadMergedProviderData.mockResolvedValue(
+        mergeUsageSources([
           zoned('UTC', { '2026-06-15': claudeDay(10), '2026-06-14': claudeDay(4) }),
           zoned('America/Los_Angeles', {
             '2026-06-14': claudeDay(7),
             '2026-06-13': claudeDay(2),
           }),
-        ],
-      });
+        ]),
+      );
 
       const result = await buildUsageComparison({ period: 'today' });
 
@@ -387,9 +374,11 @@ describe('buildUsageReport', () => {
         '2026-06-15': claudeDay(10),
       };
       const periods = [{ period: 'thismonth' }, { period: 'yesterday' }] as const;
-      const variants: LoadedUsageData[] = [
-        { providerData: {}, machineData: [], zonedSources: [zoned('UTC', days)] },
+      const variants: UsageDataInput[] = [
+        mergeUsageSources([zoned('UTC', days)]),
         {
+          // The root API's merged-only shape.
+          machineData: [],
           providerData: {
             claude_code: new Map([
               ['2026-06-01', makeDay(3, 0)],
@@ -397,7 +386,6 @@ describe('buildUsageReport', () => {
               ['2026-06-15', makeDay(10, 0)],
             ]),
           },
-          machineData: [],
         },
       ];
       for (const loaded of variants) {
@@ -407,17 +395,15 @@ describe('buildUsageReport', () => {
     });
 
     it('keeps an explicit date on the stored date keys', async () => {
-      mocks.loadMergedProviderData.mockResolvedValue({
-        providerData: {},
-        machineData: [],
-        zonedSources: [
+      mocks.loadMergedProviderData.mockResolvedValue(
+        mergeUsageSources([
           zoned('UTC', { '2026-06-15': claudeDay(10) }),
           zoned('America/Los_Angeles', {
             '2026-06-14': claudeDay(7),
             '2026-06-15': claudeDay(100),
           }),
-        ],
-      });
+        ]),
+      );
 
       const report = await buildUsageReport({ period: 'date', from: '2026-06-15' });
 
@@ -430,14 +416,10 @@ describe('buildUsageReport', () => {
         period,
       }));
       for (const otherZone of ['UTC', 'America/Los_Angeles']) {
-        const loaded: LoadedUsageData = {
-          providerData: {},
-          machineData: [],
-          zonedSources: [
-            zoned('UTC', { '2026-06-15': claudeDay(10), '2026-06-01': claudeDay(3) }),
-            zoned(otherZone, { '2026-06-14': claudeDay(7), '2026-06-15': claudeDay(100) }),
-          ],
-        };
+        const loaded = mergeUsageSources([
+          zoned('UTC', { '2026-06-15': claudeDay(10), '2026-06-01': claudeDay(3) }),
+          zoned(otherZone, { '2026-06-14': claudeDay(7), '2026-06-15': claudeDay(100) }),
+        ]);
 
         expect(buildUsageReportsFromLoaded(loaded, periods)).toEqual(
           periods.map((options) => buildUsageReportFromLoaded(loaded, options)),
@@ -447,16 +429,40 @@ describe('buildUsageReport', () => {
   });
 });
 
+describe('a migrated machine with no recorded timezone in Pacific/Kiritimati', () => {
+  useTimeZone('Pacific/Kiritimati');
+  it("counts today on the viewer's calendar", () => {
+    const instant = new Date('2026-06-15T12:00:00Z'); // Already the 16th at UTC+14.
+    const report = buildUsageReportFromLoaded(
+      mergeUsageSources([
+        zoned(UNKNOWN_TIMEZONE, { '2026-06-15': claudeDay(1), '2026-06-16': claudeDay(10) }),
+      ]),
+      { period: 'today' },
+      instant,
+    );
+    expect(report.totals.tokens).toBe(10);
+  });
+});
+
+it('never names a compacted day as a model that could not be priced', () => {
+  const report = buildUsageReportFromLoaded(
+    loadedFrom({
+      claude_code: new Map([['2026-06-15', makeDay(10, 0, undefined, '(compacted)')]]),
+    }),
+    { period: 'all' },
+    NOW,
+  );
+  expect(report.totals.hasUnpricedTokens).toBe(true);
+  expect(report.totals.unpricedModels).toBeUndefined();
+});
+
 for (const zone of EXTREME_TIME_ZONES) {
   describe(`explicit report clock in ${zone}`, () => {
     useTimeZone(zone);
     it('uses one supplied instant for all calendar windows even when the wall clock differs', () => {
       const instant = new Date('2026-01-01T00:15:00Z');
       const date = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(instant);
-      const loaded: LoadedUsageData = {
-        machineData: [],
-        providerData: { claude_code: new Map([[date, makeDay(10, 2, 1)]]) },
-      };
+      const loaded = loadedFrom({ claude_code: new Map([[date, makeDay(10, 2, 1)]]) });
       const reports = buildUsageReportsFromLoaded(
         loaded,
         [{ period: 'today' }, { period: 'thismonth' }],
@@ -469,25 +475,22 @@ for (const zone of EXTREME_TIME_ZONES) {
 }
 
 it('retains partially priced usage within one model and across models', () => {
-  const loaded: LoadedUsageData = {
-    machineData: [],
-    providerData: {
-      claude_code: new Map([
-        [
-          '2026-06-15',
-          {
-            inputTokens: 30,
-            outputTokens: 0,
-            costUSD: 2,
-            byModel: {
-              mixed: { inputTokens: 20, outputTokens: 0, costUSD: 2, hasUnpricedTokens: true },
-              unknown: { inputTokens: 10, outputTokens: 0 },
-            },
+  const loaded = loadedFrom({
+    claude_code: new Map([
+      [
+        '2026-06-15',
+        {
+          inputTokens: 30,
+          outputTokens: 0,
+          costUSD: 2,
+          byModel: {
+            mixed: { inputTokens: 20, outputTokens: 0, costUSD: 2, hasUnpricedTokens: true },
+            unknown: { inputTokens: 10, outputTokens: 0 },
           },
-        ],
-      ]),
-    },
-  };
+        },
+      ],
+    ]),
+  });
   const report = buildUsageReportFromLoaded(loaded, { period: 'all' });
   expect(report.totals).toMatchObject({
     tokens: 30,
@@ -502,10 +505,9 @@ it('retains partially priced usage within one model and across models', () => {
 
 import { emptyReportMessage } from '../usageReport.js';
 it('compares partial and fully unpriced models without claiming complete cost changes', async () => {
-  mocks.loadMergedProviderData.mockResolvedValue({
-    machineData: [],
-    providerData: {
-      claude_code: new Map([
+  mocks.loadMergedProviderData.mockResolvedValue(
+    loadedFrom({
+      claude_code: new Map<string, DayEntry>([
         [
           '2026-06-15',
           {
@@ -526,16 +528,13 @@ it('compares partial and fully unpriced models without claiming complete cost ch
           },
         ],
       ]),
-    },
-  });
+    }),
+  );
   const result = await buildUsageComparison({ period: 'today' }, new Date('2026-06-15T12:00:00'));
   expect(result?.comparison.totals.hasUnpricedTokens).toBe(true);
   expect(result?.comparison.models.every((model) => model.hasUnpricedTokens)).toBe(true);
   expect(emptyReportMessage(result?.current ?? null)).toBeNull();
-  const empty = buildUsageReportFromLoaded(
-    { machineData: [], providerData: {} },
-    { period: 'all' },
-  );
+  const empty = buildUsageReportFromLoaded(loadedFrom({}), { period: 'all' });
   expect(emptyReportMessage(empty)).toContain('No usage recorded');
   expect(emptyReportMessage(null)).toContain('No');
 });
@@ -552,14 +551,10 @@ describe('project scoping', () => {
       byCwd: { '/w/loose': { inputTokens: 40, outputTokens: 0, costUSD: 0.4 } },
     },
   };
-  const loaded: LoadedUsageData = {
-    providerData: {},
-    machineData: [],
-    zonedSources: [
-      zoned('UTC', { '2026-06-15': projectDay, '2026-06-14': claudeDay(50) }),
-      zoned('Asia/Tokyo', {}),
-    ],
-  };
+  const loaded = mergeUsageSources([
+    zoned('UTC', { '2026-06-15': projectDay, '2026-06-14': claudeDay(50) }),
+    zoned('Asia/Tokyo', {}),
+  ]);
 
   it('reports one project as a single model row and says what it cannot see', () => {
     const report = buildUsageReportFromLoaded(
@@ -588,7 +583,7 @@ describe('project scoping', () => {
       },
     };
     const report = buildUsageReportFromLoaded(
-      { ...loaded, zonedSources: [zoned('UTC', { '2026-06-15': unpriced })] },
+      mergeUsageSources([zoned('UTC', { '2026-06-15': unpriced })]),
       { period: 'all', project: { kind: 'project', project: 'a/one' } },
       NOW,
     );
