@@ -73,8 +73,8 @@ provider limits alongside the usage history and cost estimates used by aitrack.
 - A configurable tray icon or bars for your available limits, with colour or monochrome rendering.
 - A floating dashboard, global shortcut and optional launch at login.
 
-Install opentrack with Homebrew on macOS 13.5+ (Apple Silicon), or with the CLI on macOS,
-64-bit Windows or 64-bit Linux:
+Install opentrack with Homebrew on macOS 13.5+ (Apple Silicon), or with the CLI on Apple
+Silicon macOS or x86_64 Windows or Linux:
 
 ```sh
 brew install --cask bircni/tap/opentrack
@@ -123,7 +123,11 @@ You can use both apps locally without setting up a repo.
 Claude Code and Codex usage comes from local session logs. Cursor usage comes from its
 HTTPS usage export using the current machine's saved Cursor login. opentrack also
 requests live limits from each provider using the credentials that provider's tool saved.
-Credentials are never written to your usage repo.
+Credentials are never written to your usage repo. Synced files do hold your machine name,
+timezone, and daily usage by model and project (`owner/repo`, which can name a private
+repository), so keep the repo private or turn on
+[`encryptData`](docs/cli.md#encrypting-the-synced-files). [Security & privacy](SECURITY.md)
+lists everything that leaves your machine.
 
 Costs are **API-equivalent estimates**, based on model pricing and token/cache counts.
 They show the pay-as-you-go value of your usage, not your subscription bill.
@@ -140,6 +144,7 @@ aitrack show --tui --providers claude,codex
 - [Desktop guide](docs/opentrack.md) — live limits, credentials and desktop behaviour.
 - [Library guide](docs/library.md) — use `aitrack-lib` in your own tools.
 - [Architecture](docs/architecture.md) — how the data flows and how the apps fit together.
+- [Security & privacy](SECURITY.md) — what leaves your machine and what stays local.
 - [Contributing](CONTRIBUTING.md) — development setup, project layout, checks and releases.
 - [Changelog](CHANGELOG.md) — changes across both apps and the shared library.
 
