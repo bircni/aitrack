@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v4.2.0] - 2026-11-07
+
+
+
+### Bug Fixes
+
+- **aitrack-lib:** Protect synced data and warn on a moved origin
+- **aitrack-lib:** Correct PDF and PNG output
+- **aitrack:** Make errors, exit codes and non-interactive use dependable
+- **opentrack-ui:** Show empty, stale and error states
+- **opentrack:** Fix the sidecar deadlock and hide the window on close
+
+### Build
+
+- **deps:** Update dependencies to latest
+
+### CI
+
+- Isolate publishing and gate on Rust advisories
+- Install Linux desktop libraries without the apt cache
+
+### Documentation
+
+- Match the documentation to current behaviour
+
+### Features
+
+- **pricing:** Price Claude fast mode and long Haiku 5.5 prompts
+- **opentrack:** Normal window controls, compact view per chosen providers (#137)
+
+### Performance
+
+- **aitrack-lib:** Reduce reader time, memory and import cost
+
+### Tests
+
+- **opentrack:** Wait for a busy sidecar instead of a fixed sleep
+
 ## [v4.1.0] - 2026-10-31
 
 
