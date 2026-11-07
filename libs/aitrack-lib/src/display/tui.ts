@@ -4,7 +4,7 @@ import { sumDayMap } from '../data/aggregate.js';
 import { mergeAllDayMaps } from '../data/dayMap.js';
 import type { DayMap, ProviderData } from '../data/types.js';
 import { costColumnLabel, providerLabel } from '../providers/index.js';
-import { fmt, fmtUSD } from './format.js';
+import { fmt, fmtUSDCost } from './format.js';
 import { resolveProviderLayout } from './heatmap/layout.js';
 import { providerStats } from './heatmap/providerStats.js';
 import { formatMonthLabel } from './heatmap/stats.js';
@@ -102,7 +102,7 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
   const subtitle = chalk.dim('Streak = current / longest (days)');
 
   const table = renderTerminalTable(
-    [...bodyRows, ...(footer ? [footer] : [])],
+    bodyRows,
     [
       { header: 'Provider', align: 'left', cell: (r) => r.provider },
       { header: 'Days', align: 'right', cell: (r) => String(r.days) },
@@ -112,7 +112,7 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
       {
         header: costHeader(keys),
         align: 'right',
-        cell: (r) => (r.costUSD === null ? '—' : fmtUSD(r.costUSD)),
+        cell: (r) => (r.costUSD === null ? '—' : fmtUSDCost(r.costUSD)),
       },
       {
         header: 'Streak',
@@ -130,7 +130,6 @@ export function renderTui(providerData: ProviderData, options: TuiOptions = {}):
     ],
     {
       style,
-      bodyRows,
       footerRow: footer,
       firstColumnStyle: style.header,
     },

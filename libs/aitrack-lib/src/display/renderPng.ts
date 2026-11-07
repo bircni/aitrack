@@ -1,10 +1,12 @@
-import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
+import { createRequire } from 'node:module';
+
+import type * as NapiCanvas from '@napi-rs/canvas';
 
 import type { DayMap, ProviderData } from '../data/types.js';
 import { tokenIntensityLevel } from './heatmap/intensity.js';
 import { resolveProviderLayout } from './heatmap/layout.js';
-import { buildDateGrid, MONTHS } from './heatmap/stats.js';
-import { getProviderTheme, PALETTE } from './heatmap/themes.js';
+import { buildDateGrid, monthLabels } from './heatmap/stats.js';
+import { PALETTE, providerCells } from './heatmap/themes.js';
 import { buildProviderSectionViewModel } from './heatmap/viewModel.js';
 import type { RenderOptions } from './renderOptions.js';
 
@@ -34,8 +36,19 @@ const SEC_PAD_BOT = 28;
 const SECTION_H =
   SEC_PAD_TOP + HEADER_H + DIVIDER_H + MONTH_H + GRID_H + LEGEND_H + STATS_H + SEC_PAD_BOT;
 
+const STAT_COLUMN_GAP = 8;
+
+function fitText(context: NapiCanvas.SKRSContext2D, text: string, maxWidth: number): string {
+  if (context.measureText(text).width <= maxWidth) return text;
+  let fitted = text;
+  while (fitted.length > 0 && context.measureText(`${fitted}…`).width > maxWidth) {
+    fitted = fitted.slice(0, -1);
+  }
+  return `${fitted}…`;
+}
+
 function roundedRect(
-  context: SKRSContext2D,
+  context: NapiCanvas.SKRSContext2D,
   x: number,
   y: number,
   w: number,
@@ -52,7 +65,7 @@ function roundedRect(
 }
 
 function drawSection(
-  context: SKRSContext2D,
+  context: NapiCanvas.SKRSContext2D,
   providerKey: string,
   dayMap: DayMap,
   weeks: Array<Array<string | null>>,
@@ -60,9 +73,8 @@ function drawSection(
   mode: 'light' | 'dark',
 ): void {
   const C = PALETTE[mode];
-  const isDark = mode === 'dark';
-  const vm = buildProviderSectionViewModel(providerKey, dayMap);
-  const themeCells = getProviderTheme(providerKey, isDark).cells;
+  const vm = buildProviderSectionViewModel(providerKey, dayMap, new Set(weeks.flat()));
+  const themeCells = providerCells(providerKey, mode);
   const gridW = gridWidth(weeks.length);
 
   let y = baseY + SEC_PAD_TOP;
@@ -93,15 +105,8 @@ function drawSection(
 
   context.fillStyle = C.muted;
   context.font = '11px Arial';
-  let lastMonth = -1;
-  for (const [w, week] of weeks.entries()) {
-    const first = week.find((d) => d !== null);
-    if (!first) continue;
-    const month = Number.parseInt(first.slice(5, 7), 10) - 1;
-    if (month !== lastMonth) {
-      context.fillText(MONTHS[month] ?? '', LEFT + w * STEP, y + 14);
-      lastMonth = month;
-    }
+  for (const { column, label } of monthLabels(weeks)) {
+    context.fillText(label, LEFT + column * STEP, y + 14);
   }
   y += MONTH_H;
 
@@ -153,7 +158,7 @@ function drawSection(
     context.fillText(stat.label, bx, y + 12);
     context.fillStyle = C.value;
     context.font = 'bold 13px Arial';
-    context.fillText(stat.value, bx, y + 28);
+    context.fillText(fitText(context, stat.value, bColW - STAT_COLUMN_GAP), bx, y + 28);
     if (stat.sub !== undefined) {
       context.fillStyle = C.muted;
       context.font = '11px Arial';
@@ -175,6 +180,8 @@ export function renderToPng(
   const totalH = CANVAS_PAD + keys.length * SECTION_H + CANVAS_PAD;
 
   const totalW = totalWidth(weeks.length);
+  // Native and slow to load, and `show --tui` never draws; this API is sync, so not import().
+  const { createCanvas } = createRequire(import.meta.url)('@napi-rs/canvas') as typeof NapiCanvas;
   const canvas = createCanvas(totalW, totalH);
   const context = canvas.getContext('2d');
 

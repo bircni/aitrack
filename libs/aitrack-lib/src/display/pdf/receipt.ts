@@ -1,8 +1,6 @@
-import PDFDocument from 'pdfkit';
-
 import { toLocalDateString } from '../../data/dayMap.js';
 import type { UsageReport } from '../../data/usageReport.js';
-import { fmt, fmtUSD, unpricedFootnote } from '../format.js';
+import { fmt, fmtUSDCost, unpricedFootnote } from '../format.js';
 
 const PAGE_WIDTH = 360; // narrow, receipt-like
 const MARGIN = 22;
@@ -34,7 +32,7 @@ export function localTimestamp(at: Date): string {
 }
 
 function priceCell(hasCost: boolean, costUSD: number): string {
-  return hasCost ? fmtUSD(costUSD) : '-';
+  return hasCost ? fmtUSDCost(costUSD) : '-';
 }
 
 function divider(document: PDFKit.PDFDocument): void {
@@ -47,7 +45,7 @@ function divider(document: PDFKit.PDFDocument): void {
   document.y = y + 4;
 }
 
-/** Draw one model/tokens/price row on a single line, never wrapping. */
+/** Draw one model/tokens/price row on a single line, so a long model name cannot run into the next row. */
 function row(
   document: PDFKit.PDFDocument,
   left: string,
@@ -57,13 +55,10 @@ function row(
 ): void {
   const y = document.y;
   document.font(bold ? FONT_BOLD : FONT).fontSize(9);
-  document.text(asciiSafe(left), MARGIN, y, { width: LEFT_W, ellipsis: true, lineBreak: false });
-  document.text(tokens, MARGIN + LEFT_W, y, { width: TOKENS_W, align: 'right', lineBreak: false });
-  document.text(price, MARGIN + LEFT_W + TOKENS_W, y, {
-    width: PRICE_W,
-    align: 'right',
-    lineBreak: false,
-  });
+  // pdfkit only ellipsizes against a height; with a width alone it wraps.
+  document.text(asciiSafe(left), MARGIN, y, { width: LEFT_W, height: ROW_HEIGHT, ellipsis: true });
+  document.text(tokens, MARGIN + LEFT_W, y, { width: TOKENS_W, align: 'right' });
+  document.text(price, MARGIN + LEFT_W + TOKENS_W, y, { width: PRICE_W, align: 'right' });
   document.y = y + ROW_HEIGHT;
 }
 
@@ -129,19 +124,18 @@ function drawReceipt(document: PDFKit.PDFDocument, report: UsageReport, generate
     });
 }
 
-// Laid out once on a page too tall to paginate, so the real page fits with no blank tail.
-function contentHeight(report: UsageReport, generatedAt: Date): number {
-  const probe = new PDFDocument({ size: [PAGE_WIDTH, 100_000], margin: MARGIN });
-  drawReceipt(probe, report, generatedAt);
-  return Math.ceil(probe.y) + MARGIN;
-}
-
-export function renderReceiptPdf(
+export async function renderReceiptPdf(
   report: UsageReport,
   generatedAt: Date = new Date(),
 ): Promise<Buffer> {
+  const { default: PDFDocument } = await import('pdfkit'); // Slow to load, and a CSV export never needs it.
+
+  // Laid out once on a page too tall to paginate, so the real page fits with no blank tail.
+  const probe = new PDFDocument({ size: [PAGE_WIDTH, 100_000], margin: MARGIN });
+  drawReceipt(probe, report, generatedAt);
+
   const document = new PDFDocument({
-    size: [PAGE_WIDTH, contentHeight(report, generatedAt)],
+    size: [PAGE_WIDTH, Math.ceil(probe.y) + MARGIN],
     margin: MARGIN,
     info: { Title: `aitrack usage receipt - ${asciiSafe(report.windowLabel)}` },
   });

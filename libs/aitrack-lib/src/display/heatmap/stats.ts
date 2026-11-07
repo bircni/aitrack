@@ -3,6 +3,7 @@ import type { DayMap } from '../../data/types.js';
 import { rollingWindow, todayString } from '../../data/usagePeriods.js';
 import { HEATMAP_WEEKS, RECENT_WINDOW_DAYS } from './constants.js';
 
+/** @public */
 export const MONTHS = [
   'Jan',
   'Feb',
@@ -129,6 +130,25 @@ export function formatMonthLabel(month: string): string {
   const [y = '', m = ''] = month.split('-');
   const monthIndex = Number.parseInt(m, 10) - 1;
   return `${MONTHS[monthIndex] ?? m} ${y}`;
+}
+
+/** Which grid columns get a month label; a label is wider than one column. */
+export function monthLabels(
+  weeks: Array<Array<string | null>>,
+): Array<{ column: number; label: string }> {
+  const labels: Array<{ column: number; label: string }> = [];
+  let lastMonth = -1;
+  for (const [column, week] of weeks.entries()) {
+    const first = week.find((d) => d !== null);
+    if (first === undefined) continue;
+    const month = Number.parseInt(first.slice(5, 7), 10) - 1;
+    if (month !== lastMonth) {
+      labels.push({ column, label: MONTHS[month] ?? '' });
+      lastMonth = month;
+    }
+  }
+  // A rolling grid can open on a month's last days, right against the next label.
+  return labels[1]?.column === 1 ? labels.slice(1) : labels;
 }
 
 export function buildDateGrid(year?: number): Array<Array<string | null>> {

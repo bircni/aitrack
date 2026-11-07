@@ -24,15 +24,17 @@ export interface ProviderSectionViewModel {
 export function buildProviderSectionViewModel(
   providerKey: string,
   dayMap: DayMap,
+  visibleDates?: ReadonlySet<string | null>,
 ): ProviderSectionViewModel {
   const stats = providerStats(dayMap);
 
   // Only the per-day spread for the intensity percentile is specific to this
   // view; the headline figures come from the same helper the terminal table uses.
+  // Days off the grid stay out of it, or a busy old year washes out the visible one.
   const dayTotals: number[] = [];
-  for (const v of dayMap.values()) {
+  for (const [date, v] of dayMap) {
     const total = v.inputTokens + v.outputTokens;
-    if (total > 0) dayTotals.push(total);
+    if (total > 0 && (visibleDates?.has(date) ?? true)) dayTotals.push(total);
   }
 
   const maxTokens = percentile(dayTotals, INTENSITY_PERCENTILE) || 1;
