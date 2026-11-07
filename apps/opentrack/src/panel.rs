@@ -22,6 +22,38 @@ struct PanelState {
     deferred_show: Option<&'static str>,
 }
 
+#[derive(Debug, PartialEq)]
+enum ToggleAction {
+    Hide,
+    Show,
+    Ignore,
+}
+
+/// Decisions only, fed the window's visibility: a window getter off the main thread waits for it,
+/// so holding this lock across one deadlocks against a main-thread event taking the lock.
+impl PanelState {
+    fn hide_on_blur(&mut self, visible: bool, now: Instant) -> bool {
+        let hide = visible && !self.floating;
+        if hide {
+            self.hidden_by_blur_at = Some(now);
+        }
+        hide
+    }
+
+    fn toggle(&mut self, visible: bool, tray: Option<Rect>, now: Instant) -> ToggleAction {
+        if tray.is_some() {
+            self.tray = tray;
+        }
+        if visible {
+            ToggleAction::Hide
+        } else if self.hidden_by_blur_at.is_some_and(|at| now.duration_since(at) < BLUR_CLICK_GRACE) {
+            ToggleAction::Ignore
+        } else {
+            ToggleAction::Show
+        }
+    }
+}
+
 impl Panel {
     pub fn new() -> Self {
         Self {
@@ -41,37 +73,30 @@ impl Panel {
     }
 
     pub fn on_blur(&self, window: &WebviewWindow) {
-        let mut state = self.state.lock().unwrap();
-        if state.floating || !window.is_visible().unwrap_or(false) {
-            return;
+        let visible = window.is_visible().unwrap_or(false);
+        let hide = self.state.lock().unwrap().hide_on_blur(visible, Instant::now());
+        if hide {
+            let _ = window.hide();
         }
-        state.hidden_by_blur_at = Some(Instant::now());
-        let _ = window.hide();
     }
 
     pub fn toggle(&self, window: &WebviewWindow, tray: Option<Rect>) {
-        {
-            let mut state = self.state.lock().unwrap();
-            if tray.is_some() {
-                state.tray = tray;
-            }
-            if window.is_visible().unwrap_or(false) {
+        let visible = window.is_visible().unwrap_or(false);
+        let action = self.state.lock().unwrap().toggle(visible, tray, Instant::now());
+        match action {
+            ToggleAction::Hide => {
                 let _ = window.hide();
-                return;
             }
-            if state.hidden_by_blur_at.is_some_and(|at| at.elapsed() < BLUR_CLICK_GRACE) {
-                return;
-            }
+            ToggleAction::Show => self.show(window, None),
+            ToggleAction::Ignore => {}
         }
-        self.show(window, None);
     }
 
     pub fn show(&self, window: &WebviewWindow, screen: Option<&str>) {
-        let place = {
-            let state = self.state.lock().unwrap();
-            !state.floating || !window.is_visible().unwrap_or(false)
-        };
-        if place {
+        let visible = window.is_visible().unwrap_or(false);
+        let floating = self.state.lock().unwrap().floating;
+        crate::deliver_skipped_state(window.app_handle());
+        if !floating || !visible {
             self.place(window);
         }
         let _ = window.show();
@@ -147,4 +172,36 @@ pub const MAIN_WINDOW: &str = "main";
 
 pub fn main_window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(MAIN_WINDOW)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state(floating: bool) -> PanelState {
+        PanelState { floating, ..Panel::new().state.into_inner().unwrap() }
+    }
+
+    #[test]
+    fn blur_hides_only_a_visible_popup() {
+        let now = Instant::now();
+        let mut popup = state(false);
+        assert!(!popup.hide_on_blur(false, now));
+        assert_eq!(popup.hidden_by_blur_at, None);
+        assert!(popup.hide_on_blur(true, now));
+        assert_eq!(popup.hidden_by_blur_at, Some(now));
+        assert!(!state(true).hide_on_blur(true, now));
+    }
+
+    #[test]
+    fn a_tray_click_right_after_a_blur_hide_does_not_reopen() {
+        let now = Instant::now();
+        let tray = Rect { x: 1, y: 2, width: 3, height: 4 };
+        let mut popup = state(false);
+        popup.hide_on_blur(true, now);
+        assert_eq!(popup.toggle(false, Some(tray), now + BLUR_CLICK_GRACE / 2), ToggleAction::Ignore);
+        assert_eq!(popup.tray, Some(tray));
+        assert_eq!(popup.toggle(false, None, now + BLUR_CLICK_GRACE), ToggleAction::Show);
+        assert_eq!(popup.toggle(true, None, now), ToggleAction::Hide);
+    }
 }
