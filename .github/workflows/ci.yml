@@ -197,10 +197,10 @@ jobs:
 
       - name: Install Linux desktop libraries
         if: runner.os == 'Linux' && steps.opentrack.outputs.affected
-        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
-        with:
-          packages: libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
-          version: 1
+        # Not cached: the caching action saves an empty cache when a mirror 404s, failing every later run.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         if: steps.opentrack.outputs.affected
