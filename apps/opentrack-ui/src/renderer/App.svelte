@@ -1,6 +1,6 @@
 <script lang="ts">
   import { errorMessage } from 'aitrack-lib/errors';
-  import { onMount } from 'svelte';
+  import { onMount, tick as flushDom } from 'svelte';
 
   import type {
     AppState,
@@ -25,15 +25,30 @@
   let now = $state(Date.now());
   let content = $state<HTMLElement | undefined>();
   let footer = $state<HTMLElement | undefined>();
+  let titlebar = $state<HTMLElement | undefined>();
 
-  // The window takes its height from what is shown, so there is no empty space below.
+  // Unrounded, so a fractional pixel never leaves the content a pixel short of fitting.
+  function windowHeight(): number {
+    return [titlebar, content, footer]
+      .filter((part) => part instanceof HTMLElement)
+      .reduce((sum, part) => sum + part.getBoundingClientRect().height, 0);
+  }
+
+  // Compact view changes the height on purpose; the window keeps its place and width.
+  async function toggleCompact(): Promise<void> {
+    patch({ compact: !settings?.compact });
+    await flushDom();
+    api.resizeHeight(windowHeight());
+  }
+
+  // The height follows the content, so there is no empty space below.
+  function report(): void {
+    api.fitHeight(windowHeight());
+  }
+
   $effect(() => {
-    const parts = [content, footer].filter((part) => part instanceof HTMLElement);
+    const parts = [titlebar, content, footer].filter((part) => part instanceof HTMLElement);
     if (parts.length === 0) return;
-    const report = () => {
-      // Unrounded, so a fractional pixel never leaves the content a pixel short of fitting.
-      api.fitHeight(parts.reduce((sum, part) => sum + part.getBoundingClientRect().height, 0));
-    };
     const observer = new ResizeObserver(report);
     for (const part of parts) observer.observe(part);
     return () => {
@@ -176,6 +191,34 @@
 
 <main class="pop">
   <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
+  <header class="titlebar" bind:this={titlebar} data-tauri-drag-region>
+    <span class="title" data-tauri-drag-region>opentrack</span>
+    {#if settings}
+      <button
+        class="icon"
+        class:active={settings.compact}
+        type="button"
+        aria-label="Compact view"
+        aria-pressed={settings.compact}
+        title={settings.compact ? 'Full view' : 'Compact view'}
+        onclick={() => void toggleCompact()}><Icon name="compact" size={14} /></button
+      >
+    {/if}
+    <button
+      class="icon"
+      type="button"
+      aria-label="Minimize"
+      title="Minimize"
+      onclick={() => api.minimizeWindow()}><Icon name="minimize" size={14} /></button
+    >
+    <button
+      class="icon"
+      type="button"
+      aria-label="Close to tray"
+      title="Close (opentrack keeps running in the tray)"
+      onclick={() => api.hideWindow()}><Icon name="close" size={14} /></button
+    >
+  </header>
   <div class="scroll">
     <div class="content" bind:this={content}>
       {#if loadError && !(appState && settings)}
@@ -258,14 +301,8 @@
   </div>
 
   {#if screen === 'dashboard' && settings}
-    {@const floating = settings.windowMode === 'floating'}
-    <!-- The floating window has no title bar; its footer is the handle. -->
-    <footer
-      class="foot"
-      bind:this={footer}
-      data-tauri-drag-region={floating ? '' : undefined}
-    >
-      <span data-tauri-drag-region={floating ? '' : undefined}
+    <footer class="foot" bind:this={footer}>
+      <span
         >{appState?.syncing
           ? 'Syncing…'
           : appState?.refreshing
@@ -292,16 +329,6 @@
       >
       <button
         class="icon"
-        class:active={floating}
-        type="button"
-        aria-label={floating ? 'Close with the tray again' : 'Keep open'}
-        aria-pressed={floating}
-        title={floating ? 'Close with the tray again' : 'Keep open'}
-        onclick={() => patch({ windowMode: floating ? 'popup' : 'floating' })}
-        ><Icon name={floating ? 'pin-filled' : 'pin'} size={15} /></button
-      >
-      <button
-        class="icon"
         type="button"
         aria-label="Settings"
         title="Settings"
@@ -310,3 +337,18 @@
     </footer>
   {/if}
 </main>
+
+<style>
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 6px 6px 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .title {
+    flex: 1;
+    font-weight: 600;
+    color: var(--ink);
+  }
+</style>

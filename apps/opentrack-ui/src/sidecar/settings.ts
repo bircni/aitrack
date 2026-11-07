@@ -15,9 +15,9 @@ export const DEFAULT_SETTINGS: Settings = {
   launchAtLogin: false,
   globalShortcut: '',
   notifications: true,
-  windowMode: 'popup',
   alwaysOnTop: false,
   compact: false,
+  compactProviders: [...QUOTA_PROVIDERS],
   pullSyncedData: true,
   trayProvider: 'auto',
   trayWindow: 'highest',
@@ -62,9 +62,13 @@ export function normalizeSettings(input: unknown): Settings {
     launchAtLogin: bool(raw.launchAtLogin, d.launchAtLogin),
     globalShortcut: typeof raw.globalShortcut === 'string' ? raw.globalShortcut.trim() : '',
     notifications: bool(raw.notifications, d.notifications),
-    windowMode: pick(raw.windowMode, ['popup', 'floating'], d.windowMode),
     alwaysOnTop: bool(raw.alwaysOnTop, d.alwaysOnTop),
     compact: bool(raw.compact, d.compact),
+    compactProviders: Array.isArray(raw.compactProviders)
+      ? [...new Set(raw.compactProviders)].filter((key): key is QuotaProviderKey =>
+          QUOTA_PROVIDERS.includes(key as QuotaProviderKey),
+        )
+      : [...d.compactProviders],
     pullSyncedData: bool(raw.pullSyncedData, d.pullSyncedData),
     trayProvider: pick(raw.trayProvider, ['auto', ...QUOTA_PROVIDERS], d.trayProvider),
     trayWindow: pick(raw.trayWindow, ['highest', 'session', 'weekly'], d.trayWindow),

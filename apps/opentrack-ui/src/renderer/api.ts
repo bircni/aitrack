@@ -36,6 +36,15 @@ export const api: OpentrackApi = {
   fitHeight: (height) => {
     void invoke('fit_height', { height }).catch(() => undefined);
   },
+  resizeHeight: (height) => {
+    void invoke('resize_height', { height }).catch(() => undefined);
+  },
+  hideWindow: () => {
+    void invoke('hide_window').catch(() => undefined);
+  },
+  minimizeWindow: () => {
+    void invoke('minimize_window').catch(() => undefined);
+  },
   onState: (listener) => subscribe('state', listener),
   onSettings: (listener) => subscribe('settings', listener),
   onScreen: (listener) => subscribe('screen', listener),

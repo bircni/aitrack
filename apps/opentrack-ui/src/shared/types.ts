@@ -111,11 +111,11 @@ export interface Settings {
   /** Tauri global-shortcut accelerator (e.g. CommandOrControl+Shift+O), empty for none. */
   globalShortcut: string;
   notifications: boolean;
-  windowMode: 'popup' | 'floating';
-  /** Only for the floating window: keeps it above other windows. */
+  /** Keeps the window above other windows. */
   alwaysOnTop: boolean;
-  /** Shows only the session limit of the followed provider. */
+  /** Shows only the session limits of `compactProviders`. */
   compact: boolean;
+  compactProviders: QuotaProviderKey[];
   /** `git pull` the aitrack data repo so other machines' usage stays current. */
   pullSyncedData: boolean;
   /** The provider the tray icon follows; `auto` takes the most used one. */
@@ -145,6 +145,10 @@ export interface OpentrackApi {
   quit: () => Promise<void>;
   /** Report the content height so the window can fit it. */
   fitHeight: (height: number) => void;
+  /** Sets the window height for the content now shown. */
+  resizeHeight: (height: number) => void;
+  hideWindow: () => void;
+  minimizeWindow: () => void;
   onState: (listener: (state: AppState) => void) => () => void;
   onSettings: (listener: (settings: Settings) => void) => () => void;
   onScreen: (listener: (screen: Screen) => void) => () => void;

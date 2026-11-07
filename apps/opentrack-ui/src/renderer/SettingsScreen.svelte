@@ -82,6 +82,11 @@
       providers: settings.providers.map((entry) => (entry.key === key ? { ...entry, enabled } : entry)),
     });
   }
+
+  function toggleCompactProvider(key: QuotaProviderKey, inCompact: boolean): void {
+    const others = settings.compactProviders.filter((entry) => entry !== key);
+    onPatch({ compactProviders: inCompact ? [...others, key] : others });
+  }
 </script>
 
 {#snippet rowLabel(label: string, key: keyof SettingErrors)}
@@ -99,6 +104,7 @@
 
 <section class="group" aria-labelledby="g-providers">
   <h2 id="g-providers">Providers</h2>
+  <p><small>Left switch: show in the full view. Right switch: show in the compact view.</small></p>
   {#each settings.providers as provider, index (provider.key)}
     <div class="row">
       <span class="row-label"
@@ -126,6 +132,14 @@
           aria-label="Show {provider.label}"
           checked={provider.enabled}
           onchange={(event) => toggleProvider(provider.key, event.currentTarget.checked)}
+        />
+        <input
+          class="switch"
+          type="checkbox"
+          role="switch"
+          aria-label="Show {provider.label} in compact view"
+          checked={settings.compactProviders.includes(provider.key)}
+          onchange={(event) => toggleCompactProvider(provider.key, event.currentTarget.checked)}
         />
       </span>
     </div>
@@ -233,17 +247,6 @@
       role="switch"
       checked={settings.notifications}
       onchange={(event) => onPatch({ notifications: event.currentTarget.checked })}
-    />
-  </label>
-  <label class="row" for="set-compact">
-    <span class="row-text">Compact view<small>Show only the session limit</small></span>
-    <input
-      id="set-compact"
-      class="switch"
-      type="checkbox"
-      role="switch"
-      checked={settings.compact}
-      onchange={(event) => onPatch({ compact: event.currentTarget.checked })}
     />
   </label>
   <label class="row" for="set-on-top">

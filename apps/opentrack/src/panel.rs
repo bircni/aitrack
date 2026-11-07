@@ -1,21 +1,16 @@
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 use crate::position::{corner_tray, popup_bounds, Rect};
 
 const WIDTH: f64 = 320.0;
-/// A tray click that lands right after a blur-hide is the same click; ignore it.
-const BLUR_CLICK_GRACE: Duration = Duration::from_millis(250);
 
 pub struct Panel {
     state: Mutex<PanelState>,
 }
 
 struct PanelState {
-    floating: bool,
-    hidden_by_blur_at: Option<Instant>,
     /// Content height in CSS pixels, as the renderer measured it.
     content_height: f64,
     tray: Option<Rect>,
@@ -24,64 +19,22 @@ struct PanelState {
 
 impl Panel {
     pub fn new() -> Self {
-        Self {
-            state: Mutex::new(PanelState {
-                floating: false,
-                hidden_by_blur_at: None,
-                content_height: 560.0,
-                tray: None,
-                deferred_show: None,
-            }),
-        }
-    }
-
-    pub fn set_floating(&self, window: &WebviewWindow, floating: bool) {
-        let (entered, content_height) = {
-            let mut state = self.state.lock().unwrap();
-            let entered = floating && !state.floating;
-            state.floating = floating;
-            (entered, state.content_height)
-        };
-        let _ = window.set_skip_taskbar(!floating);
-        let _ = window.set_resizable(floating);
-        // Only on entry, so settings re-sent later never undo a size the user chose.
-        if entered {
-            let _ = window.set_size(LogicalSize::new(WIDTH, content_height));
-        }
-    }
-
-    pub fn on_blur(&self, window: &WebviewWindow) {
-        let mut state = self.state.lock().unwrap();
-        if state.floating || !window.is_visible().unwrap_or(false) {
-            return;
-        }
-        state.hidden_by_blur_at = Some(Instant::now());
-        let _ = window.hide();
+        Self { state: Mutex::new(PanelState { content_height: 560.0, tray: None, deferred_show: None }) }
     }
 
     pub fn toggle(&self, window: &WebviewWindow, tray: Option<Rect>) {
-        {
-            let mut state = self.state.lock().unwrap();
-            if tray.is_some() {
-                state.tray = tray;
-            }
-            if window.is_visible().unwrap_or(false) {
-                let _ = window.hide();
-                return;
-            }
-            if state.hidden_by_blur_at.is_some_and(|at| at.elapsed() < BLUR_CLICK_GRACE) {
-                return;
-            }
+        if tray.is_some() {
+            self.state.lock().unwrap().tray = tray;
         }
-        self.show(window, None);
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        } else {
+            self.show(window, None);
+        }
     }
 
     pub fn show(&self, window: &WebviewWindow, screen: Option<&str>) {
-        let place = {
-            let state = self.state.lock().unwrap();
-            !state.floating || !window.is_visible().unwrap_or(false)
-        };
-        if place {
+        if !window.is_visible().unwrap_or(false) {
             self.place(window);
         }
         let _ = window.show();
@@ -105,19 +58,19 @@ impl Panel {
         self.state.lock().unwrap().deferred_show.take()
     }
 
-    pub fn fit(&self, window: &WebviewWindow, height: f64) {
+    /// Remembers the content height; the window is only resized by `resize`, so the user's own size stays.
+    pub fn measure(&self, height: f64) {
+        if height.is_finite() && height > 0.0 {
+            self.state.lock().unwrap().content_height = height.ceil();
+        }
+    }
+
+    /// Sets the height for the content that is now shown, keeping the window where the user put it.
+    pub fn resize(&self, window: &WebviewWindow, height: f64) {
         if !height.is_finite() || height <= 0.0 {
             return;
         }
-        let floating = {
-            let mut state = self.state.lock().unwrap();
-            state.content_height = height.ceil();
-            state.floating
-        };
-        // A floating window is sized by the user, so its content scrolls instead of resizing it.
-        if !floating {
-            self.place(window);
-        }
+        let _ = window.set_size(LogicalSize::new(WIDTH, height.ceil()));
     }
 
     fn place(&self, window: &WebviewWindow) {

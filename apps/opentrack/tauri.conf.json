@@ -15,10 +15,10 @@
         "title": "opentrack",
         "width": 320,
         "height": 560,
-        "resizable": false,
+        "resizable": true,
         "decorations": false,
         "visible": false,
-        "skipTaskbar": true,
+        "skipTaskbar": false,
         "alwaysOnTop": false,
         "shadow": true
       }

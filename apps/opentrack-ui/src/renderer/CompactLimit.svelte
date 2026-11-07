@@ -1,6 +1,5 @@
 <script lang="ts">
-  import type { AppState, QuotaWindow, Settings } from '../shared/types.js';
-  import { formatUpdated } from './format.js';
+  import type { AppState, Settings } from '../shared/types.js';
   import LimitMeter from './LimitMeter.svelte';
   import ProviderIcon from './ProviderIcon.svelte';
 
@@ -13,73 +12,65 @@
 
   let { appState, settings, now, onPatch }: Props = $props();
 
-  // Same choice as the tray icon: the followed provider, else the one closest to its session limit.
-  const session = $derived.by(() => {
-    const withSession = appState.providers.flatMap((provider) => {
-      const window: QuotaWindow | undefined = provider.quota?.windows.find(({ id }) => id === 'session');
-      return window ? [{ provider, window }] : [];
-    });
-    const followed = withSession.find(({ provider }) => provider.key === settings.trayProvider);
-    if (followed) return followed;
-    return withSession.reduce<(typeof withSession)[number] | undefined>(
-      (best, entry) => (!best || entry.window.usedPercent > best.window.usedPercent ? entry : best),
-      undefined,
-    );
-  });
+  // Shown in the order of the full view, only for the providers chosen in Settings.
+  const chosen = $derived(
+    appState.providers.filter((provider) => settings.compactProviders.includes(provider.key)),
+  );
 </script>
 
-<section class="compact" aria-label="Session limit">
-  {#if session}
-    <header class="c-head">
-      <ProviderIcon provider={session.provider.key} size={16} />
-      <span class="c-name">{session.provider.label}</span>
-      <span class="c-plan">{session.provider.quota?.plan ?? ''}</span>
-    </header>
-    <LimitMeter
-      window={session.window}
-      {settings}
-      {now}
-      onToggleUsage={() => onPatch({ display: settings.display === 'used' ? 'left' : 'used' })}
-      onToggleReset={() =>
-        onPatch({ resetDisplay: settings.resetDisplay === 'relative' ? 'absolute' : 'relative' })}
-    />
+<section class="compact" aria-label="Session limits">
+  {#each chosen as provider (provider.key)}
+    {@const session = provider.quota?.windows.find(({ id }) => id === 'session')}
+    <div class="c-block">
+      <header class="c-head">
+        <ProviderIcon provider={provider.key} size={16} />
+        <span class="c-name">{provider.label}</span>
+        {#if provider.quota?.plan}<span class="c-plan">{provider.quota.plan}</span>{/if}
+      </header>
+      {#if session}
+        <LimitMeter
+          window={session}
+          {settings}
+          {now}
+          onToggleUsage={() => onPatch({ display: settings.display === 'used' ? 'left' : 'used' })}
+          onToggleReset={() =>
+            onPatch({ resetDisplay: settings.resetDisplay === 'relative' ? 'absolute' : 'relative' })}
+        />
+      {:else}
+        <p class="empty">No session limit yet.</p>
+      {/if}
+    </div>
   {:else}
-    <p class="empty">No session limit to show yet.</p>
-  {/if}
-  <footer class="c-foot">
-    <span>{appState.syncing ? 'Syncing…' : appState.refreshing ? 'Updating…' : formatUpdated(appState.updatedAt, now)}</span>
-    <button class="link" type="button" onclick={() => onPatch({ compact: false })}>Full view</button>
-  </footer>
+    <p class="empty">
+      {settings.compactProviders.length === 0
+        ? 'Choose providers for the compact view in Settings.'
+        : 'The providers chosen for compact view are turned off or not loaded yet.'}
+    </p>
+  {/each}
 </section>
 
 <style>
   .compact {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 14px;
     padding: 14px 16px;
   }
   .c-head {
     display: flex;
     align-items: center;
     gap: 8px;
+    margin-bottom: 6px;
   }
   .c-name {
     font-weight: 600;
   }
   .c-plan {
-    color: var(--muted, #888);
+    color: var(--ink-3);
     font-size: 12px;
-  }
-  .c-foot {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    color: var(--muted, #888);
   }
   .empty {
     margin: 0;
-    color: var(--muted, #888);
+    color: var(--ink-3);
   }
 </style>

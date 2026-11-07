@@ -32,6 +32,9 @@ const mocks = vi.hoisted(() => ({
     availableUpdate: vi.fn(),
     onUpdate: vi.fn(),
     installUpdate: vi.fn(),
+    resizeHeight: vi.fn(),
+    hideWindow: vi.fn(),
+    minimizeWindow: vi.fn(),
   },
 }));
 vi.mock('../api.js', () => mocks);
@@ -174,16 +177,20 @@ describe('desktop commands and settings', () => {
     expect(target.textContent).not.toContain('Could not save settings');
     click('[aria-label="Back"]');
     await settle();
-    click('[aria-label="Keep open"]');
+    click('[aria-label="Compact view"]');
     await settle();
     expect(mocks.api.saveSettings).toHaveBeenLastCalledWith(
-      expect.objectContaining({ windowMode: 'floating' }),
+      expect.objectContaining({ compact: true }),
     );
-    click('[aria-label="Close with the tray again"]');
+    click('[aria-label="Compact view"]');
     await settle();
     expect(mocks.api.saveSettings).toHaveBeenLastCalledWith(
-      expect.objectContaining({ windowMode: 'popup' }),
+      expect.objectContaining({ compact: false }),
     );
+    click('[aria-label="Minimize"]');
+    click('[aria-label="Close to tray"]');
+    expect(mocks.api.minimizeWindow).toHaveBeenCalledTimes(1);
+    expect(mocks.api.hideWindow).toHaveBeenCalledTimes(1);
     mocks.api.refresh.mockRejectedValueOnce(new Error('refresh delivery'));
     click('[aria-label="Refresh"]');
     await settle();
@@ -216,7 +223,7 @@ describe('desktop commands and settings', () => {
     const onState = listener('onState');
     onState({ ...state, refreshing: true });
     const onSettings = listener('onSettings');
-    onSettings({ ...DEFAULT_SETTINGS, windowMode: 'floating' });
+    onSettings({ ...DEFAULT_SETTINGS });
     await settle();
     expect(target.textContent).not.toContain('Could not load dashboard');
     expect(target.textContent).not.toContain('Loading');
@@ -719,7 +726,7 @@ function sessionProvider(key: 'claude' | 'codex', label: string, usedPercent: nu
   };
 }
 
-it('compact view shows only the followed or most-used session limit and can return to full view', async () => {
+it('compact view shows the session limit of each provider chosen in settings, in full-view order', async () => {
   const patch = vi.fn<(value: Partial<Settings>) => void>();
   const appState = {
     ...state,
@@ -728,23 +735,9 @@ it('compact view shows only the followed or most-used session limit and can retu
   mounted.push(
     mount(CompactLimit, {
       target,
-      props: { appState, settings: { ...DEFAULT_SETTINGS }, now: Date.now(), onPatch: patch },
-    }),
-  );
-  await settle();
-  expect(target.textContent).toContain('Codex');
-  expect(target.textContent).not.toContain('Weekly');
-  expect(target.querySelectorAll('[role="meter"]')).toHaveLength(1);
-  click('button.link');
-  expect(patch).toHaveBeenCalledWith({ compact: false });
-  const first = mounted.pop();
-  if (first) await unmount(first);
-  mounted.push(
-    mount(CompactLimit, {
-      target,
       props: {
         appState,
-        settings: { ...DEFAULT_SETTINGS, trayProvider: 'claude' },
+        settings: { ...DEFAULT_SETTINGS, compactProviders: ['codex', 'claude'] },
         now: Date.now(),
         onPatch: patch,
       },
@@ -752,6 +745,28 @@ it('compact view shows only the followed or most-used session limit and can retu
   );
   await settle();
   expect(target.textContent).toContain('Claude');
+  expect(target.textContent).toContain('Codex');
+  expect(target.textContent).not.toContain('Weekly');
+  expect(target.querySelectorAll('[role="meter"]')).toHaveLength(2);
+  const headers = [...target.querySelectorAll('.c-name')].map((node) => node.textContent);
+  expect(headers).toEqual(['Claude', 'Codex']);
+});
+
+it('compact view asks for a choice when no provider is picked', async () => {
+  mounted.push(
+    mount(CompactLimit, {
+      target,
+      props: {
+        appState: { ...state, providers: [sessionProvider('claude', 'Claude', 20)] },
+        settings: { ...DEFAULT_SETTINGS, compactProviders: [] },
+        now: Date.now(),
+        onPatch: vi.fn(),
+      },
+    }),
+  );
+  await settle();
+  expect(target.textContent).toContain('Choose providers for the compact view in Settings.');
+  expect(target.querySelector('[role="meter"]')).toBeNull();
 });
 
 it('falls back to automatic tray selection when its provider is disabled and handles unavailable setting errors', async () => {
@@ -971,7 +986,13 @@ it('fits the window to the unrounded height of the content and footer', async ()
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
-    return { height: this.classList.contains('foot') ? 41.5 : 600.25 } as DOMRect;
+    return {
+      height: this.classList.contains('foot')
+        ? 41.5
+        : this.classList.contains('titlebar')
+          ? 0
+          : 600.25,
+    } as DOMRect;
   });
   mounted.push(mount(App, { target }));
   await settle();

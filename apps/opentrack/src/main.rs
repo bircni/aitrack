@@ -56,7 +56,6 @@ fn apply_settings(app: &AppHandle, settings: &Value) {
             _ => None,
         };
         let _ = window.set_theme(theme);
-        app.state::<Panel>().set_floating(&window, text("windowMode") == "floating");
         let on_top = settings.get("alwaysOnTop").and_then(Value::as_bool) == Some(true);
         let _ = window.set_always_on_top(on_top);
     }
@@ -204,6 +203,9 @@ fn main() {
             commands::save_settings,
             commands::open_dashboard,
             commands::fit_height,
+            commands::resize_height,
+            commands::hide_window,
+            commands::minimize_window,
             commands::setting_errors,
             commands::app_version,
             commands::check_update,
@@ -237,10 +239,13 @@ fn main() {
             let config =
                 app.config().app.windows.iter().find(|window| window.label == MAIN_WINDOW).ok_or("no main window")?;
             let window = WebviewWindowBuilder::from_config(&handle, config)?.build()?;
-            let blurred = window.clone();
+            window.set_min_size(Some(tauri::LogicalSize::new(240.0, 140.0)))?;
+            let closing = window.clone();
+            // Close hides to the tray instead of quitting, like the title bar's close button.
             window.on_window_event(move |event| {
-                if let WindowEvent::Focused(false) = event {
-                    blurred.app_handle().state::<Panel>().on_blur(&blurred);
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = closing.hide();
                 }
             });
             if let Some(screen) = handle.state::<Panel>().take_deferred_show() {
