@@ -23,6 +23,7 @@
     },
     "format:check": {
       "executor": "nx:run-commands",
+      "cache": true,
       "inputs": ["repoTools", "formatConfig"],
       "options": {
         "command": "oxfmt --check .github scripts commitlint.config.ts knip.json nx.json package.json tsconfig.base.json tsconfig.json .oxlintrc.json .oxfmtrc.json"
