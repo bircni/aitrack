@@ -3,6 +3,7 @@ import {
   canonicalModelId,
   canonicalizeClaudeModelId,
   modelEffortLabel,
+  stripClaudeTierSuffix,
 } from '../data/modelId.js';
 
 function titleCase(word: string): string {
@@ -14,10 +15,7 @@ function titleCaseRest(rest: string): string {
 }
 
 function displayStem(model: string): string {
-  const lowered = model
-    .toLowerCase()
-    .replace(/-fast$/u, '')
-    .replace(/^cursor-/u, '');
+  const lowered = stripClaudeTierSuffix(model.toLowerCase()).replace(/^cursor-/u, '');
   const canonical = lowered.startsWith('claude-')
     ? canonicalizeClaudeModelId(lowered)
     : canonicalModelId(lowered);

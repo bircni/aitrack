@@ -26,6 +26,7 @@ export function defaultTableStyle(dark = false): TerminalTableStyle {
 
 export interface TerminalTableOptions<Row> {
   style?: TerminalTableStyle;
+  /** The rows to draw when `rows` also holds the footer. */
   bodyRows?: Row[];
   footerRow?: Row;
   footerStyle?: (text: string) => string;
@@ -38,9 +39,11 @@ export function renderTerminalTable<Row>(
   options: TerminalTableOptions<Row> = {},
 ): string {
   const style = options.style ?? defaultTableStyle();
+  const { footerRow } = options;
   const bodyRows = options.bodyRows ?? rows;
+  const measured = footerRow === undefined ? rows : [...rows, footerRow];
   const widths = columns.map((col) =>
-    Math.max(col.header.length, ...rows.map((row) => col.cell(row).length)),
+    Math.max(col.header.length, ...measured.map((row) => col.cell(row).length)),
   );
 
   const hLine = (left: string, mid: string, right: string) =>
@@ -83,7 +86,6 @@ export function renderTerminalTable<Row>(
     );
   }
 
-  const footerRow = options.footerRow;
   if (footerRow) {
     lines.push(hLine('├', '┼', '┤'));
     const footerStyle = options.footerStyle ?? style.total ?? style.header;

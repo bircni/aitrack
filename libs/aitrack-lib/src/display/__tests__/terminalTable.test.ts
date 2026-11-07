@@ -37,6 +37,20 @@ describe('renderTerminalTable', () => {
     );
 
     expect(table).toContain('TOTAL');
+    // The footer is wider than every body cell, and the box still has to close.
+    expect(new Set(table.split('\n').map((line) => line.length)).size).toBe(1);
+  });
+
+  it('keeps honouring bodyRows from callers that list the footer in rows', () => {
+    const body = { name: 'A', value: 1 };
+    const footer = { name: 'TOTAL', value: 1 };
+    const table = renderTerminalTable(
+      [body, footer],
+      [{ header: 'Name', align: 'left', cell: (r) => r.name }],
+      { bodyRows: [body], footerRow: footer },
+    );
+
+    expect(table.match(/TOTAL/gu)).toHaveLength(1);
   });
 
   it('exposes light and dark style presets', () => {

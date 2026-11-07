@@ -1,7 +1,7 @@
 import { makeDay } from '@aitrack/test-fixtures';
-import { describe, expect, it } from 'vitest';
+import { createCanvas } from '@napi-rs/canvas';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { DayEntry } from '../../data/types.js';
 import { renderToPng } from '../renderPng.js';
 
 // PNG width/height live in bytes 16-19 / 20-23 of the IHDR chunk.
@@ -14,14 +14,18 @@ function pngSize(buffer: Buffer): { width: number; height: number } {
 }
 
 describe('renderToPng', () => {
-  it('returns a valid PNG buffer', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('returns a valid PNG that follows the dark option', () => {
     const dayMap = new Map([['2024-01-15', makeDay(1000, 500)]]);
-    const buffer = renderToPng({ claude_code: dayMap }, {});
-    expect(buffer).toBeInstanceOf(Buffer);
-    expect(buffer[0]).toBe(0x89);
-    expect(buffer[1]).toBe(0x50);
-    expect(buffer[2]).toBe(0x4e);
-    expect(buffer[3]).toBe(0x47);
+    const light = renderToPng({ claude_code: dayMap }, {});
+    const dark = renderToPng({ claude_code: dayMap }, { dark: true });
+    expect(light.subarray(0, 4).toString('latin1')).toBe('\u0089PNG');
+    expect(dark.subarray(0, 4).toString('latin1')).toBe('\u0089PNG');
+    expect(dark.equals(light)).toBe(false);
   });
 
   it('keeps the canvas at its established size for a fixed year (layout regression guard)', () => {
@@ -46,6 +50,7 @@ describe('renderToPng', () => {
   });
 
   it('widens the canvas for a 54-week year instead of clipping it', () => {
+    vi.useFakeTimers({ now: new Date(2026, 8, 20, 12) }); // A year in progress stops at today.
     const dayMap = new Map([['2028-12-31', makeDay(1000, 500)]]);
 
     const ordinary = pngWidth(renderToPng({ claude_code: dayMap }, { year: 2027 }));
@@ -54,26 +59,25 @@ describe('renderToPng', () => {
     expect(fiftyFour).toBe(ordinary + 15);
   });
 
-  it('works in dark mode', () => {
-    const dayMap = new Map([['2024-01-15', makeDay(500, 250)]]);
-    const buffer = renderToPng({ claude_code: dayMap }, { dark: true });
-    expect(buffer).toBeInstanceOf(Buffer);
-    expect(buffer.length).toBeGreaterThan(0);
-  });
-
   it('handles empty provider data without crashing', () => {
     expect(() => renderToPng({}, {})).not.toThrow();
   });
 
-  it('renders long model names without crashing (token amount moves to its own line)', () => {
-    const day: DayEntry = {
-      inputTokens: 5_000_000,
-      outputTokens: 40_000,
-      byModel: {
-        'composer-2.5-fast-extra-long-name': { inputTokens: 5_000_000, outputTokens: 40_000 },
-      },
-    };
-    const buffer = renderToPng({ cursor: new Map([['2024-03-15', day]]) }, {});
-    expect(buffer[0]).toBe(0x89);
+  it('shortens a long model name to its stat column instead of overlapping the next', () => {
+    const context = createCanvas(1, 1).getContext('2d');
+    const fillText = vi.spyOn(Object.getPrototypeOf(context) as typeof context, 'fillText');
+    const measure = context.measureText.bind(context);
+    context.font = 'bold 13px Arial';
+    const columnWidth = (53 * 15) / 6;
+    const longName = 'some-very-long-model-name-from-a-cursor-export-20261231';
+    expect(measure(longName).width).toBeGreaterThan(columnWidth);
+
+    renderToPng({
+      cursor: new Map([['2024-03-15', makeDay(5_000_000, 40_000, undefined, longName)]]),
+    });
+
+    const shortened = fillText.mock.calls.map(([text]) => text).find((text) => text.endsWith('…'));
+    expect(shortened?.startsWith('some-very')).toBe(true);
+    expect(measure(shortened ?? '').width).toBeLessThanOrEqual(columnWidth);
   });
 });

@@ -53,6 +53,11 @@ describe('renderTui', () => {
     expect(output).toContain('Est. cost');
   });
 
+  it('shows a known zero cost as $0.00, not as missing', () => {
+    const output = renderTui({ claude_code: new Map([['2024-06-01', makeDay(100, 50, 0)]]) });
+    expect(output).toContain('$0.00');
+  });
+
   it('adds a total row for multiple providers', () => {
     const output = renderTui({
       claude_code: new Map([['2024-06-01', makeDay(100, 50)]]),

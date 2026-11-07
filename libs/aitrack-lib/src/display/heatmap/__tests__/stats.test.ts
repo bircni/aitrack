@@ -1,6 +1,7 @@
-import { makeDay, useTimeZone } from '@aitrack/test-fixtures';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EXTREME_TIME_ZONES, makeDay, useTimeZone } from '@aitrack/test-fixtures';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { shiftDate } from '../../../data/calendar.js';
 import { toLocalDateString } from '../../../data/dayMap.js';
 import type { DayEntry } from '../../../data/types.js';
 import {
@@ -8,8 +9,13 @@ import {
   computeModelStats,
   currentStreak,
   longestStreak,
+  monthLabels,
   peakMonth,
 } from '../stats.js';
+
+function week(first: string): Array<string | null> {
+  return [first, null, null, null, null, null, null];
+}
 
 function dayKey(offsetDays: number): string {
   const d = new Date();
@@ -17,6 +23,14 @@ function dayKey(offsetDays: number): string {
   d.setDate(d.getDate() - offsetDays);
   return toLocalDateString(d);
 }
+
+// A frozen clock: grids for a year in progress stop at today, so a real one breaks these in 2028.
+beforeEach(() => {
+  vi.useFakeTimers({ now: new Date(2026, 8, 20, 12) });
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('computeModelStats', () => {
   it('returns top model + peak day in one pass', () => {
@@ -114,11 +128,43 @@ describe('peakMonth', () => {
   });
 });
 
+describe.each(EXTREME_TIME_ZONES)('today in %s', (zone) => {
+  useTimeZone(zone);
+
+  it.each(['2026-01-01T00:15:00Z', '2026-01-01T23:45:00Z'])('at %s', (now) => {
+    vi.setSystemTime(new Date(now));
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date(now));
+
+    expect(currentStreak(new Map([[today, makeDay(1, 0)]]))).toBe(1);
+    expect(currentStreak(new Map([[shiftDate(today, -1), makeDay(1, 0)]]))).toBe(1);
+    expect(
+      computeModelStats(
+        new Map([
+          [shiftDate(today, -30), makeDay(100, 0, undefined, 'old')],
+          [shiftDate(today, -29), makeDay(1, 0, undefined, 'recent')],
+        ]),
+      ).topRecent?.model,
+    ).toBe('recent');
+  });
+});
+
+describe('monthLabels', () => {
+  it('labels each month once, at its first column', () => {
+    const weeks = [week('2026-01-04'), week('2026-01-11'), week('2026-02-01')];
+    expect(monthLabels(weeks)).toEqual([
+      { column: 0, label: 'Jan' },
+      { column: 2, label: 'Feb' },
+    ]);
+  });
+
+  it('drops a leading month that would collide with the next label', () => {
+    const weeks = [week('2025-11-30'), week('2025-12-07')];
+    expect(monthLabels(weeks)).toEqual([{ column: 1, label: 'Dec' }]);
+  });
+});
+
 describe('buildDateGrid', () => {
   useTimeZone('America/Santiago'); // DST starts at midnight, so local 00:00 can be skipped
-  afterEach(() => {
-    vi.useRealTimers();
-  });
 
   it('ends the rolling grid on today', () => {
     vi.useFakeTimers({ now: new Date(2026, 8, 20, 12) });

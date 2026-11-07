@@ -61,6 +61,15 @@ describe('buildProviderSectionViewModel', () => {
     expect(statValue(vm.bottomStats, 'LONGEST STREAK')).toBe('1 day');
   });
 
+  it('scales intensity to the days on the grid, not to a busier year off it', () => {
+    const dayMap: DayMap = new Map([
+      ['2024-01-15', makeDay(1_000_000, 0)],
+      ['2026-01-15', makeDay(100, 0)],
+    ]);
+    const vm = buildProviderSectionViewModel('claude_code', dayMap, new Set(['2026-01-15', null]));
+    expect(vm.maxTokens).toBe(100);
+  });
+
   it('never returns a zero intensity scale', () => {
     // maxTokens divides the per-day intensity, so a provider whose only days
     // are empty must still come back as 1.
