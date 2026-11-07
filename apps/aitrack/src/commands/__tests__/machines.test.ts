@@ -8,8 +8,12 @@ const mocks = vi.hoisted(() => ({
   isCloned: vi.fn(),
 }));
 
-vi.mock('aitrack-lib/data/usageData', () => ({
+vi.mock('aitrack-lib/data/usageData', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('aitrack-lib/data/usageData')>()),
   loadReportedMachines: mocks.loadReportedMachines,
+}));
+vi.mock('aitrack-lib/data/emptyState', () => ({
+  isUsageNotConfigured: () => false,
   usageEmptyMessage: () => 'No data.',
 }));
 vi.mock('aitrack-lib/config', () => ({
@@ -86,6 +90,30 @@ describe('machinesCommand', () => {
       totalTokens: 1100,
       costUSD: 5,
     });
+  });
+
+  it('prices a day stored without a cost the way usage does, and shows a known $0', async () => {
+    const priced = makeMachineFile(
+      'priced',
+      {
+        '2026-01-01': { claude_code: makeProviderDay(1_000_000, 0, undefined, 'claude-opus-4-8') },
+      },
+      { lastUpdated: '2026-04-01T12:00:00.000Z' },
+    );
+    const free = makeMachine('free', {
+      '2026-01-01': [{ providerKey: 'codex', input: 10, output: 0, cost: 0 }],
+    });
+    mocks.loadReportedMachines.mockResolvedValue([priced, free]);
+
+    await machinesCommand({ json: true });
+    const { machines } = JSON.parse(loggedOutput()) as {
+      machines: Array<{ hostname: string; costUSD: number | null }>;
+    };
+    expect(machines.find((m) => m.hostname === 'priced')?.costUSD).toBeGreaterThan(0);
+
+    vi.mocked(console.log).mockClear();
+    await machinesCommand();
+    expect(loggedOutput()).toContain('$0.00');
   });
 
   it('marks machines that stopped syncing, but never this one', async () => {

@@ -16,7 +16,7 @@
       ]
     },
     "libs/aitrack-lib": {
-      "entry": ["src/index.ts"],
+      "entry": ["src/index.ts", "src/readers/scanWorker.ts"],
       "project": ["src/**/*.ts"]
     },
     "apps/aitrack": {

@@ -1,10 +1,18 @@
+import {
+  EXTREME_TIME_ZONES,
+  makeMachineFile,
+  makeProviderDay,
+  useTimeZone,
+} from '@aitrack/test-fixtures';
 import { describe, expect, it, vi } from 'vitest';
 
+import { calendarDateInTimeZone } from '../../timezone.js';
 import {
   buildMachineData,
   machineHasData,
   mergePersistedDays,
   ratchetedProviderDays,
+  rebucketPersistedDays,
 } from '../localData.js';
 import type { DayMap } from '../types.js';
 
@@ -227,4 +235,97 @@ it('preserves token breakdowns and partial pricing when writing machine data', (
   });
   expect(machine.days['2026-01-01']?.claude_code?.totals).toEqual(counts);
   expect(machine.days['2026-01-01']?.claude_code?.byModel.mixed).toEqual(counts);
+});
+
+function mergedAfterZoneChange(
+  persisted: ReturnType<typeof makeMachineFile>,
+  fresh: ReturnType<typeof makeMachineFile>,
+) {
+  const days = mergePersistedDays(rebucketPersistedDays(persisted, fresh), fresh.days);
+  return Object.fromEntries(
+    Object.entries(days).map(([date, providers]) => [
+      date,
+      providers.claude_code?.totals.inputTokens,
+    ]),
+  );
+}
+
+for (const zone of EXTREME_TIME_ZONES) {
+  describe(`moving a machine to ${zone}`, () => {
+    useTimeZone(zone);
+    const instant = new Date('2026-10-01T10:30:00Z'); // A different date in each extreme zone.
+
+    it.each(EXTREME_TIME_ZONES.filter((other) => other !== zone))(
+      'counts a message near midnight once when it was bucketed in %s',
+      (other) => {
+        const before = calendarDateInTimeZone(other, instant) ?? '';
+        const after = calendarDateInTimeZone(zone, instant) ?? '';
+        expect(before).not.toBe(after);
+        const persisted = makeMachineFile(
+          'host',
+          { [before]: { claude_code: makeProviderDay(100, 0) } },
+          { timezone: other },
+        );
+        const fresh = buildMachineData('host', {
+          claude_code: new Map([
+            [
+              after,
+              {
+                inputTokens: 100,
+                outputTokens: 0,
+                byModel: { m: { inputTokens: 100, outputTokens: 0 } },
+              },
+            ],
+          ]),
+        });
+        expect(mergedAfterZoneChange(persisted, fresh)).toEqual({ [after]: 100 });
+      },
+    );
+  });
+}
+
+const file = (timezone: string, tokens: Record<string, number>) =>
+  makeMachineFile(
+    'host',
+    Object.fromEntries(
+      Object.entries(tokens).map(([date, n]) => [date, { claude_code: makeProviderDay(n, 0) }]),
+    ),
+    { timezone },
+  );
+
+describe('rebucketPersistedDays', () => {
+  it('keeps history the logs no longer reach, and the partial oldest day they still do', () => {
+    const persisted = file('UTC', {
+      '2026-06-01': 500,
+      '2026-09-30': 80,
+      '2026-10-01': 100,
+      '2026-10-02': 100,
+    });
+    const fresh = file('Asia/Tokyo', { '2026-09-30': 10, '2026-10-01': 60, '2026-10-02': 140 });
+    expect(mergedAfterZoneChange(persisted, fresh)).toEqual({
+      '2026-06-01': 500,
+      '2026-09-30': 80,
+      '2026-10-01': 60,
+      '2026-10-02': 140,
+    });
+  });
+
+  it('leaves the ratchet alone when the logs hold fewer tokens than were synced', () => {
+    const persisted = file('UTC', { '2026-10-01': 100, '2026-10-02': 100 });
+    const fresh = file('Asia/Tokyo', { '2026-10-02': 90 });
+    expect(rebucketPersistedDays(persisted, fresh)).toBe(persisted.days);
+  });
+
+  it('only applies to a recorded change of timezone', () => {
+    const fresh = file('UTC', { '2026-10-02': 100 });
+    for (const timezone of ['UTC', 'unknown', '']) {
+      const persisted = file(timezone, { '2026-10-01': 100 });
+      expect(rebucketPersistedDays(persisted, fresh)).toBe(persisted.days);
+    }
+  });
+
+  it('leaves providers the logs have nothing for', () => {
+    const persisted = file('UTC', { '2026-10-01': 100 });
+    expect(rebucketPersistedDays(persisted, file('Asia/Tokyo', {}))).toBe(persisted.days);
+  });
 });

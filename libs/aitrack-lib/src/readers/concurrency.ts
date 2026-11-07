@@ -3,7 +3,7 @@
  * one thread, so this only buys the overlap between one file's syscalls and
  * another's parsing — enough workers to keep the disk queue busy, not more.
  */
-const DEFAULT_CONCURRENCY = 8;
+export const DEFAULT_CONCURRENCY = 8;
 
 /**
  * Run `worker` over `items` with at most `limit` in flight, returning the

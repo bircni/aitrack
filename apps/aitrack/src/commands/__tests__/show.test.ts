@@ -107,7 +107,7 @@ describe('showCommand', () => {
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
     expect(mocks.writePendingMachineFile).toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(
-      'No local usage data found (Claude Code or Codex). Run: npx aitrack init to sync across machines.',
+      'No local usage data found (Claude Code or Codex). Run: npx aitrack doctor to see which logs were checked, or npx aitrack init to sync across machines.',
     );
   });
 
@@ -118,6 +118,66 @@ describe('showCommand', () => {
     expect(logSpy).toHaveBeenCalledWith(
       'No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.',
     );
+  });
+
+  describe('nothing to draw', () => {
+    beforeEach(() => {
+      mocks.buildLocalMachineFile.mockResolvedValue(localMachineWithData());
+    });
+
+    it('leaves an earlier PNG alone and opens nothing when --year matches no day', async () => {
+      await showCommand({ year: 2030, output: 'kept.png' });
+
+      expect(mocks.renderToPng).not.toHaveBeenCalled();
+      expect(mocks.writeFileSync).not.toHaveBeenCalled();
+      expect(mocks.spawn).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith('No usage recorded for 2030.');
+    });
+
+    it.each([
+      [{}, { mode: 'png', path: null }],
+      [{ tui: true }, { mode: 'tui', year: 2030, providers: [], total: null }],
+    ])('keeps the documented JSON keys for %j', async (options, keys) => {
+      await showCommand({ year: 2030, json: true, ...options });
+      expect(JSON.parse(loggedOutput())).toEqual({
+        command: 'show',
+        ...keys,
+        message: 'No usage recorded for 2030.',
+      });
+    });
+
+    it('names the filter when --providers removed everything', async () => {
+      await showCommand({ providers: ['cursor'] });
+      expect(loggedOutput()).toContain('No usage found for Cursor.');
+      vi.mocked(console.log).mockClear();
+      await showCommand({ providers: ['cursor'], json: true, tui: true });
+      expect(JSON.parse(loggedOutput())).toMatchObject({ providers: [], total: null });
+    });
+  });
+
+  it('ignores --output with --tui, which writes no file, and says so', async () => {
+    await showCommand({ tui: true, output: 'x.png' });
+    expect(loggedOutput('warn')).toContain('--output is ignored with --tui');
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('still reports when staging cannot be written', async () => {
+    mocks.isCloned.mockReturnValue(false);
+    mocks.buildLocalMachineFile.mockResolvedValue(localMachineWithData());
+    mocks.writePendingMachineFile.mockImplementationOnce(() => {
+      throw new Error('EACCES');
+    });
+
+    await showCommand({ tui: true });
+
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('EACCES'));
+    expect(loggedOutput()).toContain('Codex');
+  });
+
+  it('reads only the selected providers when it has nothing to stage', async () => {
+    await showCommand({ providers: ['codex'], tui: true });
+    expect(mocks.buildLocalMachineFile).toHaveBeenCalledTimes(1);
+    expect(mocks.buildLocalMachineFile.mock.calls[0]?.[2]).toEqual(['codex']);
   });
 
   it('renders cursor-only data when local cursor data is available', async () => {

@@ -45,6 +45,10 @@ function reasonOf(checked: ReturnType<typeof checkMachineFile>): string {
   return diagnostic && 'reason' in diagnostic ? diagnostic.reason : '';
 }
 
+function fileWith(provider: string): string {
+  return `{"hostname":"other","lastUpdated":"now","days":{"2026-01-15":{${provider}}}}`;
+}
+
 describe('checkMachineFile validation', () => {
   it('accepts a valid machine file', () => {
     expect(machineOf(validMachine, 'data/laptop.json')).toEqual(validMachine);
@@ -247,6 +251,36 @@ describe('checkMachineFile', () => {
       expect(checked.diagnostics).toMatchObject([{ kind: 'projects-dropped', date: '2026-01-15' }]);
       expect(checked.machine?.days).toEqual(validMachine.days);
     }
+  });
+
+  describe.each(['__proto__', 'constructor', 'toString'])('a synced key named %s', (key) => {
+    const counts = '{"inputTokens":100,"outputTokens":50,"costUSD":1.25}';
+
+    it('skips the file as a model or provider', () => {
+      for (const raw of [
+        fileWith(`"claude_code":{"totals":${counts},"byModel":{"${key}":${counts}}}`),
+        fileWith(`"${key}":{"totals":${counts},"byModel":{"m":${counts}}}`),
+      ]) {
+        const checked = checkRawMachineFile(raw, 'data/other.json');
+        expect(checked.machine).toBeNull();
+        expect(checked.failure).toBe('corrupt');
+        expect(reasonOf(checked)).toContain('reserved');
+      }
+    });
+
+    it('drops it as a project and removes a cwd split, keeping the day', () => {
+      const day = `"totals":${counts},"byModel":{"m":${counts}}`;
+      const machine = checkRawMachineFile(
+        fileWith(
+          `"claude_code":{${day},"byProject":{"${key}":${counts}},"byCwd":{"${key}":${counts}}}`,
+        ),
+        'data/other.json',
+      ).machine;
+      expect(Object.keys(machine?.days['2026-01-15']?.claude_code ?? {})).toEqual([
+        'totals',
+        'byModel',
+      ]);
+    });
   });
 
   it('keeps the objects it was given, so a round-trip is byte-identical', () => {

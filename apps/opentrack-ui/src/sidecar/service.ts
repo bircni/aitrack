@@ -1,6 +1,7 @@
-import { isFiniteNumber, isRecord } from 'aitrack-lib/data/guards';
+import { isFiniteNumber, isOptionalString, isRecord, isTimestamp } from 'aitrack-lib/data/guards';
 import type { MachineFile } from 'aitrack-lib/data/types';
 import { errorMessage } from 'aitrack-lib/errors';
+import { type ProviderKey, providerKeys } from 'aitrack-lib/providers/descriptors';
 import { providerLabel } from 'aitrack-lib/providers/registry';
 import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 import type { QuotaErrorKind, QuotaFormat, QuotaResult } from 'aitrack-lib/quota/types';
@@ -13,15 +14,15 @@ import type {
   ProjectUsages,
   ProviderState,
   ProviderUsage,
+  ProviderUsages,
   QuotaProviderKey,
   QuotaSnapshot,
   QuotaWindow,
   Settings,
   Spend,
 } from '../shared/types.js';
-import { EMPTY_PERIOD } from '../shared/types.js';
 import { type Alert, dueAlerts, type FiredAlerts, pruneFired } from './alerts.js';
-import type { UsageSummary } from './usage.js';
+import type { UsageLoadOptions, UsageLoadResult, UsageSummary } from './usage.js';
 
 export const REFRESH_INTERVAL_MS = 5 * 60_000;
 export const PULL_INTERVAL_MS = 30 * 60_000;
@@ -51,10 +52,6 @@ export interface CachedState {
   rateLimitedUntil?: Partial<Record<QuotaProviderKey, number>>;
 }
 
-function isTimestamp(value: unknown): value is string {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value));
-}
-
 function isSpend(value: unknown): value is Spend & Record<string, unknown> {
   return (
     isRecord(value) &&
@@ -73,7 +70,6 @@ function isPeriod(value: unknown): value is PeriodUsage {
   );
 }
 
-/** Pre-allTime caches keep other periods; missing allTime becomes an empty period. */
 function readProviderUsage(value: unknown): ProviderUsage | undefined {
   if (
     !isRecord(value) ||
@@ -81,6 +77,7 @@ function readProviderUsage(value: unknown): ProviderUsage | undefined {
     !isPeriod(value.yesterday) ||
     !isPeriod(value.last7Days) ||
     !isPeriod(value.last30Days) ||
+    !isPeriod(value.allTime) ||
     !Array.isArray(value.daily)
   ) {
     return undefined;
@@ -90,14 +87,18 @@ function readProviderUsage(value: unknown): ProviderUsage | undefined {
     if (!isRecord(day) || typeof day.date !== 'string' || !isFiniteNumber(day.costUSD)) {
       return undefined;
     }
-    daily.push({ date: day.date, costUSD: day.costUSD });
+    daily.push({
+      date: day.date,
+      costUSD: day.costUSD,
+      ...(day.hasUnpricedTokens === true && { hasUnpricedTokens: true }),
+    });
   }
   return {
     today: value.today,
     yesterday: value.yesterday,
     last7Days: value.last7Days,
     last30Days: value.last30Days,
-    allTime: isPeriod(value.allTime) ? value.allTime : EMPTY_PERIOD,
+    allTime: value.allTime,
     daily,
   };
 }
@@ -144,7 +145,7 @@ function readMachineUsage(value: unknown): MachineUsage | undefined {
     timezone: value.timezone,
     lastUpdated: value.lastUpdated,
     current: value.current,
-    providers: providerMap(value.providers, readProviderUsage),
+    providers: usageMap(value.providers),
   };
 }
 
@@ -156,7 +157,7 @@ function isWindow(value: unknown): value is QuotaWindow {
     isFiniteNumber(value.usedPercent) &&
     isFiniteNumber(value.periodSeconds) &&
     QUOTA_FORMATS.includes(value.format as QuotaFormat) &&
-    (value.resetsAt === undefined || typeof value.resetsAt === 'string') &&
+    isOptionalString(value.resetsAt) &&
     (value.usedValue === undefined || isFiniteNumber(value.usedValue)) &&
     (value.limitValue === undefined || isFiniteNumber(value.limitValue))
   );
@@ -166,7 +167,7 @@ function isSnapshot(value: unknown, key: QuotaProviderKey): value is QuotaSnapsh
   return (
     isRecord(value) &&
     value.provider === key &&
-    (value.plan === undefined || typeof value.plan === 'string') &&
+    isOptionalString(value.plan) &&
     isTimestamp(value.fetchedAt) &&
     Array.isArray(value.windows) &&
     value.windows.every(isWindow) &&
@@ -182,7 +183,7 @@ function isSnapshot(value: unknown, key: QuotaProviderKey): value is QuotaSnapsh
   );
 }
 
-function providerMap<T>(
+function quotaMap<T>(
   value: unknown,
   read: (entry: unknown, key: QuotaProviderKey) => T | undefined,
 ): Partial<Record<QuotaProviderKey, T>> {
@@ -195,78 +196,73 @@ function providerMap<T>(
   return entries;
 }
 
+function usageMap(value: unknown): ProviderUsages {
+  const entries: ProviderUsages = {};
+  if (!isRecord(value)) return entries;
+  for (const key of providerKeys()) {
+    const entry = readProviderUsage(value[key]);
+    if (entry !== undefined) entries[key] = entry;
+  }
+  return entries;
+}
+
 /** A cache.json read from disk, which may be hand-edited: whatever does not fit is dropped. */
 function normalizeCachedState(input: unknown): CachedState {
   const raw = isRecord(input) ? input : {};
   const usage = isRecord(raw.usage) ? raw.usage : undefined;
+  const projects = usage && readProjects(usage.projects);
   return {
     ...(isTimestamp(raw.updatedAt) && { updatedAt: raw.updatedAt }),
     ...(isTimestamp(raw.usageUpdatedAt) && { usageUpdatedAt: raw.usageUpdatedAt }),
     ...(typeof raw.pullError === 'string' && { pullError: raw.pullError }),
-    quotas: providerMap(raw.quotas, (entry, key) => (isSnapshot(entry, key) ? entry : undefined)),
+    quotas: quotaMap(raw.quotas, (entry, key) => (isSnapshot(entry, key) ? entry : undefined)),
     usage: usage && {
-      providers: providerMap(usage.providers, readProviderUsage),
-      machineCount: isFiniteNumber(usage.machineCount) ? usage.machineCount : 1,
+      providers: usageMap(usage.providers),
       ...(Array.isArray(usage.machines) && {
         machines: usage.machines
           .map((machine) => readMachineUsage(machine))
           .filter((machine) => machine !== undefined),
       }),
       ...(isRecord(usage.account) && {
-        account: providerMap(usage.account, readProviderUsage),
+        account: usageMap(usage.account),
       }),
-      ...(readProjects(usage.projects) && { projects: readProjects(usage.projects) }),
+      ...(projects && { projects }),
     },
     fired: Object.fromEntries(
       Object.entries(isRecord(raw.fired) ? raw.fired : {}).filter(
         (entry): entry is [string, string] => typeof entry[1] === 'string',
       ),
     ),
-    rateLimitedUntil: providerMap(raw.rateLimitedUntil, (entry) =>
+    rateLimitedUntil: quotaMap(raw.rateLimitedUntil, (entry) =>
       isFiniteNumber(entry) ? entry : undefined,
     ),
   };
 }
 
-type CacheMigration = (cache: Record<string, unknown>) => Record<string, unknown>;
-
-const CACHE_MIGRATIONS: Record<number, CacheMigration> = {
-  1: ({ updatedAt: _updatedAt, ...cache }) => cache,
-};
-
 export function loadCachedState(input: unknown): CachedState {
-  if (
-    !isRecord(input) ||
-    typeof input.format !== 'number' ||
-    !Number.isInteger(input.format) ||
-    input.format < 1
-  ) {
-    return normalizeCachedState({});
-  }
-  let version = input.format;
-  let cache = input;
-  while (version < CACHE_FORMAT) {
-    const migrate = CACHE_MIGRATIONS[version];
-    if (!migrate) return normalizeCachedState({});
-    cache = { ...migrate(cache), format: ++version };
-  }
-  return version === CACHE_FORMAT ? normalizeCachedState(cache) : normalizeCachedState({});
+  return normalizeCachedState(isRecord(input) && input.format === CACHE_FORMAT ? input : {});
 }
 
-function providersKey(providers: readonly QuotaProviderKey[]): string {
+function providersKey(providers: readonly ProviderKey[]): string {
   return providers.toSorted().join();
+}
+
+function hasQuota(key: ProviderKey): key is QuotaProviderKey {
+  return (QUOTA_PROVIDERS as readonly string[]).includes(key);
+}
+
+/** A retry-after the provider stated binds even a click; our own backoff after a bare 429 does not. */
+function declaredRetryPending(runtime: ProviderRuntime | undefined, now: number): boolean {
+  return (
+    runtime?.error?.kind === 'rateLimited' &&
+    (runtime.error.retryAfterSeconds ?? 0) > 0 &&
+    now < runtime.nextAttemptAt
+  );
 }
 
 export interface ServiceDeps {
   fetchQuota: (provider: QuotaProviderKey) => Promise<QuotaResult>;
-  loadUsage: (options: {
-    /** Only enabled providers are read, so a disabled Cursor is never contacted. */
-    providers: QuotaProviderKey[];
-    pull: boolean;
-    refreshLive: boolean;
-    /** This machine's logs as a sync just read them, so they are not parsed again. */
-    localMachine?: MachineFile;
-  }) => Promise<{ summary: UsageSummary; warning?: string } | { error: string; warning?: string }>;
+  loadUsage: (options: UsageLoadOptions) => Promise<UsageLoadResult>;
   now: () => number;
   onState: (state: AppState) => void;
   onAlert: (alert: Alert) => void;
@@ -282,11 +278,13 @@ interface ProviderRuntime {
 }
 
 export class QuotaService {
-  private readonly runtime = new Map<QuotaProviderKey, ProviderRuntime>();
+  private readonly runtime = new Map<ProviderKey, ProviderRuntime>();
   private usageRun: Promise<void> | undefined;
   private nextUsageAt = 0;
   /** Sorted providers the last usage load read; a change makes usage due so a re-enabled one shows. */
   private usageProviders: string | undefined;
+  /** The providers the last load that finished covered, which is what usage can be called empty for. */
+  private usageLoadedFor: string | undefined;
   private nextPullAt = 0;
   private usageError: string | undefined;
   private syncing = false;
@@ -302,12 +300,17 @@ export class QuotaService {
   ) {
     this.cache = cache ?? { quotas: {}, fired: {} };
     const now = deps.now();
-    for (const [key, until] of Object.entries(this.cache.rateLimitedUntil ?? {})) {
-      if (until <= now) continue;
-      this.runtime.set(key as QuotaProviderKey, {
+    for (const key of QUOTA_PROVIDERS) {
+      const until = this.cache.rateLimitedUntil?.[key];
+      if (until === undefined || until <= now) continue;
+      this.runtime.set(key, {
         refreshing: false,
         nextAttemptAt: until,
-        error: { kind: 'rateLimited', message: 'Rate limited; retrying later' },
+        error: {
+          kind: 'rateLimited',
+          message: 'Rate limited; retrying later',
+          retryAfterSeconds: Math.ceil((until - now) / 1000),
+        },
       });
     }
   }
@@ -319,28 +322,38 @@ export class QuotaService {
   }
 
   state(): AppState {
+    const now = this.deps.now();
     const providers = this.enabledProviders().map((key): ProviderState => {
       const runtime = this.runtime.get(key);
       return {
         key,
         label: providerLabel(key),
-        quota: this.cache.quotas[key],
+        quota: hasQuota(key) ? this.cache.quotas[key] : undefined,
         quotaError: runtime?.error,
-        retryAt: runtime?.error?.kind === 'rateLimited' ? runtime.nextAttemptAt : undefined,
+        retryAt: declaredRetryPending(runtime, now) ? runtime?.nextAttemptAt : undefined,
         usage: this.cache.usage?.providers[key],
         refreshing: runtime?.refreshing ?? false,
       };
     });
+    const fetchedTimes = providers
+      .flatMap(({ quota }) => (quota ? [quota.fetchedAt] : []))
+      .toSorted((a, b) => Date.parse(a) - Date.parse(b));
+    const usageEmpty =
+      this.cache.usage !== undefined &&
+      this.usageError === undefined &&
+      providersKey(providers.map(({ key }) => key)) === this.usageLoadedFor &&
+      providers.every(({ usage }) => (usage?.allTime.tokens ?? 0) === 0);
     return {
       providers,
       refreshing: this.usageRun !== undefined || providers.some((provider) => provider.refreshing),
-      machineCount: this.cache.usage?.machineCount ?? 1,
       machines: this.cache.usage?.machines,
       accountUsage: this.cache.usage?.account,
       projects: this.cache.usage?.projects,
       usageError: this.usageError,
       updatedAt: this.cache.updatedAt,
       usageUpdatedAt: this.cache.usageUpdatedAt,
+      quotaUpdatedAt: fetchedTimes[0],
+      ...(usageEmpty && { usageEmpty }),
       pullError: this.settings.pullSyncedData ? this.cache.pullError : undefined,
       syncing: this.syncing,
       syncResult: this.syncResult,
@@ -376,15 +389,15 @@ export class QuotaService {
 
   /**
    * Refresh whatever is due. `force` (a user click) skips the schedule but
-   * still honours a provider's retry-after, which it would only extend.
+   * still honours a retry-after the provider stated, which it would only extend.
    */
   async refresh(force = false): Promise<void> {
     const now = this.deps.now();
     const providers = this.enabledProviders();
-    const due = providers.filter((key) => {
+    const quotaProviders = providers.filter((key) => hasQuota(key));
+    const due = quotaProviders.filter((key) => {
       const runtime = this.runtime.get(key);
-      if (runtime?.refreshing) return false;
-      if (runtime?.error?.kind === 'rateLimited') return now >= runtime.nextAttemptAt;
+      if (runtime?.refreshing || declaredRetryPending(runtime, now)) return false;
       return force || now >= (runtime?.nextAttemptAt ?? 0);
     });
     const usageDue =
@@ -400,7 +413,7 @@ export class QuotaService {
     this.persist();
   }
 
-  private enabledProviders(): QuotaProviderKey[] {
+  private enabledProviders(): ProviderKey[] {
     return this.settings.providers.filter(({ enabled }) => enabled).map(({ key }) => key);
   }
 
@@ -456,7 +469,7 @@ export class QuotaService {
 
   private refreshUsage(
     force: boolean,
-    providers: QuotaProviderKey[],
+    providers: ProviderKey[],
     localMachine?: MachineFile,
   ): Promise<void> {
     const run = this.loadUsage(force, providers, localMachine).finally(() => {
@@ -470,7 +483,7 @@ export class QuotaService {
 
   private async loadUsage(
     force: boolean,
-    providers: QuotaProviderKey[],
+    providers: ProviderKey[],
     localMachine?: MachineFile,
   ): Promise<void> {
     const now = this.deps.now();
@@ -490,6 +503,7 @@ export class QuotaService {
       }
       if ('error' in result) throw new Error(result.error);
       this.cache.usage = result.summary;
+      this.usageLoadedFor = providersKey(providers);
       this.usageError = undefined;
       this.cache.usageUpdatedAt = new Date(completedAt).toISOString();
       this.cache.updatedAt = this.cache.usageUpdatedAt;

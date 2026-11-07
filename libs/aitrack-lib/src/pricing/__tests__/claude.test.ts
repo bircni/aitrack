@@ -5,7 +5,7 @@ import {
   estimateClaudeCostFromStoredCounts,
   findClaudePricing,
 } from '../claude.js';
-import { type ClaudeMessageUsage, claudeUsageCounts } from '../claudeUsage.js';
+import { claudeBilledModel, type ClaudeMessageUsage, claudeUsageCounts } from '../claudeUsage.js';
 import { createFallbackCollector, type FallbackCollector } from '../fallback.js';
 
 function priced(model: string, usageDate?: string, fallbacks?: FallbackCollector): ClaudePricing {
@@ -16,6 +16,9 @@ function priced(model: string, usageDate?: string, fallbacks?: FallbackCollector
 
 const estimateClaudeCostUSD = (model: string, usage: ClaudeMessageUsage): number | undefined =>
   estimateClaudeCostFromStoredCounts(model, claudeUsageCounts(usage));
+
+const billed = (model: string, usage: ClaudeMessageUsage): string =>
+  claudeBilledModel(model, usage, claudeUsageCounts(usage));
 
 describe('claude pricing', () => {
   it('finds exact pricing for known model ids', () => {
@@ -201,5 +204,42 @@ describe('claude pricing', () => {
       expect(pricing.outputPerMillion).toBe(50);
     }
     expect(fallbacks.drain()).toEqual(['claude-fable-6', 'claude-mythos-6']);
+  });
+
+  it.each([
+    ['claude-opus-5-5-fast', 8, 40, 0.4, 10],
+    ['claude-opus-5-20261101-fast', 10, 50, 1, 12.5],
+    ['claude-opus-4-8-fast', 10, 50, 1, 12.5],
+    ['claude-haiku-5-5', 0.1, 0.5, 0.01, 0.125],
+    ['claude-haiku-5-5-long-context', 0.5, 2.5, 0.05, 0.625],
+  ])('prices %s at its published rates', (model, input, output, read, write) => {
+    const fallbacks = createFallbackCollector();
+    expect(priced(model, undefined, fallbacks)).toEqual({
+      inputPerMillion: input,
+      outputPerMillion: output,
+      cacheReadPerMillion: read,
+      cacheCreatePerMillion: write,
+    });
+    expect(fallbacks.drain()).toEqual([]);
+  });
+
+  it('prices a tier with no published rate at the base rate and flags it', () => {
+    const fallbacks = createFallbackCollector();
+    expect(priced('claude-opus-4-6-fast', undefined, fallbacks)).toEqual(priced('claude-opus-4-6'));
+    expect(fallbacks.drain()).toEqual(['claude-opus-4-6-fast']);
+  });
+
+  it('bills a message by its speed and, on Haiku 5.5, its whole prompt length', () => {
+    expect(billed('claude-opus-5-5', { speed: 'fast', output_tokens: 1 })).toBe(
+      'claude-opus-5-5-fast',
+    );
+    expect(billed('claude-opus-5-5', { speed: 'standard', output_tokens: 1 })).toBe(
+      'claude-opus-5-5',
+    );
+    const atLimit = { input_tokens: 1, cache_read_input_tokens: 99_999 };
+    expect(billed('claude-haiku-5-5', atLimit)).toBe('claude-haiku-5-5');
+    const overLimit = { ...atLimit, cache_creation_input_tokens: 1 };
+    expect(billed('claude-haiku-5-5', overLimit)).toBe('claude-haiku-5-5-long-context');
+    expect(billed('claude-haiku-4-5', overLimit)).toBe('claude-haiku-4-5');
   });
 });

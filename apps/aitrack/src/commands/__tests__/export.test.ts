@@ -55,7 +55,7 @@ describe('exportCommand', () => {
 
   it('rejects an invalid period', async () => {
     await expect(exportCommand({ period: 'fortnight', output: 'r.pdf' })).rejects.toThrow(
-      'Invalid period',
+      'Invalid window',
     );
   });
 

@@ -1,4 +1,4 @@
-import { makeDay, loggedOutput } from '@aitrack/test-fixtures';
+import { loadedFrom, makeDay, loggedOutput } from '@aitrack/test-fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -9,12 +9,16 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('aitrack-lib/data/usageData', () => ({
   loadMergedProviderData: mocks.loadMergedProviderData,
-  usageEmptyMessage: () => 'No data.',
-  usageEmptyWindowMessage: () => 'No usage recorded.',
+}));
+vi.mock('aitrack-lib/data/emptyState', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('aitrack-lib/data/emptyState')>()),
+  usageEmptyMessage: (_notConfigured: boolean, providers: string[] = []) =>
+    providers.length > 0 ? `No data for ${providers.join()}.` : 'No data.',
 }));
 vi.mock('aitrack-lib/config', () => ({ tryLoadConfig: mocks.tryLoadConfig }));
 vi.mock('aitrack-lib/git', () => ({ isCloned: mocks.isCloned }));
 
+import { UsageError } from '../../cli/errors.js';
 import { topCommand } from '../top.js';
 
 describe('topCommand', () => {
@@ -26,16 +30,15 @@ describe('topCommand', () => {
   });
 
   it('days: ranks busiest days by cost across providers', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-01-01', makeDay(1000, 0, 10, 'opus')],
           ['2026-01-02', makeDay(100, 0, 1, 'opus')],
         ]),
         codex: new Map([['2026-01-01', makeDay(500, 0, 5, 'gpt-5')]]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await topCommand({ kind: 'days', limit: 2, sort: 'cost' });
 
@@ -48,15 +51,14 @@ describe('topCommand', () => {
   });
 
   it('models: ranks top models by tokens', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-01-01', makeDay(900, 100, 5, 'opus')],
           ['2026-01-02', makeDay(50, 50, 0.5, 'sonnet')],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await topCommand({ kind: 'models', limit: 5, sort: 'tokens' });
 
@@ -69,8 +71,8 @@ describe('topCommand', () => {
   });
 
   it('names unpriced models in the footnote and in JSON', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         cursor: new Map([
           [
             '2026-01-01',
@@ -81,9 +83,8 @@ describe('topCommand', () => {
             },
           ],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await topCommand({ kind: 'days', limit: 5, sort: 'tokens' });
     expect(loggedOutput()).toContain('Unpriced models: mystery');
@@ -96,8 +97,8 @@ describe('topCommand', () => {
   });
 
   it('projects: ranks by tokens, keeps the unattributed remainder and says Cursor is excluded', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           [
             '2026-01-01',
@@ -107,9 +108,8 @@ describe('topCommand', () => {
             },
           ],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await topCommand({ kind: 'projects', limit: 5, sort: 'tokens' });
     const out = loggedOutput();
@@ -131,12 +131,11 @@ describe('topCommand', () => {
   });
 
   it('prints JSON when requested', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([['2026-01-01', makeDay(900, 100, 5, 'opus')]]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await topCommand({ kind: 'models', limit: 5, sort: 'tokens', json: true });
 
@@ -156,15 +155,14 @@ describe('topCommand', () => {
   });
 
   it('names both filters in the title when --year and --since are combined', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-01-01', makeDay(100, 0, 1, 'm1')],
           ['2025-06-01', makeDay(9999, 0, 99, 'm1')],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await topCommand({ kind: 'days', limit: 10, sort: 'tokens', year: 2026, since: '2025-01-01' });
 
@@ -174,16 +172,15 @@ describe('topCommand', () => {
   });
 
   it('respects an explicit --since/--until date range', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-03-10', makeDay(100, 0, 1, 'm1')],
           ['2026-06-20', makeDay(9999, 0, 99, 'm1')],
           ['2026-09-01', makeDay(5000, 0, 50, 'm1')],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await topCommand({
       kind: 'days',
@@ -213,10 +210,9 @@ describe('topCommand', () => {
   });
 
   it('echoes the date range into --json output', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: { claude_code: new Map([['2026-06-20', makeDay(100, 0, 1, 'm1')]]) },
-      machineData: [],
-    });
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({ claude_code: new Map([['2026-06-20', makeDay(100, 0, 1, 'm1')]]) }),
+    );
 
     await topCommand({
       kind: 'models',
@@ -232,15 +228,14 @@ describe('topCommand', () => {
   });
 
   it('days: ranks by tokens in --json output', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-01-01', makeDay(100, 0, undefined, 'm1')],
           ['2026-01-02', makeDay(200, 0, undefined, 'm1')],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await topCommand({ kind: 'days', limit: 5, sort: 'tokens', json: true, year: 2026 });
 
@@ -256,16 +251,31 @@ describe('topCommand', () => {
   });
 
   it('days: prints no-usage message when filtering removes all days', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([['2026-01-01', makeDay(100, 0, undefined, 'm1')]]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await topCommand({ kind: 'days', limit: 5, sort: 'tokens', year: 2025 });
 
-    expect(loggedOutput()).toContain('No usage recorded.');
+    expect(loggedOutput()).toContain('No usage recorded for 2025.');
+  });
+
+  it('names the providers and reports since > until as a usage error', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue(null);
+    await topCommand({ kind: 'days', limit: 5, sort: 'cost', providers: ['cursor'] });
+    expect(loggedOutput()).toContain('No data for cursor.');
+
+    await expect(
+      topCommand({
+        kind: 'days',
+        limit: 5,
+        sort: 'cost',
+        since: '2026-06-01',
+        until: '2026-01-01',
+      }),
+    ).rejects.toThrow(UsageError);
   });
 
   it.each([

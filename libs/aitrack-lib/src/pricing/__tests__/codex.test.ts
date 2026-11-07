@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { findClaudePricing } from '../claude.js';
 import { estimateCodexCostUSD, findCodexPricing } from '../codex.js';
+import { resolveCursorRates } from '../cursor.js';
 import { createFallbackCollector } from '../fallback.js';
 
 describe('codex pricing', () => {
@@ -58,6 +60,19 @@ describe('codex pricing', () => {
     expect(estimateCodexCostUSD('gpt-5.1-codex', 1_000_000, 100_000)).toBeCloseTo(2.25);
   });
 
+  it('keeps stored costs byte-identical, since sync commits on any change', () => {
+    expect(estimateCodexCostUSD('gpt-5.3-codex', 2_714_701, 71_808, 2_568_219)).toBe(
+      1.7110938249999998,
+    );
+    expect(estimateCodexCostUSD('gpt-5.3-codex', 2_932_534, 12_053, 2_679_224)).toBe(
+      1.0808986999999999,
+    );
+    expect(estimateCodexCostUSD('gpt-5.6-luna', 637_096, 174_751, 122_434)).toBe(
+      0.31508228000000005,
+    );
+    expect(estimateCodexCostUSD('gpt-5.6-luna', 466_385, 182_388, 365_816)).toBe(0.24629572);
+  });
+
   it('prices gpt-5.6 sessions at the rate in effect on the usage date', () => {
     // OpenAI cut Terra and Luna on 2026-07-30, then Sol on 2026-08-21.
     // Terra: $2.50/$15 -> $2/$12, Luna: $1/$6 -> $0.20/$1.20, Sol: $5/$30 -> $4/$20.
@@ -93,5 +108,12 @@ describe('codex pricing', () => {
   it('returns undefined for non-gpt-5 models', () => {
     expect(findCodexPricing('davinci')).toBeUndefined();
     expect(estimateCodexCostUSD('unknown', 1000, 500)).toBeUndefined();
+  });
+
+  it.each(['constructor', 'toString', '__proto__'])('leaves the log model %s unpriced', (model) => {
+    expect(estimateCodexCostUSD(model, 1000, 500, 0, '2026-01-01')).toBeUndefined();
+    expect(findClaudePricing(model, '2026-01-01')).toBeUndefined();
+    expect(resolveCursorRates(model, '2026-01-01')).toBeUndefined();
+    expect(resolveCursorRates(`${model}-fast`, '2026-01-01')).toBeUndefined();
   });
 });

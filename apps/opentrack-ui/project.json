@@ -8,6 +8,7 @@
     "format:check": {},
     "typecheck": {
       "executor": "nx:run-commands",
+      "dependsOn": ["^typecheck"],
       "options": {
         "cwd": "{projectRoot}",
         "commands": [

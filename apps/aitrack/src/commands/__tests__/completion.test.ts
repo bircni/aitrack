@@ -37,6 +37,26 @@ describe('completionScript', () => {
     expect(out).not.toContain('sync');
   });
 
+  it.runIf(hasShell('bash'))('completes argument values in bash', () => {
+    const script = completionScript(buildProgram(), 'bash');
+    const out = execFileSync(
+      'bash',
+      [
+        '-c',
+        `${script}\nCOMP_WORDS=(aitrack top pro); COMP_CWORD=2; _aitrack; printf '%s\\n' "\${COMPREPLY[@]}"`,
+      ],
+      { encoding: 'utf8' },
+    );
+    expect(out.trim()).toBe('projects');
+    expect(completionScript(buildProgram(), 'fish')).toContain("-a 'projects'");
+  });
+
+  it('does not fail when zsh has not run compinit', () => {
+    expect(completionScript(buildProgram(), 'zsh')).toContain(
+      '(( $+functions[compdef] )) && compdef',
+    );
+  });
+
   it.runIf(hasShell('bash'))('completes flags after a subcommand in bash', () => {
     const script = completionScript(buildProgram(), 'bash');
     const out = execFileSync(

@@ -20,6 +20,9 @@ on:
 permissions:
   contents: write
 
+env:
+  NX_NO_CLOUD: true
+
 concurrency:
   group: publish-pricing-branch
   cancel-in-progress: true

@@ -2,18 +2,19 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { loadConfig, resolveMachineId } from './config.js';
-import { compactDays } from './data/compact.js';
+import type { Config } from './configTypes.js';
 import { reportMachineFileDiagnostics } from './data/diagnostics.js';
 import {
   buildMachineData,
-  mergePersistedDays,
+  canonicalDays,
+  outgoingDays,
   ratchetedProviderDays,
   readLocalProviderMaps,
 } from './data/localData.js';
 import { REPO_NOT_CLONED_MESSAGE } from './data/messages.js';
 import type { DayMap, MachineFile } from './data/types.js';
 import { todayString } from './data/usagePeriods.js';
-import { checkRawMachineFile } from './data/validate.js';
+import { checkRawMachineFile, type MachineFileCheck } from './data/validate.js';
 import { isMissingPathError } from './errors.js';
 import {
   commitAndPush,
@@ -28,6 +29,7 @@ import {
   withRepoLock,
   writeMachineFile,
 } from './git.js';
+import { differingOrigin, originMismatchMessage } from './git/remote.js';
 import { machineDataFilename } from './machineId.js';
 import { log } from './output.js';
 import {
@@ -38,11 +40,7 @@ import {
 import { recordPricingFallbacks } from './pricing/scan.js';
 import { syncPricingPack } from './pricing/syncPack.js';
 import { syncedProviders } from './providers/index.js';
-import {
-  ENCRYPTION_PASSPHRASE_ENV,
-  encryptionPassphrase,
-  isEncryptedRaw,
-} from './store/encryption.js';
+import { ENCRYPTION_PASSPHRASE_ENV, encryptionPassphrase } from './store/encryption.js';
 import { missingPassphraseMessage } from './store/machineFiles.js';
 
 export interface SyncDataOptions extends GitOptions {
@@ -68,15 +66,51 @@ function pushedMessage(host: string, syncedDays: number): string {
   return `Done! Pushed data/${host}.json (${String(syncedDays)} days)`;
 }
 
+function refusalMessage(host: string, failure: MachineFileCheck['failure']): string {
+  const filename = machineDataFilename(host);
+  let fix: string;
+  if (failure === 'encrypted') {
+    fix = `  Set ${ENCRYPTION_PASSPHRASE_ENV} to the passphrase the file was encrypted with.`;
+  } else if (failure === 'future-schema') {
+    fix = '  Upgrade aitrack: a newer version wrote this file.';
+  } else {
+    fix =
+      "  Run: npx aitrack recompute-costs   (restores the file's last commit if it is intact; otherwise rebuilds it from the local logs, and days they no longer cover remain only in git history)";
+  }
+  return `Refusing to overwrite invalid data/${filename} (see the warning above).\n${fix}`;
+}
+
+function readMachineFileRaw(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error; // Read as empty, it would push the logs over the file.
+    return null;
+  }
+}
+
+/** A truncated working-tree file reaches here unread when the logs are empty. Costs are recompute's to repair, so a stale total may pass. */
+function assertPushable(host: string): void {
+  const path = join(LOCAL_REPO, 'data', machineDataFilename(host));
+  const raw = readMachineFileRaw(path);
+  if (raw === null) return; // A deletion or rename is a legitimate change.
+  const checked = checkRawMachineFile(raw, path, { allowInconsistentCostTotals: true });
+  if (checked.machine) return;
+  reportMachineFileDiagnostics(checked.diagnostics);
+  throw new Error(refusalMessage(host, checked.failure));
+}
+
 /** Also commits a rename-only machineId change and pushes a commit whose earlier push failed. */
 async function pushMachineData(host: string, options: GitOptions): Promise<boolean> {
-  return (
-    ((await hasMachineDataChanges(host)) && (await commitAndPush(host, options))) ||
-    pushPendingCommits(options)
-  );
+  if (await hasMachineDataChanges(host)) {
+    assertPushable(host);
+    if (await commitAndPush(host, options)) return true;
+  }
+  return pushPendingCommits(options);
 }
 
 export interface DataRun {
+  config: Config;
   machineId: string;
   fallbacks: FallbackCollector;
   /** The local logs, read once the pricing refresh has settled. */
@@ -92,6 +126,8 @@ export async function runDataPipeline<T>(
   if (!isCloned()) {
     throw new Error(REPO_NOT_CLONED_MESSAGE);
   }
+  const origin = differingOrigin(config.repoUrl);
+  if (origin !== null) log.warn(originMismatchMessage(origin, config.repoUrl));
   const fallbacks = createFallbackCollector();
   const localRead = syncPricingPack().then(async () => {
     const maps = await readLocalProviderMaps(fallbacks);
@@ -106,6 +142,7 @@ export async function runDataPipeline<T>(
         await pull(options.git);
       }
       return step({
+        config,
         machineId: resolveMachineId(config),
         fallbacks,
         readLocalMaps: () => localRead,
@@ -130,10 +167,9 @@ export async function syncData(options: SyncDataOptions = {}): Promise<SyncResul
 
 async function pushLocalUsage(
   options: SyncDataOptions,
-  { machineId: host, readLocalMaps }: DataRun,
+  { config: { encryptData, compactAfterDays }, machineId: host, readLocalMaps }: DataRun,
 ): Promise<SyncResult> {
   const isDryRun = Boolean(options.dryRun);
-  const { encryptData, compactAfterDays } = loadConfig();
   const encrypt = encryptData === true;
   if (encrypt && encryptionPassphrase() === undefined) {
     throw new Error(missingPassphraseMessage());
@@ -172,50 +208,33 @@ async function pushLocalUsage(
     .map((source) => `${source.label} (${String(source.size)} days)`);
   log.info(`Found: ${sources.join(', ')}`);
 
-  let raw: string | null = null;
-  try {
-    raw = readFileSync(dataFilePath, 'utf8');
-  } catch (error) {
-    if (!isMissingPathError(error)) throw error; // Read as empty, it would push the logs over the file.
-  }
+  const raw = readMachineFileRaw(dataFilePath);
 
   let existingDays: MachineFile['days'] | null = null;
+  let isEncryptedNow = false;
   if (raw !== null) {
     const existing = checkRawMachineFile(raw, dataFilePath);
     reportMachineFileDiagnostics(existing.diagnostics);
     // Merging an invalid file as empty would push the loss of its history.
-    if (!existing.machine) {
-      const fix = isEncryptedRaw(raw)
-        ? `  Set ${ENCRYPTION_PASSPHRASE_ENV} to the passphrase the file was encrypted with.`
-        : "  Run: npx aitrack recompute-costs   (rebuilds this machine's file from the local logs)";
-      throw new Error(
-        `Refusing to overwrite invalid data/${machineDataFilename(host)} (see the warning above).\n${fix}`,
-      );
-    }
+    if (!existing.machine) throw new Error(refusalMessage(host, existing.failure));
     existingDays = existing.machine.days;
+    isEncryptedNow = existing.encrypted === true;
   }
 
-  const mergedDays = mergePersistedDays(existingDays, freshData.days);
-  const outgoingDays =
-    compactAfterDays === undefined
-      ? mergedDays
-      : compactDays(mergedDays, compactAfterDays, todayString());
+  const outgoing = outgoingDays(existingDays, freshData.days, compactAfterDays, todayString());
   const keptDays = ratchetedProviderDays(existingDays, freshData.days);
   if (keptDays > 0) {
     log.info(
-      `Kept ${String(keptDays)} synced day(s) with more tokens than the local logs still show.`,
-    );
-    log.info(
-      '  Run: npx aitrack recompute-costs --replace-local   to rebuild this machine from the logs.',
+      `Kept ${String(keptDays)} synced day(s) with more tokens than the local logs still show, which is normal once a tool prunes its logs.`,
     );
   }
-  const outgoingData: MachineFile = { ...freshData, days: outgoingDays };
-  const syncedDays = Object.keys(outgoingDays).length;
-  const normalizedExisting = existingDays === null ? null : mergePersistedDays(existingDays, {}); // Same key order as outgoing.
+  const outgoingData: MachineFile = { ...freshData, days: outgoing };
+  const syncedDays = Object.keys(outgoing).length;
+  const normalizedExisting = existingDays === null ? null : canonicalDays(existingDays); // Same key order as outgoing.
 
   // Usage only: lastUpdated and the schema header alone are not worth a commit.
-  const isEncryptionChange = raw !== null && isEncryptedRaw(raw) !== encrypt;
-  if (!isEncryptionChange && JSON.stringify(normalizedExisting) === JSON.stringify(outgoingDays)) {
+  const isEncryptionChange = raw !== null && isEncryptedNow !== encrypt;
+  if (!isEncryptionChange && JSON.stringify(normalizedExisting) === JSON.stringify(outgoing)) {
     let isPushed = false;
     if (!isDryRun) {
       removePendingMachineFile(host);

@@ -8,13 +8,15 @@ reads — including other machines synced through your aitrack data repo.
 
 - **Limits** — Claude Code session / weekly / per-model weekly windows and extra usage; Codex
   session and weekly windows and credits; Cursor total, Auto and API usage and on-demand spend.
-- **Pacing** — whether each limit is on track to last until it resets, with an even-pace marker
-  and alerts when one is almost used up or on pace to run out.
+- **Pacing** — whether each limit is on track to last until it resets, with alerts when one is
+  almost used up or on pace to run out. The tick on a meter is the even-pace marker: where usage
+  would be now if the limit were used evenly until it resets.
 - **Usage** — today, yesterday, the last 7 / 30 days and all-time per provider, a daily trend
   and a per-model breakdown. Numbers come from the same report builder as `aitrack usage`, so
   they match the CLI.
-- **History** — a tab with stacked daily or weekly spend per provider over the last 30 or 90
-  days, with the total, the average per day and the busiest day.
+- **History** — a tab with stacked daily or weekly estimated cost per provider over the last 30 or
+  90 days, with the total, the average per day and the busiest day. The provider chips carry the
+  chart's colours, and a day with unpriced usage is marked as partial.
 - **Projects** — a tab that lists projects (the git `owner/repo` of the folder the work ran in)
   for the selected period (Today / 7 days / 30 days / All time) with cost, tokens and a share bar;
   expand one for its split per provider. Usage that no project explains is shown as
@@ -22,8 +24,9 @@ reads — including other machines synced through your aitrack data repo.
   data and is not counted. Attribution starts with the next refresh (this machine) or sync (other
   machines), so the tab is empty until then and older synced days stay unattributed. The numbers
   come from the same report builder as `aitrack top projects`.
-- **Machines** — with a synced data repo, a tab next to Providers splits the same spend per
-  machine: its share of the period, a 30-day activity strip on one scale for every machine, the
+- **Machines** — with a synced data repo, a tab next to Providers splits the same estimated cost per
+  machine: its share of the period, a 30-day activity strip on one scale for every machine, shaded
+  at the same steps as `aitrack`'s heatmap, the
   machine's local time when its timezone differs, and when it last synced. A machine that has not
   synced for three days is marked stale. This machine always shows its live logs. Cursor usage
   comes from your Cursor account, not from any machine, so it is listed separately.
@@ -32,11 +35,32 @@ reads — including other machines synced through your aitrack data repo.
   **Bars** for a rounded progress bar per available limit (session, weekly and model limits),
   grouped by provider in dashboard order, or **Icon** for
   the "O". Turn off **Colored tray icon** for monochrome; macOS adapts it to the menu-bar appearance.
+  A limit whose reset has passed is left out until fresh numbers arrive.
 
 Dates, times and numbers follow the system language: grouping, decimal separators and clock
 format. Costs stay in US dollars. The interface text is English only. Limit meters expose their
-value to screen readers, refresh and sync results are announced politely, focus is always
-visible, and with reduced motion enabled the spinners stop and sections expand without sliding.
+value to screen readers, the results of a refresh or sync you start are announced politely, focus
+is always visible, and with reduced motion enabled the spinners stop and sections expand without
+sliding.
+
+Closing the window hides it; quit from the tray menu or the Quit button in Settings. Escape leaves
+Settings, and otherwise hides the popup, but not a pinned window.
+
+## When something is wrong
+
+- **Sign-in problems** say what to run. Sign in with that tool, then press Retry.
+- **Rate limits** — a retry-after the provider stated cannot be skipped by Refresh or Retry; the
+  provider shows how long is left and a link to its dashboard. With no stated retry-after, Retry
+  tries again at once.
+- **No numbers** — while usage is loading, failed to load or does not exist yet, totals show a dash
+  and say which, never `$0.00`. A real zero still shows `$0.00`.
+- **Old limits** — a limit past its reset reads "Reset passed, waiting for new data". Limits kept
+  from an earlier fetch show no pace. The footer's age is that of the oldest limits on screen.
+- **Background service** — if it cannot start or keeps crashing, the dashboard shows a banner with
+  the reason, the footer says it stopped, and Refresh and Sync are disabled. The last numbers stay,
+  as cached ones, and the dashboard reloads when the service recovers. A request the service does
+  not answer within 30 seconds fails with an error. Only 300 seconds with no output while an answer
+  is owed restarts it, and a second such restart in a row counts as down; any `git` it was running continues until its own timeout.
 
 ## Where data comes from
 
@@ -57,7 +81,8 @@ the saved Cursor token at most every 6 hours (`AITRACK_CURSOR_CACHE_TTL`) and on
 refresh. A provider turned off in Settings is neither read nor contacted. Usage is merged with the
 other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
 `git pull`s that repo every 30 minutes (can be turned off). It commits and pushes only when you
-press the sync button in the popup, which does exactly what `aitrack sync` does.
+press the sync button in the popup, which does exactly what `aitrack sync` does, including refusing
+a clone whose `origin` differs from `repoUrl`; that shows as a failed sync.
 
 A failed pull remains visible until recovery and retries after one minute; a successful
 pull restores the 30-minute schedule. Failed local reads retain their own warning.
@@ -71,12 +96,14 @@ pushed settings cannot overwrite those pending edits.
 
 Shortly after launch and every six hours, opentrack fetches `latest.json` from the latest
 GitHub release. When it lists a newer version, the dashboard offers **Install and restart**;
-the download must carry a signature from the release key or it is refused. Development
-builds never check.
+the download must carry a signature from the release key or it is refused. A release withdrawn
+after being offered stops being offered at the next check. Development builds never check.
 
-Settings and the last snapshot live in the app's data folder (`%APPDATA%\dev.bircni.opentrack` on
-Windows, `~/.local/share/dev.bircni.opentrack` on Linux): `settings.json`, `cache.json`, and
-`sidecar.log`. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
+Settings and the last snapshot live in the app's data folder
+(`~/Library/Application Support/dev.bircni.opentrack` on macOS, `%APPDATA%\dev.bircni.opentrack` on
+Windows, `~/.local/share/dev.bircni.opentrack` on Linux): `settings.json`, `cache.json` (discarded
+rather than migrated when its format is older), and `sidecar.log`, with the previous run's in
+`sidecar.log.1`. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
 check, and for the pricing refresh the sync button runs like `aitrack sync` (at most daily).
 
 ## Downloads
@@ -100,7 +127,7 @@ signature and installs it: on macOS it replaces `opentrack.app` in `/Application
 Windows installers, macOS disk images (Apple Silicon, macOS 13.5+) and Linux AppImage and
 `.deb` packages (x86_64) are also attached to the
 [same GitHub releases](https://github.com/bircni/aitrack/releases) as aitrack. Choose the
-`.exe` on Windows, or the `.dmg` matching your Mac, and drag opentrack to Applications. On
+`.exe` on Windows, or the `.dmg` on an Apple Silicon Mac and drag opentrack to Applications. On
 Linux, run the `.AppImage` after `chmod +x`, or install the `.deb` with
 `sudo apt install ./opentrack_*_amd64.deb`.
 

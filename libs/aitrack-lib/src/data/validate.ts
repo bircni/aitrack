@@ -7,10 +7,10 @@ import {
   type EncryptedEnvelope,
   isEncryptedEnvelope,
 } from '../store/encryption.js';
-import { applyMigrations } from '../store/migrations/index.js';
+import { applyMigrations, SchemaFromTheFutureError } from '../store/migrations/index.js';
 import { UNKNOWN_TIMEZONE } from '../timezone.js';
 import { reportMachineFileDiagnostics } from './diagnostics.js';
-import { isFiniteNumber, isRecord } from './guards.js';
+import { isFiniteNumber, isInheritedKey, isRecord } from './guards.js';
 import { CURRENT_SCHEMA_VERSION } from './schema.js';
 import type { DayBucket, MachineFile, ProviderDay, TokenCounts } from './types.js';
 
@@ -31,10 +31,16 @@ export type MachineFileDiagnostic =
       reason: string;
     };
 
+/** Only `corrupt` can be repaired by rewriting: the others are healthy files this process cannot read. */
+export type MachineFileFailure = 'corrupt' | 'future-schema' | 'encrypted';
+
 export interface MachineFileCheck {
   /** The validated file, or null when it had to be skipped entirely. */
   machine: MachineFile | null;
   diagnostics: MachineFileDiagnostic[];
+  failure?: MachineFileFailure;
+  /** Set when the raw file was an encrypted envelope, readable or not. */
+  encrypted?: true;
 }
 
 /** A validated value, or the reason it is not one. */
@@ -76,6 +82,7 @@ export function approximatelyEqual(a: number, b: number): boolean {
 function projectsProblem(value: unknown, path: string): string | null {
   if (!isRecord(value)) return `${path}.byProject must be an object`;
   for (const [project, counts] of Object.entries(value)) {
+    if (isInheritedKey(project)) return `${path}.byProject has the reserved key ${project}`;
     const checked = checkTokenCounts(counts, `${path}.byProject.${project}`);
     if (!checked.ok) return checked.error;
   }
@@ -103,6 +110,7 @@ function checkProviderDay(
   if (!isRecord(value.byModel)) return invalid(`${path}.byModel must be an object`);
   const modelCounts: TokenCounts[] = [];
   for (const [model, counts] of Object.entries(value.byModel)) {
+    if (isInheritedKey(model)) return invalid(`${path}.byModel has the reserved key ${model}`);
     const checked = checkTokenCounts(counts, `${path}.byModel.${model}`);
     if (!checked.ok) return checked;
     modelCounts.push(checked.value);
@@ -133,9 +141,10 @@ export function checkMachineFile(
   filePath: string,
   options: MachineFileValidationOptions = {},
 ): MachineFileCheck {
-  const skip = (reason: string): MachineFileCheck => ({
+  const skip = (reason: string, failure: MachineFileFailure = 'corrupt'): MachineFileCheck => ({
     machine: null,
     diagnostics: [{ kind: 'file-skipped', filePath, reason }],
+    failure,
   });
 
   if (!isRecord(data)) return skip('root must be an object');
@@ -146,7 +155,10 @@ export function checkMachineFile(
   try {
     file = applyMigrations(data);
   } catch (error) {
-    return skip(errorMessage(error));
+    return skip(
+      errorMessage(error),
+      error instanceof SchemaFromTheFutureError ? 'future-schema' : 'corrupt',
+    );
   }
 
   if (typeof file.hostname !== 'string' || file.hostname.length === 0) {
@@ -178,12 +190,17 @@ export function checkMachineFile(
     const providerDay: Record<string, ProviderDay> = {};
     for (const [providerKey, providerData] of Object.entries(providers)) {
       const path = `days.${date}.${providerKey}`;
+      if (isInheritedKey(providerKey)) return skip(`${path} has a reserved provider key`);
       let source = providerData;
-      if (isRecord(providerData) && providerData.byProject !== undefined) {
-        const reason = projectsProblem(providerData.byProject, path);
+      if (isRecord(providerData) && providerData.byCwd !== undefined) {
+        const { byCwd: _inMemoryOnly, ...fileFields } = providerData; // Goes unchecked into the merge otherwise.
+        source = fileFields;
+      }
+      if (isRecord(source) && source.byProject !== undefined) {
+        const reason = projectsProblem(source.byProject, path);
         if (reason !== null) {
-          source = { ...providerData };
-          delete (source as Record<string, unknown>).byProject;
+          const { byProject: _dropped, ...kept } = source;
+          source = kept;
           diagnostics.push({ kind: 'projects-dropped', filePath, date, providerKey, reason });
         }
       }
@@ -228,22 +245,29 @@ export function checkRawMachineFile(
   filePath: string,
   options: MachineFileValidationOptions = {},
 ): MachineFileCheck {
-  const skip = (reason: string): MachineFileCheck => ({
+  const skip = (reason: string, failure: MachineFileFailure): MachineFileCheck => ({
     machine: null,
     diagnostics: [{ kind: 'file-skipped', filePath, reason }],
+    failure,
   });
   let parsed: unknown;
+  let isEncrypted = false;
   try {
     parsed = JSON.parse(raw);
     if (isEncryptedEnvelope(parsed)) {
+      isEncrypted = true;
       const decrypted = decryptRaw(parsed);
-      if (!decrypted.ok) return skip(decrypted.error);
+      if (!decrypted.ok) return { ...skip(decrypted.error, 'encrypted'), encrypted: true };
       parsed = JSON.parse(decrypted.value);
     }
   } catch (error) {
-    return skip(`invalid JSON (${errorMessage(error)})`);
+    return {
+      ...skip(`invalid JSON (${errorMessage(error)})`, 'corrupt'),
+      ...(isEncrypted && { encrypted: true }),
+    };
   }
-  return checkMachineFile(parsed, filePath, options);
+  const checked = checkMachineFile(parsed, filePath, options);
+  return isEncrypted ? { ...checked, encrypted: true } : checked;
 }
 
 /** Parse and validate raw JSON, warning about whatever it found. */

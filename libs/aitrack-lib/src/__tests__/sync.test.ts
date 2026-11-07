@@ -5,11 +5,14 @@ const mocks = vi.hoisted(() => ({
   readClaudeData: vi.fn(),
   readCodexData: vi.fn(),
   isCloned: vi.fn(),
+  cloneOriginUrl: vi.fn(),
   pull: vi.fn(),
   commitAndPush: vi.fn(),
   hasMachineDataChanges: vi.fn(),
   pushPendingCommits: vi.fn(),
   hasUnpushedCommits: vi.fn(),
+  removePendingMachineFile: vi.fn(),
+  encryptArgument: vi.fn(),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   readFileSync: vi.fn(),
@@ -32,30 +35,11 @@ vi.mock('../data/localData.js', async () => {
   const actual =
     await vi.importActual<typeof import('../data/localData.js')>('../data/localData.js');
   return {
-    // The real merge helper — this is what keeps pruned-away history in the file.
-    mergePersistedDays: actual.mergePersistedDays,
+    // The real merge helpers — this is what keeps pruned-away history in the file.
+    canonicalDays: actual.canonicalDays,
+    outgoingDays: actual.outgoingDays,
     ratchetedProviderDays: actual.ratchetedProviderDays,
-    buildMachineData: (host: string, providers: Record<string, DayMap>) => {
-      const days: Record<string, Record<string, unknown>> = {};
-      for (const [providerKey, dayMap] of Object.entries(providers)) {
-        for (const [date, day] of dayMap) {
-          days[date] ??= {};
-          days[date][providerKey] = {
-            byModel: day.byModel,
-            totals: { inputTokens: day.inputTokens, outputTokens: day.outputTokens },
-            ...(day.byProject && { byProject: day.byProject }),
-          };
-        }
-      }
-      return {
-        schemaVersion: 2,
-        hostname: host,
-        timezone: 'UTC',
-        dayBucket: 'local',
-        lastUpdated: 'now',
-        days,
-      };
-    },
+    buildMachineData: actual.buildMachineData,
     readLocalProviderMaps: async (
       fallbacks?: FallbackCollector,
     ): Promise<{ claude_code: DayMap; codex: DayMap }> => ({
@@ -67,14 +51,16 @@ vi.mock('../data/localData.js', async () => {
 vi.mock('../git.js', () => ({
   LOCAL_REPO: '/repo',
   isCloned: mocks.isCloned,
+  cloneOriginUrl: mocks.cloneOriginUrl,
   pull: mocks.pull,
   commitAndPush: mocks.commitAndPush,
   hasMachineDataChanges: mocks.hasMachineDataChanges,
   pushPendingCommits: mocks.pushPendingCommits,
   hasUnpushedCommits: mocks.hasUnpushedCommits,
-  removePendingMachineFile: vi.fn(),
+  removePendingMachineFile: mocks.removePendingMachineFile,
   withRepoLock: (fn: () => Promise<unknown>) => fn(),
-  writeMachineFile: (filePath: string, machine: object) => {
+  writeMachineFile: (filePath: string, machine: object, encrypt?: boolean) => {
+    mocks.encryptArgument(encrypt);
     mocks.mkdirSync(filePath, { recursive: true });
     mocks.writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
   },
@@ -104,6 +90,7 @@ describe('syncData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.isCloned.mockReturnValue(true);
+    mocks.cloneOriginUrl.mockReturnValue(null);
     mocks.loadConfig.mockReturnValue({ repoUrl: 'git@example.com:me/data.git' });
     mocks.hostname.mockReturnValue('host');
     mocks.readClaudeData.mockResolvedValue(new Map());
@@ -144,6 +131,18 @@ describe('syncData', () => {
 
     await expect(syncData()).rejects.toThrow('Repo not cloned');
     expect(syncPricingPack).not.toHaveBeenCalled();
+  });
+
+  it('warns and still syncs when the clone is on a remote other than repoUrl', async () => {
+    mocks.cloneOriginUrl.mockReturnValue('git@example.com:me/old.git');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+
+    await syncData();
+
+    expect(loggedOutput('warn')).toContain('pushes to git@example.com:me/old.git');
+    expect(mocks.pull).toHaveBeenCalled();
+    expect(mocks.commitAndPush).toHaveBeenCalled();
   });
 
   it('fails a verified sync that leaves commits unpushed', async () => {
@@ -263,6 +262,94 @@ describe('syncData', () => {
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
     expect(mocks.commitAndPush).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'a newer schema',
+      JSON.stringify(makeMachineFile('host', {}, { schemaVersion: 999 })),
+      'Upgrade aitrack',
+    ],
+    [
+      'an encrypted file it cannot open',
+      JSON.stringify({ encrypted: 'aitrack-aes-256-gcm-scrypt-v1' }),
+      'AITRACK_ENCRYPTION_PASSPHRASE',
+    ],
+  ])('never points at recompute-costs for %s, which is healthy', async (_label, raw, fix) => {
+    vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', '');
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+    mocks.readFileSync.mockReturnValue(raw);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const failure = syncData();
+
+    await expect(failure).rejects.toThrow(fix);
+    await expect(failure).rejects.not.toThrow('recompute-costs');
+  });
+
+  it('states what recompute-costs can lose when it advises it for a corrupt file', async () => {
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+    mocks.readFileSync.mockReturnValue('{ not json');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(syncData()).rejects.toThrow(/recompute-costs.*days they no longer cover/u);
+  });
+
+  it('keeps a pruned day without offering the command that would drop it', async () => {
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify(
+        makeMachineFile('host', {
+          '2024-01-01': { codex: makeProviderDay(900, 100, undefined, 'gpt-5') },
+        }),
+      ),
+    );
+
+    await syncData();
+
+    expect(loggedOutput('log')).toContain('Kept 1 synced day(s)');
+    expect(loggedOutput('log')).not.toContain('--replace-local');
+  });
+
+  it('refuses to push a truncated file when the empty logs would never read it', async () => {
+    mocks.hasMachineDataChanges.mockReturnValue(true);
+    mocks.readFileSync.mockReturnValue('{ "schemaVersion": 2, "hostname": "ho');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(syncData()).rejects.toThrow('Refusing to overwrite');
+
+    expect(mocks.commitAndPush).not.toHaveBeenCalled();
+  });
+
+  it('rewrites an unchanged plaintext file once encryption is turned on', async () => {
+    vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', 'secret');
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'x', encryptData: true });
+    mocks.readClaudeData.mockResolvedValue(dayMap(30, 15, 'claude'));
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify(
+        makeMachineFile('host', {
+          '2024-01-01': { claude_code: makeProviderDay(30, 15, undefined, 'claude') },
+        }),
+      ),
+    );
+
+    await syncData();
+
+    expect(mocks.encryptArgument).toHaveBeenCalledWith(true);
+    expect(mocks.commitAndPush).toHaveBeenCalled();
+  });
+
+  it('passes the git timeout to the pull and the push, and clears the staged copy', async () => {
+    mocks.readCodexData.mockResolvedValue(dayMap(20, 10, 'gpt-5'));
+
+    await syncData({ timeoutMs: 1 });
+
+    expect(mocks.pull).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 1 }));
+    expect(mocks.commitAndPush).toHaveBeenCalledWith(
+      'host',
+      expect.objectContaining({ timeoutMs: 1 }),
+    );
+    expect(mocks.removePendingMachineFile).toHaveBeenCalledWith('host');
   });
 
   it('surfaces a read failure that is not a missing file', async () => {
@@ -387,6 +474,7 @@ describe('syncData', () => {
 
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
     expect(mocks.commitAndPush).toHaveBeenCalledWith('new-host', {});
+    expect(mocks.removePendingMachineFile).toHaveBeenCalledWith('new-host');
     expect(console.log).toHaveBeenCalledWith('Done! Pushed data/new-host.json (1 days)');
   });
 });

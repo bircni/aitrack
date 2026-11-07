@@ -84,6 +84,7 @@ function optionalOutput(command: string, arguments_: string[]): string | undefin
 }
 
 const REPO_ROOT = new URL('../', import.meta.url);
+const RELEASE_BRANCH = 'main';
 
 /**
  * Every package.json the release moves, the workspace root included.
@@ -186,34 +187,66 @@ function parseArguments(argv: string[]): ParsedArguments {
   };
 }
 
-function ensureCleanGitTree(dryRun: boolean): void {
-  const dirty = output('git', ['status', '--porcelain']);
-  if (dirty !== '') {
-    if (dryRun) {
-      console.warn('Working tree is not clean; continuing because --dry-run was used.');
-      return;
-    }
-    throw new Error('Working tree is not clean. Commit or stash your changes before releasing.');
+/** Everything that would make this release fail halfway or tag the wrong commit. */
+export function releaseProblems(tag: string, remote: string, cwd?: string): string[] {
+  const git = (arguments_: string[]) => spawnCommand('git', arguments_, { cwd, encoding: 'utf8' });
+  const problems: string[] = [];
+
+  const branch = git(['branch', '--show-current']).stdout.trim();
+  if (branch !== RELEASE_BRANCH) {
+    problems.push(
+      `Releases are cut from ${RELEASE_BRANCH}, but this is ${branch || 'detached HEAD'}.`,
+    );
   }
+  if (git(['status', '--porcelain']).stdout.trim() !== '') {
+    problems.push('Working tree is not clean. Commit or stash your changes before releasing.');
+  }
+  if (git(['rev-parse', '--quiet', '--verify', `refs/tags/${tag}`]).status === 0) {
+    problems.push(`Tag ${tag} already exists locally.`);
+  }
+
+  const branchRef = `refs/heads/${RELEASE_BRANCH}`;
+  const tagRef = `refs/tags/${tag}`;
+  const remoteRefs = git(['ls-remote', remote, branchRef, tagRef]); // Unlike fetch, changes nothing here.
+  if (remoteRefs.status !== 0) {
+    problems.push(`Could not read ${remote}: ${remoteRefs.stderr.trim()}`);
+    return problems;
+  }
+  const refs = new Map(
+    remoteRefs.stdout
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, ref] = line.split('\t');
+        return [ref, sha];
+      }),
+  );
+  if (refs.has(tagRef)) problems.push(`Tag ${tag} already exists on ${remote}.`);
+  if (refs.get(branchRef) !== git(['rev-parse', 'HEAD']).stdout.trim()) {
+    problems.push(`HEAD is not in sync with ${remote}/${RELEASE_BRANCH}.`);
+  }
+  return problems;
 }
 
 function main(): void {
   const { bump, dryRun } = parseArguments(process.argv.slice(2));
   const options = { dryRun };
 
-  ensureCleanGitTree(dryRun);
   const pushRemote = getPushRemote({ allowPlaceholder: dryRun });
+  const version = previewVersionBump(getPackageVersion(), bump);
+  const tag = `v${version}`;
+
+  const problems = releaseProblems(tag, pushRemote);
+  if (problems.length > 0 && !dryRun) throw new Error(problems.join('\n'));
+  for (const problem of problems) console.warn(`A real release would stop here: ${problem}`);
 
   run('bun', ['run', 'validate'], options);
 
-  const currentVersion = getPackageVersion();
-  const version = previewVersionBump(currentVersion, bump);
   if (bump !== 'none') {
     setPackageVersions(version, options);
     // bun.lock records each workspace's version.
     run('bun', ['install', '--lockfile-only'], options);
   }
-  const tag = `v${version}`;
 
   run('git-cliff', ['--config', '.cliff.toml', '--tag', tag, '-o', 'CHANGELOG.md'], options);
 
@@ -221,8 +254,12 @@ function main(): void {
   run('git', ['commit', '-m', `chore(release): ${tag}`], options);
   run('git', ['tag', tag], options);
 
-  run('git', ['push', pushRemote, 'HEAD'], options);
-  run('git', ['push', pushRemote, `refs/tags/${tag}`], options);
+  // Atomic: a commit on main without its tag would never publish.
+  run(
+    'git',
+    ['push', '--atomic', pushRemote, `HEAD:refs/heads/${RELEASE_BRANCH}`, `refs/tags/${tag}`],
+    options,
+  );
 
   if (dryRun) {
     console.log(`Dry run complete: would release ${tag}. No repository files were changed.`);

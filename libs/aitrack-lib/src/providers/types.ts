@@ -11,6 +11,8 @@ export interface ProviderDescriptor {
   aliases: readonly string[];
   /** Column heading for money. Estimates say "Est. cost"; billed values say "Cost". */
   costLabel: string;
+  /** Has a live quota endpoint; `quota/index.ts` must then map the key to a fetcher. */
+  hasQuota?: boolean;
 }
 
 /** Five-stop heatmap cell ramp, lightest (empty) to darkest (busiest). */

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { machineDataFilename, normalizeMachineId } from '../machineId.js';
@@ -11,8 +11,10 @@ import {
   type GitOptions,
   hasUpstream,
   pushWithRetry,
+  rebaseOntoRemote,
   runGit,
   runGitAsync,
+  SYNC_COMMIT_PREFIX,
 } from './exec.js';
 import { withRepoLock } from './lock.js';
 
@@ -20,14 +22,33 @@ export function isCloned(): boolean {
   return existsSync(join(LOCAL_REPO, '.git'));
 }
 
-export function cloneRepo(url: string): void {
-  const result = spawnSync('git', ['clone', '--', url, LOCAL_REPO], {
+export function cloneRepo(url: string, target = LOCAL_REPO): void {
+  const result = spawnSync('git', ['clone', '--', url, target], {
     stdio: 'inherit',
     windowsHide: true,
   });
   if (result.status !== 0) {
     throw new Error(`git clone failed with exit code ${String(result.status)}`);
   }
+}
+
+/** Swaps in a clone of `url` only once it succeeded: the old clone may hold the only copy of unpushed commits. */
+export function replaceLocalClone(url: string): void {
+  const incoming = `${LOCAL_REPO}.incoming`;
+  rmSync(incoming, { recursive: true, force: true });
+  try {
+    cloneRepo(url, incoming);
+    removeLocalClone();
+    renameSync(incoming, LOCAL_REPO);
+  } catch (error) {
+    rmSync(incoming, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+/** A file as of the last commit, or null when it has none. */
+export function readCommittedFile(repoPath: string): Promise<string | null> {
+  return runGitAsync(['show', `HEAD:${repoPath}`]).catch(() => null);
 }
 
 /** The URL as stored, which outlives a deleted or corrupt config; `get-url` would apply insteadOf rewrites. */
@@ -69,14 +90,15 @@ async function isAheadOfUpstream(): Promise<boolean> {
 /** Push commits that were already made locally. False when there are none. */
 export function pushPendingCommits(options: GitOptions = {}): Promise<boolean> {
   return withRepoLock(async () => {
-    if (!(await hasUpstream()) || !(await isAheadOfUpstream())) return false;
-    await pushWithRetry(undefined, options, true);
+    if (!(await hasUnpushedCommits())) return false;
+    await pushWithRetry(options);
     return true;
   });
 }
 
 export function pull(options: GitOptions = {}): Promise<void> {
   return withRepoLock(async () => {
+    await abortRebaseIfInProgress(); // A dead process's rebase would fail everything below, on every run.
     try {
       await runGitAsync(['pull', '--ff-only', '--quiet'], options);
     } catch (error) {
@@ -89,19 +111,16 @@ export function pull(options: GitOptions = {}): Promise<void> {
       // moves on, and --ff-only cannot resolve that. Replay the local commits on
       // top of the remote instead of failing every future sync.
       if (!(await hasUnpushedCommits())) throw error;
-      try {
-        await runGitAsync(['pull', '--rebase', '--quiet'], options);
-      } catch (rebaseError) {
-        await abortRebaseIfInProgress();
-        throw rebaseError;
-      }
+      await rebaseOntoRemote([], options);
     }
   });
 }
 
-export function commitDataChanges(message: string): Promise<boolean> {
+/** `paths` limits it to files the caller wrote and checked; a dirty or leftover file beside them stays out. */
+export function commitDataChanges(message: string, paths?: readonly string[]): Promise<boolean> {
   return withRepoLock(async () => {
-    await runGitAsync(['add', 'data/']);
+    const pathspecs = paths?.map((path) => `:(literal)${path}`) ?? ['data/'];
+    await runGitAsync(['add', '--', ...pathspecs]);
     return commitStagedData(message);
   });
 }
@@ -114,12 +133,10 @@ async function stageAndPushMachine(hostname: string, options: GitOptions): Promi
   const machineId = normalizeMachineId(hostname);
   const path = `data/${machineDataFilename(machineId)}`;
   await runGitAsync(['add', '--', `:(literal)${path}`]);
-  // Staged change may be a deletion.
-  const absolute = join(LOCAL_REPO, path);
-  const conflict = existsSync(absolute)
-    ? { path, contents: readFileSync(absolute, 'utf8') }
-    : undefined;
-  return commitStagedData(`sync: ${machineId} at ${new Date().toISOString()}`, conflict, options);
+  return commitStagedData(
+    `${SYNC_COMMIT_PREFIX}${machineId} at ${new Date().toISOString()}`,
+    options,
+  );
 }
 
 /** Whether this machine's target file is modified, renamed, or untracked in the data repo. */

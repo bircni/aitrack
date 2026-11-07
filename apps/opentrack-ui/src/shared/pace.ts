@@ -18,6 +18,11 @@ export function formatWhen(at: number, now: number, locale?: string): string {
   return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
+/** A cached window whose reset has passed says nothing about the limit now. */
+export function hasReset(window: QuotaWindow, now: number): boolean {
+  return window.resetsAt !== undefined && Date.parse(window.resetsAt) <= now;
+}
+
 export type Tone = 'calm' | 'warn' | 'crit';
 
 /** A window's colour: its pace when there is one, otherwise how full it is. */

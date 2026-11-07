@@ -1,4 +1,4 @@
-/* Spend summary and the period selector. */
+/* Cost summary and the period selector. */
 .summary {
   display: grid;
   gap: 12px;
@@ -67,6 +67,18 @@
   font-size: 12px;
 }
 
+.spark-box {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 2px;
+  justify-items: end;
+}
+
+.spark-span {
+  color: var(--ink-3);
+  font-size: 10.5px;
+}
+
 .spark {
   width: 112px;
   height: 36px;
@@ -126,5 +138,4 @@
 
 .sub-link {
   color: inherit;
-  font-weight: 600;
 }

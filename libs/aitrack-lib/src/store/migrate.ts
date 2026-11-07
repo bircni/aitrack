@@ -87,7 +87,13 @@ export function migrateMachineDataFiles(previousId: string, nextId: string): voi
     }
     for (const plan of plans) {
       if (plan.repositoryPaths === undefined) continue;
-      runGit(['add', '--', ...plan.repositoryPaths.map((path) => `:(literal)${path}`)]);
+      const [source, target] = plan.repositoryPaths.map((path) => `:(literal)${path}`) as [
+        string,
+        string,
+      ];
+      // git add refuses a path it knows nothing of, as with a file adopted but not yet committed.
+      const isTracked = runGit(['ls-files', '--', source]) !== '';
+      runGit(['add', '--', ...(isTracked ? [source, target] : [target])]);
     }
   } catch (error) {
     let rollbackError: unknown;

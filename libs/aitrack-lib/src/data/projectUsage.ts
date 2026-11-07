@@ -1,31 +1,13 @@
-import { isAbsolute, relative } from 'node:path';
+import { isAbsolute, relative, sep } from 'node:path';
 
 import { isSyncedProvider, providerLabel } from '../providers/index.js';
 import { type AggregateModelsFilter, dateInFilter, hasUnpricedUsage } from './aggregate.js';
 import { addTokenCounts, flagUnpriced } from './dayMap.js';
 import { ALL_MODELS, type ProjectSelector, UNATTRIBUTED_PROJECT } from './project.js';
 import { compareByCostThenTokens } from './sort.js';
-import type { DayEntry, DayMap, ProviderData, TokenCounts } from './types.js';
+import type { DayEntry, DayMap, ProjectUsage, ProviderData, TokenCounts } from './types.js';
 
-interface ProjectProviderUsage {
-  key: string;
-  label: string;
-  tokens: number;
-  costUSD: number;
-  hasCost: boolean;
-  hasUnpricedTokens?: boolean;
-}
-
-export interface ProjectUsage {
-  project: string;
-  tokens: number;
-  costUSD: number;
-  hasCost: boolean;
-  hasUnpricedTokens?: boolean;
-  /** The remainder of days that carry no (or only partial) project split. */
-  unattributed?: boolean;
-  providers: ProjectProviderUsage[];
-}
+export type { ProjectUsage } from './types.js';
 
 export interface ProjectBreakdown {
   projects: ProjectUsage[];
@@ -155,7 +137,7 @@ export function aggregateProjects(
 
 function dirContains(dir: string, cwd: string): boolean {
   const path = relative(dir, cwd);
-  return path === '' || (!path.startsWith('..') && !isAbsolute(path));
+  return path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path);
 }
 
 function sliceOf(day: DayEntry, selector: ProjectSelector): TokenCounts | undefined {

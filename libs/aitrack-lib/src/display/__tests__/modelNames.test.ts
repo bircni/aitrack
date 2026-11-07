@@ -43,6 +43,11 @@ describe('displayModelName', () => {
     expect(displayModelName('cursor-grok-4.6')).toBe('Grok 4.6');
     expect(displayModelName('grok-4.6')).toBe('Grok 4.6');
     expect(displayModelName('cursor-grok-4.7')).toBe('Grok 4.7');
+    expect(displayModelName('claude-haiku-5-5-long-context')).toBe('Haiku 5.5');
+    expect(displayModelName('claude-haiku-5-5-long-context', { effort: true })).toBe(
+      'Haiku 5.5 long context',
+    );
+    expect(displayModelName('claude-opus-5-5-fast', { effort: true })).toBe('Opus 5.5 fast');
     expect(displayModelName('cursor-grok-4.6-xhigh-fast')).toBe('Grok 4.6');
     expect(displayModelName('cursor-grok-4.6-xhigh-fast', { effort: true })).toBe(
       'Grok 4.6 xhigh fast',

@@ -23,12 +23,23 @@
     settings: Settings;
     now: number;
     period: Period;
+    /** The service that keeps these numbers current is down. */
+    serviceDown?: boolean;
     onPatch: (patch: Partial<Settings>) => void;
     onRefresh: () => void;
     onOpenDashboard: (provider: QuotaProviderKey) => void;
   }
 
-  let { provider, settings, now, period, onPatch, onRefresh, onOpenDashboard }: Props = $props();
+  let {
+    provider,
+    settings,
+    now,
+    period,
+    serviceDown = false,
+    onPatch,
+    onRefresh,
+    onOpenDashboard,
+  }: Props = $props();
   let open = $state(false);
 
   const spend = $derived(periodSpend(provider.usage, period));
@@ -37,33 +48,37 @@
   );
 </script>
 
-<section class="provider provider--{provider.key}" aria-label={provider.label}>
-  <button
-    class="p-head"
-    type="button"
-    aria-expanded={open}
-    disabled={!provider.usage}
-    onclick={() => (open = !open)}
-  >
-    <span class="p-mark"><ProviderIcon provider={provider.key} size={18} /></span>
-    <span class="p-identity">
-      <span class="p-name">{provider.label}</span>
-      {#if provider.quota?.plan}<span class="p-plan">{provider.quota.plan}</span>{/if}
-    </span>
-    {#if provider.refreshing}<span class="p-busy" role="img" aria-label="Refreshing"></span>{/if}
-    <span class="p-cost">{provider.usage ? spendLabel(spend) : '—'}</span>
-    {#if provider.usage}
-      <span class="p-chevron" class:expanded={open}><Icon name="chevron-down" size={13} /></span>
-    {/if}
-  </button>
+<section class="card provider provider--{provider.key}" aria-label={provider.label}>
+  <h2 class="p-title">
+    <button
+      class="p-head"
+      type="button"
+      aria-expanded={open}
+      disabled={!provider.usage}
+      onclick={() => (open = !open)}
+    >
+      <span class="p-mark"><ProviderIcon provider={provider.key} size={18} /></span>
+      <span class="p-identity">
+        <span class="p-name">{provider.label}</span>
+        {#if provider.quota?.plan}<span class="p-plan">{provider.quota.plan}</span>{/if}
+      </span>
+      {#if provider.refreshing}<span class="p-busy" role="img" aria-label="Refreshing"></span>{/if}
+      <span class="p-cost">{provider.usage ? spendLabel(spend) : '—'}</span>
+      {#if provider.usage}
+        <span class="p-chevron" class:expanded={open}><Icon name="chevron-down" size={13} /></span>
+      {/if}
+    </button>
+  </h2>
 
   {#if provider.quotaError && provider.quota}
     <div class="state">Cached limits: {formatUpdated(provider.quota.fetchedAt, now)}</div>
   {/if}
   {#if problem && provider.quotaError}
     <div class="state">
-      <span title={provider.quotaError.message}>{problem.text}</span>
-      {#if problem.retry}
+      <span title={problem.text === provider.quotaError.message ? undefined : provider.quotaError.message}
+        >{problem.text}</span
+      >
+      {#if problem.action === 'retry'}
         <button class="link" type="button" onclick={onRefresh}>Retry</button>
       {:else}
         <button class="link" type="button" onclick={() => onOpenDashboard(provider.key)}
@@ -78,6 +93,7 @@
       {window}
       {settings}
       {now}
+      stale={serviceDown || provider.quotaError !== undefined}
       onToggleUsage={() => onPatch({ display: settings.display === 'used' ? 'left' : 'used' })}
       onToggleReset={() =>
         onPatch({ resetDisplay: settings.resetDisplay === 'relative' ? 'absolute' : 'relative' })}
@@ -109,7 +125,7 @@
         <div class="d-heading">Models · {PERIOD_LABELS[period]}</div>
         {#each spend.models as model (model.model)}
           <div class="d-row d-model">
-            <span>{model.model}</span><span>{spendReading(model)}</span>
+            <span title={model.model}>{model.model}</span><span>{spendReading(model)}</span>
           </div>
         {/each}
       {/if}

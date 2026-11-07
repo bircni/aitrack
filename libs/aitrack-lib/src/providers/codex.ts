@@ -2,15 +2,11 @@ import { estimateCodexCostUSD } from '../pricing/codex.js';
 import { getCodexPaths, readCodexData } from '../readers/codex.js';
 import { sourceCheck } from '../readers/paths.js';
 import type { CheckResult } from './checkResult.js';
+import { PROVIDER_DESCRIPTORS } from './descriptors.js';
 import type { SyncedProvider } from './types.js';
 
 export const codexProvider: SyncedProvider = {
-  descriptor: {
-    key: 'codex',
-    label: 'Codex',
-    aliases: ['codex'],
-    costLabel: 'Est. cost',
-  },
+  descriptor: PROVIDER_DESCRIPTORS.codex,
   heatmap: {
     light: ['#ebedf0', '#cde4f8', '#7db9ea', '#2472c8', '#0b3d7a'],
     dark: ['#1e1e24', '#0c2240', '#0d4a8a', '#1a7fd4', '#4db8ff'],

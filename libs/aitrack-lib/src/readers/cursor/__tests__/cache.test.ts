@@ -14,6 +14,11 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, homedir: () => TEST_HOME };
 });
 
+vi.mock('../csv.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../csv.js')>();
+  return { ...actual, aggregateCursorCsvToDayMap: vi.fn(actual.aggregateCursorCsvToDayMap) };
+});
+
 import { packageVersion } from '../../../version.js';
 import {
   cursorCacheAgeSeconds,
@@ -22,6 +27,7 @@ import {
   readCursorCache,
   writeCursorCache,
 } from '../cache.js';
+import { aggregateCursorCsvToDayMap } from '../csv.js';
 import { readCursorData } from '../index.js';
 import { cursorAccountId } from '../jwt.js';
 
@@ -155,6 +161,27 @@ describe('cursor CSV cache', () => {
 
       expect(fetchCalls).toBe(0);
       expect(map.get('2026-02-02')?.outputTokens).toBe(10);
+    });
+
+    it('prices an unchanged export once, handing out separate copies', async () => {
+      const csv = `${CSV}\n2026-02-03,gpt-4,5,1`;
+      const store = () => {
+        writeCursorCache({
+          accountId: cursorAccountId('token'),
+          fetchedAt: new Date().toISOString(),
+          csv,
+        });
+      };
+      store();
+      vi.mocked(aggregateCursorCsvToDayMap).mockClear();
+
+      const first = await readCursorData({ maxAgeSeconds: 3600 });
+      first.delete('2026-02-03');
+      store();
+      const second = await readCursorData({ maxAgeSeconds: 3600 });
+
+      expect(aggregateCursorCsvToDayMap).toHaveBeenCalledTimes(1);
+      expect(second.get('2026-02-03')?.outputTokens).toBe(1);
     });
 
     it('does not serve an unverifiable cache when the database disappears', async () => {

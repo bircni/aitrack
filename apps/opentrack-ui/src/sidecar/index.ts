@@ -1,23 +1,25 @@
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
-import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
-import { loadMergedProviderData } from 'aitrack-lib/data/usageData';
-import { errorMessage } from 'aitrack-lib/errors';
-import { pull } from 'aitrack-lib/git';
+import { writeFileAtomic } from 'aitrack-lib/atomicWrite';
 import { fetchQuota } from 'aitrack-lib/quota/index';
 import { syncData } from 'aitrack-lib/sync';
 
 import type { Settings } from '../shared/types.js';
-import { handleRequest, parseRequest, type SidecarMessage } from './protocol.js';
-import { CACHE_FORMAT, loadCachedState, QuotaService, type ServiceDeps } from './service.js';
+import {
+  handleRequest,
+  parseRequest,
+  serializeMessage,
+  type SidecarMessage,
+  stateWriter,
+} from './protocol.js';
+import { CACHE_FORMAT, loadCachedState, QuotaService } from './service.js';
 import { loadSettings, readJsonFile, writeJsonFile } from './settings.js';
 import { renderTrayIcon, summarizeTray } from './trayIcon.js';
-import { summarizeUsage } from './usage.js';
+import { GIT_TIMEOUT_MS, loadUsageSummary } from './usage.js';
 
 const TICK_MS = 60_000;
 const TRAY_ICON_SIZE = 32;
-const GIT_TIMEOUT_MS = 60_000;
 
 // stdout is the protocol channel; anything the library prints goes to stderr.
 console.log = console.error;
@@ -28,32 +30,12 @@ process.on('unhandledRejection', (error) => {
 });
 
 function send(message: SidecarMessage): void {
-  process.stdout.write(`${JSON.stringify(message)}\n`);
+  process.stdout.write(serializeMessage(message));
 }
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name);
   return index === -1 ? undefined : process.argv[index + 1];
-}
-
-async function loadUsage(options: Parameters<ServiceDeps['loadUsage']>[0]) {
-  // Pulls while this machine's logs are parsed; only the synced files wait for it.
-  const pulled =
-    options.pull && !isUsageNotConfigured()
-      ? pull({ timeoutMs: GIT_TIMEOUT_MS }).then(
-          () => undefined,
-          (error: unknown) => `Could not pull synced data: ${errorMessage(error)}`,
-        )
-      : undefined;
-  const result = await loadMergedProviderData({
-    providers: options.providers,
-    refreshLive: options.refreshLive,
-    localMachine: options.localMachine,
-    syncedReady: pulled,
-  })
-    .then((loaded) => ({ summary: summarizeUsage(loaded) }))
-    .catch((error: unknown) => ({ error: errorMessage(error) }));
-  return { ...result, warning: await pulled };
 }
 
 async function main(): Promise<void> {
@@ -64,14 +46,18 @@ async function main(): Promise<void> {
   const raw = await readJsonFile(cachePath);
   const cached = loadCachedState(raw);
   let lastTray = '';
+  const sendState = stateWriter((line) => {
+    process.stdout.write(line);
+  });
 
   const service = new QuotaService(
     {
       fetchQuota: (provider) => fetchQuota(provider),
-      loadUsage,
+      loadUsage: loadUsageSummary,
       now: () => Date.now(),
       onState: (state) => {
-        send({ event: 'state', data: state });
+        sendState(state);
+        // Past the writer's check: a repeated state can still mean a new tray setting or a passed reset.
         const summary = summarizeTray(state.providers, Date.now(), settings);
         const key = JSON.stringify([summary, settings.trayStyle, settings.trayColored]);
         if (key === lastTray) return;
@@ -95,9 +81,11 @@ async function main(): Promise<void> {
         send({ event: 'alert', data: { title: alert.title, body: alert.body } });
       },
       persist: (cache) => {
-        writeJsonFile(cachePath, { format: CACHE_FORMAT, ...cache }).catch((error: unknown) => {
-          console.error('opentrack sidecar:', error);
-        });
+        try {
+          writeFileAtomic(cachePath, JSON.stringify({ format: CACHE_FORMAT, ...cache }));
+        } catch (error) {
+          console.error('opentrack sidecar:', error); // The next cycle tries again.
+        }
       },
       sync: () => syncData({ timeoutMs: GIT_TIMEOUT_MS }),
     },
@@ -108,8 +96,8 @@ async function main(): Promise<void> {
   const context = {
     service,
     settings: () => settings,
-    saveSettings: async (next: Settings) => {
-      await writeJsonFile(settingsPath, next);
+    saveSettings: (next: Settings) => {
+      writeJsonFile(settingsPath, next);
       settings = next;
       service.setSettings(settings);
       send({ event: 'settings', data: settings });

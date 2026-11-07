@@ -2,6 +2,7 @@ import { readCursorAuthState } from '../readers/cursor/authState.js';
 import { jwtExpiryMs } from '../readers/cursor/jwt.js';
 import { getCursorStateDatabasePath } from '../readers/cursor/location.js';
 import {
+  assertNotExpired,
   instantValue,
   numberValue,
   QuotaFailure,
@@ -151,10 +152,11 @@ export async function fetchCursorQuota(now = new Date()): Promise<QuotaSnapshot>
   if (accessToken === undefined) {
     throw new QuotaFailure('noCredentials', 'No Cursor login found. Sign in to Cursor.');
   }
-  const expiresAt = jwtExpiryMs(accessToken);
-  if (expiresAt !== undefined && expiresAt <= now.getTime()) {
-    throw new QuotaFailure('expired', 'Cursor login expired. Open Cursor to refresh it.');
-  }
+  assertNotExpired(
+    jwtExpiryMs(accessToken),
+    now,
+    'Cursor login expired. Open Cursor to refresh it.',
+  );
   const [usage, plan] = await Promise.all([
     connectPost('GetCurrentPeriodUsage', accessToken),
     connectPost('GetPlanInfo', accessToken).catch(() => undefined),

@@ -34,7 +34,9 @@ impl Panel {
     }
 
     pub fn show(&self, window: &WebviewWindow, screen: Option<&str>) {
-        if !window.is_visible().unwrap_or(false) {
+        let visible = window.is_visible().unwrap_or(false);
+        crate::deliver_skipped_state(window.app_handle());
+        if !visible {
             self.place(window);
         }
         let _ = window.show();

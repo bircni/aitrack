@@ -1,9 +1,9 @@
 import { isDayKey } from '../../constants.js';
-import { addModelUsage, getOrCreateDay, tryLocalDateString } from '../../data/dayMap.js';
+import { addModelUsage, getOrCreateDay } from '../../data/dayMap.js';
 import { stringValue } from '../../data/guards.js';
-import { stripModelAliasSuffix } from '../../data/modelId.js';
 import type { DayMap, TokenCounts } from '../../data/types.js';
 import { estimateCursorCostUSD } from '../../pricing/cursor.js';
+import { isTokenCount, logDay, logModel } from '../logValues.js';
 
 /** One Cursor CSV row's token buckets used for aggregation and list-price estimates. */
 interface CursorTokenTotals {
@@ -64,14 +64,14 @@ function createCursorCsvRow(headers: string[], values: string[]): CursorCsvRow {
 
 function parseCursorNumber(value?: string): number | null {
   const numeric = Number(value?.replaceAll(',', '').trim() ?? '');
-  if (!Number.isFinite(numeric) || numeric <= 0) return null;
-  return Math.round(numeric);
+  const rounded = Math.round(numeric);
+  return numeric > 0 && isTokenCount(rounded) ? rounded : null;
 }
 
 export function parseCursorDateString(value?: string): string | null {
   const trimmed = stringValue(value);
   if (trimmed === undefined) return null;
-  return isDayKey(trimmed) ? trimmed : tryLocalDateString(trimmed);
+  return isDayKey(trimmed) ? trimmed : logDay(trimmed);
 }
 
 function createCursorTokenTotals(row: CursorCsvRow): CursorTokenTotals | null {
@@ -117,7 +117,7 @@ export function aggregateCursorCsvToDayMap(content: string): DayMap {
     const tokenTotals = createCursorTokenTotals(row);
     if (!dateString || !rawModel || !tokenTotals) return;
 
-    const model = stripModelAliasSuffix(rawModel);
+    const model = logModel(rawModel) ?? 'unknown';
     // Ignore Cursor's Cost column: those cells are plan-included / "Free" /
     // vendor-billed amounts. Estimate API-rate dollars from the token buckets
     // when the model can be priced; otherwise leave cost unset.

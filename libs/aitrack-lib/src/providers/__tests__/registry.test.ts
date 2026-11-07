@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
+import { isProviderKey, PROVIDER_DESCRIPTORS, QUOTA_PROVIDERS } from '../descriptors.js';
 import {
   getProvider,
   liveProviders,
+  normalizeProviderKey,
   PROVIDER_BY_ALIAS,
   PROVIDER_BY_KEY,
   PROVIDERS,
@@ -11,6 +15,27 @@ import {
 } from '../index.js';
 
 describe('provider registry', () => {
+  it('builds on the descriptors, which stay free of runtime imports', () => {
+    expect(PROVIDERS.map((provider) => provider.descriptor)).toEqual(
+      Object.values(PROVIDER_DESCRIPTORS),
+    );
+    expect(QUOTA_PROVIDERS).toEqual(['claude_code', 'codex', 'cursor']);
+    const source = readFileSync(new URL('../descriptors.ts', import.meta.url), 'utf8');
+    expect(source.match(/^import (?!type ).*$/gmu)).toBeNull();
+  });
+
+  it('normalizes aliases regardless of case and rejects unknown names', () => {
+    expect(normalizeProviderKey(' Claude-Code ')).toBe('claude_code');
+    expect(normalizeProviderKey('gemini')).toBeNull();
+  });
+
+  it('accepts only canonical keys as provider keys', () => {
+    expect(isProviderKey('claude_code')).toBe(true);
+    for (const value of ['claude', 'toString', '__proto__', 1, null]) {
+      expect(isProviderKey(value)).toBe(false);
+    }
+  });
+
   it('exposes claude_code, codex and cursor in display order', () => {
     expect(providerKeys()).toEqual(['claude_code', 'codex', 'cursor']);
   });

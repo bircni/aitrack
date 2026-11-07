@@ -7,7 +7,6 @@ import { stringValue } from '../../data/guards.js';
 
 export interface CursorAuthState {
   accessToken?: string;
-  refreshToken?: string;
 }
 
 function normalizeCursorDatabaseValue(value: unknown): string | undefined {
@@ -24,11 +23,7 @@ function readCursorAuthStateFromDatabase(
   try {
     const query = database.prepare('SELECT value FROM ItemTable WHERE key = ? LIMIT 1');
     const accessRow = query.get('cursorAuth/accessToken') as { value?: unknown } | undefined;
-    const refreshRow = query.get('cursorAuth/refreshToken') as { value?: unknown } | undefined;
-    return {
-      accessToken: normalizeCursorDatabaseValue(accessRow?.value),
-      refreshToken: normalizeCursorDatabaseValue(refreshRow?.value),
-    };
+    return { accessToken: normalizeCursorDatabaseValue(accessRow?.value) };
   } finally {
     database.close();
   }

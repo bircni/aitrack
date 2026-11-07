@@ -2,13 +2,13 @@
 .provider {
   --provider-accent: var(--provider-codex);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
-  margin: 0 12px 10px;
-  padding: 14px;
-  border: 1px solid var(--edge);
-  border-radius: 14px;
-  background: var(--card);
-  box-shadow: var(--card-shadow);
+}
+
+.p-title {
+  display: grid;
+  font: inherit;
 }
 
 .p-head {
@@ -134,11 +134,19 @@
 }
 
 .tone-warn .l-pace {
-  color: var(--warn);
+  color: var(--warn-text);
 }
 
 .tone-crit .l-pace {
-  color: var(--crit);
+  color: var(--crit-text);
+}
+
+.limit.past .fill {
+  background: var(--ink-3);
+}
+
+.limit.past .l-value {
+  color: var(--ink-2);
 }
 
 .state {
@@ -148,6 +156,12 @@
   gap: 12px;
   color: var(--ink-2);
   font-size: 12px;
+  user-select: text;
+}
+
+.state > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .provider--claude_code {
@@ -171,6 +185,7 @@
 .p-identity {
   display: grid;
   min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
 }
 

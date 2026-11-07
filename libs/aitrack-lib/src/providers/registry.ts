@@ -1,8 +1,10 @@
-// Adding a provider is one module plus one PROVIDERS entry; every path iterates this list.
+// Adding a provider is a descriptor, one module and one PROVIDERS entry, plus a quota fetcher when
+// it has limits. opentrack also needs its dashboard link, icon and colours.
 import type { ProviderData } from '../data/types.js';
 import { claudeCodeProvider } from './claudeCode.js';
 import { codexProvider } from './codex.js';
 import { cursorProvider } from './cursor.js';
+import { providerKeys } from './descriptors.js';
 import type { LiveProvider, Provider, SyncedProvider } from './types.js';
 
 /** In display order. */
@@ -20,10 +22,7 @@ export function getProvider(key: string): Provider | undefined {
   return PROVIDER_BY_KEY[key];
 }
 
-/** Provider keys in display order. */
-export function providerKeys(): string[] {
-  return PROVIDERS.map((provider) => provider.descriptor.key);
-}
+export { normalizeProviderKey, providerKeys } from './descriptors.js';
 
 /** Providers written to git during sync, in display order. */
 export function syncedProviders(): SyncedProvider[] {
@@ -54,14 +53,6 @@ export const PROVIDER_LABELS: Record<string, string> = {
   ),
   all: 'All providers',
 };
-
-/**
- * Normalize a user-supplied provider name (case-insensitive, friendly aliases)
- * to its canonical key, or return null when it is not a known provider.
- */
-export function normalizeProviderKey(input: string): string | null {
-  return PROVIDER_BY_ALIAS[input.trim().toLowerCase()]?.descriptor.key ?? null;
-}
 
 export function providerLabel(providerKey: string): string {
   return PROVIDER_LABELS[providerKey] ?? providerKey;

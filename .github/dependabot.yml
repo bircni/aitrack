@@ -11,6 +11,9 @@ updates:
     # One PR per weekly run instead of a dozen: dev tooling and runtime deps
     # each move together, and majors stay separate so they get a real look.
     groups:
+      # Before the groups below: Tauri's api (runtime) and cli (dev) must move together.
+      tauri:
+        patterns: ['@tauri-apps/*']
       runtime:
         dependency-type: production
         update-types: [minor, patch]
@@ -20,6 +23,20 @@ updates:
     commit-message:
       prefix: chore
       prefix-development: chore
+      include: scope
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      rust:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
       include: scope
 
   - package-ecosystem: github-actions

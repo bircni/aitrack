@@ -1,6 +1,6 @@
 import { clampPercent, projectPace } from 'aitrack-lib/quota/pacing';
 
-import { meterTone, type Tone } from '../shared/pace.js';
+import { hasReset, meterTone, type Tone } from '../shared/pace.js';
 import type { ProviderState, QuotaWindow, Settings, TrayWindow } from '../shared/types.js';
 
 /** The popup's meter tones, so the icon never looks calmer than the window it stands for. */
@@ -56,7 +56,7 @@ export function summarizeTray(
     : 'auto';
   for (const provider of providers) {
     const followed = follow === 'auto' || follow === provider.key;
-    const windows = provider.quota?.windows ?? [];
+    const windows = (provider.quota?.windows ?? []).filter((window) => !hasReset(window, now));
     if (windows.length === 0) continue;
     const shown = pickWindow(windows, choice.trayWindow);
     lines.push(

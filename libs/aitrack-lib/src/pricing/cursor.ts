@@ -1,19 +1,8 @@
-import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
 import type { TokenCounts } from '../data/types.js';
 import { claudeRates, lookupClaudePricing } from './claude.js';
-import { lookupCodexPricing } from './codex.js';
+import { codexRates, lookupCodexPricing } from './codex.js';
 import { costFromRates, type FullModelRates, scaleRates, tokenRateBuckets } from './rates.js';
 import { currentModelPricing } from './store.js';
-import type { CodexPricing } from './types.js';
-
-function codexToCursorRates(pricing: CodexPricing): FullModelRates {
-  return {
-    inputPerMillion: pricing.inputPerMillion,
-    outputPerMillion: pricing.outputPerMillion,
-    cacheReadPerMillion: pricing.inputPerMillion * CACHE_READ_RATE_MULTIPLIER,
-    cacheWritePerMillion: pricing.inputPerMillion,
-  };
-}
 
 function lookupExactCursorRates(model: string, usageDate?: string): FullModelRates | undefined {
   const pricing = currentModelPricing();
@@ -22,7 +11,7 @@ function lookupExactCursorRates(model: string, usageDate?: string): FullModelRat
   const claude = lookupClaudePricing(model, usageDate);
   if (claude) return claudeRates(claude);
   const codex = lookupCodexPricing(model, usageDate);
-  if (codex) return codexToCursorRates(codex);
+  if (codex) return codexRates(codex);
   // Do not fall through to public catalogs here: Cursor CSV slugs that aren't
   // in the supplement (or Claude/Codex tables) stay unpriced on purpose.
   return undefined;

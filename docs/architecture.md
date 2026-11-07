@@ -22,7 +22,9 @@ local logs / Cursor export                  other machines
 
 - **Readers** turn provider logs into a `DayMap`: local calendar day → token counts per model. Only
   lines that can count are parsed, and a large cold read is scanned on worker threads. Each parsed
-  transcript is cached by path, size and modification time. See [reader benchmarks](reader-benchmarks.md).
+  transcript is cached by path, size and modification time, and a provider's merged result is kept
+  in a snapshot reused while no source file changed. The parse cache is not rewritten when only
+  recently active files changed. See [reader benchmarks](reader-benchmarks.md).
 - **Projects**: each message is attributed to the `owner/repo` of its git origin (Codex records it;
   for Claude Code the transcript's `cwd` is resolved with `git remote get-url origin`). Day entries
   carry an optional `byProject` map, written to machine files without a schema bump. Working
@@ -42,11 +44,14 @@ A provider is a descriptor, a heatmap palette, a pricing function and a doctor c
   data repo; or
 - a **live** reader (`LiveProvider`): Cursor, fetched from the account (cached for six hours by default) and never written to git.
 
-Providers are registered in `libs/aitrack-lib/src/providers/registry.ts`. Live quota limits (session and
-weekly windows) are separate and live in `libs/aitrack-lib/src/quota/`.
+Providers are registered in `libs/aitrack-lib/src/providers/registry.ts`, on top of the dependency-free
+names and keys in `providers/descriptors.ts`. Live quota limits (session and weekly windows) are separate
+and live in `libs/aitrack-lib/src/quota/`; their provider keys derive from each descriptor's `hasQuota`,
+so a flagged provider without a fetcher is a compile error.
 
-To add a provider: implement the reader under `readers/`, its rate table under `pricing/tables/`, the
-provider module under `providers/`, register it, and cover the log format with a fixture-driven test.
+To add a provider: start with its descriptor in `providers/descriptors.ts`, implement the reader under
+`readers/`, its rate table under `pricing/tables/`, the provider module under `providers/`, register it,
+and cover the log format with a fixture-driven test.
 
 ## opentrack
 
@@ -57,7 +62,11 @@ Svelte renderer ◄──► Tauri shell (Rust) ◄── JSON lines over stdio 
                                                                      tray icon, alerts
 ```
 
-The Rust shell supervises the sidecar and restarts it with a growing delay when it stops. The sidecar
-owns all provider access and state; the renderer only renders the `AppState` it is pushed and sends
+The Rust shell supervises the sidecar and restarts it with a growing delay when it stops. A request
+unanswered after 30 seconds fails, and only 300 seconds of silence while a line is owed (since spawn or
+an unanswered request) kills the process, which counts as a failed run however long it took. It reports `starting`, `running` or `down`
+through the `service_status` command and `service-status` event: requests wait while starting and fail
+at once with the reason while down, and the last state stays available. The sidecar owns all provider
+access and state; the renderer only renders the `AppState` it is pushed and sends
 requests (refresh, sync, save settings). The shared types are in
 `apps/opentrack-ui/src/shared/types.ts`.

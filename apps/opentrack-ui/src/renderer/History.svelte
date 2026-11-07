@@ -3,6 +3,7 @@
   import {
     buildHistory,
     formatCost,
+    formatDay,
     type HistoryBucket,
     type HistoryRange,
   } from './format.js';
@@ -10,11 +11,12 @@
 
   interface Props {
     providers: ProviderState[];
+    /** Bound by App, so a visit to another tab or Settings keeps them. */
+    range?: HistoryRange;
+    bucket?: HistoryBucket;
   }
 
-  let { providers }: Props = $props();
-  let range = $state<HistoryRange>(30);
-  let bucket = $state<HistoryBucket>('day');
+  let { providers, range = $bindable(30), bucket = $bindable('day') }: Props = $props();
 
   const WIDTH = 320;
   const HEIGHT = 96;
@@ -30,17 +32,24 @@
     { value: 'day', label: 'Day' },
     { value: 'week', label: 'Week' },
   ];
+  const partial = $derived(history.hasUnpricedTokens ? ' (partial)' : '');
   const chartLabel = $derived(
-    `Spend per ${bucket}, last ${String(range)} days, peak ${formatCost(peak)}`,
+    `Estimated cost per ${bucket}, last ${String(range)} days, peak ${formatCost(peak)} on ${formatDay(history.busiest)}`,
   );
   const busiestLabel = $derived(`Busiest ${bucket}`);
   const emptyText = $derived(`No priced usage in the last ${String(range)} days.`);
   const bars = $derived(
-    history.bars.map((bar) => ({
-      start: bar.start,
-      title: `${bucket === 'day' ? 'Day' : 'Week of'} ${bar.start} · ${formatCost(bar.totalUSD)}`,
-      layers: layers(bar.parts),
-    })),
+    history.bars.map((bar) => {
+      const split = bar.parts
+        .filter((part) => part.costUSD > 0)
+        .map((part) => `${part.label} ${formatCost(part.costUSD)}`)
+        .join(', ');
+      return {
+        start: bar.start,
+        title: `${bucket === 'day' ? 'Day' : 'Week of'} ${formatDay(bar.start)} · ${formatCost(bar.totalUSD)}${split ? ` (${split})` : ''}`,
+        layers: layers(bar.parts),
+      };
+    }),
   );
 
   function layers(parts: Array<{ key: string; costUSD: number }>) {
@@ -55,9 +64,9 @@
   }
 </script>
 
-<section class="history" aria-label="Spend history">
+<section class="history" aria-label="Estimated cost history">
   <div class="summary-top">
-    <span class="eyebrow">History</span>
+    <h2 class="eyebrow">History</h2>
     <div class="h-controls">
       <div class="seg" role="group" aria-label="Range">
         {#each ranges as option (option.value)}
@@ -104,27 +113,32 @@
       {/each}
     </svg>
     <div class="h-axis">
-      <span>{history.from}</span>
+      <span>{formatDay(history.from)}</span>
       <span>peak {formatCost(peak)}</span>
-      <span>{history.to}</span>
+      <span>{formatDay(history.to)}</span>
     </div>
 
     <div class="h-stats">
-      <div><span class="sub">Total</span><strong>{formatCost(history.totalUSD)}</strong></div>
-      <div><span class="sub">Per day</span><strong>{formatCost(history.averageUSD)}</strong></div>
+      <div><span class="sub">Total{partial}</span><strong>{formatCost(history.totalUSD)}</strong></div>
+      <div><span class="sub">Per day{partial}</span><strong>{formatCost(history.averageUSD)}</strong></div>
       <div>
-        <span class="sub">{busiestLabel}</span><strong>{history.busiest}</strong>
+        <span class="sub">{busiestLabel}</span><strong>{formatDay(history.busiest)}</strong>
       </div>
     </div>
 
-    <div class="summary-providers" aria-label="Spend by provider">
+    <div class="summary-providers" role="group" aria-label="Estimated cost by provider">
       {#each history.byProvider as part (part.key)}
         <div class="summary-provider">
           <span class="summary-provider-name">
+            <span class="h-swatch h-swatch--{part.key}"></span>
             <ProviderIcon provider={part.key} size={12} />
             <span>{part.label}</span>
           </span>
-          <span class="summary-provider-value">{formatCost(part.costUSD)}</span>
+          <span class="summary-provider-value"
+            >{part.costUSD > 0 ? formatCost(part.costUSD) : '—'}{part.hasUnpricedTokens
+              ? ' (partial)'
+              : ''}</span
+          >
         </div>
       {/each}
     </div>

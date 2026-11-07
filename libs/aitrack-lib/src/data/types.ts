@@ -63,3 +63,23 @@ export interface MachineFile {
   lastUpdated: string;
   days: Record<string, Record<string, ProviderDay>>;
 }
+
+export interface ProjectProviderUsage {
+  key: string;
+  label: string;
+  tokens: number;
+  costUSD: number;
+  hasCost: boolean;
+  hasUnpricedTokens?: boolean;
+}
+
+export interface ProjectUsage {
+  project: string;
+  tokens: number;
+  costUSD: number;
+  hasCost: boolean;
+  hasUnpricedTokens?: boolean;
+  /** The remainder of days that carry no (or only partial) project split. */
+  unattributed?: boolean;
+  providers: ProjectProviderUsage[];
+}

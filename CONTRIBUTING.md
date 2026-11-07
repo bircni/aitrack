@@ -2,15 +2,18 @@
 
 ## Development setup
 
-Install Node.js 24+, Bun (the version in `package.json`), git, and rustup. The pinned
-Rust version and components live in `rust-toolchain.toml`.
+Install Node.js (the version in `.node-version`), Bun (the version in `package.json`), git, and
+rustup. Building needs Node 26 or newer, because the desktop sidecar's build uses `--build-sea`, which
+Node 24 rejects; the published `aitrack` and `aitrack-lib` run on Node 24+, and CI tests them there.
+`bun nx run aitrack:build` builds only the CLI and the library. The pinned Rust version and components
+live in `rust-toolchain.toml`.
 The workspace builds both the CLI and the Tauri desktop app. On macOS, install Xcode
 Command Line Tools. On Windows, install the Visual Studio C++ build tools and WebView2.
 On Ubuntu, install the desktop app's system libraries before building:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
 ```
 
 ```sh
@@ -23,7 +26,7 @@ node apps/aitrack/dist/cli.js sync
 node apps/aitrack/dist/cli.js show
 ```
 
-Use `bun run dev init` (or `sync`, `show`) to run from TypeScript without building.
+Use `bun run dev init` (or `sync`, `show`) to build the CLI's dependencies, then run it from TypeScript.
 
 ## Desktop development
 
@@ -62,6 +65,7 @@ apps/
     src/
       renderer/      Svelte dashboard and settings
       sidecar/       Provider limits, usage, polling and tray state
+      shared/        Types and pacing shared by the renderer and sidecar
 libs/
   aitrack-lib/        The library: everything that is not the command line
     src/
@@ -75,11 +79,13 @@ libs/
       pricing/        Cost resolution; editable rates in pricing/tables/*.json
                       (live pack published on orphan branch `pricing`, not bundled)
       providers/      Provider registry and descriptors
+      quota/          Live limits per provider
       store/          Machine files on disk and their schema migrations
-  test-fixtures/      Fixtures shared by both test suites. Never published.
-scripts/              Repo tooling: release and release notes, pricing pack build/check,
-                      sidecar SEA build, bundle smoke check, updater manifest, Homebrew
-                      cask and winget manifests, reader benchmark
+  test-fixtures/      Fixtures and the isolated test environment shared by the test suites.
+                      Never published.
+scripts/              Repo tooling: release and release notes, npm publish, pricing pack
+                      build/check, sidecar SEA build, bundle smoke check, updater manifest,
+                      Homebrew cask and winget manifests, reader benchmark
 ```
 
 ### Pricing updates
@@ -102,7 +108,9 @@ Shared pricing calculations, catalog access, table conversion, and stored-day re
 
 Tests are colocated per module in one `__tests__` folder each. Usage is keyed by the
 **local** calendar day, so cover day edges with `useTimeZone` and `EXTREME_TIME_ZONES` from
-`@aitrack/test-fixtures`, not by changing `TZ`.
+`@aitrack/test-fixtures`, not by changing `TZ`. The library, CLI and UI vitest configs apply
+`isolatedTestEnv()` from `@aitrack/test-fixtures/test-env`, so their tests read neither your real home
+nor a source-root variable from your shell.
 
 The CLI imports the library by subpath (`import { log } from 'aitrack-lib/output'`), which
 the `exports` map resolves to `dist/`. Within a package, imports are relative with a `.js`
@@ -126,7 +134,8 @@ patched transitive versions that `bun audit` would otherwise flag.
 
 Tests run `vitest run`; the `ci` configuration adds coverage (`bun nx run
 aitrack-lib:test:ci`, or `bun run test:ci` for all). Aggregate thresholds are 90%
-lines/statements/functions and 80% branches, plus 80% per measured file and metric. Fixture
+lines/statements/functions and 80% branches, plus 80% per measured file and metric; `repo-tools`
+has 80% throughout. Fixture
 changes invalidate dependents' cached checks.
 
 `bun x tsx scripts/benchmark-readers.ts` runs a synthetic reader benchmark; see
@@ -139,14 +148,20 @@ If `nx` hangs without starting tasks (usually Nx Cloud unreachable), rerun with
 and `src/pricing` (not the rate tables) and writes an HTML report to
 `libs/aitrack-lib/reports/mutation/`. It is slow and deliberately outside `validate` and CI.
 Stryker runs vitest in worker threads, where `useTimeZone` cannot move the zone, so the target
-pins `TZ=UTC` and `libs/aitrack-lib/vitest.mutation.config.ts` skips the non-UTC cases. Narrow a
+pins `TZ=UTC` and `libs/aitrack-lib/vitest.mutation.config.ts` skips tests with `Pacific/` in their
+name; a test that depends on the zone must name one there. `os.homedir()` also ignores the test env in
+worker threads, so that config pins the process env, which keeps these runs away from your real
+`~/.config/aitrack`. Narrow a
 run with `bun nx run aitrack-lib:mutation -- --mutate 'src/data/usageReport.ts'`.
 
-CI uses `nx affected` with `nrwl/nx-set-shas`. The Audit job lints the workflows with actionlint, runs GitHub's dependency review on
-pull requests and `bun audit` against the lockfile, failing on high-severity advisories.
+CI uses `nx affected` with `nrwl/nx-set-shas`. It runs on `main` and pull requests, not on tags, which Publish validates itself. The Audit job lints the workflows with actionlint, runs GitHub's dependency review on
+pull requests and `bun audit` against the lockfile, failing on high-severity advisories. Dependency
+review sees only direct npm dependencies, since GitHub does not parse `bun.lock`, so `bun audit` is
+what covers transitive ones. Dependabot proposes Bun, Cargo and Actions updates.
 Ubuntu runs the affected checks for every project except the Rust shell in one parallel Nx
-run, plus CLI smoke and publish-tarball checks. A `macos-latest` / `windows-latest` /
-`ubuntu-latest` matrix runs opentrack's Rust checks and packaging, skipped on pull requests
+run, plus CLI smoke and publish-tarball checks. `Check (Node 24)` runs the published packages' affected
+tests and the CLI smoke tests on Node 24. A `macos-latest` / `windows-latest` /
+`ubuntu-24.04` matrix runs opentrack's Rust checks and packaging, skipped on pull requests
 that do not affect `opentrack`; pushes to `main` save the Cargo cache those runs restore, and CI
 packages build without LTO, which only the Publish workflow keeps (the Linux row installs the WebKitGTK, AppIndicator and
 `libxdo` development packages first) and uploads the NSIS installer, Apple Silicon DMG,
@@ -195,7 +210,7 @@ bun run release
 
 Patch bump by default. Pass a bump type if needed: `bun run release minor`.
 
-This runs `validate`, which includes the build, sets the same version in the workspace root and both published packages, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes the current branch plus that exact tag to the configured remote. Opentrack's app and installer version comes from that workspace version. npm publish, desktop packaging and GitHub Release creation happen in CI.
+It first checks that you are on `main` with a clean tree, in sync with the remote, and that the tag is free locally and remotely, and stops otherwise. It then runs `validate`, which includes the build, sets the same version in the workspace root and both published packages, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes `main` and that exact tag atomically to the configured remote, so a commit never lands without its tag. Opentrack's app and installer version comes from that workspace version. npm publish, desktop packaging and GitHub Release creation happen in CI.
 
 Preview without changing anything:
 
@@ -203,30 +218,38 @@ Preview without changing anything:
 bun run release:dry-run
 ```
 
-The dry run calculates and prints the next version, changelog command, commit, and exact pushes without changing repository files.
+The dry run calculates and prints the next version, changelog command, commit, and exact pushes without changing repository files. It reads the remote with `git ls-remote` and prints whatever would stop a real release as a warning.
 
 ### After the tag is pushed
 
 The [Publish workflow](.github/workflows/publish.yml) triggers on that same `v*` tag:
 
-- After both desktop packages succeed, the npm job re-runs `validate`, which also
-  builds, for every project except the Rust shell, which the desktop jobs check. It
-  then packs both with `bun pm pack`, which rewrites `workspace:*` and `catalog:` to
-  exact versions, and publishes `aitrack-lib` before `aitrack` with `npm publish
-  --provenance`. `scripts/sbom.ts` writes a CycloneDX SBOM of each packed package's
-  production dependencies, which the release job attaches to the GitHub release.
-- Desktop jobs check the Rust shell's formatting, Clippy and tests, and package a
-  Windows NSIS installer, a macOS DMG for Apple Silicon and a Linux AppImage and `.deb`
-  for x86_64, plus the updater's signed `.app.tar.gz` and installer signatures, then
+- **Tarballs.** The first job re-runs `validate`, which also builds, for every project
+  except the Rust shell, which the desktop jobs check. It then packs both packages with
+  `bun pm pack`, which rewrites `workspace:*` and `catalog:` to exact versions, and
+  `scripts/sbom.ts` writes a CycloneDX SBOM of each packed package's production dependencies.
+- **Desktop.** Alongside it, desktop jobs check that the tag matches the workspace version,
+  check the Rust shell's formatting, Clippy and tests, and package a Windows NSIS installer,
+  a macOS DMG for Apple Silicon and a Linux AppImage and `.deb` for x86_64 (built on
+  `ubuntu-24.04`), plus the updater's signed `.app.tar.gz` and installer signatures, then
   upload them as workflow artifacts. Missing installers fail the build.
-- After npm publishing and all desktop jobs succeed, the release job extracts that
-  tag's section from `CHANGELOG.md`, creates or updates the GitHub release, downloads
-  the installer artifacts and uploads them to that release. Reruns replace existing
-  assets with the same names. Prerelease tags produce GitHub prereleases.
-  It also uploads `latest.json`, which opentrack and `aitrack install-opentrack` read
-  from the latest non-prerelease release.
-- For non-prerelease tags, the Homebrew job writes `Casks/opentrack.rb` with the new
-  version and DMG checksum to `bircni/homebrew-tap` and pushes it.
+- **Draft release.** After those succeed, this job extracts the tag's section from
+  `CHANGELOG.md` and creates a draft GitHub release with the installers, SBOMs and
+  `latest.json`. It runs before npm, which cannot be undone, so its failures surface first.
+- **npm.** `scripts/publish-npm.ts` publishes the built tarballs, `aitrack-lib` before `aitrack`,
+  with `npm publish --provenance`. It skips a version already on the registry. This job alone holds
+  the npm credential, so it installs nothing and runs only that script.
+- **Publish the release.** The draft goes public only now, so opentrack and `aitrack install-opentrack`,
+  which read `latest.json` from the latest non-prerelease release, never find it half uploaded.
+- **Homebrew.** The last job writes `Casks/opentrack.rb` with the new version and DMG checksum to
+  `bircni/homebrew-tap` and pushes it.
+
+A tag with a `-` is a prerelease: npm publishes it under the `next` dist-tag, the GitHub release
+is marked a prerelease and never becomes latest, and the Homebrew job is skipped.
+
+After a failure, re-run the failed jobs of the same workflow run. They reuse its artifacts; the draft
+job finds the existing release and replaces assets with the same names, and the npm script skips what
+already published.
 
 CI and Publish jobs that run Nx install the toolchain from `rust-toolchain.toml` through
 `.github/actions/setup-rust`, which passes the version and components read from that file

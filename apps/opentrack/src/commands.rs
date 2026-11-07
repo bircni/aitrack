@@ -15,7 +15,8 @@ static DASHBOARDS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
         .expect("provider-dashboards.json")
 });
 
-/// The last state the sidecar pushed, so the popup opens instantly even mid-refresh.
+/// The last state the sidecar pushed, so the popup opens instantly even mid-refresh; while the
+/// sidecar is down it stays useful as old numbers, which `service_status` tells the renderer they are.
 #[tauri::command]
 pub async fn get_state(shell: State<'_, Shell>) -> Result<Value, String> {
     if let Some(state) = shell.last_state.lock().unwrap().clone() {
@@ -30,6 +31,11 @@ pub async fn get_settings(shell: State<'_, Shell>) -> Result<Value, String> {
         return Ok(settings);
     }
     shell.sidecar.request("getSettings", Value::Null).await
+}
+
+#[tauri::command]
+pub fn service_status(shell: State<'_, Shell>) -> Value {
+    shell.sidecar.status().to_json()
 }
 
 #[tauri::command]

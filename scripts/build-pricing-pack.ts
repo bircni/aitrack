@@ -21,6 +21,7 @@ import {
   supplementFromTables,
   type PricingTables,
 } from '../libs/aitrack-lib/src/pricing/supplementFromTables.js';
+import { runMain } from './runMain.ts';
 import { sha256 } from './util.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -155,15 +156,10 @@ export async function buildPricingPack(options: BuildPackOptions = {}): Promise<
   };
 }
 
-const isMain = process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename;
-
-if (isMain) {
-  const write = process.argv.includes('--write');
-  const offline = process.argv.includes('--offline');
-  buildPricingPack({ writeTablesFromFeeds: write, offline })
-    .then(() => process.exit(0))
-    .catch((error: unknown) => {
-      console.error(error);
-      process.exit(1);
-    });
-}
+runMain(import.meta.url, async () => {
+  await buildPricingPack({
+    writeTablesFromFeeds: process.argv.includes('--write'),
+    offline: process.argv.includes('--offline'),
+  });
+  return 0;
+});

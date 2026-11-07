@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   readLocalProviderMaps: vi.fn(),
   buildMachineData: vi.fn(),
   machineHasData: vi.fn(),
+  readCommittedFile: vi.fn(),
+  commitDataChanges: vi.fn(),
+  encryptArgument: vi.fn(),
 }));
 
 vi.mock('../config.js', () => ({
@@ -21,11 +24,14 @@ vi.mock('../config.js', () => ({
 vi.mock('../git.js', () => ({
   LOCAL_REPO: '/repo',
   isCloned: mocks.isCloned,
+  cloneOriginUrl: () => null,
   pull: mocks.pull,
   listDataFiles: mocks.listDataFiles,
-  commitDataChanges: vi.fn(() => true),
+  commitDataChanges: mocks.commitDataChanges,
+  readCommittedFile: mocks.readCommittedFile,
   withRepoLock: (fn: () => Promise<unknown>) => fn(),
-  writeMachineFile: (filePath: string, machine: MachineFile) => {
+  writeMachineFile: (filePath: string, machine: MachineFile, encrypt?: boolean) => {
+    mocks.encryptArgument(encrypt);
     mocks.writeFileSync(filePath, JSON.stringify(machine, null, 2), 'utf8');
   },
 }));
@@ -36,7 +42,8 @@ vi.mock('../data/localData.js', async () => {
     readLocalProviderMaps: mocks.readLocalProviderMaps,
     buildMachineData: mocks.buildMachineData,
     machineHasData: mocks.machineHasData,
-    // The real merge helper — this is what keeps pruned-away history in the file.
+    // The real merge helpers — this is what keeps pruned-away history in the file.
+    canonicalDays: actual.canonicalDays,
     mergePersistedDays: actual.mergePersistedDays,
   };
 });
@@ -56,8 +63,10 @@ vi.mock('../pricing/syncPack.js', () => ({
 
 import type { MachineFile } from '../data/types.js';
 import type { FallbackCollector } from '../pricing/fallback.js';
+import { repriceMachineDays } from '../pricing/reprice.js';
 import { resolveModelCost } from '../pricing/resolve.js';
 import { recomputeCosts } from '../recompute.js';
+import { encryptText } from '../store/encryption.js';
 
 const machineJson = makeMachineFile(
   'host',
@@ -80,6 +89,9 @@ describe('recomputeCosts', () => {
     mocks.readLocalProviderMaps.mockResolvedValue({ claude_code: new Map(), codex: new Map() });
     mocks.buildMachineData.mockReturnValue({ hostname: 'host', lastUpdated: 'now', days: {} });
     mocks.machineHasData.mockReturnValue(false);
+    mocks.readCommittedFile.mockResolvedValue(null);
+    mocks.commitDataChanges.mockResolvedValue(true);
+    vi.unstubAllEnvs();
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
@@ -253,6 +265,173 @@ describe('recomputeCosts', () => {
     const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
     expect(mocks.writeFileSync.mock.calls[0]?.[0]).toBe('/repo/data/host.json');
     expect(written.days['2024-01-01']?.claude_code?.totals.inputTokens).toBe(1_000_000);
+  });
+
+  const localLogs = {
+    hostname: 'host',
+    lastUpdated: 'now',
+    days: { '2024-06-01': { codex: makeProviderDay(5, 1, undefined, 'gpt-5') } },
+  };
+  const stored = JSON.stringify(
+    makeMachineFile('host', { '2023-01-01': { codex: makeProviderDay(7, 1, undefined, 'gpt-5') } }),
+  );
+
+  const stalePricedDays = { '2024-01-01': { codex: makeProviderDay(1000, 100, 999, 'gpt-5') } };
+
+  it.each([
+    [
+      'a newer schema',
+      JSON.stringify(makeMachineFile('host', {}, { schemaVersion: 999 })),
+      undefined,
+    ],
+    ['the wrong passphrase', encryptText(stored, 'right'), 'typo'],
+    ['no passphrase', encryptText(stored, 'right'), ''],
+  ])('leaves this machine alone when its file needs %s', async (_label, raw, passphrase) => {
+    if (passphrase !== undefined) vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', passphrase);
+    mocks.readFileSync.mockReturnValue(raw);
+    mocks.buildMachineData.mockReturnValue(localLogs);
+    mocks.machineHasData.mockReturnValue(true);
+
+    await expect(recomputeCosts()).resolves.toEqual({ changed: 0, pushed: false });
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+    expect(mocks.commitDataChanges).not.toHaveBeenCalled();
+  });
+
+  it('never replaces a newer schema, even when asked', async () => {
+    mocks.readFileSync.mockReturnValue(
+      JSON.stringify(makeMachineFile('host', {}, { schemaVersion: 999 })),
+    );
+    mocks.buildMachineData.mockReturnValue(localLogs);
+    mocks.machineHasData.mockReturnValue(true);
+
+    await recomputeCosts({ replaceLocal: true });
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('replaces a file no passphrase can open only when asked', async () => {
+    vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', 'new');
+    mocks.readFileSync.mockReturnValue(encryptText(stored, 'lost'));
+    mocks.buildMachineData.mockReturnValue(localLogs);
+    mocks.machineHasData.mockReturnValue(true);
+
+    await recomputeCosts({ replaceLocal: true });
+
+    const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
+    expect(Object.keys(written.days)).toEqual(['2024-06-01']);
+  });
+
+  it('restores a corrupt file from its last commit instead of losing pruned days', async () => {
+    mocks.readFileSync.mockReturnValue('{ "schemaVersion": 2, "hostn');
+    mocks.readCommittedFile.mockResolvedValue(stored);
+    mocks.buildMachineData.mockReturnValue(localLogs);
+    mocks.machineHasData.mockReturnValue(true);
+
+    await recomputeCosts();
+
+    expect(mocks.readCommittedFile).toHaveBeenCalledWith('data/host.json');
+    const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
+    expect(Object.keys(written.days)).toEqual(['2023-01-01', '2024-06-01']);
+  });
+
+  it('does not rebuild a corrupt file whose last commit is healthy but unreadable here', async () => {
+    mocks.readFileSync.mockReturnValue('{ "schemaVersion": 2, "hostn');
+    mocks.readCommittedFile.mockResolvedValue(encryptText(stored, 'right'));
+    mocks.buildMachineData.mockReturnValue(localLogs);
+    mocks.machineHasData.mockReturnValue(true);
+
+    await recomputeCosts();
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['encrypted', true, undefined],
+    ['plain', false, true],
+  ])(
+    'keeps another machine %s whatever this machine is set to',
+    async (_label, isEncrypted, encryptData) => {
+      vi.stubEnv('AITRACK_ENCRYPTION_PASSPHRASE', 'shared');
+      mocks.loadConfig.mockReturnValue({ repoUrl: 'x', encryptData });
+      mocks.listDataFiles.mockReturnValue(['/repo/data/other.json']);
+      const other = JSON.stringify(makeMachineFile('other', stalePricedDays));
+      mocks.readFileSync.mockReturnValue(isEncrypted ? encryptText(other, 'shared') : other);
+
+      await recomputeCosts();
+
+      expect(mocks.writeFileSync).toHaveBeenCalled();
+      expect(mocks.encryptArgument).toHaveBeenCalledWith(isEncrypted);
+    },
+  );
+
+  it('commits only the files it wrote', async () => {
+    mocks.listDataFiles.mockReturnValue(['/repo/data/host.json', '/repo/data/broken.json']);
+    mocks.resolveMachineId.mockReturnValue('host');
+    mocks.readFileSync.mockImplementation((path: string) =>
+      path.endsWith('broken.json')
+        ? '{ truncated'
+        : JSON.stringify(makeMachineFile('host', stalePricedDays)),
+    );
+
+    await recomputeCosts();
+
+    expect(mocks.commitDataChanges).toHaveBeenCalledWith(expect.any(String), ['data/host.json']);
+  });
+
+  it('applies the compaction setting on --replace-local, like sync', async () => {
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'x', compactAfterDays: 30 });
+    mocks.readFileSync.mockReturnValue(stored);
+    mocks.buildMachineData.mockReturnValue(localLogs);
+    mocks.machineHasData.mockReturnValue(true);
+
+    await recomputeCosts({ replaceLocal: true });
+
+    const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
+    expect(Object.keys(written.days['2024-06-01']?.codex?.byModel ?? {})).toEqual(['(compacted)']);
+    expect(loggedOutput('warn')).toContain('Dropping 1 synced day(s)');
+  });
+
+  it('reprices a day before compacting it, so the corrected cost is the one kept', async () => {
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'x', compactAfterDays: 30 });
+    mocks.readFileSync.mockReturnValue(JSON.stringify(makeMachineFile('host', stalePricedDays)));
+    mocks.buildMachineData.mockReturnValue(localLogs);
+    mocks.machineHasData.mockReturnValue(true);
+
+    await recomputeCosts();
+
+    const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
+    const day = written.days['2024-01-01']?.codex;
+    expect(Object.keys(day?.byModel ?? {})).toEqual(['(compacted)']);
+    expect(day?.totals.costUSD).toBeLessThan(1);
+    expect(day?.byModel['(compacted)']?.costUSD).toBe(day?.totals.costUSD);
+  });
+
+  it('compacts a correctly priced day that has crossed the cutoff', async () => {
+    const days = { '2024-06-01': { codex: makeProviderDay(5, 1, undefined, 'gpt-5') } };
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'x', compactAfterDays: 30 });
+    mocks.buildMachineData.mockReturnValue({ ...localLogs, days });
+    mocks.machineHasData.mockReturnValue(true);
+    const priced = JSON.parse(JSON.stringify(makeMachineFile('host', days))) as MachineFile;
+    repriceMachineDays(priced.days);
+    mocks.readFileSync.mockReturnValue(JSON.stringify(priced));
+
+    await expect(recomputeCosts()).resolves.toMatchObject({ changed: 1 });
+
+    const written = JSON.parse(String(mocks.writeFileSync.mock.calls[0]?.[1])) as MachineFile;
+    expect(Object.keys(written.days['2024-06-01']?.codex?.byModel ?? {})).toEqual(['(compacted)']);
+  });
+
+  it('writes nothing when the passphrase for this machine is missing', async () => {
+    mocks.loadConfig.mockReturnValue({ repoUrl: 'x', encryptData: true });
+    mocks.listDataFiles.mockReturnValue(['/repo/data/a-other.json', '/repo/data/host.json']);
+    mocks.readFileSync.mockImplementation((path: string) =>
+      JSON.stringify(makeMachineFile(path.includes('other') ? 'other' : 'host', stalePricedDays)),
+    );
+
+    await expect(recomputeCosts()).rejects.toThrow('AITRACK_ENCRYPTION_PASSPHRASE');
+
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 
   it('leaves another machine unparseable file alone, still reporting fallback pricing', async () => {

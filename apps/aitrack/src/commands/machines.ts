@@ -1,19 +1,15 @@
 import { tryLoadConfig, resolveMachineId } from 'aitrack-lib/config';
-import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
+import { isUsageNotConfigured, usageEmptyMessage } from 'aitrack-lib/data/emptyState';
 import { isStaleSync } from 'aitrack-lib/data/staleSync';
 import type { MachineFile } from 'aitrack-lib/data/types';
-import { loadReportedMachines, usageEmptyMessage } from 'aitrack-lib/data/usageData';
-import { fmt, fmtUSD } from 'aitrack-lib/display/format';
-import {
-  defaultTableStyle,
-  renderTerminalTable,
-  type TerminalTableColumn,
-} from 'aitrack-lib/display/terminalTable';
+import { loadReportedMachines, machineUsageTotals } from 'aitrack-lib/data/usageData';
+import { fmt, fmtUSDCost } from 'aitrack-lib/display/format';
+import { renderTerminalTable, type TerminalTableColumn } from 'aitrack-lib/display/terminalTable';
 import { log } from 'aitrack-lib/output';
-import { providerLabel, sortProviderKeys } from 'aitrack-lib/providers/index';
+import { providerLabel } from 'aitrack-lib/providers/index';
 import chalk from 'chalk';
 
-import { printJsonCommand } from '../cli/json.js';
+import { printEmptyResult, printJsonCommand } from '../cli/json.js';
 
 interface MachineSummary {
   hostname: string;
@@ -32,41 +28,20 @@ interface MachineSummary {
 }
 
 function summarizeMachine(file: MachineFile, currentId: string | undefined): MachineSummary {
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let costUSD = 0;
-  let hasCost = false;
-  const providers = new Set<string>();
-  const dayKeys: string[] = [];
-
-  for (const [date, dayProviders] of Object.entries(file.days)) {
-    let dayHasTokens = false;
-    for (const [providerKey, pData] of Object.entries(dayProviders)) {
-      providers.add(providerKey);
-      inputTokens += pData.totals.inputTokens;
-      outputTokens += pData.totals.outputTokens;
-      if (pData.totals.costUSD !== undefined) {
-        costUSD += pData.totals.costUSD;
-        hasCost = true;
-      }
-      if (pData.totals.inputTokens + pData.totals.outputTokens > 0) dayHasTokens = true;
-    }
-    if (dayHasTokens) dayKeys.push(date);
-  }
-  dayKeys.sort((a, b) => a.localeCompare(b));
+  const totals = machineUsageTotals(file);
   return {
     hostname: file.hostname,
     timezone: file.timezone,
     lastUpdated: file.lastUpdated,
     stale: file.hostname !== currentId && isStaleSync(file.lastUpdated, Date.now()),
-    days: dayKeys.length,
-    inputTokens,
-    outputTokens,
-    totalTokens: inputTokens + outputTokens,
-    costUSD: hasCost ? costUSD : null,
-    providers: sortProviderKeys([...providers]),
-    firstDay: dayKeys[0] ?? null,
-    lastDay: dayKeys.at(-1) ?? null,
+    days: totals.days,
+    inputTokens: totals.inputTokens,
+    outputTokens: totals.outputTokens,
+    totalTokens: totals.inputTokens + totals.outputTokens,
+    costUSD: totals.costUSD,
+    providers: totals.providers,
+    firstDay: totals.firstDay,
+    lastDay: totals.lastDay,
   };
 }
 
@@ -78,12 +53,9 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
   const machineData = await loadReportedMachines();
 
   if (machineData.length === 0) {
-    const message = usageEmptyMessage(isUsageNotConfigured());
-    if (options.json) {
-      printJsonCommand('machines', { machines: [], message });
-    } else {
-      log.info(message);
-    }
+    printEmptyResult('machines', options.json, usageEmptyMessage(isUsageNotConfigured()), {
+      machines: [],
+    });
     return;
   }
 
@@ -103,7 +75,11 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
     { header: 'Timezone', align: 'left', cell: (m) => m.timezone },
     { header: 'Days', align: 'right', cell: (m) => String(m.days) },
     { header: 'Tokens', align: 'right', cell: (m) => fmt(m.totalTokens) },
-    { header: 'Cost', align: 'right', cell: (m) => fmtUSD(m.costUSD) },
+    {
+      header: 'Cost',
+      align: 'right',
+      cell: (m) => (m.costUSD === null ? '—' : fmtUSDCost(m.costUSD)),
+    },
     {
       header: 'Last sync',
       align: 'left',
@@ -120,5 +96,5 @@ export async function machinesCommand(options: MachinesOptions = {}): Promise<vo
   ];
 
   log.info(chalk.bold(`aitrack machines (${String(summaries.length)})`));
-  log.info(renderTerminalTable(summaries, columns, { style: defaultTableStyle() }));
+  log.info(renderTerminalTable(summaries, columns));
 }

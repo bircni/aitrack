@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 
-import { isFiniteNumber, isRecord } from '../../data/guards.js';
+import { isFiniteNumber, isRecord, stringValue } from '../../data/guards.js';
 
 export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const encodedPayload = token.split('.', 2)[1];
@@ -22,9 +22,12 @@ export function jwtExpiryMs(token: string): number | undefined {
   return isFiniteNumber(exp) ? exp * 1000 : undefined;
 }
 
+export function jwtSubject(token: string): string | undefined {
+  return stringValue(decodeJwtPayload(token)?.sub);
+}
+
 export function cursorAccountId(token: string): string {
-  const sub = decodeJwtPayload(token)?.sub;
-  const identity =
-    typeof sub === 'string' && sub.trim() !== '' ? `subject:${sub.trim()}` : `token:${token}`;
+  const subject = jwtSubject(token);
+  const identity = subject === undefined ? `token:${token}` : `subject:${subject}`;
   return createHash('sha256').update(identity).digest('hex');
 }

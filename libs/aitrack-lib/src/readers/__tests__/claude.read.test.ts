@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { localTimestamp, writeJsonl } from '@aitrack/test-fixtures';
@@ -28,6 +28,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 import { open, readdir, realpath, stat } from 'node:fs/promises';
 
 import { getClaudePaths, readClaudeData } from '../claude.js';
+import { parseProviderSources } from '../pipeline.js';
 
 function metadata(): number {
   return [stat, realpath, readdir].reduce(
@@ -150,6 +151,50 @@ describe('readClaudeData', () => {
     expect([...warm]).toEqual([...cold]);
     expect(open).not.toHaveBeenCalled();
     expect(metadata() - warmBefore).toBe(coldCalls);
+  });
+
+  it('fails the whole read when one transcript cannot be scanned, not a silent undercount', async () => {
+    const root = join(TEST_HOME, 'claude', 'projects', 'project');
+    mkdirSync(root, { recursive: true });
+    process.env.AITRACK_CLAUDE_PROJECTS_DIRS = root;
+    writeJsonl(join(root, 'a.jsonl'), [assistantLine('a', 10, 5)]);
+    vi.mocked(open).mockRejectedValueOnce(new Error('EACCES: permission denied'));
+
+    await expect(readClaudeData()).rejects.toThrow('EACCES');
+  });
+
+  it('gives each file its own parse through the published per-file entry', async () => {
+    const root = join(TEST_HOME, 'claude', 'projects', 'project');
+    mkdirSync(root, { recursive: true });
+    writeJsonl(join(root, 'a.jsonl'), [assistantLine('a', 10, 5)]);
+    writeJsonl(join(root, 'b.jsonl'), [assistantLine('b', 20, 5)]);
+
+    const parsed = await parseProviderSources({
+      kind: 'claude',
+      roots: [root],
+      finish: (scanned) =>
+        Promise.resolve({ days: new Map(), keys: scanned.flatMap(({ key }) => key ?? []) }),
+    });
+
+    expect(parsed.map(({ keys }) => keys)).toEqual([['a:req-a'], ['b:req-b']]);
+  });
+
+  it('serves an unchanged corpus without parsing the parse cache', async () => {
+    const root = join(TEST_HOME, 'claude', 'projects', 'project');
+    mkdirSync(root, { recursive: true });
+    process.env.AITRACK_CLAUDE_PROJECTS_DIRS = root;
+    writeJsonl(join(root, 'a.jsonl'), [assistantLine('a', 10, 5)]);
+    const cold = await readClaudeData();
+    const cacheDir = join(TEST_HOME, '.config', 'aitrack', 'cache');
+    for (const file of readdirSync(cacheDir).filter((name) => !name.includes('-merged-'))) {
+      writeFileSync(join(cacheDir, file), '{not json');
+    }
+    vi.mocked(open).mockClear();
+
+    const warm = await readClaudeData();
+
+    expect([...warm]).toEqual([...cold]);
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('picks up an appended message once the file changes', async () => {

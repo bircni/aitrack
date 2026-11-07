@@ -13,10 +13,15 @@ function canonicalPricing(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((entry: unknown) => canonicalPricing(entry));
   if (!isRecord(value)) return value;
   return Object.fromEntries(
-    Object.entries(value)
-      .toSorted(([a], [b]) => a.localeCompare(b))
-      .map(([key, entry]) => [key, canonicalPricing(entry)]),
+    Object.keys(value)
+      .toSorted()
+      .map((key) => [key, canonicalPricing(value[key])]),
   );
+}
+
+// Model ids come from logs, and `constructor` or `__proto__` must not resolve on Object.prototype.
+function own<T>(table: Record<string, T>, key: string): T | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
 }
 
 interface CompiledAlias {
@@ -30,7 +35,7 @@ function pickOverride<P>(
   usageDate: string | undefined,
 ): P | undefined {
   if (!usageDate || !overrides) return undefined;
-  const entries = overrides[id];
+  const entries = own(overrides, id);
   if (!entries) return undefined;
   for (const entry of entries) {
     if (usageDate < entry.before) return entry.pricing;
@@ -41,7 +46,7 @@ function pickOverride<P>(
 /** First-party rates and overrides, with catalog gap filling for Claude and Codex. */
 export class ModelPricing {
   readonly updatedAt: string;
-  readonly fingerprint: string;
+  private cachedFingerprint: string | undefined;
   private readonly supplement: PricingSupplement;
   private readonly catalogs: PricingCatalogs;
   private readonly aliases: CompiledAlias[];
@@ -53,17 +58,6 @@ export class ModelPricing {
   };
 
   constructor(supplement: PricingSupplement, primary: PricingCatalog, secondary: PricingCatalog) {
-    this.fingerprint = createHash('sha256')
-      .update(
-        JSON.stringify(
-          canonicalPricing([
-            { ...supplement, updatedAt: undefined, comment: undefined },
-            [...primary.entries].toSorted(([a], [b]) => a.localeCompare(b)),
-            [...secondary.entries].toSorted(([a], [b]) => a.localeCompare(b)),
-          ]),
-        ),
-      )
-      .digest('hex');
     this.supplement = supplement;
     this.updatedAt = supplement.updatedAt;
     this.catalogs = { primary, secondary };
@@ -78,6 +72,21 @@ export class ModelPricing {
         outputPerMillion: entry.outputPerMillion,
       },
     }));
+  }
+
+  /** Effective rates only: the daily pack timestamps must not invalidate the parse cache. */
+  get fingerprint(): string {
+    return (this.cachedFingerprint ??= createHash('sha256')
+      .update(
+        JSON.stringify(
+          canonicalPricing([
+            { ...this.supplement, updatedAt: undefined, comment: undefined },
+            Object.fromEntries(this.catalogs.primary.entries),
+            Object.fromEntries(this.catalogs.secondary.entries),
+          ]),
+        ),
+      )
+      .digest('hex'));
   }
 
   applyCursorAlias(model: string): string {
@@ -102,7 +111,7 @@ export class ModelPricing {
   lookupClaude(modelId: string, usageDate?: string): ClaudePricing | undefined {
     const overridden = pickOverride(this.supplement.claude.overrides, modelId, usageDate);
     if (overridden) return overridden;
-    return this.supplement.claude.models[modelId];
+    return own(this.supplement.claude.models, modelId);
   }
 
   claudeFamilyFallback(family: ClaudeFamily): ClaudePricing {
@@ -112,7 +121,9 @@ export class ModelPricing {
   lookupCodex(modelId: string, usageDate?: string): CodexPricing | undefined {
     const overridden = pickOverride(this.supplement.codex.overrides, modelId, usageDate);
     if (overridden) return overridden;
-    return this.supplement.codex.current[modelId] ?? this.supplement.codex.historical[modelId];
+    return (
+      own(this.supplement.codex.current, modelId) ?? own(this.supplement.codex.historical, modelId)
+    );
   }
 
   codexFamilyFallbacks(): Array<{ match: RegExp; pricing: CodexPricing }> {
@@ -120,11 +131,11 @@ export class ModelPricing {
   }
 
   lookupCursorNative(modelId: string): CursorPricing | undefined {
-    return this.supplement.cursor.models[modelId];
+    return own(this.supplement.cursor.models, modelId);
   }
 
   cursorFastMultiplier(baseModel: string): number | undefined {
-    return this.supplement.cursor.fastMultipliers[baseModel];
+    return own(this.supplement.cursor.fastMultipliers, baseModel);
   }
 
   claudeModelCount(): number {

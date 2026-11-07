@@ -209,6 +209,7 @@ it('validates registry arguments and compares fixed and rolling calendar windows
     ['last', ['1.5'], days],
     ['last', ['3x'], days],
     ['last', ['x3'], days],
+    ['last', ['36501'], /Too many days/u],
     ['today', ['x'], /does not accept extra arguments/u],
   ] as const) {
     const parse = () => usagePeriodDefinition(period).parseArgs([...args]);

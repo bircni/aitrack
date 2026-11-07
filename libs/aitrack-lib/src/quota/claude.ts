@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { environmentValue } from '../env.js';
 import { claudeHomeDirs } from '../readers/paths.js';
 import {
+  assertNotExpired,
   instantValue,
   numberValue,
   QuotaFailure,
@@ -180,9 +181,11 @@ export async function fetchClaudeQuota(now = new Date()): Promise<QuotaSnapshot>
       'This Claude Code login cannot read usage limits (missing user:profile scope).',
     );
   }
-  if (credentials.expiresAt !== undefined && credentials.expiresAt <= now.getTime()) {
-    throw new QuotaFailure('expired', 'Claude Code login expired. Open Claude Code to refresh it.');
-  }
+  assertNotExpired(
+    credentials.expiresAt,
+    now,
+    'Claude Code login expired. Open Claude Code to refresh it.',
+  );
   const { body } = await requestJson('Claude', CLAUDE_USAGE_URL, {
     headers: {
       Accept: 'application/json',

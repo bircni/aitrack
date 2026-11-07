@@ -1,17 +1,21 @@
+import { hasUnpricedUsage } from 'aitrack-lib/data/aggregate';
 import { shiftDate } from 'aitrack-lib/data/calendar';
 import { toLocalDateString } from 'aitrack-lib/data/dayMap';
+import { isUsageNotConfigured } from 'aitrack-lib/data/emptyState';
+import type { MachineFile } from 'aitrack-lib/data/types';
 import {
-  type LoadedUsageData,
-  providerDataForWindows,
-  type ZonedUsageSource,
+  loadMergedProviderData,
+  mergeUsageSources,
+  type ZonedUsageData,
 } from 'aitrack-lib/data/usageData';
-import { ALL_TIME } from 'aitrack-lib/data/usagePeriods';
 import {
   buildProjectBreakdownsFromLoaded,
   buildUsageReportsFromLoaded,
   type UsageReport,
 } from 'aitrack-lib/data/usageReport';
-import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
+import { errorMessage } from 'aitrack-lib/errors';
+import { pull } from 'aitrack-lib/git';
+import { type ProviderKey, providerKeys } from 'aitrack-lib/providers/descriptors';
 
 import type {
   DailyUsage,
@@ -25,9 +29,10 @@ import { EMPTY_PERIOD } from '../shared/types.js';
 /** The History tab's longest range; the sparkline and strips show the last 30 of these. */
 const TREND_DAYS = 90;
 
+export const GIT_TIMEOUT_MS = 60_000;
+
 export interface UsageSummary {
   providers: ProviderUsages;
-  machineCount: number;
   machines?: MachineUsage[];
   /** Providers read live from the account (Cursor), which no machine's logs hold. */
   account?: ProviderUsages;
@@ -57,7 +62,7 @@ function trailingDates(today: Date, days: number): string[] {
   return Array.from({ length: days }, (_, index) => shiftDate(last, index - (days - 1)));
 }
 
-function providerUsages(loaded: LoadedUsageData, now: Date): ProviderUsages {
+function providerUsages(loaded: ZonedUsageData, now: Date, dates: string[]): ProviderUsages {
   const [today, yesterday, week, month, all] = buildUsageReportsFromLoaded(
     loaded,
     [
@@ -69,16 +74,19 @@ function providerUsages(loaded: LoadedUsageData, now: Date): ProviderUsages {
     ],
     now,
   );
-  const dates = trailingDates(now, TREND_DAYS);
 
   const providers: ProviderUsages = {};
-  for (const key of QUOTA_PROVIDERS) {
+  for (const key of providerKeys()) {
     const days = loaded.providerData[key];
     if (!days) continue;
-    const daily: DailyUsage[] = dates.map((date) => ({
-      date,
-      costUSD: days.get(date)?.costUSD ?? 0,
-    }));
+    const daily = dates.map((date): DailyUsage => {
+      const day = days.get(date);
+      return {
+        date,
+        costUSD: day?.costUSD ?? 0,
+        ...(day && hasUnpricedUsage(day) && { hasUnpricedTokens: true }),
+      };
+    });
     providers[key] = {
       today: periodFor(today, key),
       yesterday: periodFor(yesterday, key),
@@ -91,7 +99,7 @@ function providerUsages(loaded: LoadedUsageData, now: Date): ProviderUsages {
   return providers;
 }
 
-function projectUsages(loaded: LoadedUsageData, now: Date): ProjectUsages {
+function projectUsages(loaded: ZonedUsageData, now: Date): ProjectUsages {
   const [today, week, month, all] = buildProjectBreakdownsFromLoaded(
     loaded,
     [{ period: 'today' }, { period: 'week' }, { period: 'month' }, { period: 'all' }],
@@ -105,37 +113,57 @@ function projectUsages(loaded: LoadedUsageData, now: Date): ProjectUsages {
   };
 }
 
-/** Just these machines' days, plus the live providers when asked; priced like the whole. */
-function sliceLoaded(
-  loaded: LoadedUsageData,
-  zonedSources: ZonedUsageSource[],
-  live: boolean,
-): LoadedUsageData {
-  const part: LoadedUsageData = {
-    providerData: {},
-    machineData: [],
-    zonedSources,
-    ...(live && loaded.liveProviderData && { liveProviderData: loaded.liveProviderData }),
-  };
-  return { ...part, providerData: providerDataForWindows(part, () => ALL_TIME) };
-}
-
 /** Same report builder as `aitrack usage`, so the numbers match the CLI. */
-export function summarizeUsage(loaded: LoadedUsageData | null, now = new Date()): UsageSummary {
-  if (!loaded) return { providers: {}, machineCount: 1 };
-  const machines = (loaded.zonedSources ?? []).map((source): MachineUsage => ({
+export function summarizeUsage(loaded: ZonedUsageData | null, now = new Date()): UsageSummary {
+  if (!loaded) return { providers: {} };
+  const dates = trailingDates(now, TREND_DAYS);
+  const machines = loaded.zonedSources.map((source): MachineUsage => ({
     name: source.hostname,
     timezone: source.timezone,
     lastUpdated: source.lastUpdated,
     current: source.current,
-    providers: providerUsages(sliceLoaded(loaded, [source], false), now),
+    providers: providerUsages(mergeUsageSources([source]), now, dates),
   }));
-  const live = Object.keys(loaded.liveProviderData ?? {}).length > 0;
+  const live = Object.keys(loaded.liveProviderData).length > 0;
   return {
-    providers: providerUsages(loaded, now),
+    providers: providerUsages(loaded, now, dates),
     projects: projectUsages(loaded, now),
-    machineCount: Math.max(1, loaded.zonedSources?.length ?? loaded.machineData.length),
     machines,
-    ...(live && { account: providerUsages(sliceLoaded(loaded, [], true), now) }),
+    ...(live && {
+      account: providerUsages(mergeUsageSources([], loaded.liveProviderData), now, dates),
+    }),
   };
+}
+
+export interface UsageLoadOptions {
+  /** Only enabled providers are read, so a disabled Cursor is never contacted. */
+  providers: ProviderKey[];
+  pull: boolean;
+  refreshLive: boolean;
+  /** This machine's logs as a sync just read them, so they are not parsed again. */
+  localMachine?: MachineFile;
+}
+
+export type UsageLoadResult = ({ summary: UsageSummary } | { error: string }) & {
+  warning?: string;
+};
+
+export async function loadUsageSummary(options: UsageLoadOptions): Promise<UsageLoadResult> {
+  // Pulls while this machine's logs are parsed; only the synced files wait for it.
+  const pulled =
+    options.pull && !isUsageNotConfigured()
+      ? pull({ timeoutMs: GIT_TIMEOUT_MS }).then(
+          () => undefined,
+          (error: unknown) => `Could not pull synced data: ${errorMessage(error)}`,
+        )
+      : undefined;
+  const result = await loadMergedProviderData({
+    providers: options.providers,
+    refreshLive: options.refreshLive,
+    localMachine: options.localMachine,
+    syncedReady: pulled,
+  })
+    .then((loaded) => ({ summary: summarizeUsage(loaded) }))
+    .catch((error: unknown) => ({ error: errorMessage(error) }));
+  return { ...result, warning: await pulled };
 }

@@ -1,29 +1,36 @@
-import { useTimeZone } from '@aitrack/test-fixtures';
+import { EXTREME_TIME_ZONES, useTimeZone } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { formatWhen, meterTone } from '../../shared/pace.js';
-import type { PeriodUsage, ProviderUsage, QuotaWindow } from '../../shared/types.js';
+import type { PeriodUsage, ProviderUsage, QuotaError, QuotaWindow } from '../../shared/types.js';
 import { EMPTY_PERIOD } from '../../shared/types.js';
 import {
   buildHistory,
   combinedDaily,
+  dayCostLabel,
+  emptyUsageGuidance,
   formatCost,
+  formatDay,
   fillPercent,
   formatDuration,
   formatLimitValue,
   formatReset,
+  formatTokens,
   formatUpdated,
-  heatLevel,
+  freshnessLine,
   paceLabel,
   periodProjects,
   periodSpend,
   spendLabel,
   problemLine,
+  refreshOutcome,
+  shareBasis,
   slideDuration,
   sparkline,
   splitAmount,
   syncStatus,
   totalSpend,
+  usageAvailability,
   zoneClock,
 } from '../format.js';
 
@@ -128,8 +135,8 @@ describe('spend', () => {
       '2026-05-04',
     ]);
     expect(days.byProvider).toEqual([
-      { key: 'claude_code', label: 'Claude Code', costUSD: 10 },
-      { key: 'codex', label: 'Codex', costUSD: 1 },
+      { key: 'claude_code', label: 'Claude Code', costUSD: 10, hasUnpricedTokens: false },
+      { key: 'codex', label: 'Codex', costUSD: 1, hasUnpricedTokens: false },
     ]);
 
     const weeks = buildHistory(providers, 30, 'week');
@@ -138,8 +145,8 @@ describe('spend', () => {
       ['2026-05-04', 4],
     ]);
     expect(buildHistory(providers, 30, 'day').bars.at(0)?.parts).toEqual([
-      { key: 'claude_code', costUSD: 1 },
-      { key: 'codex', costUSD: 1 },
+      { key: 'claude_code', label: 'Claude Code', costUSD: 1 },
+      { key: 'codex', label: 'Codex', costUSD: 1 },
     ]);
     expect(buildHistory(providers, 2, 'day').bars.map((bar) => bar.start)).toEqual([
       '2026-05-03',
@@ -200,6 +207,12 @@ describe('limits', () => {
     );
     expect(formatReset(new Date(later).toISOString(), NOW, 'relative')).toBe('Resets in 2h');
     expect(formatReset(new Date(NOW + 30_000).toISOString(), NOW, 'relative')).toBe('Resets soon');
+    expect(formatReset(new Date(NOW).toISOString(), NOW, 'relative')).toBe(
+      'Reset passed, waiting for new data',
+    );
+    expect(formatReset(new Date(NOW - 9 * HOUR).toISOString(), NOW, 'absolute')).toBe(
+      'Reset passed, waiting for new data',
+    );
     expect(formatReset(undefined, NOW, 'relative')).toBeUndefined();
   });
 
@@ -254,20 +267,31 @@ describe('limits', () => {
     expect(formatLimitValue({ ...dollars, usedValue: 0 }, 'used')).toBe('$0.00 / $50.00');
   });
 
-  it('turns errors into one line', () => {
-    expect(problemLine({ kind: 'noCredentials', message: 'x' }, NOW)).toEqual({
-      text: 'Not signed in on this PC',
-      retry: false,
+  it('shows what fixes a sign-in problem, and offers only what can work', () => {
+    const line = (kind: QuotaError['kind'], message: string, retryAt?: number) =>
+      problemLine({ kind, message }, NOW, retryAt);
+    expect(line('noCredentials', 'No Codex login found. Run `codex login`.')).toEqual({
+      text: 'No Codex login found. Run `codex login`.',
+      action: 'retry',
     });
-    expect(problemLine({ kind: 'expired', message: 'x' }, NOW).retry).toBe(true);
-    expect(problemLine({ kind: 'rateLimited', message: 'x' }, NOW, NOW + 3120 * 1000).text).toBe(
-      'Limits paused, back in 52m',
+    expect(line('expired', 'Cursor login expired. Open Cursor to refresh it.').text).toBe(
+      'Cursor login expired. Open Cursor to refresh it.',
     );
-    expect(problemLine({ kind: 'rateLimited', message: 'x' }, NOW).text).toBe('Limits paused');
-    expect(problemLine({ kind: 'network', message: 'x' }, NOW).text).toBe(
-      'Could not reach the service',
+    expect(line('auth', 'Codex rejected the saved login (HTTP 401)').text).toBe(
+      'Codex rejected the saved login (HTTP 401). Sign in again with that tool.',
     );
-    expect(problemLine({ kind: 'invalidResponse', message: 'x' }, NOW).retry).toBe(true);
+    // The service skips the provider until then, so a Retry would do nothing.
+    expect(line('rateLimited', 'x', NOW + 3120 * 1000)).toEqual({
+      text: 'Rate limited by the provider, retrying in 52m',
+      action: 'dashboard',
+    });
+    expect(line('rateLimited', 'x', NOW - 1)).toEqual({
+      text: 'Rate limited by the provider',
+      action: 'retry',
+    });
+    expect(line('rateLimited', 'x').action).toBe('retry');
+    expect(line('network', 'x').text).toBe('Could not reach the service');
+    expect(line('invalidResponse', 'x').action).toBe('retry');
   });
 
   it('formats the footer age', () => {
@@ -275,6 +299,93 @@ describe('limits', () => {
     expect(formatUpdated(new Date(NOW - 3 * 60_000).toISOString(), NOW)).toBe('Updated 3m ago');
     expect(formatUpdated(undefined, NOW)).toBe('Not updated yet');
     expect(formatUpdated(new Date(NOW - 61_000).toISOString(), NOW)).toBe('Updated 1m ago');
+  });
+
+  it('dates the footer by the limits, not by a usage read that works offline', () => {
+    const provider = { key: 'codex' as const, label: 'Codex', refreshing: false };
+    const failing = { ...provider, quotaError: { kind: 'network' as const, message: 'x' } };
+    const signedOut = { ...provider, quotaError: { kind: 'noCredentials' as const, message: 'x' } };
+    const justNow = new Date(NOW).toISOString();
+    const nineHours = new Date(NOW - 9 * HOUR).toISOString();
+    expect(
+      freshnessLine({ providers: [failing], updatedAt: justNow, quotaUpdatedAt: nineHours }, NOW),
+    ).toBe('Updated 9h ago');
+    expect(freshnessLine({ providers: [failing], updatedAt: justNow }, NOW)).toBe(
+      'Limits unavailable',
+    );
+    expect(freshnessLine({ providers: [signedOut], updatedAt: justNow }, NOW)).toBe(
+      'Updated just now',
+    );
+    expect(freshnessLine({ providers: [], updatedAt: nineHours }, NOW)).toBe('Updated 9h ago');
+  });
+
+  it('tells a real zero from usage it does not have', () => {
+    const provider = { key: 'codex' as const, label: 'Codex', refreshing: false };
+    const withUsage = { ...provider, usage: usage([1]) };
+    const state = { providers: [provider], refreshing: false };
+    expect(usageAvailability({ ...state, providers: [] })).toBe('off');
+    expect(usageAvailability(state)).toBe('loading');
+    expect(usageAvailability({ ...state, refreshing: true })).toBe('loading');
+    expect(usageAvailability({ ...state, usageError: 'x' })).toBe('failed');
+    expect(usageAvailability({ ...state, refreshing: true, usageError: 'x' })).toBe('loading');
+    expect(usageAvailability({ ...state, usageEmpty: true })).toBe('empty');
+    expect(usageAvailability({ ...state, usageEmpty: true, refreshing: true })).toBe('empty');
+    expect(usageAvailability({ ...state, providers: [withUsage] })).toBe('ready');
+    expect(usageAvailability({ ...state, providers: [withUsage], usageError: 'x' })).toBe('ready');
+    expect(emptyUsageGuidance([provider, { label: 'Cursor' }])).toBe(
+      'Use Codex or Cursor, then refresh. To add your other machines, run `npx aitrack init`.',
+    );
+  });
+
+  it('says how a refresh ended', () => {
+    const provider = { key: 'codex' as const, label: 'Codex', refreshing: false };
+    expect(refreshOutcome({ providers: [provider] })).toBe('Usage updated');
+    expect(
+      refreshOutcome({
+        providers: [{ ...provider, quotaError: { kind: 'network', message: 'x' } }],
+      }),
+    ).toBe('Refresh finished, Codex limits unavailable');
+  });
+});
+
+describe('localised values', () => {
+  it('writes tokens in the CLI shape with the system decimal separator', () => {
+    expect([12, 1234, 1_234_567, 2_500_000_000].map((n) => formatTokens(n))).toEqual([
+      '12',
+      '1.2K',
+      '1.2M',
+      '2.50B',
+    ]);
+    vi.stubGlobal('navigator', { language: 'de-DE' });
+    expect(formatTokens(1_234_567)).toBe('1,2M');
+  });
+
+  describe.each(EXTREME_TIME_ZONES)('in %s', (zone) => {
+    useTimeZone(zone);
+
+    it('keeps a calendar day on its date', () => {
+      expect(formatDay('2026-03-08')).toBe('Mar 8');
+      expect(formatDay('2026-12-31')).toBe('Dec 31');
+    });
+  });
+
+  it('marks a day that is not fully priced', () => {
+    expect(dayCostLabel({ date: 'x', costUSD: 2 })).toBe('$2.00');
+    expect(dayCostLabel({ date: 'x', costUSD: 2, hasUnpricedTokens: true })).toBe(
+      '$2.00 (partial)',
+    );
+    expect(dayCostLabel({ date: 'x', costUSD: 0, hasUnpricedTokens: true })).toBe('Not priced');
+  });
+
+  it('shares by cost while anything is priced, by tokens otherwise', () => {
+    const priced = { tokens: 10, costUSD: 3, hasCost: true };
+    const unpriced = { tokens: 90, costUSD: 0, hasCost: false };
+    expect(shareBasis([priced, unpriced]).total).toBe(3);
+    expect(shareBasis([unpriced]).total).toBe(90);
+  });
+
+  it('shows a sub-cent headline as its chips do, not as free', () => {
+    expect(splitAmount(0.004)).toEqual({ whole: '<$0.01', cents: '', tail: '' });
   });
 });
 
@@ -313,12 +424,5 @@ describe('machines', () => {
     expect(zoneClock('', at)).toBeUndefined();
     expect(zoneClock('Not/AZone', at)).toBeUndefined();
     expect(zoneClock('Asia/Tokyo', at)).toMatch(/(?:21|09).00/u);
-  });
-
-  it('buckets daily spend into heat levels', () => {
-    expect([0, 1, 2.5, 5, 7.6, 10].map((value) => heatLevel(value, 10))).toEqual([
-      0, 1, 1, 2, 4, 4,
-    ]);
-    expect(heatLevel(1, 0)).toBe(0);
   });
 });

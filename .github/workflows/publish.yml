@@ -12,13 +12,9 @@ env:
   NX_NO_CLOUD: true # Never restore release builds from PR runs' remote cache.
 
 jobs:
-  publish:
-    name: Publish to npm
-    needs: opentrack
+  npm-tarballs:
+    name: Build npm tarballs
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -29,7 +25,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: .node-version
-          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -59,14 +54,12 @@ jobs:
           path: sbom
           if-no-files-found: error
 
-      # bun cannot publish with provenance, so npm publishes bun's tarballs; provenance
-      # needs `id-token: write`.
-      - name: Publish
-        run: |
-          version=$(node -p 'require("./package.json").version')
-          for package in aitrack-lib aitrack; do
-            npm publish "./packs/$package-$version.tgz" --provenance
-          done
+      - name: Upload tarballs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-tarballs
+          path: packs
+          if-no-files-found: error
 
   opentrack:
     name: Package Opentrack (${{ matrix.platform }})
@@ -84,7 +77,7 @@ jobs:
           - os: macos-latest
             platform: macos-arm64
             installer: target/release/bundle/dmg/*.dmg target/release/bundle/macos/*.app.tar.gz*
-          - os: ubuntu-latest
+          - os: ubuntu-24.04 # The release notes name this; the glibc floor follows it.
             platform: linux-x64
             installer: target/release/bundle/appimage/*.AppImage* target/release/bundle/deb/*.deb*
     steps:
@@ -152,15 +145,18 @@ jobs:
           path: installers
           if-no-files-found: error
 
-  github-release:
-    name: Create GitHub release
-    needs: [publish, opentrack]
+  # Runs before npm, the one step that cannot be undone, so its failures surface first. Installed
+  # apps read releases/latest, so the release stays a draft until its assets are all uploaded.
+  draft-release:
+    name: Draft GitHub release
+    needs: [npm-tarballs, opentrack]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           sparse-checkout: |
             .node-version
             CHANGELOG.md
@@ -192,39 +188,24 @@ jobs:
       - name: Write the updater manifest
         run: node scripts/updater-manifest.ts "$GITHUB_REF_NAME" installers > installers/latest.json
 
-      - name: Create GitHub release
+      - name: Create or update the draft
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            is_prerelease=true
-          else
-            is_prerelease=false
-          fi
-
+          # A re-run finds the draft, or the release an earlier attempt finished.
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            # Set the flag explicitly so a re-run can also clear a stale prerelease flag.
-            edit_flags=(--prerelease="$is_prerelease")
-            if [[ "$is_prerelease" == false ]]; then
-              edit_flags+=(--latest)
-            fi
             gh release edit "$GITHUB_REF_NAME" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$GITHUB_REF_NAME" \
-              --notes-file release-notes.md \
-              "${edit_flags[@]}"
+              --notes-file release-notes.md
           else
-            create_flags=()
-            if [[ "$is_prerelease" == true ]]; then
-              create_flags+=(--prerelease)
-            fi
             gh release create "$GITHUB_REF_NAME" \
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
+              --draft \
               --title "$GITHUB_REF_NAME" \
-              --notes-file release-notes.md \
-              "${create_flags[@]}"
+              --notes-file release-notes.md
           fi
 
       - name: Upload installers to the release
@@ -235,9 +216,64 @@ jobs:
           installers/*.exe installers/*.dmg installers/*.app.tar.gz installers/*.AppImage
           installers/*.deb installers/latest.json sbom/*.cdx.json
 
+  # Holds the npm credential, so it installs nothing and runs only the repo's own script.
+  publish:
+    name: Publish to npm
+    needs: draft-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .node-version
+            scripts/*.ts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Download tarballs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-tarballs
+          path: packs
+
+      - name: Publish
+        run: node scripts/publish-npm.ts "$GITHUB_REF_NAME" packs
+
+  release:
+    name: Publish GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Set the flag explicitly so a re-run can also clear a stale prerelease flag.
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            flags=(--prerelease=true)
+          else
+            flags=(--prerelease=false --latest)
+          fi
+          gh release edit "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false \
+            "${flags[@]}"
+
   homebrew:
     name: Update the Homebrew cask
-    needs: github-release
+    needs: release
     # Prereleases never become the cask's version.
     if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest

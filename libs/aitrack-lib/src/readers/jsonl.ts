@@ -53,13 +53,14 @@ function lastCarrier(
   to: number,
   carry: NonNullable<CompiledFilter['carry']>,
 ): Record<string, unknown> | undefined {
-  for (let at = to; at > from;) {
-    const hit = view.lastIndexOf(carry.needle, at - 1);
-    if (hit < from) return undefined;
-    const start = lineStartOf(view, hit);
-    const record = parseLine(view, start, lineEndOf(view, hit, to));
+  const gap = view.subarray(from, to); // On the whole view, a miss would search back to byte 0 every time.
+  for (let at = gap.length; at > 0;) {
+    const hit = gap.lastIndexOf(carry.needle, at - 1);
+    if (hit === -1) return undefined;
+    const start = lineStartOf(view, from + hit);
+    const record = parseLine(view, start, lineEndOf(view, from + hit, to));
     if (record && carry.holds(record)) return record;
-    at = start;
+    at = start - from;
   }
   return undefined;
 }

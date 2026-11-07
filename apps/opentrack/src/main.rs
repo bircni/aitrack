@@ -6,6 +6,7 @@ mod position;
 mod sidecar;
 mod updater;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use base64::Engine as _;
@@ -20,14 +21,17 @@ use tauri_plugin_notification::NotificationExt;
 
 use crate::panel::{main_window, Panel, MAIN_WINDOW};
 use crate::position::Rect;
-use crate::sidecar::Sidecar;
+use crate::sidecar::{Sidecar, Status};
 use crate::updater::Updates;
 
 const TRAY_ID: &str = "main";
 
+#[derive(Default)]
 pub struct Shell {
     pub sidecar: Sidecar,
     pub last_state: Mutex<Option<Value>>,
+    /// `last_state` is newer than what a hidden window was sent.
+    state_skipped: AtomicBool,
     pub last_settings: Mutex<Option<Value>>,
     /// Why a setting the OS applies did not take, keyed like the settings.
     pub setting_errors: Mutex<Map<String, Value>>,
@@ -90,12 +94,73 @@ fn apply_settings(app: &AppHandle, settings: &Value) {
     *app.state::<Shell>().setting_errors.lock().unwrap() = errors;
 }
 
+fn is_busy(state: &Value) -> bool {
+    ["refreshing", "syncing"].iter().any(|flag| state.get(flag).and_then(Value::as_bool) == Some(true))
+}
+
+/// What is left of a state once the process working on it is gone.
+fn settle(state: &mut Value) {
+    for flag in ["refreshing", "syncing"] {
+        if let Some(value) = state.get_mut(flag) {
+            *value = false.into();
+        }
+    }
+    if let Some(providers) = state.get_mut("providers").and_then(Value::as_array_mut) {
+        for provider in providers {
+            if let Some(value) = provider.get_mut("refreshing") {
+                *value = false.into();
+            }
+        }
+    }
+}
+
+fn on_state(app: &AppHandle, data: Value) {
+    let shell = app.state::<Shell>();
+    if shell.last_state.lock().unwrap().as_ref() == Some(&data) {
+        return;
+    }
+    // A refresh pushes several busy states; a hidden page keeps its height from the settled one that ends it.
+    let deliver = !is_busy(&data) || main_window(app).is_some_and(|window| window.is_visible().unwrap_or(true));
+    if deliver {
+        let _ = app.emit("state", &data);
+    }
+    *shell.last_state.lock().unwrap() = Some(data);
+    shell.state_skipped.store(!deliver, Ordering::Relaxed);
+}
+
+/// For a window about to show. A busy state skipped just after this is followed by a settled one.
+pub fn deliver_skipped_state(app: &AppHandle) {
+    let shell = app.state::<Shell>();
+    if shell.state_skipped.swap(false, Ordering::Relaxed) {
+        let state = shell.last_state.lock().unwrap().clone();
+        let _ = app.emit("state", &state);
+    }
+}
+
+fn on_service_status(app: &AppHandle, status: &Status) {
+    let _ = app.emit("service-status", status.to_json());
+    if *status == Status::Running {
+        return;
+    }
+    // The process that would have finished them is gone, and "Updating…" keeps Refresh disabled.
+    let shell = app.state::<Shell>();
+    let settled = shell.last_state.lock().unwrap().as_mut().filter(|state| is_busy(state)).map(|state| {
+        settle(state);
+        state.clone()
+    });
+    if let Some(state) = settled {
+        shell.state_skipped.store(false, Ordering::Relaxed);
+        let _ = app.emit("state", &state);
+    }
+    // The next process sends its own tray update first thing, which restores the tooltip.
+    if let (Status::Down(_), Some(tray)) = (status, app.tray_by_id(TRAY_ID)) {
+        let _ = tray.set_tooltip(Some("opentrack: the background service stopped"));
+    }
+}
+
 fn on_sidecar_event(app: &AppHandle, name: &str, data: Value) {
     match name {
-        "state" => {
-            let _ = app.emit("state", &data);
-            *app.state::<Shell>().last_state.lock().unwrap() = Some(data);
-        }
+        "state" => on_state(app, data),
         "settings" => {
             let _ = app.emit("settings", &data);
             // A sidecar restart resends the same settings; the OS-side ones need no reapplying.
@@ -129,9 +194,10 @@ fn on_sidecar_event(app: &AppHandle, name: &str, data: Value) {
     }
 }
 
-fn tray_rect(rect: &tauri::Rect, scale: f64) -> Rect {
-    let position = rect.position.to_physical::<i32>(scale);
-    let size = rect.size.to_physical::<i32>(scale);
+fn tray_rect(rect: &tauri::Rect) -> Rect {
+    // Tray events report physical pixels, so the scale goes unused.
+    let position = rect.position.to_physical::<i32>(1.0);
+    let size = rect.size.to_physical::<i32>(1.0);
     Rect { x: position.x, y: position.y, width: size.width, height: size.height }
 }
 
@@ -167,9 +233,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 button: MouseButton::Left, button_state: MouseButtonState::Up, rect, ..
             } = event
             {
-                let app = tray.app_handle();
-                let scale = main_window(app).and_then(|w| w.scale_factor().ok()).unwrap_or(1.0);
-                toggle(app, Some(tray_rect(&rect, scale)));
+                toggle(tray.app_handle(), Some(tray_rect(&rect)));
             }
         });
     if let Some(icon) = app.default_window_icon() {
@@ -207,6 +271,7 @@ fn main() {
             commands::hide_window,
             commands::minimize_window,
             commands::setting_errors,
+            commands::service_status,
             commands::app_version,
             commands::check_update,
             commands::available_update,
@@ -218,12 +283,7 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle().clone();
-            app.manage(Shell {
-                sidecar: Sidecar::default(),
-                last_state: Mutex::new(None),
-                last_settings: Mutex::new(None),
-                setting_errors: Mutex::default(),
-            });
+            app.manage(Shell::default());
 
             build_tray(&handle)?;
             updater::watch(handle.clone());
@@ -231,17 +291,20 @@ fn main() {
             // Before the window: on Windows, building it waits for WebView2, which the sidecar need not.
             let program = app.path().resource_dir()?.join("opentrack-sidecar.exe");
             let data_dir = app.path().app_data_dir()?;
-            let events = handle.clone();
-            app.state::<Shell>()
-                .sidecar
-                .supervise(program, data_dir, move |name, data| on_sidecar_event(&events, name, data));
+            let (events, statuses) = (handle.clone(), handle.clone());
+            app.state::<Shell>().sidecar.supervise(
+                program,
+                data_dir,
+                move |name, data| on_sidecar_event(&events, name, data),
+                move |status| on_service_status(&statuses, status),
+            );
 
             let config =
                 app.config().app.windows.iter().find(|window| window.label == MAIN_WINDOW).ok_or("no main window")?;
             let window = WebviewWindowBuilder::from_config(&handle, config)?.build()?;
             window.set_min_size(Some(tauri::LogicalSize::new(240.0, 140.0)))?;
             let closing = window.clone();
-            // Close hides to the tray instead of quitting, like the title bar's close button.
+            // Quitting is the tray's job; Alt+F4, the taskbar's Close and the title bar's close only dismiss the window.
             window.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
@@ -255,4 +318,33 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("opentrack failed to start");
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn settling_a_state_ends_everything_a_dead_process_was_doing() {
+        let mut state = json!({
+            "refreshing": true,
+            "syncing": true,
+            "updatedAt": "then",
+            "providers": [{ "key": "codex", "refreshing": true }],
+        });
+        assert!(is_busy(&state));
+        settle(&mut state);
+        assert!(!is_busy(&state));
+        assert_eq!(
+            state,
+            json!({
+                "refreshing": false,
+                "syncing": false,
+                "updatedAt": "then",
+                "providers": [{ "key": "codex", "refreshing": false }],
+            })
+        );
+    }
 }

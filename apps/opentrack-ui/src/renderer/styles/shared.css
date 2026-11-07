@@ -9,13 +9,27 @@
   white-space: nowrap;
 }
 
-.link:hover {
+.link:hover:not(:disabled) {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
+.link:disabled {
+  opacity: 0.5;
+}
+
+.card {
+  margin: 0 12px 10px;
+  padding: 14px;
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+
 .details {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--rule);
