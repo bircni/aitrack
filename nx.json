@@ -63,7 +63,7 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "production": ["default", "!{projectRoot}/**/__tests__/**", "!{projectRoot}/vitest.config.ts"],
-    "sharedGlobals": ["{workspaceRoot}/tsconfig.base.json"],
+    "sharedGlobals": ["{workspaceRoot}/tsconfig.base.json", "{workspaceRoot}/.node-version"],
     "rustToolchain": [
       "{workspaceRoot}/rust-toolchain.toml",
       {
@@ -80,6 +80,12 @@
     ],
     "repoTools": [
       "{workspaceRoot}/.github/**/*",
+      "{workspaceRoot}/.node-version",
+      "{workspaceRoot}/Cargo.lock",
+      "{workspaceRoot}/LICENSE",
+      "{workspaceRoot}/{apps,libs}/*/LICENSE",
+      "{workspaceRoot}/{apps,libs}/*/package.json",
+      "{workspaceRoot}/{apps,libs}/*/vitest.config.ts",
       "{workspaceRoot}/scripts/**/*",
       "{workspaceRoot}/commitlint.config.ts",
       "{workspaceRoot}/knip.json",
