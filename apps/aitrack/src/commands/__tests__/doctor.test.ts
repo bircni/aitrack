@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
   resolveMachineId: vi.fn(),
   isCloned: vi.fn(),
+  cloneOriginUrl: vi.fn(),
+  runGitAsync: vi.fn(),
+  isRebaseInProgress: vi.fn(),
   listDataFiles: vi.fn(),
   readDataFile: vi.fn(),
   getClaudePaths: vi.fn(),
@@ -39,9 +42,15 @@ vi.mock('aitrack-lib/config', () => ({
 }));
 vi.mock('aitrack-lib/git', () => ({
   isCloned: mocks.isCloned,
+  cloneOriginUrl: mocks.cloneOriginUrl,
   listDataFiles: mocks.listDataFiles,
   readDataFile: mocks.readDataFile,
   LOCAL_REPO: '/repo',
+}));
+vi.mock('aitrack-lib/git/exec', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('aitrack-lib/git/exec')>()),
+  runGitAsync: mocks.runGitAsync,
+  isRebaseInProgress: mocks.isRebaseInProgress,
 }));
 vi.mock('aitrack-lib/readers/claude', () => ({
   getClaudePaths: mocks.getClaudePaths,
@@ -72,6 +81,8 @@ vi.mock('aitrack-lib/pricing/store', async () => {
   };
 });
 
+import { GitCommandError } from 'aitrack-lib/git/exec';
+
 import { doctorCommand, duplicateMachineCheck } from '../doctor.js';
 
 const machine = (hostname: string, days: Record<string, unknown>) => ({ hostname, days });
@@ -101,6 +112,9 @@ describe('doctorCommand', () => {
     process.exitCode = undefined;
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     mocks.spawnSync.mockReturnValue({ status: 0 });
+    mocks.runGitAsync.mockResolvedValue('');
+    mocks.isRebaseInProgress.mockReturnValue(false);
+    mocks.cloneOriginUrl.mockReturnValue('git@example.com:me/data.git');
     mocks.existsSync.mockImplementation((path: string) => path !== '/missing');
     // --pricing-check shells out to a script only the source checkout has.
     mocks.readFileSync.mockReturnValue(
@@ -270,6 +284,54 @@ describe('doctorCommand', () => {
     expect(out).toContain('Pricing drift: bun run pricing:check failed: drift detected');
   });
 
+  it('warns when the clone pushes somewhere other than repoUrl, without printing a token', async () => {
+    mocks.readConfig.mockReturnValue({
+      status: 'ok',
+      config: { repoUrl: 'https://me:s3cret@example.test/new.git' },
+    });
+    mocks.cloneOriginUrl.mockReturnValue('git@example.com:me/old.git');
+
+    await doctorCommand();
+
+    const out = loggedOutput();
+    expect(out).toMatch(/WARN\s+Remote: The local clone pushes to git@example.com:me\/old.git/u);
+    expect(out).toContain('repoUrl=https://***@example.test/new.git');
+    expect(out).not.toContain('s3cret');
+    expect(process.exitCode).toBeUndefined();
+    process.exitCode = undefined;
+  });
+
+  it('reports a rebase left in progress, and runs repo checks unattended', async () => {
+    mocks.isRebaseInProgress.mockReturnValue(true);
+
+    await doctorCommand();
+
+    expect(loggedOutput()).toMatch(/WARN\s+Rebase: an interrupted rebase/u);
+    expect(mocks.runGitAsync).toHaveBeenCalledWith(['push', '--dry-run'], { timeoutMs: 10_000 });
+    expect(mocks.spawnSync).not.toHaveBeenCalledWith(
+      'git',
+      ['push', '--dry-run'],
+      expect.anything(),
+    );
+  });
+
+  it('shows a git failure with its own output or a timeout message', async () => {
+    mocks.runGitAsync.mockImplementation((args: string[]) =>
+      Promise.reject(
+        args[0] === 'push'
+          ? new Error('git push --dry-run timed out after 10000 ms')
+          : new GitCommandError(args, 128, 'not a repository'),
+      ),
+    );
+
+    await doctorCommand();
+
+    const out = loggedOutput();
+    expect(out).toMatch(/FAIL\s+Repo health: git status failed: not a repository/u);
+    expect(out).toMatch(/WARN\s+Remote push: git push --dry-run failed: git push .*timed out/u);
+    process.exitCode = undefined;
+  });
+
   it('prints JSON when requested', async () => {
     await doctorCommand({ json: true });
 
@@ -287,6 +349,9 @@ describe('doctorCommand', () => {
     mocks.readConfig.mockReturnValue({ status: 'missing' });
     mocks.isCloned.mockReturnValue(true);
     mocks.spawnSync.mockReturnValue({ status: 1 });
+    mocks.runGitAsync.mockImplementation((args: string[]) =>
+      Promise.reject(new GitCommandError(args, 1, '')),
+    );
     mocks.getClaudePaths.mockReturnValue([]);
     mocks.getCodexPaths.mockReturnValue([]);
     mocks.getCursorStateDatabasePath.mockReturnValue(null);
@@ -304,6 +369,17 @@ describe('doctorCommand', () => {
   });
 
   describe('duplicateMachineCheck', () => {
+    it('names machine files it could not read rather than reporting OK', () => {
+      mocks.listDataFiles.mockReturnValue(['/repo/data/good.json', '/repo/data/broken.json']);
+      mocks.readDataFile
+        .mockReturnValueOnce(machine('good', { '2026-07-01': day(1) }))
+        .mockReturnValueOnce(null);
+
+      const check = duplicateMachineCheck();
+      expect(check.status).toBe('warn');
+      expect(check.detail).toContain('broken.json');
+    });
+
     it('warns when one machine is synced under several ids', () => {
       const shared = day(5);
       mocks.listDataFiles.mockReturnValue(['/repo/data/a.json', '/repo/data/b.json']);

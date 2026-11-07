@@ -8,7 +8,8 @@ import {
 } from 'aitrack-lib/data/usagePeriods';
 import type { UsageReportOptions } from 'aitrack-lib/data/usageReport';
 import { errorMessage } from 'aitrack-lib/errors';
-import { normalizeProviderKey, providerKeys } from 'aitrack-lib/providers/index';
+import { log } from 'aitrack-lib/output';
+import { normalizeProviderKey, PROVIDER_DESCRIPTORS } from 'aitrack-lib/providers/descriptors';
 import { InvalidArgumentError } from 'commander';
 
 import { UsageError } from './errors.js';
@@ -36,7 +37,20 @@ export function parseYearArgument(value: string): number {
 
 function invalidUsagePeriodMessage(period: string): string {
   const periods = USAGE_PERIOD_DEFINITIONS.map((def) => def.period).join(', ');
-  return `Invalid period: "${period}". Expected one of: ${periods}.`;
+  return `Invalid window: "${period}". Expected one of: ${periods}.`;
+}
+
+/** The names `--providers` documents, rather than the storage keys. */
+function providerNames(): string {
+  return Object.values(PROVIDER_DESCRIPTORS)
+    .map((descriptor) => descriptor.aliases[0])
+    .join(', ');
+}
+
+/** `-` conventionally means stdout, which these writers do not support. */
+export function parseOutputPath(value: string): string {
+  if (value === '-') log.warn('-o - writes a file named "-": aitrack cannot write to stdout.');
+  return value;
 }
 
 /** Canonical, de-duplicated keys for a comma-separated, alias-tolerant list; throws on unknown names. */
@@ -48,14 +62,14 @@ export function parseProviders(value: string): string[] {
     const key = normalizeProviderKey(name);
     if (key === null) {
       throw new InvalidArgumentError(
-        `Invalid provider: "${name}". Expected one of: ${providerKeys().join(', ')}.`,
+        `Invalid provider: "${name}". Expected one of: ${providerNames()}.`,
       );
     }
     seen.add(key);
   }
   if (seen.size === 0) {
     throw new InvalidArgumentError(
-      `No valid providers given. Expected one of: ${providerKeys().join(', ')}.`,
+      `No valid providers given. Expected one of: ${providerNames()}.`,
     );
   }
   return [...seen];

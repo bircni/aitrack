@@ -1,4 +1,4 @@
-import { makeDay, loggedOutput } from '@aitrack/test-fixtures';
+import { loadedFrom, makeDay, loggedOutput } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -21,15 +21,14 @@ const TODAY = '2026-06-15';
 const TODAY_LOCALE = `${NOW.toLocaleDateString()} ${NOW.toLocaleTimeString()}`;
 
 function withJuneUsage() {
-  mocks.loadMergedProviderData.mockResolvedValue({
-    providerData: {
+  mocks.loadMergedProviderData.mockResolvedValue(
+    loadedFrom({
       claude_code: new Map([
         ['2026-06-03', makeDay(1_000_000, 20_000, 90, 'claude-opus-4-8')],
         ['2026-06-14', makeDay(900_000, 18_000, 82.5, 'claude-opus-4-8')],
       ]),
-    },
-    machineData: [],
-  });
+    }),
+  );
 }
 
 describe('usageCommand', () => {
@@ -47,8 +46,8 @@ describe('usageCommand', () => {
   });
 
   it('today: prints per-model rows, TOTAL row, and today date in title', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           [
             TODAY,
@@ -68,9 +67,8 @@ describe('usageCommand', () => {
           ],
         ]),
         codex: new Map([[TODAY, makeDay(200, 100, undefined, 'mystery-gpt')]]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
@@ -93,8 +91,8 @@ describe('usageCommand', () => {
   });
 
   it('omits the cached column for Codex rows', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         codex: new Map([
           [
             TODAY,
@@ -114,9 +112,8 @@ describe('usageCommand', () => {
             },
           ],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await usageCommand({ period: 'today', providers: ['codex'] });
 
@@ -137,8 +134,8 @@ describe('usageCommand', () => {
   });
 
   it('names the project and its caveats, as text and as JSON', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           [
             '2026-06-14',
@@ -148,9 +145,8 @@ describe('usageCommand', () => {
             },
           ],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
     const project = { kind: 'project' as const, project: 'acme/widget' };
 
     await usageCommand({ period: 'month', project });
@@ -174,12 +170,11 @@ describe('usageCommand', () => {
   });
 
   it('prints a single line with --short', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([[TODAY, makeDay(1000, 200, 1.2, 'claude-opus-4-8')]]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await usageCommand({ period: 'today', providers: ['claude_code'], short: true });
 
@@ -187,12 +182,11 @@ describe('usageCommand', () => {
   });
 
   it('prints JSON when requested', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([[TODAY, makeDay(1000, 200, 1.2, 'claude-opus-4-8')]]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await usageCommand({ period: 'today', providers: ['claude_code'], json: true });
 
@@ -211,15 +205,14 @@ describe('usageCommand', () => {
   });
 
   it('prints comparison totals and per-model movement, as text and as JSON', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-06-08', makeDay(100, 0, 1, 'claude-opus')],
           ['2026-06-15', makeDay(200, 0, 3, 'claude-opus')],
         ]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await usageCommand({ period: 'thisweek', compare: true });
 
@@ -262,10 +255,9 @@ describe('usageCommand', () => {
     });
 
     vi.mocked(console.log).mockClear();
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: { claude_code: new Map([['2020-01-01', makeDay(10, 0)]]) },
-      machineData: [],
-    });
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({ claude_code: new Map([['2020-01-01', makeDay(10, 0)]]) }),
+    );
     await usageCommand({ period: 'today', json: true });
     expect(JSON.parse(loggedOutput())).toMatchObject({
       command: 'usage',
@@ -275,16 +267,29 @@ describe('usageCommand', () => {
   });
 
   it('today: prints no-usage message when no entry for today exists', async () => {
-    mocks.loadMergedProviderData.mockResolvedValue({
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([['2020-01-01', makeDay(1000, 200, 1.2)]]),
-      },
-      machineData: [],
-    });
+      }),
+    );
 
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
     expect(loggedOutput()).toContain(`No usage recorded for today (${TODAY_LOCALE}).`);
+  });
+
+  it('shows a known zero cost as $0.00, not as unknown', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({ codex: new Map([[TODAY, makeDay(10, 0, 0, 'gpt-5')]]) }),
+    );
+    await usageCommand({ period: 'today' });
+    expect(loggedOutput()).toContain('$0.00');
+  });
+
+  it('always has a comparison key with --compare, null when there is no data', async () => {
+    mocks.loadMergedProviderData.mockResolvedValue(null);
+    await usageCommand({ period: 'today', compare: true, json: true });
+    expect(JSON.parse(loggedOutput())).toMatchObject({ comparison: null });
   });
 
   it('prints empty hint when no data is loaded', async () => {
@@ -295,7 +300,7 @@ describe('usageCommand', () => {
     await usageCommand({ period: 'today', providers: ['claude_code', 'codex'] });
 
     expect(console.log).toHaveBeenCalledWith(
-      'No local usage data found (Claude Code or Codex). Run: npx aitrack init to sync across machines.',
+      'No usage found for Claude Code, Codex. Run: npx aitrack doctor to see which sources were checked.',
     );
   });
 
@@ -358,15 +363,14 @@ describe('usageCommand', () => {
       hasUnpricedTokens: true,
       byModel: { mixed: { inputTokens: 10, outputTokens: 2, costUSD: 1, hasUnpricedTokens: true } },
     };
-    mocks.loadMergedProviderData.mockResolvedValue({
-      machineData: [],
-      providerData: {
+    mocks.loadMergedProviderData.mockResolvedValue(
+      loadedFrom({
         claude_code: new Map([
           ['2026-06-01', mixed],
           ['2026-05-01', mixed],
         ]),
-      },
-    });
+      }),
+    );
     await usageCommand({ period: 'thismonth', compare: true });
     expect(loggedOutput()).toContain('(partial)');
     expect(loggedOutput()).toContain('Unpriced models: mixed');

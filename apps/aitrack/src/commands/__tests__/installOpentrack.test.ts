@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { loggedOutput } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ spawnSync: vi.fn(), verifyMinisign: vi.fn() }));
@@ -20,6 +21,7 @@ vi.mock('../../minisign.js', () => ({
   verifyMinisign: mocks.verifyMinisign,
 }));
 
+import { UsageError } from '../../cli/errors.js';
 import { installOpentrackCommand } from '../installOpentrack.js';
 
 const MANIFEST = {
@@ -153,9 +155,9 @@ describe('installOpentrackCommand', () => {
 
     mocks.spawnSync.mockReturnValue({ status: 2 });
     await expect(installOpentrackCommand()).rejects.toThrow('exited with code 2');
-    await expect(installOpentrackCommand({ dir })).rejects.toThrow(
-      '--dir applies to macOS and Linux only',
-    );
+    const windowsDir = installOpentrackCommand({ dir });
+    await expect(windowsDir).rejects.toThrow('--dir applies to macOS and Linux only');
+    await expect(windowsDir).rejects.toThrow(UsageError);
   });
 
   it('replaces the AppImage on Linux with the verified, executable release', async () => {
@@ -176,6 +178,41 @@ describe('installOpentrackCommand', () => {
     expect(statSync(appImage).mode & 0o100).toBe(0o100);
     expect(readdirSync(target)).toEqual(['opentrack.AppImage']);
     expect(mocks.spawnSync).not.toHaveBeenCalled();
+  });
+
+  it('prints one JSON document on Linux, as on the other platforms', async () => {
+    onMachine('linux', 'x64');
+    const target = join(dir, 'new', 'bin');
+
+    await installOpentrackCommand({ dir: target, json: true });
+
+    const document = loggedOutput().slice(loggedOutput().indexOf('{')); // runAsync sends progress to stderr.
+    expect(JSON.parse(document)).toEqual({
+      command: 'install-opentrack',
+      version: '3.1.0',
+      path: join(target, 'opentrack.AppImage'),
+    });
+  });
+
+  it('creates a missing --dir on a Mac before downloading anything', async () => {
+    onMachine('darwin', 'arm64');
+    const target = join(dir, 'new', 'apps');
+    fetchMock.mockImplementation(() => {
+      expect(existsSync(target)).toBe(true);
+      return Promise.reject(new Error('stop here'));
+    });
+    await expect(installOpentrackCommand({ dir: target })).rejects.toThrow('stop here');
+
+    serve();
+    await installOpentrackCommand({ dir: target });
+    expect(existsSync(join(target, 'opentrack.app'))).toBe(true);
+
+    writeFileSync(join(dir, 'file'), '');
+    fetchMock.mockClear();
+    await expect(installOpentrackCommand({ dir: join(dir, 'file', 'sub') })).rejects.toThrow(
+      /ENOTDIR|ENOENT|EEXIST/u,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('explains machines and releases it cannot install on', async () => {

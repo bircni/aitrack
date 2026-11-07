@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 
+import { loggedOutput } from '@aitrack/test-fixtures';
 import type { Config } from 'aitrack-lib/configTypes';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   prompts: vi.fn(),
@@ -10,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   saveConfig: vi.fn(),
   isCloned: vi.fn(),
   cloneRepo: vi.fn(),
-  removeLocalClone: vi.fn(),
+  replaceLocalClone: vi.fn(),
+  runGitAsync: vi.fn(),
   mkdirSync: vi.fn(),
   adoptPendingDataFiles: vi.fn(),
   migrateMachineDataFiles: vi.fn(),
@@ -31,12 +33,17 @@ vi.mock('aitrack-lib/git', () => ({
   isCloned: mocks.isCloned,
   cloneOriginUrl: mocks.cloneOriginUrl,
   cloneRepo: mocks.cloneRepo,
-  removeLocalClone: mocks.removeLocalClone,
+  replaceLocalClone: mocks.replaceLocalClone,
   adoptPendingDataFiles: mocks.adoptPendingDataFiles,
   migrateMachineDataFiles: mocks.migrateMachineDataFiles,
 }));
 
+vi.mock('aitrack-lib/git/exec', () => ({ runGitAsync: mocks.runGitAsync }));
+
+import { UsageError } from '../../cli/errors.js';
 import { initCommand } from '../init.js';
+
+const originalIsTTY = process.stdin.isTTY;
 
 function okConfig(config: Config): void {
   mocks.readConfig.mockReturnValue({ status: 'ok', config });
@@ -49,7 +56,15 @@ describe('initCommand', () => {
     mocks.readConfig.mockReturnValue({ status: 'missing' });
     mocks.isCloned.mockReturnValue(false);
     mocks.cloneOriginUrl.mockReturnValue('same-url');
+    mocks.runGitAsync.mockResolvedValue('0');
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    process.stdin.isTTY = true;
+    process.exitCode = undefined;
+  });
+
+  afterEach(() => {
+    process.stdin.isTTY = originalIsTTY;
+    process.exitCode = undefined;
   });
 
   it('clones and saves a trimmed repo URL for a new config', async () => {
@@ -120,7 +135,7 @@ describe('initCommand', () => {
 
     await initCommand();
 
-    expect(mocks.removeLocalClone).not.toHaveBeenCalled();
+    expect(mocks.replaceLocalClone).not.toHaveBeenCalled();
     expect(mocks.cloneRepo).not.toHaveBeenCalled();
     expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: 'same-url', machineId: 'my-pc' });
     expect(mocks.adoptPendingDataFiles).not.toHaveBeenCalled();
@@ -201,14 +216,125 @@ describe('initCommand', () => {
     mocks.prompts
       .mockResolvedValueOnce({ overwrite: true })
       .mockResolvedValueOnce({ repoUrl: 'new-url' })
-      .mockResolvedValueOnce({ reclone: true })
-      .mockResolvedValueOnce({ machineId: 'my-pc' });
+      .mockResolvedValueOnce({ machineId: 'my-pc' })
+      .mockResolvedValueOnce({ reclone: true });
 
     await initCommand();
 
-    expect(mocks.removeLocalClone).toHaveBeenCalled();
-    expect(mocks.cloneRepo).toHaveBeenCalledWith('new-url');
+    expect(mocks.replaceLocalClone).toHaveBeenCalledWith('new-url');
+    expect(mocks.cloneRepo).not.toHaveBeenCalled();
     expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: 'new-url', machineId: 'my-pc' });
+  });
+
+  it('names unpushed commits before replacing the clone, and keeps the setup if the clone fails', async () => {
+    okConfig({ repoUrl: 'old-url', machineId: 'my-pc' });
+    mocks.isCloned.mockReturnValue(true);
+    mocks.cloneOriginUrl.mockReturnValue('old-url');
+    mocks.runGitAsync.mockResolvedValue('3');
+    mocks.replaceLocalClone.mockImplementationOnce(() => {
+      throw new Error('git clone failed');
+    });
+    mocks.prompts
+      .mockResolvedValueOnce({ overwrite: true })
+      .mockResolvedValueOnce({ repoUrl: 'new-url' })
+      .mockResolvedValueOnce({ machineId: 'my-pc' })
+      .mockResolvedValueOnce({ reclone: true });
+
+    await expect(initCommand()).rejects.toThrow('git clone failed');
+
+    expect(mocks.prompts).toHaveBeenLastCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('3 commit(s)') as string }),
+    );
+    expect(mocks.saveConfig).not.toHaveBeenCalled();
+  });
+
+  it('touches nothing when the machine prompt is cancelled before a re-clone', async () => {
+    okConfig({ repoUrl: 'old-url' });
+    mocks.isCloned.mockReturnValue(true);
+    mocks.cloneOriginUrl.mockReturnValue('old-url');
+    mocks.prompts
+      .mockResolvedValueOnce({ overwrite: true })
+      .mockResolvedValueOnce({ repoUrl: 'new-url' })
+      .mockResolvedValueOnce({});
+
+    await initCommand();
+
+    expect(mocks.replaceLocalClone).not.toHaveBeenCalled();
+    expect(mocks.saveConfig).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('keeps repo and config in step when machine data migration fails after a re-clone', async () => {
+    okConfig({ repoUrl: 'old-url', machineId: 'old-pc' });
+    mocks.isCloned.mockReturnValue(true);
+    mocks.cloneOriginUrl.mockReturnValue('old-url');
+    mocks.migrateMachineDataFiles.mockImplementation(() => {
+      throw new Error('already exists');
+    });
+    mocks.prompts
+      .mockResolvedValueOnce({ overwrite: true })
+      .mockResolvedValueOnce({ repoUrl: 'new-url' })
+      .mockResolvedValueOnce({ machineId: 'new-pc' })
+      .mockResolvedValueOnce({ reclone: true });
+
+    await expect(initCommand()).rejects.toThrow('already exists');
+
+    expect(mocks.saveConfig).toHaveBeenCalledTimes(1);
+    expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: 'new-url', machineId: 'old-pc' });
+  });
+
+  describe('without a terminal', () => {
+    beforeEach(() => {
+      process.stdin.isTTY = false;
+    });
+
+    it.each([
+      [{}, '--repo'],
+      [{ repo: 'url' }, '--machine'],
+      [{ repo: '  ', machine: 'box' }, '--repo'],
+      [{ repo: 'url', machine: '../escape' }, 'Machine name'],
+    ])('refuses %j as a usage error, before anything changes', async (options, named) => {
+      const init = initCommand(options);
+      await expect(init).rejects.toThrow(UsageError);
+      await expect(init).rejects.toThrow(named);
+      expect(mocks.prompts).not.toHaveBeenCalled();
+      expect(mocks.cloneRepo).not.toHaveBeenCalled();
+      expect(mocks.saveConfig).not.toHaveBeenCalled();
+    });
+
+    it('sets up from flags alone', async () => {
+      await initCommand({ repo: 'url', machine: 'box' });
+      expect(mocks.prompts).not.toHaveBeenCalled();
+      expect(mocks.cloneRepo).toHaveBeenCalledWith('url');
+      expect(mocks.saveConfig).toHaveBeenCalledWith({ repoUrl: 'url', machineId: 'box' });
+    });
+
+    it('re-runs against the same remote, keeping the configured machine and settings', async () => {
+      okConfig({ repoUrl: 'same-url', machineId: 'my-pc', compactAfterDays: 30 });
+      mocks.isCloned.mockReturnValue(true);
+      await initCommand({ repo: 'same-url' });
+      expect(mocks.prompts).not.toHaveBeenCalled();
+      expect(mocks.saveConfig).toHaveBeenCalledWith({
+        repoUrl: 'same-url',
+        machineId: 'my-pc',
+        compactAfterDays: 30,
+      });
+    });
+
+    it('refuses to replace a clone or an unreadable config it cannot ask about', async () => {
+      okConfig({ repoUrl: 'https://me:s3cret@example.test/old.git', machineId: 'my-pc' });
+      mocks.isCloned.mockReturnValue(true);
+      mocks.cloneOriginUrl.mockReturnValue('https://me:s3cret@example.test/old.git');
+      const init = initCommand({ repo: 'new-url' });
+      await expect(init).rejects.toThrow('run init in a terminal');
+      await expect(init).rejects.not.toThrow('s3cret');
+      expect(mocks.replaceLocalClone).not.toHaveBeenCalled();
+      expect(loggedOutput()).toContain('repo=https://***@example.test/old.git');
+
+      mocks.readConfig.mockReturnValue({ status: 'invalid', reason: 'not valid JSON' });
+      await expect(initCommand({ repo: 'url', machine: 'box' })).rejects.toThrow(UsageError);
+      expect(mocks.saveConfig).not.toHaveBeenCalled();
+    });
   });
 
   it('aborts when the repo URL changes and the user declines re-clone', async () => {
@@ -217,11 +343,13 @@ describe('initCommand', () => {
     mocks.prompts
       .mockResolvedValueOnce({ overwrite: true })
       .mockResolvedValueOnce({ repoUrl: 'new-url' })
+      .mockResolvedValueOnce({ machineId: 'my-pc' })
       .mockResolvedValueOnce({ reclone: false });
 
     await initCommand();
 
-    expect(mocks.removeLocalClone).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+    expect(mocks.replaceLocalClone).not.toHaveBeenCalled();
     expect(mocks.cloneRepo).not.toHaveBeenCalled();
     expect(mocks.saveConfig).not.toHaveBeenCalled();
   });
@@ -251,12 +379,28 @@ describe('initCommand', () => {
     mocks.cloneOriginUrl.mockReturnValue('old-url');
     mocks.prompts
       .mockResolvedValueOnce({ repoUrl: 'new-url' })
+      .mockResolvedValueOnce({ machineId: 'my-pc' })
       .mockResolvedValueOnce({ reclone: false });
 
     await initCommand();
 
     expect(mocks.prompts).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'reclone' }));
     expect(mocks.cloneRepo).not.toHaveBeenCalled();
+  });
+
+  it('keeps a clone whose origin is the same remote written another way', async () => {
+    mocks.isCloned.mockReturnValue(true);
+    mocks.cloneOriginUrl.mockReturnValue('git@github.com:me/d.git');
+    mocks.prompts
+      .mockResolvedValueOnce({ repoUrl: 'https://github.com/me/d' })
+      .mockResolvedValueOnce({ machineId: 'my-pc' });
+
+    await initCommand();
+
+    expect(mocks.replaceLocalClone).not.toHaveBeenCalled();
+    expect(mocks.saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ repoUrl: 'https://github.com/me/d' }),
+    );
   });
 
   it('keeps a clone whose origin URL cannot be read', async () => {
@@ -268,7 +412,7 @@ describe('initCommand', () => {
 
     await initCommand();
 
-    expect(mocks.removeLocalClone).not.toHaveBeenCalled();
+    expect(mocks.replaceLocalClone).not.toHaveBeenCalled();
     expect(mocks.cloneRepo).not.toHaveBeenCalled();
   });
 

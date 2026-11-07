@@ -1,6 +1,7 @@
+import { USAGE_PERIOD_DEFINITIONS } from 'aitrack-lib/data/usagePeriods';
 import { errorMessage } from 'aitrack-lib/errors';
 import { log, routeInfoToStderr } from 'aitrack-lib/output';
-import { Argument, Command, Option } from 'commander';
+import { Argument, Command, CommanderError, Option } from 'commander';
 
 import {
   COMPLETION_SHELLS,
@@ -9,6 +10,7 @@ import {
 } from '../commands/completion.js';
 import { CONFIG_KEYS } from '../commands/configKeys.js';
 import type { ExportOptions } from '../commands/export.js';
+import type { InitOptions } from '../commands/init.js';
 import type { ShowOptions } from '../commands/show.js';
 import type { SyncOptions } from '../commands/sync.js';
 import type { TopKind, TopOptions } from '../commands/top.js';
@@ -17,6 +19,7 @@ import { EXIT_FAILURE, EXIT_USAGE, UsageError } from './errors.js';
 import { printJsonCommand, printJsonError } from './json.js';
 import {
   parseDateOption,
+  parseOutputPath,
   parsePositiveIntArgument,
   parseProviders,
   parseYearArgument,
@@ -55,25 +58,59 @@ function fail(error: unknown, jsonCommand: string | undefined): void {
   process.exitCode = error instanceof UsageError ? EXIT_USAGE : EXIT_FAILURE; // Not process.exit, which can truncate buffered stdout.
 }
 
+/** The command to name in a parser failure when `--json` was asked for, else undefined. */
+function jsonParseFailureCommand(program: Command, argv: readonly string[]): string | undefined {
+  const end = argv.indexOf('--');
+  const args = end === -1 ? argv : argv.slice(0, end);
+  if (!args.includes('--json')) return undefined;
+  const known = args.find((arg) => program.commands.some((command) => command.name() === arg));
+  return known ?? program.name();
+}
+
+function windowHelp(): string {
+  const width = Math.max(...USAGE_PERIOD_DEFINITIONS.map((def) => def.name.length));
+  const rows = USAGE_PERIOD_DEFINITIONS.map(
+    (def) => `  ${def.name.padEnd(width)}  ${def.description}`,
+  );
+  return `\nWindows:\n${rows.join('\n')}\n\nExample: aitrack export last 14 --csv`;
+}
+
 /** Handlers are imported on use, so a command loads only its own modules. */
-export function buildProgram(): Command {
+export function buildProgram(argv: readonly string[] = process.argv): Command {
   const program = new Command();
-  program.exitOverride((error) => {
-    process.exit(error.exitCode === 0 ? 0 : EXIT_USAGE); // Set before the subcommands exist, so they inherit it.
-  });
+  // Both set before the subcommands exist, so they inherit them.
+  program
+    .exitOverride((error) => {
+      process.exitCode = error.exitCode === 0 ? 0 : EXIT_USAGE; // Not process.exit, which can truncate buffered stdout.
+      throw error;
+    })
+    .configureOutput({
+      outputError: (text, write) => {
+        const command = jsonParseFailureCommand(program, argv);
+        if (command === undefined) write(text);
+        else printJsonError(command, text.trim().replace(/^error: /u, ''));
+      },
+    })
+    .showHelpAfterError('(run with --help for usage)');
 
   program
     .name('aitrack')
-    .description('Sync AI coding assistant usage across machines via a git remote')
-    .version(cliVersion());
+    .description('Report AI coding assistant usage, and sync it across machines via a git remote')
+    .version(cliVersion())
+    .addHelpText('after', '\nNo setup needed to start: aitrack usage today');
 
   program
     .command('init')
-    .description('Interactive setup: configure git remote and clone repo')
-    .action(() => {
+    .description('Set up: configure the git remote and machine name, and clone the repo')
+    .option('--repo <url>', 'git remote URL; required without a terminal')
+    .option(
+      '--machine <name>',
+      'machine name, the data filename; required without a terminal on first setup',
+    )
+    .action((options: InitOptions) => {
       runAsync(async () => {
         const { initCommand } = await import('../commands/init.js');
-        await initCommand();
+        await initCommand(options);
       });
     });
 
@@ -98,7 +135,7 @@ export function buildProgram(): Command {
     .description(
       'Merge local usage with already-synced machine data and render a heatmap PNG (or terminal table with --tui)',
     )
-    .option('-o, --output <path>', 'output file path', 'aitrack.png')
+    .option('-o, --output <path>', 'output file path (default: aitrack.png)', parseOutputPath)
     .option('--dark', 'dark mode output')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option('--all', 'single merged heatmap across all providers instead of one row per provider')
@@ -123,13 +160,20 @@ export function buildProgram(): Command {
   registerUsageCommands(usage, runAsync);
 
   program
-    .command('export [period] [args...]')
-    .description('Export an itemized usage receipt for a period (default: month) as PDF or CSV')
-    .option('-o, --output <path>', 'output path (default: aitrack-receipt.pdf, or .csv with --csv)')
+    .command('export [window] [args...]')
+    .description(
+      'Export an itemized usage receipt for a window (default: month, the rolling 30 days) as PDF or CSV',
+    )
+    .option(
+      '-o, --output <path>',
+      'output path (default: aitrack-receipt.pdf, or .csv with --csv)',
+      parseOutputPath,
+    )
     .option('--csv', 'write a spreadsheet-friendly CSV instead of the PDF receipt')
     .option(PROVIDERS_FLAG, PROVIDERS_DESC, parseProviders)
     .option(REFRESH_FLAG, REFRESH_DESC)
     .option('--json', 'print machine-readable JSON')
+    .addHelpText('after', windowHelp)
     .action((period: string | undefined, args: string[], options: ExportOptions) => {
       runAsync(
         async () => {
@@ -143,7 +187,7 @@ export function buildProgram(): Command {
   program
     .command('top')
     .description(
-      'Show top days, models or projects by tokens or cost. Uses already-local synced machine data.',
+      'Show top days, models or projects by tokens or cost, merging local usage with already-synced machine data',
     )
     .addArgument(
       new Argument('[kind]', 'what to rank')
@@ -201,7 +245,7 @@ export function buildProgram(): Command {
     )
     .option(
       '--replace-local',
-      'Rebuild this machine from the local logs, dropping synced days the logs no longer cover',
+      'Rebuild this machine from the local logs, dropping synced days the logs no longer cover; also the way past a file no passphrase can open',
     )
     .option('--json', 'print machine-readable JSON')
     .action((options: { replaceLocal?: boolean; json?: boolean }) => {
@@ -253,7 +297,7 @@ export function buildProgram(): Command {
     .description('Print a shell completion script (eval it or save it to your completions folder)')
     .addArgument(new Argument('<shell>', 'target shell').choices(COMPLETION_SHELLS))
     .action((shell: CompletionShell) => {
-      process.stdout.write(completionScript(program, shell));
+      log.info(completionScript(program, shell).trimEnd()); // console.log, unlike stdout.write, ignores a closed pipe (EPIPE).
     });
 
   const config = program
@@ -267,8 +311,8 @@ export function buildProgram(): Command {
     .action((options: { json?: boolean }) => {
       runAsync(
         async () => {
-          const { configCommand } = await import('../commands/config.js');
-          configCommand({ action: 'list', ...(options.json && { json: true }) });
+          const { listConfig } = await import('../commands/config.js');
+          listConfig(options.json);
         },
         { command: 'config', enabled: options.json },
       );
@@ -281,8 +325,8 @@ export function buildProgram(): Command {
     .action((key: string, options: { json?: boolean }) => {
       runAsync(
         async () => {
-          const { configCommand } = await import('../commands/config.js');
-          configCommand({ action: 'get', key, ...(options.json && { json: true }) });
+          const { getConfig } = await import('../commands/config.js');
+          getConfig(key, options.json);
         },
         { command: 'config', enabled: options.json },
       );
@@ -293,10 +337,19 @@ export function buildProgram(): Command {
     .description(`Set a configuration value (keys: ${CONFIG_KEYS.join(', ')})`)
     .action((key: string, value: string) => {
       runAsync(async () => {
-        const { configCommand } = await import('../commands/config.js');
-        configCommand({ action: 'set', key, value });
+        const { setConfig } = await import('../commands/config.js');
+        setConfig(key, value);
       });
     });
 
   return program;
+}
+
+/** The entry point: exitOverride has already set the exit code of the failure it throws. */
+export function runCli(): void {
+  try {
+    buildProgram().parse();
+  } catch (error) {
+    if (!(error instanceof CommanderError)) throw error;
+  }
 }

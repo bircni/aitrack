@@ -1,7 +1,10 @@
 import { invalidConfigMessage, readConfig, resolveMachineId, saveConfig } from 'aitrack-lib/config';
 import type { Config } from 'aitrack-lib/configTypes';
 import { NO_CONFIG_MESSAGE, REPO_URL_UNSET_MESSAGE } from 'aitrack-lib/data/messages';
-import { migrateMachineDataFiles } from 'aitrack-lib/git';
+import { parsePositiveInteger } from 'aitrack-lib/data/usagePeriods';
+import { errorMessage } from 'aitrack-lib/errors';
+import { LOCAL_REPO, migrateMachineDataFiles } from 'aitrack-lib/git';
+import { differingOrigin, redactUrl } from 'aitrack-lib/git/remote';
 import { normalizeMachineId } from 'aitrack-lib/machineId';
 import { log } from 'aitrack-lib/output';
 import { ENCRYPTION_PASSPHRASE_ENV, encryptionPassphrase } from 'aitrack-lib/store/encryption';
@@ -22,77 +25,58 @@ function unknownKeyError(key: string): Error {
 }
 
 function configValue(config: Config | null, key: ConfigKey): string | number | boolean | undefined {
-  if (!config) return undefined;
-  switch (key) {
-    case 'repoUrl':
-    case 'machineId':
-    case 'claudeProjectsDir':
-    case 'codexSessionsDir': {
-      return config[key];
-    }
-    case 'budget.monthly': {
-      return config.budget?.monthlyUSD;
-    }
-    case 'encryptData':
-    case 'compactAfterDays': {
-      return config[key];
-    }
-    default: {
-      const _exhaustive: never = key;
-      throw new Error(`Unhandled config key: ${String(_exhaustive)}`);
-    }
-  }
+  return key === 'budget.monthly' ? config?.budget?.monthlyUSD : config?.[key];
 }
 
-function parseMonthlyBudget(value: string): number {
+/** What `list` and the `set` echo show; `get` prints the stored value, since asking for it is explicit. */
+function displayValue(key: ConfigKey, value: string | number | boolean): string {
+  return key === 'repoUrl' ? redactUrl(String(value)) : String(value);
+}
+
+/** Undefined for "off", which clears the setting. */
+function parseMonthlyBudget(value: string): number | undefined {
+  if (value === 'off') return undefined;
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new UsageError('budget.monthly must be a positive dollar amount, e.g. 200 or 149.99.');
+    throw new UsageError(
+      'budget.monthly must be a positive dollar amount, e.g. 200 or 149.99, or "off".',
+    );
   }
   return parsed;
 }
 
 function parseEncryptData(value: string): boolean {
   if (value === 'true' || value === 'false') return value === 'true';
-  throw new Error('encryptData must be true or false.');
+  throw new UsageError('encryptData must be true or false.');
 }
 
 /** Undefined for "off", which clears the setting. */
 function parseCompactAfterDays(value: string): number | undefined {
   if (value === 'off') return undefined;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error('compactAfterDays must be a positive whole number of days, or "off".');
+  const parsed = parsePositiveInteger(value);
+  if (parsed === null) {
+    throw new UsageError('compactAfterDays must be a positive whole number of days, or "off".');
   }
   return parsed;
 }
 
-export interface ConfigCommandOptions {
-  action: 'list' | 'get' | 'set';
-  key?: string;
-  value?: string;
-  json?: boolean;
+function parseMachineId(value: string): string {
+  try {
+    return normalizeMachineId(value);
+  } catch (error) {
+    throw new UsageError(errorMessage(error));
+  }
 }
 
-export function configCommand(options: ConfigCommandOptions): void {
-  switch (options.action) {
-    case 'list': {
-      listConfig(options.json);
-      break;
-    }
-    case 'get': {
-      getConfig(options.key, options.json);
-      break;
-    }
-    case 'set': {
-      setConfig(options.key, options.value);
-      break;
-    }
-    default: {
-      const _exhaustive: never = options.action;
-      throw new Error(`Unhandled config action: ${String(_exhaustive)}`);
-    }
-  }
+/** Moving the remote replaces the clone, which needs init's confirmation; saying so here beats a sync that keeps pushing to the old one. */
+function assertRepoUrlFitsClone(repoUrl: string): void {
+  const origin = differingOrigin(repoUrl);
+  if (origin === null) return;
+  throw new UsageError(
+    `repoUrl not changed: the local clone at ${LOCAL_REPO} pushes to ${redactUrl(origin)}. ` +
+      `To replace the clone, run: aitrack init --repo <url> (asks first). ` +
+      `To keep its history and move it to the new remote, run: git -C "${LOCAL_REPO}" remote set-url origin <url>, then set repoUrl again.`,
+  );
 }
 
 /** Null when there is no config; an invalid one throws, so nothing here overwrites it. */
@@ -102,7 +86,7 @@ function existingConfig(): Config | null {
   return loaded.status === 'ok' ? loaded.config : null;
 }
 
-function listConfig(json?: boolean): void {
+export function listConfig(json?: boolean): void {
   const config = existingConfig();
   if (json) {
     printJsonCommand('config', {
@@ -120,15 +104,13 @@ function listConfig(json?: boolean): void {
   log.info(chalk.bold('aitrack config'));
   for (const key of CONFIG_KEYS) {
     const value = configValue(config, key);
-    log.info(`  ${key} = ${value === undefined ? chalk.dim('(unset)') : String(value)}`);
+    log.info(`  ${key} = ${value === undefined ? chalk.dim('(unset)') : displayValue(key, value)}`);
   }
   log.info(`  ${chalk.dim('resolved machineId')} = ${resolveMachineId(config)}`);
 }
 
-function getConfig(key: string | undefined, json?: boolean): void {
-  if (key === undefined || !isConfigKey(key)) {
-    throw unknownKeyError(key ?? '');
-  }
+export function getConfig(key: string, json?: boolean): void {
+  if (!isConfigKey(key)) throw unknownKeyError(key);
   const value = configValue(existingConfig(), key);
   if (json) {
     printJsonCommand('config', { action: 'get', key, value: value ?? null });
@@ -141,18 +123,15 @@ function getConfig(key: string | undefined, json?: boolean): void {
   log.info(String(value));
 }
 
-function setConfig(key: string | undefined, value: string | undefined): void {
-  if (key === undefined || !isConfigKey(key)) {
-    throw unknownKeyError(key ?? '');
-  }
-  if (value === undefined) {
-    throw new UsageError(`A value is required: aitrack config set ${key} <value>`);
-  }
+export function setConfig(key: string, value: string): void {
+  if (!isConfigKey(key)) throw unknownKeyError(key);
   const existing = existingConfig();
   const base: Config = existing ?? { repoUrl: '' };
   let next: Config;
   if (key === 'budget.monthly') {
-    next = { ...base, budget: { ...base.budget, monthlyUSD: parseMonthlyBudget(value) } };
+    const { budget, ...rest } = base;
+    const monthlyUSD = parseMonthlyBudget(value);
+    next = monthlyUSD === undefined ? rest : { ...rest, budget: { ...budget, monthlyUSD } };
   } else if (key === 'encryptData') {
     next = { ...base, encryptData: parseEncryptData(value) };
     if (next.encryptData && encryptionPassphrase() === undefined) {
@@ -165,14 +144,16 @@ function setConfig(key: string | undefined, value: string | undefined): void {
     const days = parseCompactAfterDays(value);
     next = days === undefined ? rest : { ...rest, compactAfterDays: days };
   } else if (key === 'machineId') {
-    const machineId = normalizeMachineId(value);
+    const machineId = parseMachineId(value);
     migrateMachineDataFiles(resolveMachineId(existing), machineId);
     next = { ...base, machineId };
   } else {
+    if (key === 'repoUrl') assertRepoUrlFitsClone(value);
     next = { ...base, [key]: value };
   }
   saveConfig(next);
-  log.info(`Set ${key} = ${String(configValue(next, key))}`);
+  const saved = configValue(next, key);
+  log.info(saved === undefined ? `Cleared ${key}.` : `Set ${key} = ${displayValue(key, saved)}`);
   if (next.repoUrl.length === 0) {
     log.warn(chalk.yellow(REPO_URL_UNSET_MESSAGE));
   }

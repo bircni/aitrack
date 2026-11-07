@@ -7,6 +7,8 @@ interface Node {
   name: string;
   description: string;
   flags: string[];
+  /** Fixed values of its arguments, e.g. `days` for `top`. */
+  values: string[];
   children: Node[];
 }
 
@@ -17,6 +19,7 @@ function collect(command: Command): Node {
     flags: [...command.options.flatMap((option) => [option.long, option.short]), '--help'].filter(
       (flag): flag is string => flag !== undefined,
     ),
+    values: command.registeredArguments.flatMap((argument) => argument.argChoices ?? []),
     children: command.commands.map(collect),
   };
 }
@@ -32,7 +35,7 @@ function flatten(node: Node, path: string[] = []): Array<{ path: string[]; node:
 }
 
 function words(node: Node): string {
-  return [...node.children.map((child) => child.name), ...node.flags].join(' ');
+  return [...node.children.map((child) => child.name), ...node.values, ...node.flags].join(' ');
 }
 
 /** Shared by bash and zsh: `path` ends up as the key of the deepest subcommand already typed. */
@@ -81,7 +84,7 @@ ${optionCases(root)}
   esac
   compadd -- \${=opts}
 }
-compdef _aitrack aitrack
+(( $+functions[compdef] )) && compdef _aitrack aitrack
 `;
 }
 
@@ -99,6 +102,9 @@ function fish(root: Node): string {
       lines.push(
         `complete -c aitrack -f -n ${quote(condition)} -a ${quote(child.name)} -d ${quote(child.description)}`,
       );
+    }
+    for (const value of node.values) {
+      lines.push(`complete -c aitrack -f -n ${quote(condition)} -a ${quote(value)}`);
     }
     for (const flag of node.flags) {
       if (!flag.startsWith('--')) continue;
