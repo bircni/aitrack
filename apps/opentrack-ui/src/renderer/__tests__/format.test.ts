@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatWhen, meterTone } from '../../shared/pace.js';
 import type { PeriodUsage, ProviderUsage, QuotaError, QuotaWindow } from '../../shared/types.js';
 import { EMPTY_PERIOD } from '../../shared/types.js';
+import { DEFAULT_SETTINGS } from '../../sidecar/settings.js';
 import {
   buildHistory,
   combinedDaily,
@@ -15,6 +16,8 @@ import {
   formatDuration,
   formatLimitValue,
   formatReset,
+  toggledDisplay,
+  toggledResetDisplay,
   formatTokens,
   formatUpdated,
   freshnessLine,
@@ -207,6 +210,10 @@ describe('limits', () => {
     );
     expect(formatReset(new Date(later).toISOString(), NOW, 'relative')).toBe('Resets in 2h');
     expect(formatReset(new Date(NOW + 30_000).toISOString(), NOW, 'relative')).toBe('Resets soon');
+    expect(toggledResetDisplay({ ...DEFAULT_SETTINGS, resetDisplay: 'relative' })).toEqual({
+      resetDisplay: 'absolute',
+    });
+    expect(toggledDisplay({ ...DEFAULT_SETTINGS, display: 'left' })).toEqual({ display: 'used' });
     expect(formatReset(new Date(NOW).toISOString(), NOW, 'relative')).toBe(
       'Reset passed, waiting for new data',
     );

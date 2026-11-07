@@ -206,6 +206,7 @@ describe('desktop commands and settings', () => {
     expect(mocks.api.saveSettings).toHaveBeenLastCalledWith(
       expect.objectContaining({ compact: false }),
     );
+    expect(mocks.api.resizeHeight).toHaveBeenCalledTimes(2);
     click('[aria-label="Minimize"]');
     click('[aria-label="Close to tray"]');
     expect(mocks.api.minimizeWindow).toHaveBeenCalledTimes(1);
@@ -242,7 +243,7 @@ describe('desktop commands and settings', () => {
     const onState = listener('onState');
     onState({ ...state, refreshing: true });
     const onSettings = listener('onSettings');
-    onSettings({ ...DEFAULT_SETTINGS });
+    onSettings(DEFAULT_SETTINGS);
     await settle();
     expect(target.textContent).not.toContain('Could not load dashboard');
     expect(target.textContent).not.toContain('Loading');
@@ -937,7 +938,7 @@ it('renders remaining quotas with and without reset metadata and delivers toggle
   expect(target.querySelector('.spark')).toBeNull();
 });
 
-function sessionProvider(key: 'claude' | 'codex', label: string, usedPercent: number) {
+function sessionProvider(key: 'claude_code' | 'codex', label: string, usedPercent: number) {
   return {
     key,
     label,
@@ -968,100 +969,79 @@ function sessionProvider(key: 'claude' | 'codex', label: string, usedPercent: nu
   };
 }
 
-it('compact view shows the session limit of each provider chosen in settings, in full-view order', async () => {
-  const patch = vi.fn<(value: Partial<Settings>) => void>();
-  const appState = {
-    ...state,
-    providers: [sessionProvider('claude', 'Claude', 20), sessionProvider('codex', 'Codex', 70)],
+function compactSettings(...keys: string[]): Settings {
+  return {
+    ...DEFAULT_SETTINGS,
+    providers: DEFAULT_SETTINGS.providers.map((entry) => ({
+      ...entry,
+      compact: keys.includes(entry.key),
+    })),
   };
+}
+
+function mountCompact(
+  appState: AppState,
+  settings: Settings,
+  onPatch = vi.fn(),
+  serviceDown = false,
+): void {
   mounted.push(
     mount(CompactLimit, {
       target,
-      props: {
-        appState,
-        settings: { ...DEFAULT_SETTINGS, compactProviders: ['codex', 'claude'] },
-        now: Date.now(),
-        onPatch: patch,
-      },
+      props: { appState, settings, now: Date.now(), serviceDown, onPatch },
     }),
   );
-  await settle();
-  expect(target.textContent).toContain('Claude');
-  expect(target.textContent).toContain('Codex');
-  expect(target.textContent).not.toContain('Weekly');
-  expect(target.querySelectorAll('[role="meter"]')).toHaveLength(2);
-  const headers = [...target.querySelectorAll('.c-name')].map((node) => node.textContent);
-  expect(headers).toEqual(['Claude', 'Codex']);
-});
+}
 
-it('compact view asks for a choice when no provider is picked', async () => {
-  mounted.push(
-    mount(CompactLimit, {
-      target,
-      props: {
-        appState: { ...state, providers: [sessionProvider('claude', 'Claude', 20)] },
-        settings: { ...DEFAULT_SETTINGS, compactProviders: [] },
-        now: Date.now(),
-        onPatch: vi.fn(),
-      },
-    }),
-  );
-  await settle();
-  expect(target.textContent).toContain('Choose providers for the compact view in Settings.');
-  expect(target.querySelector('[role="meter"]')).toBeNull();
-});
-
-it('compact view shows a missing session limit, the plan, toggles and a note for providers not loaded', async () => {
+it('compact view shows the session limit of each chosen provider in full-view order, with plan and toggles', async () => {
   const patch = vi.fn<(value: Partial<Settings>) => void>();
-  const bare = sessionProvider('claude', 'Claude', 0);
-  const noSession = { ...bare, quota: { ...bare.quota, plan: 'Max', windows: [] } };
-  mounted.push(
-    mount(CompactLimit, {
-      target,
-      props: {
-        appState: { ...state, providers: [noSession] },
-        settings: { ...DEFAULT_SETTINGS, compactProviders: ['claude'] },
-        now: Date.now(),
-        onPatch: patch,
-      },
-    }),
-  );
+  const claude = sessionProvider('claude_code', 'Claude Code', 20);
+  const noSession = { ...claude, quota: { ...claude.quota, plan: 'Max', windows: [] } };
+  const codex = sessionProvider('codex', 'Codex', 70);
+  const cursor = { ...codex, key: 'cursor' as const, label: 'Cursor', quota: undefined };
+  const providers = [noSession, codex, cursor];
+  mountCompact({ ...state, providers }, compactSettings('cursor', 'codex', 'claude_code'), patch);
   await settle();
+  expect(target.textContent).not.toContain('Weekly');
+  expect(target.querySelectorAll('[role="meter"]')).toHaveLength(1);
+  const headers = [...target.querySelectorAll('.p-name')].map((node) => node.textContent);
+  expect(headers).toEqual(['Claude Code', 'Codex', 'Cursor']);
   expect(target.textContent).toContain('No session limit yet.');
   expect(target.textContent).toContain('Max');
-  const first = mounted.pop();
-  if (first) await unmount(first);
-  mounted.push(
-    mount(CompactLimit, {
-      target,
-      props: {
-        appState: { ...state, providers: [sessionProvider('claude', 'Claude', 20)] },
-        settings: { ...DEFAULT_SETTINGS, compactProviders: ['codex'] },
-        now: Date.now(),
-        onPatch: patch,
-      },
-    }),
-  );
-  await settle();
-  expect(target.textContent).toContain('turned off or not loaded yet');
-  const second = mounted.pop();
-  if (second) await unmount(second);
-  mounted.push(
-    mount(CompactLimit, {
-      target,
-      props: {
-        appState: { ...state, providers: [sessionProvider('claude', 'Claude', 20)] },
-        settings: { ...DEFAULT_SETTINGS, compactProviders: ['claude'] },
-        now: Date.now(),
-        onPatch: patch,
-      },
-    }),
-  );
-  await settle();
   click('[title="Show used or left"]');
   click('[title="Show time or countdown"]');
   expect(patch).toHaveBeenCalledWith({ display: 'left' });
   expect(patch).toHaveBeenCalledWith({ resetDisplay: 'relative' });
+});
+
+it.each([
+  ['the service is down', true, undefined],
+  ['the provider failed', false, { kind: 'network' as const, message: 'offline' }],
+])('compact view marks limits cached while %s', async (_, serviceDown, quotaError) => {
+  const provider = { ...sessionProvider('claude_code', 'Claude Code', 20), quotaError };
+  mountCompact(
+    { ...state, providers: [provider] },
+    compactSettings('claude_code'),
+    vi.fn(),
+    serviceDown,
+  );
+  await settle();
+  expect(target.querySelector('[role="meter"]')?.getAttribute('aria-valuetext')).toContain(
+    'cached',
+  );
+});
+
+it.each([
+  [[], 'Choose providers for the compact view in Settings.'],
+  [['codex'], 'turned off or not loaded yet'],
+])('compact view explains an empty view for chosen providers %j', async (keys, message) => {
+  mountCompact(
+    { ...state, providers: [sessionProvider('claude_code', 'Claude Code', 20)] },
+    compactSettings(...keys),
+  );
+  await settle();
+  expect(target.textContent).toContain(message);
+  expect(target.querySelector('[role="meter"]')).toBeNull();
 });
 
 it('falls back to automatic tray selection when its provider is disabled and handles unavailable setting errors', async () => {
@@ -1298,22 +1278,18 @@ it('offers a found update and retries a failed install', async () => {
   expect(target.textContent).not.toContain('3.1.0');
 });
 
-it('fits the window to the unrounded height of the content and footer', async () => {
+it('reports the unrounded height of the title bar, content and footer', async () => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
     return {
-      height: this.classList.contains('foot')
-        ? 41.5
-        : this.classList.contains('titlebar')
-          ? 0
-          : 600.25,
+      height: ({ foot: 41.5, titlebar: 30 } as Record<string, number>)[this.className] ?? 600.25,
     } as DOMRect;
   });
   mounted.push(mount(App, { target }));
   await settle();
   reportResize?.();
-  expect(mocks.api.fitHeight).toHaveBeenLastCalledWith(641.75);
+  expect(mocks.api.fitHeight).toHaveBeenLastCalledWith(671.75);
 });
 
 it('shows the version and checks for and installs updates from settings', async () => {

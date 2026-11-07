@@ -13,6 +13,8 @@
     slideDuration,
     spendLabel,
     spendReading,
+    toggledDisplay,
+    toggledResetDisplay,
   } from './format.js';
   import Icon from './Icon.svelte';
   import LimitMeter from './LimitMeter.svelte';
@@ -94,9 +96,8 @@
       {settings}
       {now}
       stale={serviceDown || provider.quotaError !== undefined}
-      onToggleUsage={() => onPatch({ display: settings.display === 'used' ? 'left' : 'used' })}
-      onToggleReset={() =>
-        onPatch({ resetDisplay: settings.resetDisplay === 'relative' ? 'absolute' : 'relative' })}
+      onToggleUsage={() => onPatch(toggledDisplay(settings))}
+      onToggleReset={() => onPatch(toggledResetDisplay(settings))}
     />
   {/each}
 

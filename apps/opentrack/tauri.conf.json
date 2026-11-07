@@ -15,6 +15,8 @@
         "title": "opentrack",
         "width": 320,
         "height": 560,
+        "minWidth": 240,
+        "minHeight": 140,
         "resizable": true,
         "decorations": false,
         "visible": false,

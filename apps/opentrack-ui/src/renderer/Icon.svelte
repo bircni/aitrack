@@ -8,8 +8,6 @@
     | 'close'
     | 'compact'
     | 'minimize'
-    | 'pin'
-    | 'pin-filled'
     | 'refresh'
     | 'sliders'
     | 'sync';
@@ -63,13 +61,6 @@
   {:else if name === 'compact'}
     <rect x="4" y="4" width="16" height="16" rx="2" />
     <path d="M4 12h16" />
-  {:else if name === 'pin'}
-    <path d="M9 3h6v4.2c0 1.7.7 3.1 2 4.3V13H7v-1.5c1.3-1.2 2-2.6 2-4.3V3Z" /><path d="M12 13v8" />
-  {:else if name === 'pin-filled'}
-    <path
-      d="M9 3h6v4.2c0 1.7.7 3.1 2 4.3V13H7v-1.5c1.3-1.2 2-2.6 2-4.3V3Z"
-      fill="currentColor"
-    /><path d="M12 13v8" />
   {/if}
 </svg>
 

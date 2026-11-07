@@ -18,7 +18,13 @@ describe('settings', () => {
     const settings = normalizeSettings({
       theme: 'neon',
       display: 'left',
-      providers: [{ key: 'cursor', enabled: false }, { key: 'cursor' }, { key: 'bogus' }, null],
+      providers: [
+        { key: 'cursor', enabled: false, compact: 'no' },
+        { key: 'codex', compact: false },
+        { key: 'cursor' },
+        { key: 'bogus' },
+        null,
+      ],
       globalShortcut: '  Alt+U ',
       notifications: 'yes',
       trayStyle: 'square',
@@ -31,9 +37,9 @@ describe('settings', () => {
     expect(settings.trayStyle).toBe('icon');
     expect(settings.trayColored).toBe(true);
     expect(settings.providers).toEqual([
-      { key: 'cursor', label: 'Cursor', enabled: false },
-      { key: 'claude_code', label: 'Claude Code', enabled: true },
-      { key: 'codex', label: 'Codex', enabled: true },
+      { key: 'cursor', label: 'Cursor', enabled: false, compact: true },
+      { key: 'codex', label: 'Codex', enabled: true, compact: false },
+      { key: 'claude_code', label: 'Claude Code', enabled: true, compact: true },
     ]);
   });
 

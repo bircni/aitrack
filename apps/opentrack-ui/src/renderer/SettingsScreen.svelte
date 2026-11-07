@@ -81,15 +81,10 @@
     return errors[key] === undefined ? undefined : `${key}-error`;
   }
 
-  function toggleProvider(key: QuotaProviderKey, enabled: boolean): void {
+  function setProvider(key: QuotaProviderKey, change: { enabled: boolean } | { compact: boolean }): void {
     onPatch({
-      providers: settings.providers.map((entry) => (entry.key === key ? { ...entry, enabled } : entry)),
+      providers: settings.providers.map((entry) => (entry.key === key ? { ...entry, ...change } : entry)),
     });
-  }
-
-  function toggleCompactProvider(key: QuotaProviderKey, inCompact: boolean): void {
-    const others = settings.compactProviders.filter((entry) => entry !== key);
-    onPatch({ compactProviders: inCompact ? [...others, key] : others });
   }
 </script>
 
@@ -166,15 +161,15 @@
           role="switch"
           aria-label="Track {provider.label}"
           checked={provider.enabled}
-          onchange={(event) => toggleProvider(provider.key, event.currentTarget.checked)}
+          onchange={(event) => setProvider(provider.key, { enabled: event.currentTarget.checked })}
         />
         <input
           class="switch"
           type="checkbox"
           role="switch"
           aria-label="Show {provider.label} in compact view"
-          checked={settings.compactProviders.includes(provider.key)}
-          onchange={(event) => toggleCompactProvider(provider.key, event.currentTarget.checked)}
+          checked={provider.compact}
+          onchange={(event) => setProvider(provider.key, { compact: event.currentTarget.checked })}
         />
       </span>
     </div>

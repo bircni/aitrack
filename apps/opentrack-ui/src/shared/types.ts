@@ -108,16 +108,16 @@ export interface Settings {
   display: 'used' | 'left';
   resetDisplay: 'relative' | 'absolute';
   /** `label` is filled in by the sidecar from the provider registry; what is saved is ignored. */
-  providers: Array<{ key: ProviderKey; label: string; enabled: boolean }>;
+  /** `enabled` shows a provider in the full view, `compact` in the compact view. */
+  providers: Array<{ key: ProviderKey; label: string; enabled: boolean; compact: boolean }>;
   launchAtLogin: boolean;
   /** Tauri global-shortcut accelerator (e.g. CommandOrControl+Shift+O), empty for none. */
   globalShortcut: string;
   notifications: boolean;
   /** Keeps the window above other windows. */
   alwaysOnTop: boolean;
-  /** Shows only the session limits of `compactProviders`. */
+  /** Shows only the session limits of the providers marked `compact`. */
   compact: boolean;
-  compactProviders: QuotaProviderKey[];
   /** `git pull` the aitrack data repo so other machines' usage stays current. */
   pullSyncedData: boolean;
   /** The provider the tray icon follows; `auto` takes the most used one. */

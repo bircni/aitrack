@@ -55,32 +55,38 @@
     };
   });
 
+  const parts = $derived([titlebar, content, footer].filter((part) => part instanceof HTMLElement));
+
   // Unrounded, so a fractional pixel never leaves the content a pixel short of fitting.
   function windowHeight(): number {
-    return [titlebar, content, footer]
-      .filter((part) => part instanceof HTMLElement)
-      .reduce((sum, part) => sum + part.getBoundingClientRect().height, 0);
+    return parts.reduce((sum, part) => sum + part.getBoundingClientRect().height, 0);
   }
 
-  // Compact view changes the height on purpose; the window keeps its place and width.
-  async function toggleCompact(): Promise<void> {
-    patch({ compact: !settings?.compact });
-    await tick();
-    api.resizeHeight(windowHeight());
-  }
-
-  function report(): void {
-    api.fitHeight(windowHeight());
-  }
+  let reportedHeight = 0;
 
   $effect(() => {
-    const parts = [titlebar, content, footer].filter((part) => part instanceof HTMLElement);
     if (parts.length === 0) return;
-    const observer = new ResizeObserver(report);
+    const observer = new ResizeObserver(() => {
+      const height = windowHeight();
+      if (height === reportedHeight) return; // Width changes while the user resizes.
+      reportedHeight = height;
+      api.fitHeight(height);
+    });
     for (const part of parts) observer.observe(part);
     return () => {
       observer.disconnect();
     };
+  });
+
+  let shownCompact: boolean | undefined;
+
+  // Switching views changes the height on purpose; the first settings only set the mode.
+  $effect(() => {
+    const compact = settings?.compact;
+    if (compact === undefined || compact === shownCompact) return;
+    const first = shownCompact === undefined;
+    shownCompact = compact;
+    if (!first) void tick().then(() => api.resizeHeight(windowHeight()));
   });
 
   let announcement = $state('');
@@ -295,7 +301,7 @@
         aria-label="Compact view"
         aria-pressed={settings.compact}
         title={settings.compact ? 'Full view' : 'Compact view'}
-        onclick={() => void toggleCompact()}><Icon name="compact" size={14} /></button
+        onclick={() => patch({ compact: !settings?.compact })}><Icon name="compact" size={14} /></button
       >
     {/if}
     <button
@@ -379,7 +385,7 @@
               onBack={() => (screen = 'dashboard')}
             />
           {:else if settings.compact}
-            <CompactLimit {appState} {settings} {now} onPatch={patch} />
+            <CompactLimit {appState} {settings} {now} {serviceDown} onPatch={patch} />
           {:else}
             <Dashboard
               {appState}
@@ -447,17 +453,3 @@
   {/if}
 </main>
 
-<style>
-  .titlebar {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 6px 6px 16px;
-    border-bottom: 1px solid var(--rule);
-  }
-  .title {
-    flex: 1;
-    font-weight: 600;
-    color: var(--ink);
-  }
-</style>

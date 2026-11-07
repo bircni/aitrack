@@ -50,7 +50,7 @@ fn show(app: &AppHandle, screen: &'static str) {
     }
 }
 
-/// Settings that live outside the webview: theme, window mode, autostart, shortcut.
+/// Settings that live outside the webview: theme, always on top, autostart, shortcut.
 fn apply_settings(app: &AppHandle, settings: &Value) {
     let text = |key: &str| settings.get(key).and_then(Value::as_str).unwrap_or_default();
     if let Some(window) = main_window(app) {
@@ -302,7 +302,6 @@ fn main() {
             let config =
                 app.config().app.windows.iter().find(|window| window.label == MAIN_WINDOW).ok_or("no main window")?;
             let window = WebviewWindowBuilder::from_config(&handle, config)?.build()?;
-            window.set_min_size(Some(tauri::LogicalSize::new(240.0, 140.0)))?;
             let closing = window.clone();
             // Quitting is the tray's job; Alt+F4, the taskbar's Close and the title bar's close only dismiss the window.
             window.on_window_event(move |event| {

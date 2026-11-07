@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 use crate::position::{corner_tray, popup_bounds, Rect};
 
@@ -60,19 +60,18 @@ impl Panel {
         self.state.lock().unwrap().deferred_show.take()
     }
 
-    /// Remembers the content height; the window is only resized by `resize`, so the user's own size stays.
-    pub fn measure(&self, height: f64) {
-        if height.is_finite() && height > 0.0 {
-            self.state.lock().unwrap().content_height = height.ceil();
-        }
+    /// Remembers the content height for the next placement; a shown window keeps the user's size.
+    pub fn measure(&self, height: f64) -> Option<f64> {
+        let height = (height.is_finite() && height > 0.0).then(|| height.ceil())?;
+        self.state.lock().unwrap().content_height = height;
+        Some(height)
     }
 
-    /// Sets the height for the content that is now shown, keeping the window where the user put it.
+    /// Fits the height to the content now shown, keeping the window's place and the user's width.
     pub fn resize(&self, window: &WebviewWindow, height: f64) {
-        if !height.is_finite() || height <= 0.0 {
-            return;
-        }
-        let _ = window.set_size(LogicalSize::new(WIDTH, height.ceil()));
+        let Some(height) = self.measure(height) else { return };
+        let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) else { return };
+        let _ = window.set_size(PhysicalSize::new(size.width, (height * scale).round() as u32));
     }
 
     fn place(&self, window: &WebviewWindow) {

@@ -63,7 +63,7 @@ pub fn open_dashboard(app: AppHandle, provider: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn fit_height(panel: State<'_, Panel>, height: f64) {
-    panel.measure(height);
+    let _ = panel.measure(height);
 }
 
 #[tauri::command]

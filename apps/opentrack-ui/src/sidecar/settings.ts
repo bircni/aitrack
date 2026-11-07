@@ -2,12 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { writeFileAtomic } from 'aitrack-lib/atomicWrite';
 import { isRecord } from 'aitrack-lib/data/guards';
-import {
-  isProviderKey,
-  type ProviderKey,
-  providerKeys,
-  type QuotaProviderKey,
-} from 'aitrack-lib/providers/descriptors';
+import { isProviderKey, type ProviderKey, providerKeys } from 'aitrack-lib/providers/descriptors';
 import { providerLabel } from 'aitrack-lib/providers/registry';
 import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 
@@ -17,13 +12,17 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   display: 'used',
   resetDisplay: 'absolute',
-  providers: providerKeys().map((key) => ({ key, label: providerLabel(key), enabled: true })),
+  providers: providerKeys().map((key) => ({
+    key,
+    label: providerLabel(key),
+    enabled: true,
+    compact: true,
+  })),
   launchAtLogin: false,
   globalShortcut: '',
   notifications: true,
   alwaysOnTop: false,
   compact: false,
-  compactProviders: [...QUOTA_PROVIDERS],
   pullSyncedData: true,
   trayProvider: 'auto',
   trayWindow: 'highest',
@@ -49,13 +48,20 @@ export function normalizeSettings(input: unknown): Settings {
   const providers: Settings['providers'] = [];
   for (const entry of Array.isArray(raw.providers) ? raw.providers : []) {
     if (!isRecord(entry)) continue;
-    const { key, enabled } = entry;
+    const { key, enabled, compact } = entry;
     if (!isProviderKey(key) || seen.has(key)) continue;
     seen.add(key);
-    providers.push({ key, label: providerLabel(key), enabled: bool(enabled, true) });
+    providers.push({
+      key,
+      label: providerLabel(key),
+      enabled: bool(enabled, true),
+      compact: bool(compact, true),
+    });
   }
   for (const key of providerKeys()) {
-    if (!seen.has(key)) providers.push({ key, label: providerLabel(key), enabled: true });
+    if (!seen.has(key)) {
+      providers.push({ key, label: providerLabel(key), enabled: true, compact: true });
+    }
   }
   const d = DEFAULT_SETTINGS;
   return {
@@ -68,11 +74,6 @@ export function normalizeSettings(input: unknown): Settings {
     notifications: bool(raw.notifications, d.notifications),
     alwaysOnTop: bool(raw.alwaysOnTop, d.alwaysOnTop),
     compact: bool(raw.compact, d.compact),
-    compactProviders: Array.isArray(raw.compactProviders)
-      ? [...new Set(raw.compactProviders)].filter((key): key is QuotaProviderKey =>
-          QUOTA_PROVIDERS.includes(key as QuotaProviderKey),
-        )
-      : [...d.compactProviders],
     pullSyncedData: bool(raw.pullSyncedData, d.pullSyncedData),
     trayProvider: pick(raw.trayProvider, ['auto', ...QUOTA_PROVIDERS], d.trayProvider),
     trayWindow: pick(raw.trayWindow, ['highest', 'session', 'weekly'], d.trayWindow),
