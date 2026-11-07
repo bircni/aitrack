@@ -1,11 +1,10 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { environmentValue } from '../env.js';
 import { claudeHomeDirs } from '../readers/paths.js';
 import {
-  assertNotExpired,
   instantValue,
   numberValue,
   QuotaFailure,
@@ -18,11 +17,18 @@ import { clampPercent, SESSION_SECONDS, WEEK_SECONDS } from './pacing.js';
 import type { QuotaSnapshot, QuotaValue, QuotaWindow } from './types.js';
 
 const CLAUDE_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
+/** Claude Code's public OAuth client; the refresh grant needs no secret. */
+const CLAUDE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+const CLAUDE_TOKEN_URLS = [
+  'https://platform.claude.com/v1/oauth/token',
+  'https://console.anthropic.com/v1/oauth/token',
+];
 const KEYCHAIN_SERVICE = 'Claude Code-credentials';
 const KEYCHAIN_TIMEOUT_MS = 5000; // An access prompt nobody answers would otherwise hang the fetch.
 
 export interface ClaudeCredentials {
   accessToken: string;
+  refreshToken?: string;
   expiresAt?: number;
   scopes?: string[];
   subscriptionType?: string;
@@ -45,6 +51,7 @@ export function parseClaudeCredentials(text: string): ClaudeCredentials | undefi
   if (!oauth || accessToken === undefined) return undefined;
   return {
     accessToken,
+    refreshToken: stringValue(oauth.refreshToken),
     expiresAt: numberValue(oauth.expiresAt),
     scopes: Array.isArray(oauth.scopes)
       ? oauth.scopes.filter((scope): scope is string => typeof scope === 'string')
@@ -67,17 +74,86 @@ function readKeychainCredentials(): Promise<string | undefined> {
   });
 }
 
+interface StoredCredentials {
+  credentials: ClaudeCredentials;
+  /** The file they came from; absent for the Keychain, which is never written back. */
+  path?: string;
+}
+
 /** The file Claude Code writes, then (macOS) the Keychain item it prefers there. */
-async function readClaudeCredentials(): Promise<ClaudeCredentials | undefined> {
+async function readClaudeCredentials(): Promise<StoredCredentials | undefined> {
   for (const path of claudeCredentialsPaths()) {
     const text = await readFile(path, 'utf8').catch(() => undefined);
     const fromFile = text === undefined ? undefined : parseClaudeCredentials(text);
-    if (fromFile) return fromFile;
+    if (fromFile) return { credentials: fromFile, path };
   }
   // The Keychain item is the default account's, not the one CLAUDE_CONFIG_DIR points at.
   if (process.platform !== 'darwin' || environmentValue('CLAUDE_CONFIG_DIR')) return undefined;
   const keychain = await readKeychainCredentials();
-  return keychain === undefined ? undefined : parseClaudeCredentials(keychain);
+  const fromKeychain = keychain === undefined ? undefined : parseClaudeCredentials(keychain);
+  return fromKeychain && { credentials: fromKeychain };
+}
+
+/** Saves a renewed login into the file it was read from, leaving every other field as it was. */
+async function saveRefreshedCredentials(path: string, renewed: ClaudeCredentials): Promise<void> {
+  try {
+    const document: unknown = JSON.parse(await readFile(path, 'utf8'));
+    const root = record(document);
+    const oauth = record(root?.claudeAiOauth);
+    if (!root || !oauth) return;
+    oauth.accessToken = renewed.accessToken;
+    if (renewed.refreshToken !== undefined) oauth.refreshToken = renewed.refreshToken;
+    if (renewed.expiresAt !== undefined) oauth.expiresAt = renewed.expiresAt;
+    const temporary = `${path}.${String(process.pid)}.tmp`;
+    await writeFile(temporary, JSON.stringify(root), { encoding: 'utf8', mode: 0o600 });
+    await rename(temporary, path);
+  } catch {
+    // The renewed token still serves this fetch; the next one renews again.
+  }
+}
+
+/** Trades the saved refresh token for a new access token, as Claude Code itself does. */
+export async function refreshClaudeCredentials(
+  credentials: ClaudeCredentials,
+  now: Date,
+  path?: string,
+): Promise<ClaudeCredentials> {
+  const { refreshToken } = credentials;
+  if (refreshToken === undefined) {
+    throw new QuotaFailure('expired', 'Claude Code login expired. Open Claude Code to refresh it.');
+  }
+  let failure: QuotaFailure | undefined;
+  for (const url of CLAUDE_TOKEN_URLS) {
+    try {
+      const { body } = await requestJson('Claude sign-in', url, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+          client_id: CLAUDE_CLIENT_ID,
+        }),
+      });
+      const accessToken = stringValue(body.access_token);
+      if (accessToken === undefined) continue;
+      const lifetime = numberValue(body.expires_in);
+      const renewed: ClaudeCredentials = {
+        ...credentials,
+        accessToken,
+        refreshToken: stringValue(body.refresh_token) ?? refreshToken,
+        expiresAt: lifetime === undefined ? undefined : now.getTime() + lifetime * 1000,
+      };
+      if (path !== undefined) await saveRefreshedCredentials(path, renewed);
+      return renewed;
+    } catch (error) {
+      if (error instanceof QuotaFailure) failure = error;
+    }
+  }
+  if (failure?.kind === 'rateLimited') throw failure;
+  throw new QuotaFailure(
+    'expired',
+    'Claude Code login expired and could not be renewed. Open Claude Code to refresh it.',
+  );
 }
 
 /** "pro" + "default_claude_max_5x" → "Pro 5x"; Anthropic now sells Max 5x as Max and Max 20x as Ultra. */
@@ -168,24 +244,23 @@ export function mapClaudeUsage(
 }
 
 export async function fetchClaudeQuota(now = new Date()): Promise<QuotaSnapshot> {
-  const credentials = await readClaudeCredentials();
-  if (!credentials) {
+  const stored = await readClaudeCredentials();
+  if (!stored) {
     throw new QuotaFailure(
       'noCredentials',
       'No Claude Code login found. Run `claude` and sign in.',
     );
   }
+  let { credentials } = stored;
   if (credentials.scopes && !credentials.scopes.includes('user:profile')) {
     throw new QuotaFailure(
       'noCredentials',
       'This Claude Code login cannot read usage limits (missing user:profile scope).',
     );
   }
-  assertNotExpired(
-    credentials.expiresAt,
-    now,
-    'Claude Code login expired. Open Claude Code to refresh it.',
-  );
+  if (credentials.expiresAt !== undefined && credentials.expiresAt <= now.getTime()) {
+    credentials = await refreshClaudeCredentials(credentials, now, stored.path);
+  }
   const { body } = await requestJson('Claude', CLAUDE_USAGE_URL, {
     headers: {
       Accept: 'application/json',

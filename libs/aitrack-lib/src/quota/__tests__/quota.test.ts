@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -198,6 +198,56 @@ describe('claude', () => {
     writeFileSync(path, JSON.stringify({ claudeAiOauth: { accessToken: 't', expiresAt: 1 } }));
     expect(await fetchQuota('claude_code', NOW)).toMatchObject({ error: { kind: 'expired' } });
     expect(requests).toEqual([]);
+  });
+
+  it('renews an expired login with its refresh token and saves it', async () => {
+    process.env.CLAUDE_CONFIG_DIR = tmpDir;
+    const path = join(tmpDir, '.credentials.json');
+    writeFileSync(
+      path,
+      JSON.stringify({
+        other: 'kept',
+        claudeAiOauth: { accessToken: 'old', refreshToken: 'r1', expiresAt: 1, subscriptionType: 'pro' },
+      }),
+    );
+    globalThis.fetch = (input, init) => {
+      requests.push({ url: urlOf(input), init });
+      const body = urlOf(input).includes('/oauth/token')
+        ? { access_token: 'new', refresh_token: 'r2', expires_in: 3600 }
+        : { five_hour: { utilization: 40 } };
+      return Promise.resolve(new Response(JSON.stringify(body)));
+    };
+    expect(await fetchQuota('claude_code', NOW)).toMatchObject({ ok: true });
+    const usage = requests.find(({ url }) => url.endsWith('/api/oauth/usage'));
+    const usageHeaders = (usage?.init?.headers ?? {}) as Record<string, string>;
+    expect(usageHeaders.Authorization).toBe('Bearer new');
+    const saved = JSON.parse(readFileSync(path, 'utf8')) as {
+      other: string;
+      claudeAiOauth: Record<string, unknown>;
+    };
+    expect(saved.other).toBe('kept');
+    expect(saved.claudeAiOauth).toMatchObject({
+      accessToken: 'new',
+      refreshToken: 'r2',
+      expiresAt: NOW.getTime() + 3_600_000,
+      subscriptionType: 'pro',
+    });
+  });
+
+  it('reports an expired login when it cannot be renewed', async () => {
+    process.env.CLAUDE_CONFIG_DIR = tmpDir;
+    writeFileSync(
+      join(tmpDir, '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'old', refreshToken: 'r1', expiresAt: 1 } }),
+    );
+    respondWith(400, {});
+    expect(await fetchQuota('claude_code', NOW)).toMatchObject({ error: { kind: 'expired' } });
+    respondWith(200, {});
+    expect(await fetchQuota('claude_code', NOW)).toMatchObject({ error: { kind: 'expired' } });
+    respondWith(429, {}, { 'retry-after': '60' });
+    expect(await fetchQuota('claude_code', NOW)).toMatchObject({
+      error: { kind: 'rateLimited', retryAfterSeconds: 60 },
+    });
   });
 
   it('types HTTP failures', async () => {
