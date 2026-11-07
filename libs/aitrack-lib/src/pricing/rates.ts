@@ -30,7 +30,6 @@ export function tokenRateBuckets(counts: TokenCounts): TokenRateBuckets {
   };
 }
 
-/** Weighted sum used by every list-price estimator. */
 export function costFromRates(rates: FullModelRates, tokens: TokenRateBuckets): number {
   return (
     (tokens.raw * rates.inputPerMillion +

@@ -1,15 +1,19 @@
-import { tryLocalDateString } from '../data/dayMap.js';
-import { stripModelAliasSuffix } from '../data/modelId.js';
 import type { TokenCounts } from '../data/types.js';
-import { type ClaudeMessageUsage, claudeUsageCounts } from '../pricing/claudeUsage.js';
+import {
+  claudeBilledModel,
+  type ClaudeMessageUsage,
+  claudeUsageCounts,
+} from '../pricing/claudeUsage.js';
 import { type JsonlFilter, streamJsonlObjects } from './jsonl.js';
+import { isOptionalTokenCount, logCwd, logDay, logModel } from './logValues.js';
 
+/** Cast from the log: `logValues` checks a field before it is trusted. */
 interface ClaudeEntry {
   type: string;
-  timestamp?: string;
+  timestamp?: unknown;
   cwd?: string;
   requestId?: string;
-  message?: { id?: string; model?: string; usage?: ClaudeMessageUsage };
+  message?: { id?: string; model?: unknown; usage?: ClaudeMessageUsage };
 }
 
 /** One counted message, before pricing and project attribution. */
@@ -22,7 +26,19 @@ export interface ScannedClaudeMessage {
 }
 
 function hasCwd(entry: { cwd?: unknown }): entry is { cwd: string } {
-  return typeof entry.cwd === 'string' && entry.cwd !== '';
+  return logCwd(entry.cwd) !== undefined;
+}
+
+function hasValidTokens(usage: ClaudeMessageUsage): boolean {
+  const writes = usage.cache_creation;
+  return [
+    usage.input_tokens,
+    usage.output_tokens,
+    usage.cache_read_input_tokens,
+    usage.cache_creation_input_tokens,
+    writes?.ephemeral_5m_input_tokens,
+    writes?.ephemeral_1h_input_tokens,
+  ].every((tokens) => isOptionalTokenCount(tokens));
 }
 
 /** Only lines with usage are counted; any other line can still move the session's cwd. */
@@ -50,17 +66,15 @@ export async function scanClaudeFile(filePath: string): Promise<ScannedClaudeMes
     if (hasCwd(entry)) cwd = entry.cwd;
     if (entry.type !== 'assistant') continue;
     const usage = entry.message?.usage;
-    if (!usage) continue;
+    if (!usage || !hasValidTokens(usage)) continue;
 
-    const ts = entry.timestamp;
-    if (!ts) continue;
-    const date = tryLocalDateString(ts);
+    const date = logDay(entry.timestamp);
     if (date === null) continue;
 
     const counts = claudeUsageCounts(usage);
     if (counts.inputTokens === 0 && counts.outputTokens === 0) continue;
 
-    const model = stripModelAliasSuffix(entry.message?.model ?? 'unknown');
+    const model = claudeBilledModel(logModel(entry.message?.model) ?? 'unknown', usage, counts);
     const where = cwd === undefined ? {} : { cwd };
 
     // No id to dedupe on: count the row. A known id keeps the fullest record

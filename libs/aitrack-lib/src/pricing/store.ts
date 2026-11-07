@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -111,25 +111,21 @@ function mergeRules<T>(local: T[], remote: T[], key: (rule: T) => string): T[] {
 export class PricingStore {
   private snapshot: ModelPricing;
   private readonly localSupplement = supplementFromTables();
-  private state: CacheState = { sources: {} };
+  private state: CacheState;
   private cachedFiles: Record<string, unknown> | undefined;
   private unverified = false;
   private refreshInFlight: Promise<PricingRefreshResult> | undefined;
 
   constructor(private readonly cacheDir = PRICING_CACHE_DIR) {
-    this.snapshot = pricingFromParts(structuredClone(this.localSupplement));
-    this.hydrateFromDiskSync();
+    this.state = readState(join(cacheDir, 'state.json'));
+    this.snapshot = this.loadSnapshot();
   }
 
-  private hydrateFromDiskSync(): void {
-    this.state = readState(join(this.cacheDir, 'state.json'));
+  private loadSnapshot(): ModelPricing {
     try {
-      const packPath = join(this.cacheDir, 'pack.json');
-      if (existsSync(packPath)) {
-        const files: unknown = JSON.parse(readFileSync(packPath, 'utf8'));
-        if (!isRecord(files)) throw new Error('invalid cached pricing pack');
-        this.cachedFiles = files;
-      }
+      const files: unknown = JSON.parse(readFileSync(join(this.cacheDir, 'pack.json'), 'utf8'));
+      if (!isRecord(files)) throw new Error('invalid cached pricing pack');
+      this.cachedFiles = files;
       const load = <T>(file: string, validate: (value: unknown) => value is T, hash?: string): T =>
         parseBody(this.cachedBody(file), validate, hash);
       const manifest = load('manifest.json', isPricingManifest);
@@ -144,21 +140,19 @@ export class PricingStore {
         isCompactCatalog,
         manifest.hashes?.modelsDev,
       );
+      const pricing = pricingFromParts(this.mergeSupplement(supplement), litellm, modelsDev);
       this.unverified = manifest.hashes === undefined;
-      this.snapshot = pricingFromParts(this.mergeSupplement(supplement), litellm, modelsDev);
+      return pricing;
     } catch {
-      this.snapshot = pricingFromParts(structuredClone(this.localSupplement));
-      this.unverified = false;
       // An incomplete cache must recover immediately, except during failure backoff.
       for (const source of Object.values(this.state.sources)) source.fetchedAt = undefined;
+      return pricingFromParts(structuredClone(this.localSupplement));
     }
   }
 
   private cachedBody(fileName: string): string {
-    // Read legacy component files only when no aggregate cache exists.
-    if (!this.cachedFiles) return readFileSync(join(this.cacheDir, fileName), 'utf8');
-    const body = this.cachedFiles[fileName];
-    if (typeof body !== 'string') throw new Error(`missing cached ${fileName}`);
+    const body = this.cachedFiles?.[fileName];
+    if (typeof body !== 'string') throw new TypeError(`missing cached ${fileName}`);
     return body;
   }
 
