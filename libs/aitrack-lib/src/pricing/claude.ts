@@ -1,5 +1,9 @@
 import { TOKEN_BREAKDOWN_FIELDS } from '../constants.js';
-import { CLAUDE_FAMILIES, canonicalizeClaudeModelId } from '../data/modelId.js';
+import {
+  CLAUDE_FAMILIES,
+  canonicalizeClaudeModelId,
+  stripClaudeTierSuffix,
+} from '../data/modelId.js';
 import type { TokenCounts } from '../data/types.js';
 import type { FallbackCollector } from './fallback.js';
 import {
@@ -37,6 +41,12 @@ export function findClaudePricing(
   const exact = lookupClaudePricing(model, usageDate);
   if (exact) return exact;
   const id = canonicalClaudeModelId(model);
+  const base = stripClaudeTierSuffix(id);
+  if (base !== id) {
+    // A tier with no published rate, like fast mode on a retired model: the base rate, flagged as a guess.
+    fallbacks?.record(id);
+    return findClaudePricing(base, usageDate, fallbacks);
+  }
   const pricing = currentModelPricing();
   const fromCatalog = pricing.lookupCatalogClaude(id);
   if (fromCatalog) return fromCatalog;

@@ -91,7 +91,7 @@ async function fixture(modify?: (supplement: PricingSupplement) => void) {
   vi.stubEnv('AITRACK_PRICING_URL', 'https://example.test/pricing');
   vi.stubEnv('AITRACK_NO_PRICING_REFRESH', '0');
   async function cache(fetchedAt = '2000-01-01T00:00:00.000Z') {
-    for (const [name, body] of Object.entries(files)) await writeFile(join(dir, name), body);
+    await writeFile(join(dir, 'pack.json'), JSON.stringify(files));
     await writeFile(
       join(dir, 'state.json'),
       JSON.stringify({
@@ -418,9 +418,9 @@ describe('PricingStore', () => {
   it.each(['manifest.json', 'supplement.json', 'litellm.json', 'models_dev.json'])(
     'refetches a corrupt %s on HTTP 304',
     async (name) => {
-      const { dir, cache, fetchMock } = await fixture();
+      const { dir, files, cache, fetchMock } = await fixture();
       await cache(new Date().toISOString());
-      await writeFile(join(dir, name), '{not-json');
+      await writeFile(join(dir, 'pack.json'), JSON.stringify({ ...files, [name]: '{not-json' }));
       const store = new PricingStore(dir);
       expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(3);
       await expect(store.refreshIfDue()).resolves.toMatchObject({ updated: true });
@@ -430,7 +430,7 @@ describe('PricingStore', () => {
   );
 
   it.each(['manifest.json', 'supplement.json', 'litellm.json', 'models_dev.json'])(
-    'never borrows legacy files for an aggregate missing %s and recovers on HTTP 304',
+    'recovers a pack missing %s on HTTP 304',
     async (name) => {
       const { dir, files, cache, fetchMock } = await fixture();
       await cache(new Date().toISOString());
@@ -448,14 +448,18 @@ describe('PricingStore', () => {
     },
   );
 
-  it('recovers a missing manifest after a conditional response', async () => {
-    const { dir, cache, fetchMock } = await fixture();
+  it('ignores component files without a pack and refetches after HTTP 304', async () => {
+    const { dir, files, cache, fetchMock } = await fixture();
     await cache();
-    await rm(join(dir, 'manifest.json'));
-    await expect(new PricingStore(dir).refreshIfDue(true)).resolves.toMatchObject({
-      updated: true,
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    await rm(join(dir, 'pack.json'));
+    await Promise.all(
+      Object.entries(files).map(([name, body]) => writeFile(join(dir, name), body)),
+    );
+    const store = new PricingStore(dir);
+    expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(3);
+    await expect(store.refreshIfDue()).resolves.toMatchObject({ updated: true });
+    expect(fetchMock).toHaveBeenCalledTimes(8);
+    expect(store.current().lookupClaude('claude-sonnet-4-6')?.inputPerMillion).toBe(9);
   });
 
   it.each([

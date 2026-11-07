@@ -1,10 +1,20 @@
 import { CACHE_READ_RATE_MULTIPLIER } from '../constants.js';
 import { canonicalModelId } from '../data/modelId.js';
 import type { FallbackCollector } from './fallback.js';
+import type { FullModelRates } from './rates.js';
 import { currentModelPricing } from './store.js';
 import type { CodexPricing } from './types.js';
 
 export type { CodexPricing };
+
+export function codexRates(pricing: CodexPricing): FullModelRates {
+  return {
+    inputPerMillion: pricing.inputPerMillion,
+    outputPerMillion: pricing.outputPerMillion,
+    cacheReadPerMillion: pricing.inputPerMillion * CACHE_READ_RATE_MULTIPLIER,
+    cacheWritePerMillion: pricing.inputPerMillion,
+  };
+}
 
 export function lookupCodexPricing(model: string, usageDate?: string): CodexPricing | undefined {
   const id = canonicalModelId(model);
@@ -39,6 +49,7 @@ export function estimateCodexCostUSD(
   if (!p) return undefined;
   const fresh = Math.max(0, inputTokens - cachedInputTokens);
   const cached = Math.min(cachedInputTokens, inputTokens);
+  // Not costFromRates: its term order moves the last float bit, and sync commits on any byte change.
   return (
     (fresh * p.inputPerMillion +
       cached * p.inputPerMillion * CACHE_READ_RATE_MULTIPLIER +

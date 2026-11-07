@@ -60,6 +60,7 @@ describe('pricing codecs', () => {
     });
     expect(findCatalogRates(catalog, 'shared', ['anthropic'])).toBeUndefined();
     expect(findCatalogRates(catalog, 'shared', ['openai'])?.key).toBe('openai/shared');
+    expect(findCatalogRates(catalog, 'shared')?.key).toBe('openai/shared');
   });
 
   it('parses LiteLLM long-context and provider-specific fast multipliers', () => {

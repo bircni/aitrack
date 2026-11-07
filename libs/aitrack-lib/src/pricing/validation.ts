@@ -1,4 +1,4 @@
-import { isFiniteNumber, isRecord } from '../data/guards.js';
+import { isFiniteNumber, isRecord, isTimestamp } from '../data/guards.js';
 import { CLAUDE_FAMILIES } from '../data/modelId.js';
 import type { CompactCatalog } from './codecs.js';
 import type { PricingManifest, PricingSupplement } from './packMeta.js';
@@ -19,10 +19,6 @@ function map(value: unknown, validate: (value: unknown) => boolean): boolean {
   return isRecord(value) && Object.values(value).every((entry) => validate(entry));
 }
 
-function stamp(value: unknown): value is string {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value));
-}
-
 function pattern(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
@@ -39,7 +35,8 @@ function overrides(value: unknown, fields: string[]): boolean {
     (entries) =>
       Array.isArray(entries) &&
       entries.every(
-        (entry: unknown) => isRecord(entry) && stamp(entry.before) && rates(entry.pricing, fields),
+        (entry: unknown) =>
+          isRecord(entry) && isTimestamp(entry.before) && rates(entry.pricing, fields),
       ),
   );
 }
@@ -49,7 +46,7 @@ const CLAUDE = [...IO, 'cacheReadPerMillion', 'cacheCreatePerMillion'];
 const CURSOR = [...IO, 'cacheReadPerMillion', 'cacheWritePerMillion'];
 
 export function isPricingSupplement(value: unknown): value is PricingSupplement {
-  if (!isRecord(value) || !stamp(value.updatedAt)) return false;
+  if (!isRecord(value) || !isTimestamp(value.updatedAt)) return false;
   const { claude, codex, cursor } = value;
   const fallback = isRecord(claude) ? claude.familyFallback : undefined;
   return (
@@ -80,7 +77,7 @@ export function isPricingSupplement(value: unknown): value is PricingSupplement 
 export function isCompactCatalog(value: unknown): value is CompactCatalog {
   return (
     isRecord(value) &&
-    stamp(value.retrievedAt) &&
+    isTimestamp(value.retrievedAt) &&
     isRecord(value.models) &&
     Object.keys(value.models).length > 0 &&
     map(
@@ -102,7 +99,7 @@ export function isPricingManifest(value: unknown): value is PricingManifest {
   if (
     !isRecord(value) ||
     value.schemaVersion !== 1 ||
-    !stamp(value.updatedAt) ||
+    !isTimestamp(value.updatedAt) ||
     !isRecord(value.files)
   )
     return false;

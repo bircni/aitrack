@@ -22,6 +22,14 @@ const MODEL_EFFORT_SUFFIX = new RegExp(
   'u',
 );
 
+/** Rate tiers a reader appends to a Claude id, per message: the stored key then reprices without its usage. */
+const CLAUDE_TIER_SUFFIX = /-(fast|long-context)$/u;
+
+/** The id without a rate tier; the id itself when it has none. */
+export function stripClaudeTierSuffix(model: string): string {
+  return model.replace(CLAUDE_TIER_SUFFIX, '');
+}
+
 /** Strip the `-latest` alias suffix. Applied by readers before storing a model. */
 export function stripModelAliasSuffix(model: string): string {
   return model.replace(/-latest$/u, '');
@@ -51,14 +59,13 @@ export function stripModelEffortSuffix(model: string): string {
  */
 export function modelEffortLabel(model: string): string | undefined {
   let rest = model.toLowerCase();
-  const fast = rest.endsWith('-fast');
-  if (fast) rest = rest.slice(0, -'-fast'.length);
-  rest = stripModelVersionSuffixes(rest);
+  const tier = CLAUDE_TIER_SUFFIX.exec(rest)?.[1];
+  rest = stripModelVersionSuffixes(stripClaudeTierSuffix(rest));
   const match = MODEL_EFFORT_SUFFIX.exec(rest);
   const effort = match
     ? match[0].replaceAll('-thinking', '').replace(/^-/u, '').replaceAll('-', ' ')
     : '';
-  const parts = [effort, fast ? 'fast' : ''].filter((part) => part !== '');
+  const parts = [effort, (tier ?? '').replace('-', ' ')].filter((part) => part !== '');
   return parts.length > 0 ? parts.join(' ') : undefined;
 }
 
@@ -73,10 +80,13 @@ export function canonicalModelId(model: string): string {
  * releases, and Cursor effort suffixes (`-thinking-high`).
  */
 export function canonicalizeClaudeModelId(model: string): string {
-  const id = canonicalModelId(model).replace(/(\d+)\.(\d+)/u, '$1-$2');
+  const lowered = model.toLowerCase();
+  const base = stripClaudeTierSuffix(lowered);
+  const tier = lowered.slice(base.length);
+  const id = canonicalModelId(base).replace(/(\d+)\.(\d+)/u, '$1-$2');
   const versionFirst = CLAUDE_VERSION_FIRST.exec(id);
   const [, major, minor, family] = versionFirst ?? [];
-  return versionFirst && major && family
-    ? `claude-${family}-${major}${minor ? `-${minor}` : ''}`
-    : id;
+  const folded =
+    versionFirst && major && family ? `claude-${family}-${major}${minor ? `-${minor}` : ''}` : id;
+  return `${folded}${tier}`;
 }
