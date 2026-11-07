@@ -1,8 +1,38 @@
 {
-  "updatedAt": "2026-11-06T14:14:39.246Z",
+  "updatedAt": "2026-11-07T10:33:13.043Z",
   "comment": "First-party pricing from tables/*.json. Catalogs supply additional models.",
   "claude": {
     "models": {
+      "claude-opus-5-5-fast": {
+        "inputPerMillion": 8,
+        "outputPerMillion": 40,
+        "cacheReadPerMillion": 0.4,
+        "cacheCreatePerMillion": 10
+      },
+      "claude-opus-5-fast": {
+        "inputPerMillion": 10,
+        "outputPerMillion": 50,
+        "cacheReadPerMillion": 1,
+        "cacheCreatePerMillion": 12.5
+      },
+      "claude-opus-4-8-fast": {
+        "inputPerMillion": 10,
+        "outputPerMillion": 50,
+        "cacheReadPerMillion": 1,
+        "cacheCreatePerMillion": 12.5
+      },
+      "claude-haiku-5-5": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.5,
+        "cacheReadPerMillion": 0.01,
+        "cacheCreatePerMillion": 0.125
+      },
+      "claude-haiku-5-5-long-context": {
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 2.5,
+        "cacheReadPerMillion": 0.05,
+        "cacheCreatePerMillion": 0.625
+      },
       "claude-fable-5-1": {
         "inputPerMillion": 10,
         "outputPerMillion": 50,
