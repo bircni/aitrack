@@ -6,7 +6,8 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test-env": "./src/testEnv.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",
