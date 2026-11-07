@@ -43,8 +43,13 @@ value to screen readers, the results of a refresh or sync you start are announce
 is always visible, and with reduced motion enabled the spinners stop and sections expand without
 sliding.
 
+The window first opens next to the tray; after that it keeps the size and place you give it, and
+stays open when another window takes focus. A tray click brings a covered or minimized window to the
+front and hides one already in front. Its title bar minimizes it, closes it to the tray and switches
+to the **compact view**, which shows only the session limit of each provider whose right-hand switch
+is on under Settings → Providers. **Always on top** in Settings keeps it above other windows.
 Closing the window hides it; quit from the tray menu or the Quit button in Settings. Escape leaves
-Settings, and otherwise hides the popup, but not a pinned window.
+Settings, and otherwise hides the window unless it is kept on top.
 
 ## When something is wrong
 
@@ -81,7 +86,7 @@ the saved Cursor token at most every 6 hours (`AITRACK_CURSOR_CACHE_TTL`) and on
 refresh. A provider turned off in Settings is neither read nor contacted. Usage is merged with the
 other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
 `git pull`s that repo every 30 minutes (can be turned off). It commits and pushes only when you
-press the sync button in the popup, which does exactly what `aitrack sync` does, including refusing
+press the sync button in the dashboard, which does exactly what `aitrack sync` does, including refusing
 a clone whose `origin` differs from `repoUrl`; that shows as a failed sync.
 
 A failed pull remains visible until recovery and retries after one minute; a successful
@@ -149,7 +154,7 @@ not start them. The behaviour differs from macOS and Windows in a few places:
   position the dashboard and register the global shortcut. Set `GDK_BACKEND=wayland` to
   override this; the dashboard is then placed by the compositor, typically in the centre, and
   the shortcut only fires while an XWayland window has focus.
-- **Popup position** — the dashboard opens in the top-right corner of the screen.
+- **Window position** — the dashboard opens in the top-right corner of the screen.
 - **Global shortcut** — needs X11 or XWayland; without it Settings shows why it could not be
   registered.
 - **Launch at login** — writes `~/.config/autostart/opentrack.desktop`, pointing at the
@@ -169,4 +174,4 @@ not start them. The behaviour differs from macOS and Windows in a few places:
 
 opentrack follows the design of [OpenQuota](https://github.com/deviffyy/OpenQuota) (MIT), whose
 provider research and pacing model it ports to TypeScript on top of aitrack-lib. The provider
-logos and the pin icon come from OpenQuota's frontend.
+logos come from OpenQuota's frontend.

@@ -10,6 +10,7 @@
     Settings,
   } from '../shared/types.js';
   import { api, type ServiceStatus } from './api.js';
+  import CompactLimit from './CompactLimit.svelte';
   import Dashboard from './Dashboard.svelte';
   import {
     freshnessLine,
@@ -32,6 +33,7 @@
   let now = $state(Date.now());
   let content = $state<HTMLElement | undefined>();
   let footer = $state<HTMLElement | undefined>();
+  let titlebar = $state<HTMLElement | undefined>();
   let scroller = $state<HTMLElement | undefined>();
   let settingsButton = $state<HTMLElement | undefined>();
   let moreBelow = $state(false);
@@ -42,7 +44,7 @@
     if (scroller) moreBelow = scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 1;
   }
 
-  // The window is capped below tall screens, and an overlay scrollbar is invisible until scrolled.
+  // The window can be shorter than its content, and an overlay scrollbar is invisible until scrolled.
   $effect(() => {
     if (!scroller || !content) return;
     const observer = new ResizeObserver(measureScroll);
@@ -53,19 +55,38 @@
     };
   });
 
-  // The window takes its height from what is shown, so there is no empty space below.
+  const parts = $derived([titlebar, content, footer].filter((part) => part instanceof HTMLElement));
+
+  // Unrounded, so a fractional pixel never leaves the content a pixel short of fitting.
+  function windowHeight(): number {
+    return parts.reduce((sum, part) => sum + part.getBoundingClientRect().height, 0);
+  }
+
+  let reportedHeight = 0;
+
   $effect(() => {
-    const parts = [content, footer].filter((part) => part instanceof HTMLElement);
     if (parts.length === 0) return;
-    const report = () => {
-      // Unrounded, so a fractional pixel never leaves the content a pixel short of fitting.
-      api.fitHeight(parts.reduce((sum, part) => sum + part.getBoundingClientRect().height, 0));
-    };
-    const observer = new ResizeObserver(report);
+    const observer = new ResizeObserver(() => {
+      const height = windowHeight();
+      if (height === reportedHeight) return; // Width changes while the user resizes.
+      reportedHeight = height;
+      api.fitHeight(height);
+    });
     for (const part of parts) observer.observe(part);
     return () => {
       observer.disconnect();
     };
+  });
+
+  let shownCompact: boolean | undefined;
+
+  // Switching views changes the height on purpose; the first settings only set the mode.
+  $effect(() => {
+    const compact = settings?.compact;
+    if (compact === undefined || compact === shownCompact) return;
+    const first = shownCompact === undefined;
+    shownCompact = compact;
+    if (!first) void tick().then(() => api.resizeHeight(windowHeight()));
   });
 
   let announcement = $state('');
@@ -124,7 +145,7 @@
     if (target instanceof HTMLSelectElement) return;
     if (target instanceof HTMLInputElement && target.type === 'text') return;
     if (screen === 'settings') screen = 'dashboard';
-    else if (settings?.windowMode !== 'floating') api.hideWindow();
+    else if (!settings?.alwaysOnTop) api.hideWindow(); // A window kept on top is meant to stay.
   }
 
   function updateNow(): void {
@@ -270,6 +291,34 @@
 
 <main class="pop">
   <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
+  <header class="titlebar" bind:this={titlebar} data-tauri-drag-region>
+    <span class="title" data-tauri-drag-region>opentrack</span>
+    {#if settings && screen === 'dashboard'}
+      <button
+        class="icon"
+        class:active={settings.compact}
+        type="button"
+        aria-label="Compact view"
+        aria-pressed={settings.compact}
+        title={settings.compact ? 'Full view' : 'Compact view'}
+        onclick={() => patch({ compact: !settings?.compact })}><Icon name="compact" size={14} /></button
+      >
+    {/if}
+    <button
+      class="icon"
+      type="button"
+      aria-label="Minimize"
+      title="Minimize"
+      onclick={() => api.minimizeWindow()}><Icon name="minimize" size={14} /></button
+    >
+    <button
+      class="icon"
+      type="button"
+      aria-label="Close to tray"
+      title="Close (opentrack keeps running in the tray)"
+      onclick={() => api.hideWindow()}><Icon name="close" size={14} /></button
+    >
+  </header>
   <div class="scroll-frame">
     <div class="scroll" bind:this={scroller} onscroll={measureScroll}>
       <div class="content" bind:this={content}>
@@ -335,6 +384,8 @@
               onPatch={patch}
               onBack={() => (screen = 'dashboard')}
             />
+          {:else if settings.compact}
+            <CompactLimit {appState} {settings} {now} {serviceDown} onPatch={patch} />
           {:else}
             <Dashboard
               {appState}
@@ -362,14 +413,8 @@
   </div>
 
   {#if screen === 'dashboard' && settings}
-    {@const floating = settings.windowMode === 'floating'}
-    <!-- The floating window has no title bar; its footer is the handle. -->
-    <footer
-      class="foot"
-      bind:this={footer}
-      data-tauri-drag-region={floating ? '' : undefined}
-    >
-      <span data-tauri-drag-region={floating ? '' : undefined}
+    <footer class="foot" bind:this={footer}>
+      <span
         >{serviceDown
           ? 'Background service stopped'
           : appState?.syncing
@@ -398,16 +443,6 @@
       >
       <button
         class="icon"
-        class:active={floating}
-        type="button"
-        aria-label="Keep open"
-        aria-pressed={floating}
-        title={floating ? 'Close with the tray again' : 'Keep open'}
-        onclick={() => patch({ windowMode: floating ? 'popup' : 'floating' })}
-        ><Icon name={floating ? 'pin-filled' : 'pin'} size={15} /></button
-      >
-      <button
-        class="icon"
         type="button"
         aria-label="Settings"
         title="Settings"
@@ -417,3 +452,4 @@
     </footer>
   {/if}
 </main>
+

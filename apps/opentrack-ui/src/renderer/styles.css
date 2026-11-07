@@ -4,6 +4,7 @@
 @import './styles/shared.css';
 @import './styles/summary.css';
 @import './styles/providers.css';
+@import './styles/compact.css';
 @import './styles/machines.css';
 @import './styles/history.css';
 @import './styles/projects.css';

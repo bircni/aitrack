@@ -295,6 +295,14 @@ export function formatDuration(ms: number): string {
   return `${String(rest)}m`;
 }
 
+export function toggledDisplay({ display }: Settings): Pick<Settings, 'display'> {
+  return { display: display === 'used' ? 'left' : 'used' };
+}
+
+export function toggledResetDisplay({ resetDisplay }: Settings): Pick<Settings, 'resetDisplay'> {
+  return { resetDisplay: resetDisplay === 'relative' ? 'absolute' : 'relative' };
+}
+
 export function formatReset(
   resetsAt: string | undefined,
   now: number,

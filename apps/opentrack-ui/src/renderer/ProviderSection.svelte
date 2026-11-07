@@ -13,10 +13,12 @@
     slideDuration,
     spendLabel,
     spendReading,
+    toggledDisplay,
+    toggledResetDisplay,
   } from './format.js';
   import Icon from './Icon.svelte';
   import LimitMeter from './LimitMeter.svelte';
-  import ProviderIcon from './ProviderIcon.svelte';
+  import ProviderHeading from './ProviderHeading.svelte';
 
   interface Props {
     provider: ProviderState;
@@ -57,11 +59,7 @@
       disabled={!provider.usage}
       onclick={() => (open = !open)}
     >
-      <span class="p-mark"><ProviderIcon provider={provider.key} size={18} /></span>
-      <span class="p-identity">
-        <span class="p-name">{provider.label}</span>
-        {#if provider.quota?.plan}<span class="p-plan">{provider.quota.plan}</span>{/if}
-      </span>
+      <ProviderHeading {provider} />
       {#if provider.refreshing}<span class="p-busy" role="img" aria-label="Refreshing"></span>{/if}
       <span class="p-cost">{provider.usage ? spendLabel(spend) : '—'}</span>
       {#if provider.usage}
@@ -94,9 +92,8 @@
       {settings}
       {now}
       stale={serviceDown || provider.quotaError !== undefined}
-      onToggleUsage={() => onPatch({ display: settings.display === 'used' ? 'left' : 'used' })}
-      onToggleReset={() =>
-        onPatch({ resetDisplay: settings.resetDisplay === 'relative' ? 'absolute' : 'relative' })}
+      onToggleUsage={() => onPatch(toggledDisplay(settings))}
+      onToggleReset={() => onPatch(toggledResetDisplay(settings))}
     />
   {/each}
 

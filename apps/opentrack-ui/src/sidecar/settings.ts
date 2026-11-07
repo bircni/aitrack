@@ -12,11 +12,17 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   display: 'used',
   resetDisplay: 'absolute',
-  providers: providerKeys().map((key) => ({ key, label: providerLabel(key), enabled: true })),
+  providers: providerKeys().map((key) => ({
+    key,
+    label: providerLabel(key),
+    enabled: true,
+    compact: true,
+  })),
   launchAtLogin: false,
   globalShortcut: '',
   notifications: true,
-  windowMode: 'popup',
+  alwaysOnTop: false,
+  compact: false,
   pullSyncedData: true,
   trayProvider: 'auto',
   trayWindow: 'highest',
@@ -42,13 +48,20 @@ export function normalizeSettings(input: unknown): Settings {
   const providers: Settings['providers'] = [];
   for (const entry of Array.isArray(raw.providers) ? raw.providers : []) {
     if (!isRecord(entry)) continue;
-    const { key, enabled } = entry;
+    const { key, enabled, compact } = entry;
     if (!isProviderKey(key) || seen.has(key)) continue;
     seen.add(key);
-    providers.push({ key, label: providerLabel(key), enabled: bool(enabled, true) });
+    providers.push({
+      key,
+      label: providerLabel(key),
+      enabled: bool(enabled, true),
+      compact: bool(compact, true),
+    });
   }
   for (const key of providerKeys()) {
-    if (!seen.has(key)) providers.push({ key, label: providerLabel(key), enabled: true });
+    if (!seen.has(key)) {
+      providers.push({ key, label: providerLabel(key), enabled: true, compact: true });
+    }
   }
   const d = DEFAULT_SETTINGS;
   return {
@@ -59,7 +72,8 @@ export function normalizeSettings(input: unknown): Settings {
     launchAtLogin: bool(raw.launchAtLogin, d.launchAtLogin),
     globalShortcut: typeof raw.globalShortcut === 'string' ? raw.globalShortcut.trim() : '',
     notifications: bool(raw.notifications, d.notifications),
-    windowMode: pick(raw.windowMode, ['popup', 'floating'], d.windowMode),
+    alwaysOnTop: bool(raw.alwaysOnTop, raw.windowMode === 'floating'), // A pinned window stays on top.
+    compact: bool(raw.compact, d.compact),
     pullSyncedData: bool(raw.pullSyncedData, d.pullSyncedData),
     trayProvider: pick(raw.trayProvider, ['auto', ...QUOTA_PROVIDERS], d.trayProvider),
     trayWindow: pick(raw.trayWindow, ['highest', 'session', 'weekly'], d.trayWindow),

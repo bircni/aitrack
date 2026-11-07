@@ -62,9 +62,14 @@ pub fn open_dashboard(app: AppHandle, provider: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn fit_height(app: AppHandle, panel: State<'_, Panel>, height: f64) {
+pub fn fit_height(panel: State<'_, Panel>, height: f64) {
+    let _ = panel.measure(height);
+}
+
+#[tauri::command]
+pub fn resize_height(app: AppHandle, panel: State<'_, Panel>, height: f64) {
     if let Some(window) = main_window(&app) {
-        panel.fit(&window, height);
+        panel.resize(&window, height);
     }
 }
 
@@ -72,6 +77,13 @@ pub fn fit_height(app: AppHandle, panel: State<'_, Panel>, height: f64) {
 pub fn hide_window(app: AppHandle) {
     if let Some(window) = main_window(&app) {
         let _ = window.hide();
+    }
+}
+
+#[tauri::command]
+pub fn minimize_window(app: AppHandle) {
+    if let Some(window) = main_window(&app) {
+        let _ = window.minimize();
     }
 }
 

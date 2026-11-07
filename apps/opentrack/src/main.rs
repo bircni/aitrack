@@ -50,7 +50,7 @@ fn show(app: &AppHandle, screen: &'static str) {
     }
 }
 
-/// Settings that live outside the webview: theme, window mode, autostart, shortcut.
+/// Settings that live outside the webview: theme, always on top, autostart, shortcut.
 fn apply_settings(app: &AppHandle, settings: &Value) {
     let text = |key: &str| settings.get(key).and_then(Value::as_str).unwrap_or_default();
     if let Some(window) = main_window(app) {
@@ -60,7 +60,8 @@ fn apply_settings(app: &AppHandle, settings: &Value) {
             _ => None,
         };
         let _ = window.set_theme(theme);
-        app.state::<Panel>().set_floating(&window, text("windowMode") == "floating");
+        let on_top = settings.get("alwaysOnTop").and_then(Value::as_bool) == Some(true);
+        let _ = window.set_always_on_top(on_top);
     }
     let mut errors = Map::new();
     // A dev build registering itself to start at login would outlive the checkout.
@@ -266,7 +267,9 @@ fn main() {
             commands::save_settings,
             commands::open_dashboard,
             commands::fit_height,
+            commands::resize_height,
             commands::hide_window,
+            commands::minimize_window,
             commands::setting_errors,
             commands::service_status,
             commands::app_version,
@@ -301,8 +304,8 @@ fn main() {
             let window = WebviewWindowBuilder::from_config(&handle, config)?.build()?;
             let events = window.clone();
             window.on_window_event(move |event| match event {
-                WindowEvent::Focused(false) => events.app_handle().state::<Panel>().on_blur(&events),
-                // Quitting is the tray's job; Alt+F4 or the taskbar's Close only dismiss the window.
+                WindowEvent::Focused(false) => events.app_handle().state::<Panel>().on_blur(),
+                // Quitting is the tray's job; Alt+F4, the taskbar's Close and the title bar's close only dismiss the window.
                 WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = events.hide();

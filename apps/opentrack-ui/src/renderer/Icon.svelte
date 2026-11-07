@@ -5,8 +5,9 @@
     | 'chevron-up'
     | 'cloud'
     | 'laptop'
-    | 'pin'
-    | 'pin-filled'
+    | 'close'
+    | 'compact'
+    | 'minimize'
     | 'refresh'
     | 'sliders'
     | 'sync';
@@ -53,13 +54,13 @@
       cy="17"
       r="2"
     />
-  {:else if name === 'pin'}
-    <path d="M9 3h6v4.2c0 1.7.7 3.1 2 4.3V13H7v-1.5c1.3-1.2 2-2.6 2-4.3V3Z" /><path d="M12 13v8" />
-  {:else if name === 'pin-filled'}
-    <path
-      d="M9 3h6v4.2c0 1.7.7 3.1 2 4.3V13H7v-1.5c1.3-1.2 2-2.6 2-4.3V3Z"
-      fill="currentColor"
-    /><path d="M12 13v8" />
+  {:else if name === 'minimize'}
+    <path d="M5 12h14" />
+  {:else if name === 'close'}
+    <path d="M6 6l12 12M18 6L6 18" />
+  {:else if name === 'compact'}
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <path d="M4 12h16" />
   {/if}
 </svg>
 

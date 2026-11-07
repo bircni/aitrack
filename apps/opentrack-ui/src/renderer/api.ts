@@ -16,7 +16,6 @@ interface DesktopApi extends Omit<OpentrackApi, 'onUpdate'> {
   /** Asked for on mount, since the event may have fired before the page loaded. */
   serviceStatus: () => Promise<ServiceStatus>;
   onServiceStatus: (listener: (status: ServiceStatus) => void) => () => void;
-  hideWindow: () => void;
 }
 
 interface Events {
@@ -53,8 +52,14 @@ export const api: DesktopApi = {
   fitHeight: (height) => {
     void invoke('fit_height', { height }).catch(() => undefined);
   },
+  resizeHeight: (height) => {
+    void invoke('resize_height', { height }).catch(() => undefined);
+  },
   hideWindow: () => {
     void invoke('hide_window').catch(() => undefined);
+  },
+  minimizeWindow: () => {
+    void invoke('minimize_window').catch(() => undefined);
   },
   onState: (listener) => subscribe('state', listener),
   onSettings: (listener) => subscribe('settings', listener),

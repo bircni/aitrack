@@ -1,4 +1,4 @@
-/* Footer status line and its busy indicators. */
+/* Footer status line, its busy indicators, and the title bar. */
 .foot {
   display: flex;
   align-items: center;
@@ -21,4 +21,18 @@
 .pulsing {
   display: grid;
   animation: pulse 1.2s ease-in-out infinite;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 6px 16px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.titlebar > .title {
+  flex: 1;
+  color: var(--ink);
+  font-weight: 600;
 }
