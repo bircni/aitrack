@@ -1,5 +1,6 @@
 {
   "main": "dist-sidecar/js/index.cjs",
   "output": "dist-sidecar/opentrack-sidecar.exe",
-  "disableExperimentalSEAWarning": true
+  "disableExperimentalSEAWarning": true,
+  "execArgv": ["--optimize-for-size"]
 }

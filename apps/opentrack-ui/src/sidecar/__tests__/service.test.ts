@@ -16,10 +16,21 @@ import {
   type ServiceDeps,
 } from '../service.js';
 import { DEFAULT_SETTINGS } from '../settings.js';
+import type { UsageSummary } from '../usage.js';
 
 const START = Date.parse('2026-06-01T12:00:00.000Z');
 // Only passed through, never read.
 const MACHINE = { hostname: 'host' } as MachineFile;
+const SUMMARY: UsageSummary = {
+  providers: {},
+  machines: ['desk', 'laptop'].map((name) => ({
+    name,
+    timezone: 'UTC',
+    lastUpdated: '',
+    current: name === 'desk',
+    providers: {},
+  })),
+};
 
 function ok(provider: QuotaProviderKey, usedPercent = 10, now = START): QuotaResult {
   return {
@@ -67,7 +78,7 @@ function harness(
       pulls.push(pull);
       reused.push(localMachine);
       if (usageFails) return Promise.reject(new Error('disk on fire'));
-      return Promise.resolve({ summary: { providers: {}, machineCount: 2 }, warning: undefined });
+      return Promise.resolve({ summary: SUMMARY, warning: undefined });
     },
     now: () => now,
     onState: (state) => {
@@ -106,6 +117,18 @@ function harness(
   };
 }
 
+function harnessDeps(): ServiceDeps {
+  return {
+    fetchQuota: () => Promise.reject(new Error('unused')),
+    loadUsage: () => Promise.reject(new Error('unused')),
+    now: () => START,
+    onState: () => {},
+    onAlert: () => {},
+    persist: () => {},
+    sync: () => Promise.reject(new Error('unused')),
+  };
+}
+
 describe('QuotaService', () => {
   it('refreshes every enabled provider and the usage once', async () => {
     const h = harness();
@@ -122,7 +145,8 @@ describe('QuotaService', () => {
       'codex',
       'cursor',
     ]);
-    expect(state).toMatchObject({ refreshing: false, machineCount: 2 });
+    expect(state.refreshing).toBe(false);
+    expect(state.machines).toHaveLength(2);
     expect(h.persisted()).toBe(1);
     expect(h.states.some((value) => value.refreshing)).toBe(true);
   });
@@ -131,7 +155,8 @@ describe('QuotaService', () => {
     const h = harness({}, { fetchQuota: () => new Promise(() => {}) });
     void h.service.refresh();
     await vi.waitFor(() => {
-      expect(h.states.at(-1)).toMatchObject({ machineCount: 2, refreshing: true });
+      expect(h.states.at(-1)?.refreshing).toBe(true);
+      expect(h.states.at(-1)?.machines).toHaveLength(2);
     });
     expect(h.states.at(-1)?.usageUpdatedAt).toBe(new Date(START).toISOString());
   });
@@ -165,6 +190,7 @@ describe('QuotaService', () => {
     await h.service.refresh();
     const state = h.service.state();
     expect(state.providers[1]?.quotaError?.kind).toBe('rateLimited');
+    expect(state.providers[1]?.retryAt).toBe(START + 300_000);
     expect(state.providers[2]?.quota).toBeUndefined();
     h.calls.length = 0;
     await h.service.refresh(true);
@@ -173,6 +199,19 @@ describe('QuotaService', () => {
     h.advance(FAILURE_BACKOFF_MS);
     await h.service.refresh();
     expect(h.calls).toEqual(['cursor']);
+  });
+
+  it('lets a click retry a bare 429, which only our own backoff holds back', async () => {
+    const h = harness({
+      codex: () => ({ ok: false, error: { kind: 'rateLimited', message: 'slow down' } }),
+    });
+    await h.service.refresh();
+    expect(h.service.state().providers[1]?.retryAt).toBeUndefined();
+    h.calls.length = 0;
+    await h.service.refresh();
+    expect(h.calls).toEqual([]);
+    await h.service.refresh(true);
+    expect(h.calls).toContain('codex');
   });
 
   it('alerts once per reset and only when enabled', async () => {
@@ -283,7 +322,7 @@ describe('QuotaService', () => {
   });
 
   it('keeps sync exclusive through the prior refresh and the usage reload', async () => {
-    const summary = { providers: {}, machineCount: 2 };
+    const summary = SUMMARY;
     let finishEarlier: (() => void) | undefined;
     let finishReload: (() => void) | undefined;
     const earlier = new Promise<void>((resolve) => {
@@ -354,7 +393,6 @@ describe('QuotaService', () => {
       quotas: { codex: snapshot.ok ? snapshot.snapshot : undefined },
       usage: {
         providers: {},
-        machineCount: 1,
         machines: [
           { name: 'work', timezone: 'UTC', lastUpdated: '', current: false, providers: {} },
         ],
@@ -382,25 +420,13 @@ describe('QuotaService', () => {
     expect(loadProjects('nope')?.projects).toBeUndefined();
   });
 
-  it('migrates each supported cache format and discards stale v1 update time', () => {
-    const snapshot = ok('codex');
-    const v1 = {
-      format: 1,
-      quotas: { codex: snapshot.ok ? snapshot.snapshot : undefined },
-      usage: { providers: {}, machineCount: 2 },
-      updatedAt: '2026-06-01T12:00:00.000Z',
-      fired: { alert: '2026-06-02T12:00:00.000Z' },
-    };
-    expect(loadCachedState(v1)).toMatchObject({
-      quotas: { codex: snapshot.ok ? snapshot.snapshot : undefined },
-      usage: { providers: {}, machineCount: 2 },
-      fired: { alert: '2026-06-02T12:00:00.000Z' },
-    });
-    expect(loadCachedState(v1).updatedAt).toBeUndefined();
-    expect(loadCachedState({ ...v1, format: 2 }).updatedAt).toBe(v1.updatedAt);
+  it('reads only the current cache format', () => {
+    const cache = { updatedAt: '2026-06-01T12:00:00.000Z', fired: { alert: 'soon' } };
+    expect(loadCachedState({ ...cache, format: CACHE_FORMAT })).toMatchObject(cache);
     const empty = { quotas: {}, usage: undefined, fired: {}, rateLimitedUntil: {} };
-    expect(loadCachedState({ ...v1, format: 3 })).toEqual(empty);
-    expect(loadCachedState('garbage')).toEqual(empty);
+    for (const input of [{ ...cache, format: 1 }, { ...cache, format: 3 }, 'garbage']) {
+      expect(loadCachedState(input)).toEqual(empty);
+    }
   });
 
   it.each([
@@ -422,55 +448,114 @@ describe('QuotaService', () => {
     );
   });
 
-  it('fills missing allTime on a pre-upgrade usage cache', () => {
-    const empty = EMPTY_PERIOD;
-    const today = { tokens: 10, costUSD: 1, hasCost: true, models: [] };
-    const daily = [{ date: '2026-06-01', costUSD: 1 }];
+  it('drops a cached provider with a missing period and keeps the unpriced mark on its days', () => {
+    const period = { tokens: 10, costUSD: 1, hasCost: true, models: [] };
+    const usage = {
+      today: period,
+      yesterday: EMPTY_PERIOD,
+      last7Days: EMPTY_PERIOD,
+      last30Days: EMPTY_PERIOD,
+      allTime: period,
+      daily: [
+        { date: '2026-06-01', costUSD: 1, hasUnpricedTokens: true },
+        { date: '2026-06-02', costUSD: 0 },
+      ],
+    };
+    const { allTime: _allTime, ...withoutAllTime } = usage;
     expect(
       loadCachedState({
         format: CACHE_FORMAT,
-        usage: {
-          providers: {
-            claude_code: {
-              today,
-              yesterday: empty,
-              last7Days: empty,
-              last30Days: empty,
-              daily,
-            },
-          },
-          machineCount: 2,
-        },
-        fired: {},
-      }),
-    ).toEqual({
-      quotas: {},
-      usage: {
-        providers: {
-          claude_code: {
-            today,
-            yesterday: empty,
-            last7Days: empty,
-            last30Days: empty,
-            allTime: empty,
-            daily,
-          },
-        },
-        machineCount: 2,
-      },
-      fired: {},
-      rateLimitedUntil: {},
+        usage: { providers: { claude_code: usage, codex: withoutAllTime } },
+      }).usage?.providers,
+    ).toEqual({ claude_code: usage });
+  });
+
+  it('shows the cached machines before any load', () => {
+    const cached = { quotas: {}, fired: {}, usage: SUMMARY };
+    expect(new QuotaService(harnessDeps(), DEFAULT_SETTINGS, cached).state().machines).toHaveLength(
+      2,
+    );
+  });
+
+  it('dates the limits by their oldest fetch, however fresh the usage is', async () => {
+    let fail = false;
+    const h = harness({
+      codex: () =>
+        fail ? { ok: false, error: { kind: 'network', message: 'offline' } } : ok('codex'),
     });
+    expect(h.service.state().quotaUpdatedAt).toBeUndefined();
+    await h.service.refresh();
+    fail = true;
+    h.advance(REFRESH_INTERVAL_MS);
+    await h.service.refresh();
+    const state = h.service.state();
+    expect(state.usageUpdatedAt).toBe(new Date(START + REFRESH_INTERVAL_MS).toISOString());
+    expect(state.quotaUpdatedAt).toBe(new Date(START).toISOString());
+  });
+
+  it('says usage is empty only after a load that worked and found nothing', async () => {
+    const h = harness();
+    expect(h.service.state().usageEmpty).toBeUndefined();
+    await h.service.refresh();
+    expect(h.service.state().usageEmpty).toBe(true);
+    h.failUsage();
+    await h.service.refresh(true);
+    expect(h.service.state().usageEmpty).toBeUndefined();
+
+    const period = { ...EMPTY_PERIOD, tokens: 1 };
+    const found: UsageSummary['providers'] = {
+      codex: {
+        today: period,
+        yesterday: EMPTY_PERIOD,
+        last7Days: period,
+        last30Days: period,
+        allTime: period,
+        daily: [],
+      },
+    };
+    const used = new QuotaService(harnessDeps(), DEFAULT_SETTINGS, {
+      quotas: {},
+      fired: {},
+      usage: { providers: found },
+    });
+    expect(used.state().usageEmpty).toBeUndefined();
+  });
+
+  it('does not call usage empty while the load for newly enabled providers runs', async () => {
+    const finishLoad: Array<(result: { summary: UsageSummary }) => void> = [];
+    const service = new QuotaService(
+      {
+        ...harnessDeps(),
+        fetchQuota: (provider) => Promise.resolve(ok(provider, 10, START)),
+        loadUsage: () =>
+          new Promise((resolve) => {
+            finishLoad.push(resolve);
+          }),
+      },
+      {
+        ...DEFAULT_SETTINGS,
+        providers: DEFAULT_SETTINGS.providers.map((provider) => ({
+          ...provider,
+          enabled: provider.key === 'codex',
+        })),
+      },
+      { quotas: {}, fired: {}, usage: { providers: {} } },
+    );
+    const run = service.refresh();
+    await Promise.resolve();
+    expect(service.state()).toMatchObject({ refreshing: true });
+    expect(service.state().usageEmpty).toBeUndefined();
+
+    finishLoad[0]?.({ summary: { providers: {} } });
+    await run;
+    expect(service.state().usageEmpty).toBe(true);
   });
 
   it('keeps pull failures through local reads, retries after one minute and restores the normal schedule', async () => {
     const pull = vi
       .fn()
-      .mockResolvedValueOnce({
-        summary: { providers: {}, machineCount: 2 },
-        warning: 'pull failed',
-      })
-      .mockResolvedValue({ summary: { providers: {}, machineCount: 2 } });
+      .mockResolvedValueOnce({ summary: SUMMARY, warning: 'pull failed' })
+      .mockResolvedValue({ summary: SUMMARY });
     const h = harness({}, { loadUsage: pull });
     await h.service.refresh();
     expect(h.service.state().pullError).toBe('pull failed');
@@ -524,7 +609,7 @@ describe('QuotaService', () => {
     const loadUsage = vi
       .fn<ServiceDeps['loadUsage']>()
       .mockResolvedValueOnce({ error: 'local read failed', warning: 'pull failed' })
-      .mockResolvedValue({ summary: { providers: {}, machineCount: 1 } });
+      .mockResolvedValue({ summary: { providers: {} } });
     const h = harness({}, { loadUsage });
     await h.service.refresh();
     expect(h.service.state()).toMatchObject({

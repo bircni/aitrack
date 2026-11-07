@@ -1,16 +1,20 @@
 <script lang="ts">
+  import { INIT_HINT } from 'aitrack-lib/data/messages';
   import { compareByCostThenTokens } from 'aitrack-lib/data/sort';
+  import { tokenIntensityLevel } from 'aitrack-lib/display/heatmap/intensity';
   import { slide } from 'svelte/transition';
 
-  import type { MachineUsage, ProviderState, ProviderUsages, Spend } from '../shared/types.js';
+  import type { DailyUsage, MachineUsage, ProviderState, ProviderUsages } from '../shared/types.js';
   import {
     combinedDaily,
+    dayCostLabel,
     formatCost,
+    formatDay,
     formatPercent,
-    heatLevel,
     PERIOD_LABELS,
     type Period,
     periodSpend,
+    shareBasis,
     spendLabel,
     slideDuration,
     spendReading,
@@ -67,19 +71,23 @@
     }
     return list.toSorted((a, b) => compareByCostThenTokens(a.spend, b.spend));
   });
-  // Shares follow cost while anything is priced, so an unpriced machine does not look free.
-  const byCost = $derived(rows.some((row) => row.spend.costUSD > 0));
-  const measure = (spend: Spend): number => (byCost ? spend.costUSD : spend.tokens);
-  const total = $derived(rows.reduce((sum, row) => sum + measure(row.spend), 0));
+  const basis = $derived(shareBasis(rows.map((row) => row.spend)));
   // One scale for every strip, so a busy day looks busy next to the other machines too.
   const peak = $derived(Math.max(0, ...rows.flatMap((row) => row.daily.map((day) => day.costUSD))));
+
+  function stripLabel(daily: DailyUsage[]): string {
+    const busiest = daily.reduce((best, day) => (day.costUSD > best.costUSD ? day : best));
+    return busiest.costUSD > 0
+      ? `Estimated cost per day, last 30 days, peak ${formatCost(busiest.costUSD)} on ${formatDay(busiest.date)}`
+      : 'Estimated cost per day, last 30 days, nothing priced';
+  }
 </script>
 
 <section class="machines" aria-label="Usage by machine">
   {#each rows as row (row.id)}
-    {@const share = total > 0 ? measure(row.spend) / total : 0}
+    {@const share = basis.total > 0 ? basis.measure(row.spend) / basis.total : 0}
     {@const percent = formatPercent(share)}
-    <article class="machine" class:current={row.machine?.current}>
+    <article class="card machine" class:current={row.machine?.current}>
       <button
         class="m-head"
         type="button"
@@ -89,7 +97,7 @@
         <span class="m-mark"><Icon name={row.machine ? 'laptop' : 'cloud'} size={17} /></span>
         <span class="m-identity">
           <span class="m-name">
-            {row.name}
+            <span class="m-name-text" title={row.name}>{row.name}</span>
             {#if row.machine?.current}<span class="m-badge">This machine</span>{/if}
           </span>
           <span class="m-meta">
@@ -104,15 +112,18 @@
           </span>
         </span>
         <span class="m-cost">{spendLabel(row.spend)}</span>
+        <span class="p-chevron" class:expanded={open === row.id}
+          ><Icon name="chevron-down" size={13} /></span
+        >
       </button>
 
       {#if share > 0}
-        <div class="m-share" title="{percent} of {byCost ? 'spend' : 'tokens'}">
+        <div class="m-share" title="{percent} of {basis.byCost ? 'cost' : 'tokens'}">
           <div class="m-bar">
             {#each row.parts as part (part.key)}
               <span
                 class="m-part m-part--{part.key}"
-                style:width="{(measure(part.spend) / total) * 100}%"
+                style:width="{(basis.measure(part.spend) / basis.total) * 100}%"
               ></span>
             {/each}
           </div>
@@ -121,12 +132,16 @@
       {/if}
 
       {#if row.daily.length > 0}
-        <div class="m-strip" role="img" aria-label="Spend per day, last 30 days">
+        <div class="m-strip" role="img" aria-label={stripLabel(row.daily)}>
           {#each row.daily as day (day.date)}
             <span
               class="m-cell"
-              data-level={heatLevel(day.costUSD, peak)}
-              title="{day.date} · {formatCost(day.costUSD)}"
+              data-level={day.costUSD > 0
+                ? tokenIntensityLevel(day.costUSD, peak)
+                : day.hasUnpricedTokens
+                  ? 1
+                  : 0}
+              title="{formatDay(day.date)} · {dayCostLabel(day)}"
             ></span>
           {/each}
         </div>
@@ -147,7 +162,9 @@
             <div class="d-rule"></div>
             <div class="d-heading">Top models · {PERIOD_LABELS[period]}</div>
             {#each row.models as model (model.model)}
-              <div class="d-row d-model"><span>{model.model}</span><span>{spendReading(model)}</span></div>
+              <div class="d-row d-model">
+                <span title={model.model}>{model.model}</span><span>{spendReading(model)}</span>
+              </div>
             {/each}
           {/if}
         </div>
@@ -156,7 +173,7 @@
   {/each}
   {#if machines.length === 1}
     <p class="empty">
-      Run <code>aitrack init</code> with the same data repo on another machine to compare them here.
+      Run <code>{INIT_HINT}</code> with the same data repo on another machine to compare them here.
     </p>
   {/if}
 </section>

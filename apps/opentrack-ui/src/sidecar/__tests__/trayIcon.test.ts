@@ -6,6 +6,13 @@ import { NOW, provider, sessionWindow } from './quotaFixtures.js';
 describe('tray icon', () => {
   const AUTO = { trayProvider: 'auto', trayWindow: 'highest' } as const;
 
+  it('ignores a cached window whose reset has passed', () => {
+    const past = { ...sessionWindow(95, 2.5), resetsAt: new Date(NOW - 1).toISOString() };
+    const summary = summarizeTray([provider([past, sessionWindow(20, 2.5)])], NOW, AUTO);
+    expect(summary).toMatchObject({ usedPercent: 20, tone: 'calm' });
+    expect(summary.bars).toHaveLength(1);
+  });
+
   it('takes the most urgent tone and the highest usage', () => {
     const summary = summarizeTray(
       [
