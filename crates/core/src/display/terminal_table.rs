@@ -22,7 +22,8 @@ pub struct TableStyle {
     pub total: Style,
 }
 
-pub fn default_table_style(dark: bool) -> TableStyle {
+#[must_use]
+pub const fn default_table_style(dark: bool) -> TableStyle {
     if dark {
         TableStyle { border: GRAY, header: BOLD_WHITE, total: BOLD_CYAN }
     } else {
@@ -43,7 +44,8 @@ pub struct TableOptions<'a> {
 }
 
 /// The default light style, coloured as stdout allows; `footer` pairs the total row with its style.
-pub fn render_terminal_table(columns: &[Column], rows: &[Vec<String>], footer: Option<Footer>) -> String {
+#[must_use]
+pub fn render_terminal_table(columns: &[Column<'_>], rows: &[Vec<String>], footer: Option<Footer<'_>>) -> String {
     let paint = footer.map(|(_, paint)| paint);
     render_table(
         columns,
@@ -58,7 +60,8 @@ pub fn render_terminal_table(columns: &[Column], rows: &[Vec<String>], footer: O
     )
 }
 
-pub fn render_table(columns: &[Column], rows: &[Vec<String>], options: &TableOptions) -> String {
+#[must_use]
+pub fn render_table(columns: &[Column<'_>], rows: &[Vec<String>], options: &TableOptions<'_>) -> String {
     let len = |s: &str| s.encode_utf16().count();
     let cell = |row: &[String], i: usize| row.get(i).map_or("", String::as_str).to_owned();
     let widths: Vec<usize> = columns

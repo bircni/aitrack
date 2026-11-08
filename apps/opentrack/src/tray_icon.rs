@@ -9,7 +9,7 @@ use serde::Serialize;
 use crate::pace::{has_reset, meter_tone, Tone};
 use crate::state::ProviderState;
 
-fn tone_rgb(tone: Tone) -> [u8; 3] {
+const fn tone_rgb(tone: Tone) -> [u8; 3] {
     match tone {
         Tone::Neutral => [140, 140, 150],
         Tone::Calm => [52, 168, 83],
@@ -178,7 +178,12 @@ impl Default for TrayAppearance {
 }
 
 /// The "O" filled like a pie, or one bar per limit, as straight RGBA for Tauri's tray image.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "a bounded, rounded number converted between float and integer"
+)]
 pub fn render_tray_icon(size: u32, used_percent: f64, tone: Tone, appearance: &TrayAppearance) -> Vec<u8> {
     let mut pixels = vec![0u8; (size * size * 4) as usize];
     let fallback = [TrayBar { used_percent: 0.0, tone: Tone::Neutral }];

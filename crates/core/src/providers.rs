@@ -48,10 +48,12 @@ pub const PROVIDERS: [Descriptor; 3] = [
     },
 ];
 
+#[must_use]
 pub fn provider(key: &str) -> Option<&'static Descriptor> {
     PROVIDERS.iter().find(|p| p.key == key)
 }
 
+#[must_use]
 pub fn is_synced_provider(key: &str) -> bool {
     provider(key).is_some_and(|p| p.synced)
 }
@@ -61,6 +63,7 @@ pub fn synced_provider_keys() -> impl Iterator<Item = &'static str> {
 }
 
 /// The label, `All providers` for `all`, or the key itself for a provider a newer version wrote.
+#[must_use]
 pub fn provider_label(key: &str) -> &str {
     if key == "all" {
         return "All providers";
@@ -68,18 +71,21 @@ pub fn provider_label(key: &str) -> &str {
     provider(key).map_or(key, |p| p.label)
 }
 
+#[must_use]
 pub fn cost_column_label(key: &str, uppercase: bool) -> String {
     let label = provider(key).map_or("Est. cost", |p| p.cost_label);
     if uppercase { label.to_uppercase() } else { label.to_owned() }
 }
 
 /// A user-supplied name (any case, friendly aliases) as its canonical key.
+#[must_use]
 pub fn normalize_provider_key(input: &str) -> Option<&'static str> {
     let name = crate::js::trim(input).to_lowercase();
     PROVIDERS.iter().find(|p| p.aliases.contains(&name.as_str())).map(|p| p.key)
 }
 
 /// Known providers in display order, then any others in the order they appear.
+#[must_use]
 pub fn ordered_provider_keys(data: &ProviderData) -> Vec<String> {
     PROVIDERS
         .iter()
@@ -89,11 +95,13 @@ pub fn ordered_provider_keys(data: &ProviderData) -> Vec<String> {
         .collect()
 }
 
+#[must_use]
 pub fn active_provider_keys(data: &ProviderData) -> Vec<String> {
     ordered_provider_keys(data).into_iter().filter(|k| data.get(k).is_some_and(|d| !d.is_empty())).collect()
 }
 
 /// Known providers in display order, then unknown ones by `localeCompare`.
+#[must_use]
 pub fn sort_provider_keys(keys: &[String]) -> Vec<String> {
     let rank = |key: &str| PROVIDERS.iter().position(|p| p.key == key);
     let mut sorted = keys.to_vec();

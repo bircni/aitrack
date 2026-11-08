@@ -31,7 +31,10 @@ const TREND_DAYS: i64 = 90;
 
 pub const GIT_TIMEOUT: Duration = Duration::from_secs(60);
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn period_for(report: Option<&UsageReport>, key: &str) -> PeriodUsage {
     let Some(provider) = report.and_then(|r| r.providers.iter().find(|p| p.key == key)) else {
         return PeriodUsage::default();
@@ -94,7 +97,10 @@ fn provider_usages(context: &ReportContext<'_>, loaded: &ZonedUsageData, dates: 
     providers
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn project_entries(breakdown: Option<ProjectBreakdown>) -> Vec<ProjectUsageEntry> {
     let Some(breakdown) = breakdown else { return Vec::new() };
     breakdown

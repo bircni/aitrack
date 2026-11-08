@@ -1,5 +1,6 @@
 //! Windows 11 rounds decorated windows itself; an undecorated one has to ask. Windows 10 has no
 //! rounding and rejects the request, which is fine. The work area comes from the monitor info.
+#![expect(unsafe_code, reason = "DWM, COM and monitor queries are Win32 calls, unsafe by signature")]
 
 use std::ffi::c_void;
 

@@ -35,14 +35,14 @@ enum Face {
 
 impl Face {
     /// The font bounding box's height beyond ascender and descender.
-    fn line_gap(self) -> f64 {
+    const fn line_gap(self) -> f64 {
         match self {
             Self::Regular => 269.0,
             Self::Bold => 265.0,
         }
     }
 
-    fn resource(self) -> &'static str {
+    const fn resource(self) -> &'static str {
         match self {
             Self::Regular => "F1",
             Self::Bold => "F2",
@@ -87,7 +87,7 @@ enum Mark {
 
 /// The largest float32 at or below `n`, as pdfkit stores widths and limits.
 fn pdf_number(n: f64) -> f64 {
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
     let rounded = n as f32;
     if f64::from(rounded) <= n { f64::from(rounded) } else { f64::from(rounded.next_down()) }
 }
@@ -97,7 +97,7 @@ fn number(n: f64) -> String {
 }
 
 /// The `WinAnsi` code pdfkit writes for a UTF-16 unit.
-fn win_ansi(unit: u16) -> u16 {
+const fn win_ansi(unit: u16) -> u16 {
     match unit {
         402 => 131,
         8211 => 150,
@@ -131,7 +131,7 @@ fn win_ansi(unit: u16) -> u16 {
 }
 
 /// Codes with no Courier glyph draw as a zero-width `.notdef`.
-fn advance(unit: u16) -> u32 {
+const fn advance(unit: u16) -> u32 {
     match win_ansi(unit) {
         0x7f | 0x81 | 0x8d | 0x8f | 0x90 | 0x9d => 0,
         0x20..=0xff => ADVANCE,
@@ -140,11 +140,13 @@ fn advance(unit: u16) -> u32 {
 }
 
 /// Courier is `WinAnsi` (Latin-1): "→" becomes "->", other code points outside it "?".
+#[must_use]
 pub fn ascii_safe(text: &str) -> String {
     text.replace('→', "->").chars().map(|c| if ('\u{20}'..='\u{ff}').contains(&c) { c } else { '?' }).collect()
 }
 
 /// Local time, to match the local calendar dates in the window labels.
+#[must_use]
 pub fn local_timestamp(at: &Zoned) -> String {
     format!("{} {:02}:{:02}:{:02}", at.date().strftime("%Y-%m-%d"), at.hour(), at.minute(), at.second())
 }
@@ -164,7 +166,7 @@ enum Class {
     Other,
 }
 
-fn class(c: char) -> Class {
+const fn class(c: char) -> Class {
     match c {
         ' ' => Class::Space,
         '-' => Class::Hyphen,
@@ -247,11 +249,11 @@ struct Wrap {
 }
 
 impl Layout {
-    fn new(page_height: f64) -> Self {
+    const fn new(page_height: f64) -> Self {
         Self { x: MARGIN, y: MARGIN, face: Face::Regular, size: 12.0, page_height, marks: Vec::new() }
     }
 
-    fn font(&mut self, face: Face, size: f64) -> &mut Self {
+    const fn font(&mut self, face: Face, size: f64) -> &mut Self {
         self.face = face;
         self.size = size;
         self
@@ -322,7 +324,12 @@ impl Layout {
                     let mut l;
                     let mut might_grow = false;
                     if w > wrap.space_left {
-                        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        #[expect(
+                            clippy::cast_precision_loss,
+                            clippy::cast_possible_truncation,
+                            clippy::cast_sign_loss,
+                            reason = "a bounded, rounded number converted between float and integer"
+                        )]
                         let fit = (wrap.space_left / (w / len as f64)).ceil().max(0.0) as usize;
                         l = fit.min(len);
                         w = self.word_width(&rest[..l]);
@@ -343,7 +350,7 @@ impl Layout {
                             might_grow = w <= wrap.space_left && l < len;
                         }
                     }
-                    #[allow(clippy::float_cmp)]
+                    #[expect(clippy::float_cmp, reason = "exact equality is what is meant here")]
                     if l == 0 && wrap.space_left == wrap.line_width {
                         l = 1;
                     }
@@ -446,7 +453,10 @@ impl Layout {
                         wrap.line_width - self.width_of(&trimmed)
                     }
                 };
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the value is rounded and bounded to the target range first"
+            )]
             let bytes = units.iter().map(|&u| win_ansi(u) as u8).collect();
             self.marks.push(Mark::Text { x, y: self.y, face: self.face, size: self.size, bytes });
         }
@@ -465,7 +475,10 @@ fn price_cell(has_cost: bool, cost: f64) -> String {
     if has_cost { fmt_usd_cost(cost) } else { "-".to_owned() }
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn tokens(n: u64) -> String {
     fmt(n as f64)
 }
@@ -629,10 +642,12 @@ fn write_pdf(marks: &[Mark], page_height: f64, title: &str, created: Timestamp) 
 }
 
 /// Stamped with `now` in the system timezone.
+#[must_use]
 pub fn render_receipt_pdf(report: &UsageReport, now: Timestamp) -> Vec<u8> {
     render_receipt_pdf_at(report, &now.to_zoned(TimeZone::system()))
 }
 
+#[must_use]
 pub fn render_receipt_pdf_at(report: &UsageReport, generated_at: &Zoned) -> Vec<u8> {
     let stamp = local_timestamp(generated_at);
     let mut probe = Layout::new(PROBE_HEIGHT);

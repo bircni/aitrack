@@ -15,7 +15,7 @@ pub enum Installer {
 
 impl Installer {
     /// The folder under `target/release/bundle` it is laid out in.
-    pub fn dir(self) -> &'static str {
+    pub const fn dir(self) -> &'static str {
         match self {
             Self::Dmg => "dmg",
             Self::AppArchive => "macos",
@@ -26,7 +26,7 @@ impl Installer {
     }
 
     /// How its file name ends, whatever the version.
-    pub fn suffix(self) -> &'static str {
+    pub const fn suffix(self) -> &'static str {
         match self {
             Self::Dmg => "_aarch64.dmg",
             Self::AppArchive => ".app.tar.gz",

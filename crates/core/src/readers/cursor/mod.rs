@@ -42,7 +42,7 @@ struct Retry {
     server_until_ms: i64,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CacheEntry {
     pub fetched_at: String,
@@ -109,7 +109,10 @@ fn write_cache(core: &Core, entry: &CacheEntry) {
     }
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn cache_age_seconds(core: &Core, entry: &CacheEntry) -> f64 {
     core.clock
         .parse_timestamp(&entry.fetched_at)

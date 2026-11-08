@@ -166,7 +166,10 @@ impl App {
                     viewport.native_pixels_per_point.unwrap_or(1.0),
                 )
             });
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the value is rounded and bounded to the target range first"
+            )]
             let rect = Rect { x: 0, y: 0, width: (size.x * scale) as i32, height: (size.y * scale) as i32 };
             (rect, scale)
         })
@@ -174,7 +177,11 @@ impl App {
 
     /// Size and position for the content height: at the tray for a popup, grown in place when kept open,
     /// on the screen the kept-open window was dragged to.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        reason = "a bounded, rounded number converted between float and integer"
+    )]
     fn place(&self, ctx: &egui::Context, in_place: bool) {
         let window_scale = ctx.input(|i| i.viewport().native_pixels_per_point).unwrap_or(1.0);
         let kept = in_place.then(|| ctx.input(|i| i.viewport().outer_rect)).flatten();
@@ -393,7 +400,10 @@ impl eframe::App for App {
         }
         let ctx = ui.ctx().clone();
         let palette = Palette::for_dark(ctx.theme() == egui::Theme::Dark);
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+        )]
         let now = self.clock.now().as_millisecond() as f64;
         let (actions, height) = {
             let model = Model {

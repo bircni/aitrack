@@ -179,7 +179,11 @@ fn positive_integer(value: &Value) -> Option<u64> {
         return (n > 0).then_some(n);
     }
     let x = value.as_f64()?;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the value is rounded and bounded to the target range first"
+    )]
     (x > 0.0 && x.fract() == 0.0 && x < 2f64.powi(64)).then_some(x as u64)
 }
 
@@ -190,7 +194,7 @@ fn file_mode(path: &Path) -> std::io::Result<Option<u32>> {
 }
 
 #[cfg(not(unix))]
-#[allow(clippy::unnecessary_wraps)]
+#[expect(clippy::unnecessary_wraps, reason = "same signature as the Unix version")]
 fn file_mode(_: &Path) -> std::io::Result<Option<u32>> {
     Ok(None)
 }

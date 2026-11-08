@@ -1,4 +1,5 @@
 //! Sync, recompute and renames against real git: a bare remote and machines with their own clones.
+#![expect(clippy::unwrap_used, reason = "fixture helpers: a broken fixture should fail the test outright")]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -78,7 +79,8 @@ impl Machine {
     fn core_at(&self, now: &str) -> (Core, std::sync::Arc<VecOutput>) {
         let output = std::sync::Arc::new(VecOutput::default());
         let clock = Clock::fixed(now.parse().unwrap(), "UTC").unwrap();
-        let core = Core::new(Env::new(&self.home, self.vars.clone()), clock, Box::new(Shared(output.clone())));
+        let core =
+            Core::new(Env::new(&self.home, self.vars.clone()), clock, Box::new(Shared(std::sync::Arc::clone(&output))));
         (core, output)
     }
 

@@ -121,7 +121,7 @@ pub fn claude_billed_model(model: &str, fast: bool, counts: &TokenCounts) -> Str
 }
 
 /// Prefer more output, then more input; a later record wins a tie.
-fn is_richer_usage(next: &TokenCounts, current: &TokenCounts) -> bool {
+const fn is_richer_usage(next: &TokenCounts, current: &TokenCounts) -> bool {
     if next.output_tokens != current.output_tokens {
         return next.output_tokens > current.output_tokens;
     }

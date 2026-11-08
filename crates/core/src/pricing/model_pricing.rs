@@ -26,6 +26,7 @@ fn pick_override<P: Copy>(overrides: &Overrides<P>, id: &str, usage_date: Option
 }
 
 impl ModelPricing {
+    #[must_use]
     pub fn new(supplement: Supplement, primary: Catalog, secondary: Catalog) -> Self {
         let aliases = supplement
             .cursor

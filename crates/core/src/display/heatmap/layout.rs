@@ -10,6 +10,7 @@ pub struct ProviderLayout {
 }
 
 /// Providers with no day in `year` are dropped.
+#[must_use]
 pub fn filter_provider_data_by_year(data: &ProviderData, year: i16) -> ProviderData {
     data.iter()
         .map(|(key, days)| (key.clone(), filter_day_map_by_year(days, year)))
@@ -17,6 +18,7 @@ pub fn filter_provider_data_by_year(data: &ProviderData, year: i16) -> ProviderD
         .collect()
 }
 
+#[must_use]
 pub fn resolve_provider_layout(data: &ProviderData, all: bool, year: Option<i16>) -> ProviderLayout {
     let filtered = year.map_or_else(|| data.clone(), |year| filter_provider_data_by_year(data, year));
     if all {

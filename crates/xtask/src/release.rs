@@ -278,7 +278,7 @@ mod tests {
         ] {
             assert_eq!(bump(current, kind).unwrap(), expected, "{current} {kind}");
         }
-        assert!(bump("1.2.3", "sideways").is_err());
+        bump("1.2.3", "sideways").unwrap_err();
     }
 
     #[test]
@@ -287,7 +287,7 @@ mod tests {
         assert_eq!(workspace_version(toml).unwrap(), "4.2.0");
         assert_eq!(workspace_version(&set_workspace_version(toml, "5.0.0").unwrap()).unwrap(), "5.0.0");
         assert!(set_workspace_version(toml, "5.0.0").unwrap().contains("[package]\nversion = \"9\""));
-        assert!(workspace_version(&std::fs::read_to_string(root().join("Cargo.toml")).unwrap()).is_ok());
+        workspace_version(&std::fs::read_to_string(root().join("Cargo.toml")).unwrap()).unwrap();
     }
 
     #[test]

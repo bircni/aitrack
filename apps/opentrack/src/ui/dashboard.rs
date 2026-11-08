@@ -39,7 +39,7 @@ pub fn tabs(state: &AppState) -> Vec<(Tab, String)> {
     tabs
 }
 
-pub fn show(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
+pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
     let palette = frame.palette;
     let state = model.state;
     let availability = usage_availability(state);
@@ -89,7 +89,7 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
     }
 }
 
-fn tab_bar(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame) {
+fn tab_bar(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) {
     let palette = frame.palette;
     let tabs = tabs(model.state);
     EguiFrame::new()
@@ -99,7 +99,10 @@ fn tab_bar(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame) {
         .outer_margin(Margin { left: 12, right: 12, top: 0, bottom: 10 })
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
-            #[allow(clippy::cast_precision_loss)]
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+            )]
             let width = (ui.available_width() - 2.0 * (tabs.len() - 1) as f32) / tabs.len() as f32;
             ui.horizontal(|ui| {
                 for (tab, label) in &tabs {
@@ -128,7 +131,14 @@ fn tab_bar(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame) {
         });
 }
 
-fn summary(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame, availability: Availability, machines: usize) {
+fn summary(
+    ui: &mut Ui,
+    view: &mut View,
+    model: &Model<'_>,
+    frame: &Frame<'_>,
+    availability: Availability,
+    machines: usize,
+) {
     let palette = frame.palette;
     let providers = &model.state.providers;
     let spend = total_spend(providers.iter().map(|p| p.usage.as_ref()), view.period);
@@ -205,13 +215,16 @@ impl Spark {
         Some(Self { points, peak: values.iter().copied().fold(0.0, f64::max) })
     }
 
-    fn show(&self, ui: &mut Ui, frame: &Frame) {
+    fn show(&self, ui: &mut Ui, frame: &Frame<'_>) {
         let palette = frame.palette;
         let points = &self.points;
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 2.0;
             let (rect, response) = ui.allocate_exact_size(Vec2::new(112.0, 36.0), Sense::hover());
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the value is rounded and bounded to the target range first"
+            )]
             let at = |(x, y): (f64, f64)| Pos2::new(rect.left() + x as f32, rect.top() + y as f32);
             let line: Vec<Pos2> = points.iter().copied().map(at).collect();
             let baseline = rect.top() + 33.0;
@@ -236,7 +249,10 @@ impl Spark {
 /// The width each of `count` chips gets in a row with 6 pt gaps.
 pub fn chip_width(ui: &Ui, count: usize) -> f32 {
     let count = count.max(1);
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     let width = (ui.available_width() - 6.0 * (count - 1) as f32) / count as f32;
     width
 }
@@ -244,7 +260,7 @@ pub fn chip_width(ui: &Ui, count: usize) -> f32 {
 /// A small card naming a provider over a figure; `swatch` adds its chart colour.
 pub fn chip(
     ui: &mut Ui,
-    frame: &Frame,
+    frame: &Frame<'_>,
     width: f32,
     (key, label): (&str, &str),
     figure: String,
@@ -275,7 +291,7 @@ pub fn chip(
         .response
 }
 
-fn provider_chips(ui: &mut Ui, period: Period, providers: &[ProviderState], frame: &Frame) {
+fn provider_chips(ui: &mut Ui, period: Period, providers: &[ProviderState], frame: &Frame<'_>) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
         let width = chip_width(ui, providers.len());
@@ -293,13 +309,13 @@ fn provider_chips(ui: &mut Ui, period: Period, providers: &[ProviderState], fram
     });
 }
 
-pub fn mark(ui: &mut Ui, frame: &Frame, key: &str, size: f32) {
+pub fn mark(ui: &mut Ui, frame: &Frame<'_>, key: &str, size: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
     let color = if key == "claude_code" { frame.palette.claude } else { frame.palette.ink };
     frame.marks.paint(ui.painter(), rect, key, color);
 }
 
-fn heading(ui: &mut Ui, frame: &Frame, provider: &ProviderState) {
+fn heading(ui: &mut Ui, frame: &Frame<'_>, provider: &ProviderState) {
     let palette = frame.palette;
     mark(ui, frame, &provider.key, 18.0);
     ui.label(strong(&provider.label, 13.0, palette.ink));
@@ -308,7 +324,7 @@ fn heading(ui: &mut Ui, frame: &Frame, provider: &ProviderState) {
     }
 }
 
-fn provider_section(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame, provider: &ProviderState) {
+fn provider_section(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>, provider: &ProviderState) {
     let palette = frame.palette;
     let spend = period_spend(provider.usage.as_ref(), view.period);
     let open = view.open_providers.contains(&provider.key) && spend.is_some();
@@ -443,7 +459,14 @@ fn busy_dot(ui: &mut Ui, palette: &super::theme::Palette) {
     ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
 }
 
-pub fn limit_meter(ui: &mut Ui, model: &Model, frame: &mut Frame, provider: &str, window: &QuotaWindow, stale: bool) {
+pub fn limit_meter(
+    ui: &mut Ui,
+    model: &Model<'_>,
+    frame: &mut Frame<'_>,
+    provider: &str,
+    window: &QuotaWindow,
+    stale: bool,
+) {
     let palette = frame.palette;
     let settings: &Settings = model.settings;
     let left = settings.display == "left";
@@ -467,7 +490,10 @@ pub fn limit_meter(ui: &mut Ui, model: &Model, frame: &mut Frame, provider: &str
             });
         });
         let fill = fill_percent(window, left);
-        #[allow(clippy::cast_possible_truncation)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the value is rounded and bounded to the target range first"
+        )]
         let target = (fill / 100.0) as f32;
         let id = ui.scope_id().with((provider, &window.id));
         let shown = ui.ctx().animate_value_with_time(id, target, 0.22);
@@ -478,7 +504,10 @@ pub fn limit_meter(ui: &mut Ui, model: &Model, frame: &mut Frame, provider: &str
         ui.painter().rect_filled(fill_rect, CornerRadius::same(3), color);
         if let (Some(_), Some(even)) = (&label, pace.even_pace_percent) {
             let at = if left { 100.0 - even } else { even }.clamp(0.0, 100.0);
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the value is rounded and bounded to the target range first"
+            )]
             let x = rect.left() + rect.width() * (at / 100.0) as f32;
             ui.painter().vline(x, (rect.top() - 2.0)..=(rect.bottom() + 2.0), Stroke::new(1.5, palette.ink2));
         }
@@ -520,7 +549,7 @@ pub fn limit_meter(ui: &mut Ui, model: &Model, frame: &mut Frame, provider: &str
     });
 }
 
-pub fn compact(ui: &mut Ui, model: &Model, frame: &mut Frame) {
+pub fn compact(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
     let palette = frame.palette;
     let providers = &model.state.providers;
     if providers.is_empty() {
@@ -547,7 +576,7 @@ pub fn compact(ui: &mut Ui, model: &Model, frame: &mut Frame) {
                     .or_else(|| windows.first());
                 match session {
                     Some(window) => {
-                        limit_meter(ui, model, frame, &provider.key, window, provider.quota_error.is_some())
+                        limit_meter(ui, model, frame, &provider.key, window, provider.quota_error.is_some());
                     }
                     None if provider.quota_error.is_none() => {
                         ui.label(text("No limits yet.", 12.0, palette.ink3));

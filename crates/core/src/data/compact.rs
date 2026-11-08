@@ -9,10 +9,12 @@ use crate::pricing::model_pricing::ModelPricing;
 pub const COMPACTED_MODEL: &str = "(compacted)";
 
 /// A row that stands for several models, so there is no model to name or to price.
+#[must_use]
 pub fn is_synthetic_model(model: &str) -> bool {
     model == COMPACTED_MODEL || model == crate::data::project::ALL_MODELS
 }
 
+#[must_use]
 pub fn is_compacted_day(day: &ProviderDay) -> bool {
     day.by_model.len() == 1 && day.by_model.contains_key(COMPACTED_MODEL)
 }

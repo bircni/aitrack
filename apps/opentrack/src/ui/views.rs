@@ -16,7 +16,7 @@ use super::widgets::{card, divider, empty, segmented, spread, stacked_bar, stron
 use super::{Frame, Model, View};
 use crate::state::{AppState, DailyUsage, ModelUsage, ProviderUsages};
 
-pub fn history(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame) {
+pub fn history(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) {
     let palette = frame.palette;
     let (range, bucket) = (view.history_range, view.history_bucket);
     let history =
@@ -37,17 +37,26 @@ pub fn history(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame) {
             return;
         }
         let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 96.0), Sense::hover());
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+        )]
         let slot = rect.width() / history.bars.len().max(1) as f32;
         let gap = (slot * 0.2).min(2.0);
         let pointer = response.hover_pos();
         let noun = if view.history_bucket == Bucket::Day { "Day" } else { "Week of" };
         for (index, bar) in history.bars.iter().enumerate() {
-            #[allow(clippy::cast_precision_loss)]
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+            )]
             let x = rect.left() + index as f32 * slot + gap / 2.0;
             let mut top = rect.bottom();
             for part in bar.parts.iter().filter(|p| p.cost_usd > 0.0) {
-                #[allow(clippy::cast_possible_truncation)]
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "the value is rounded and bounded to the target range first"
+                )]
                 let height = (part.cost_usd / history.peak_usd) as f32 * rect.height();
                 let layer = Rect::from_min_max(Pos2::new(x, top - height), Pos2::new(x + (slot - gap).max(0.5), top));
                 ui.painter().rect_filled(layer, CornerRadius::ZERO, palette.provider(&part.key));
@@ -197,7 +206,7 @@ fn share_bar<'a>(
     if basis.total <= 0.0 || basis.measure(spend) <= 0.0 {
         return;
     }
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
     let parts: Vec<(&str, f32)> = parts.map(|(key, part)| (key, (basis.measure(&part) / basis.total) as f32)).collect();
     let what = if basis.by_cost { "cost" } else { "tokens" };
     let share = basis.measure(spend) / basis.total;
@@ -214,7 +223,7 @@ fn share_bar<'a>(
 }
 
 /// A provider's name and spend, one line of an opened row.
-fn provider_spend_row(ui: &mut Ui, frame: &Frame, key: &str, label: &str, spend: &Spend) {
+fn provider_spend_row(ui: &mut Ui, frame: &Frame<'_>, key: &str, label: &str, spend: &Spend) {
     let palette = frame.palette;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
@@ -226,7 +235,7 @@ fn provider_spend_row(ui: &mut Ui, frame: &Frame, key: &str, label: &str, spend:
     });
 }
 
-pub fn machines(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame) {
+pub fn machines(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) {
     let palette = frame.palette;
     let state = model.state;
     let machines = state.machines.as_deref().unwrap_or_default();
@@ -356,7 +365,10 @@ fn strip(ui: &mut Ui, palette: &Palette, daily: &[DailyUsage], peak: f64) {
     for (index, day) in daily.iter().enumerate() {
         let level =
             if day.cost_usd > 0.0 { intensity_level(day.cost_usd, peak) } else { u8::from(day.has_unpriced_tokens) };
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+        )]
         let x = rect.left() + index as f32 * (cell + 2.0);
         let cell_rect = Rect::from_min_size(Pos2::new(x, rect.top()), Vec2::new(cell, 8.0));
         ui.painter().rect_filled(cell_rect, CornerRadius::same(2), colors[usize::from(level)]);
@@ -386,7 +398,7 @@ fn strip(ui: &mut Ui, palette: &Palette, daily: &[DailyUsage], peak: f64) {
     });
 }
 
-pub fn projects(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame) {
+pub fn projects(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) {
     let palette = frame.palette;
     let projects = model.state.projects.as_ref();
     let entries = period_projects(projects, view.period);

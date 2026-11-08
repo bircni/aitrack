@@ -1,4 +1,4 @@
-#![allow(clippy::struct_excessive_bools)] // Command-line flags.
+#![expect(clippy::struct_excessive_bools, reason = "clap flags are bools")]
 
 mod commands;
 mod json;

@@ -155,7 +155,7 @@ mod tests {
         let core = Core::new(
             Env::new(home.path(), Vec::<(String, String)>::new()),
             Clock::system(),
-            Box::new(Shared(output.clone())),
+            Box::new(Shared(std::sync::Arc::clone(&output))),
         );
         std::fs::create_dir_all(&core.paths.app_dir).unwrap();
         std::fs::write(&core.paths.config, "{}").unwrap();

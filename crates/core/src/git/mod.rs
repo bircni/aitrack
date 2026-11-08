@@ -51,7 +51,8 @@ pub struct RepoGuard<'a> {
 }
 
 impl RepoGuard<'_> {
-    pub fn git(&self) -> &Git {
+    #[must_use]
+    pub const fn git(&self) -> &Git {
         &self.git
     }
 }
@@ -93,11 +94,12 @@ impl Git {
     }
 
     #[must_use]
-    pub fn with_timeout(mut self, timeout: Option<Duration>) -> Self {
+    pub const fn with_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.timeout = timeout;
         self
     }
 
+    #[must_use]
     pub fn repo(&self) -> &Path {
         &self.repo
     }
@@ -135,10 +137,12 @@ impl Git {
         self.clone().with_timeout(None)
     }
 
+    #[must_use]
     pub fn has_upstream(&self) -> bool {
         self.untimed().run(&["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]).is_ok()
     }
 
+    #[must_use]
     pub fn is_rebase_in_progress(&self) -> bool {
         let git = self.repo.join(".git");
         git.join("rebase-merge").exists() || git.join("rebase-apply").exists()
@@ -152,16 +156,19 @@ impl Git {
     }
 
     /// A file as of the last commit, or `None` when it has none.
+    #[must_use]
     pub fn read_committed_file(&self, repo_path: &str) -> Option<String> {
         self.untimed().run(&["show", &format!("HEAD:{repo_path}")]).ok()
     }
 
     /// The URL as stored, which outlives a deleted or corrupt config; `get-url` would apply `insteadOf`.
+    #[must_use]
     pub fn clone_origin_url(&self) -> Option<String> {
         self.untimed().run(&["config", "--get", "remote.origin.url"]).ok()
     }
 
     /// Whether the branch holds commits the remote does not have: a failed push leaves a clean tree behind.
+    #[must_use]
     pub fn has_unpushed_commits(&self) -> bool {
         self.has_upstream() && self.untimed().run(&["rev-list", "--count", "@{upstream}..HEAD"]).is_ok_and(|n| n != "0")
     }

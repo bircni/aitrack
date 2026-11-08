@@ -105,7 +105,7 @@ pub fn pack(version: &str, binaries: &Path, out: &Path) -> Result<Vec<PathBuf>> 
         )?;
         written.push(path);
     }
-    let mut manifest = launcher.clone();
+    let mut manifest = launcher;
     manifest.insert("version".into(), json!(version));
     let pins: Map<String, Value> = targets.into_iter().map(|(_, name)| (name, json!(version))).collect();
     manifest.insert("optionalDependencies".into(), Value::Object(pins));
@@ -253,7 +253,7 @@ case "$2" in */"{fail}"-*) exit 1 ;; esac
         fn publishes_platforms_before_the_launcher_and_resumes_and_stops() {
             let all = names();
             let (result, calls) = run("1.2.3", "", "", true);
-            assert!(result.is_ok());
+            result.unwrap();
             assert_eq!(calls, published("1.2.3", &all, ""));
 
             let (_, calls) = run("1.2.3-0", "", "", true);
@@ -262,7 +262,7 @@ case "$2" in */"{fail}"-*) exit 1 ;; esac
             let order = publish_order().unwrap();
             let done = format!("{}@1.2.3 {}@1.2.3", order[0], order[1]);
             let (result, calls) = run("1.2.3", &done, "", true);
-            assert!(result.is_ok());
+            result.unwrap();
             assert_eq!(calls, published("1.2.3", &all[2..], ""));
 
             let (result, calls) = run("1.2.3", "", &all[1], true);

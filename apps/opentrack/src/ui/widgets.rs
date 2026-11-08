@@ -133,12 +133,12 @@ pub struct IconButton<'a> {
 }
 
 impl<'a> IconButton<'a> {
-    pub fn new(glyph: Glyph, label: &'a str) -> Self {
+    pub const fn new(glyph: Glyph, label: &'a str) -> Self {
         Self { glyph, label, enabled: true, active: false, rotation: 0.0, size: 28.0 }
     }
 }
 
-pub fn icon_button(ui: &mut Ui, palette: &Palette, button: IconButton) -> Response {
+pub fn icon_button(ui: &mut Ui, palette: &Palette, button: IconButton<'_>) -> Response {
     let IconButton { glyph, label, enabled, active, rotation, size } = button;
     let (rect, response) =
         ui.allocate_exact_size(Vec2::splat(size), if enabled { Sense::click() } else { Sense::hover() });
@@ -215,7 +215,7 @@ pub fn divider(ui: &mut Ui, palette: &Palette) {
 
 /// One turn every 0.9 s, for the refresh spinners.
 pub fn spin_angle(ui: &Ui) -> f32 {
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
     let time = ui.input(|i| i.time) as f32;
     time * std::f32::consts::TAU / 0.9
 }

@@ -25,7 +25,7 @@ fn line(fields: &[String]) -> String {
     fields.iter().map(|f| field(f)).collect::<Vec<_>>().join(",")
 }
 
-fn pricing_status(has_cost: bool, has_unpriced: bool, tokens: u64) -> &'static str {
+const fn pricing_status(has_cost: bool, has_unpriced: bool, tokens: u64) -> &'static str {
     match (has_cost, has_unpriced) {
         (false, _) if tokens == 0 => "complete",
         (false, _) => "unpriced",

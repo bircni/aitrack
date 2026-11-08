@@ -33,6 +33,7 @@ fn candidates(env: &Env) -> Vec<PathBuf> {
 }
 
 /// Cursor's `state.vscdb`, where the IDE keeps its login, or `None` when there is none.
+#[must_use]
 pub fn cursor_state_database_path(env: &Env) -> Option<PathBuf> {
     candidates(env).into_iter().find(|candidate| candidate.exists())
 }

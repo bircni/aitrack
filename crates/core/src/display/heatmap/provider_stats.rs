@@ -23,6 +23,7 @@ pub struct ProviderStats {
     pub peak_month: Option<PeakMonth>,
 }
 
+#[must_use]
 pub fn provider_stats(days: &DayMap, today: Day) -> ProviderStats {
     let totals = sum_day_map(days);
     ProviderStats {

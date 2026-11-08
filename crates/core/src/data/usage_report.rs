@@ -23,7 +23,7 @@ use crate::pricing::model_pricing::ModelPricing;
 use crate::providers::{ordered_provider_keys, provider_label};
 use crate::time::{Clock, UNKNOWN_TIMEZONE, calendar_date_in_zone};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReportOptions {
     pub period: UsagePeriod,
     pub args: PeriodArgs,
@@ -32,7 +32,7 @@ pub struct ReportOptions {
 }
 
 /// What a project-scoped report leaves out or cannot see, in words.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct UsageProjectScope {
     pub label: String,
     pub notes: Vec<String>,
@@ -177,6 +177,7 @@ impl ReportContext<'_> {
 }
 
 /// The viewer's zone, then every other recorded machine zone; empty when there are no others.
+#[must_use]
 pub fn machine_zones(viewer: &str, sources: &[ZonedUsageSource]) -> Vec<String> {
     let mut others: Vec<String> = Vec::new();
     for source in sources {
@@ -192,6 +193,7 @@ pub fn machine_zones(viewer: &str, sources: &[ZonedUsageSource]) -> Vec<String> 
 }
 
 /// Other machines' zones, when a relative window has to follow more than one.
+#[must_use]
 pub fn timezone_window_note(viewer: &str, sources: &[ZonedUsageSource], period: UsagePeriod) -> Option<String> {
     if !period.anchors_on_today() {
         return None;
@@ -243,7 +245,7 @@ fn windowed_provider_data<'a>(
     Ok((Cow::Owned(data), UsageWindow { start, end, label: label_window.label }))
 }
 
-fn filter_of(window: &UsageWindow) -> DateFilter {
+const fn filter_of(window: &UsageWindow) -> DateFilter {
     DateFilter { start: Some(window.start), end: Some(window.end), year: None }
 }
 
@@ -266,7 +268,10 @@ fn project_scope(
     }
     let unattributed = aggregate_projects(data, &filter_of(window)).unattributed.map_or(0, |u| u.tokens);
     if unattributed > 0 {
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+        )]
         let tokens = fmt(unattributed as f64);
         notes.push(format!(
             "{tokens} tokens in this window are not attributed to any project (synced before projects were recorded) and are not included."
@@ -372,7 +377,10 @@ fn rows_by_provider_and_model(report: &UsageReport) -> IndexMap<(String, String)
     report.providers.iter().flat_map(|p| p.rows.iter().map(|r| ((p.key.clone(), r.model.clone()), r))).collect()
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn compare_reports(current: &UsageReport, previous: &UsageReport) -> UsageComparison {
     let (current_rows, previous_rows) = (rows_by_provider_and_model(current), rows_by_provider_and_model(previous));
     let mut keys: Vec<&(String, String)> = current_rows.keys().collect();
@@ -452,6 +460,7 @@ pub fn build_usage_comparison(
 }
 
 /// Why a report has nothing to show, or `None` when it does.
+#[must_use]
 pub fn empty_report_message(
     report: Option<&UsageReport>,
     not_configured: bool,

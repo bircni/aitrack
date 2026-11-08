@@ -1,3 +1,4 @@
+#![expect(clippy::unwrap_used, reason = "fixture helpers: a broken fixture should fail the test outright")]
 use assert_cmd::Command;
 use serde_json::Value;
 

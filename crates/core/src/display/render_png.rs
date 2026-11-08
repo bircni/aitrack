@@ -36,7 +36,10 @@ const SECTION_H: f32 = SEC_PAD_TOP + HEADER_H + DIVIDER_H + MONTH_H + GRID_H + L
 const STAT_COLUMN_GAP: f32 = 8.0;
 const CANVAS_PAD: f32 = 24.0;
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn grid_width(weeks: usize) -> f32 {
     weeks.max(MIN_WEEKS) as f32 * STEP
 }
@@ -60,7 +63,7 @@ struct Canvas {
 }
 
 impl Canvas {
-    fn font(&self, bold: bool) -> &FontRef<'static> {
+    const fn font(&self, bold: bool) -> &FontRef<'static> {
         if bold { &self.bold } else { &self.regular }
     }
 
@@ -107,7 +110,7 @@ impl Canvas {
     }
 
     /// `fillText` on the alphabetic baseline `y`.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments, reason = "each argument is a distinct part of the layout")]
     fn text(&mut self, text: &str, anchor: f32, baseline: f32, size: f32, bold: bool, fill: &str, align: Align) {
         let width = self.measure(text, size, bold);
         let mut caret = match align {
@@ -122,7 +125,7 @@ impl Canvas {
             let c = color(fill).to_color_u8();
             [c.red(), c.green(), c.blue()]
         };
-        #[allow(clippy::cast_possible_wrap)]
+        #[expect(clippy::cast_possible_wrap, reason = "the value is far below the signed limit")]
         let (w, h) = (self.pixmap.width() as i32, self.pixmap.height() as i32);
         let data = self.pixmap.data_mut();
         for c in text.chars() {
@@ -131,7 +134,11 @@ impl Canvas {
             caret += scaled.h_advance(id);
             let Some(outlined) = font.outline_glyph(glyph) else { continue };
             let bounds = outlined.px_bounds();
-            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_possible_wrap,
+                reason = "the value is rounded and bounded to the target range first"
+            )]
             outlined.draw(|gx, gy, coverage| {
                 let px = bounds.min.x as i32 + gx as i32;
                 let py = bounds.min.y as i32 + gy as i32;
@@ -142,7 +149,7 @@ impl Canvas {
                 let alpha = coverage.clamp(0.0, 1.0);
                 for (i, src) in rgb.into_iter().enumerate() {
                     let dst = f32::from(data[at + i]);
-                    #[allow(clippy::cast_sign_loss)]
+                    #[expect(clippy::cast_sign_loss, reason = "the value is clamped to zero or above first")]
                     let blended = (dst + (f32::from(src) - dst) * alpha).round() as u8;
                     data[at + i] = blended;
                 }
@@ -165,7 +172,11 @@ impl Canvas {
     }
 }
 
-#[allow(clippy::cast_precision_loss, clippy::too_many_lines)]
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::too_many_lines,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used; one layout reads better in one place than split across helpers"
+)]
 fn draw_section(canvas: &mut Canvas, key: &str, days: &DayMap, weeks: &[Week], base_y: f32, dark: bool, today: Day) {
     let c: Palette = palette(dark);
     let visible: HashSet<Day> = weeks.iter().flatten().flatten().copied().collect();
@@ -232,17 +243,26 @@ fn draw_section(canvas: &mut Canvas, key: &str, days: &DayMap, weeks: &[Week], b
     }
 }
 
+#[must_use]
 pub fn render_to_png(data: &ProviderData, options: &RenderOptions) -> Vec<u8> {
     render_to_png_at(data, options, Clock::system().today())
 }
 
+#[must_use]
 pub fn render_to_png_at(data: &ProviderData, options: &RenderOptions, today: Day) -> Vec<u8> {
     let weeks = build_date_grid(options.year, today);
     let layout = resolve_provider_layout(data, options.all, options.year);
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     let total_h = CANVAS_PAD * 2.0 + layout.keys.len() as f32 * SECTION_H;
     let total_w = LEFT + grid_width(weeks.len()) + 80.0;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the value is rounded and bounded to the target range first"
+    )]
     let (width, height) = (total_w as u32, total_h as u32);
     let mut canvas = Canvas {
         pixmap: Pixmap::new(width, height).expect("a non-empty canvas"),
@@ -250,7 +270,10 @@ pub fn render_to_png_at(data: &ProviderData, options: &RenderOptions, today: Day
         bold: FontRef::try_from_slice(BOLD).expect("the embedded font parses"),
     };
     canvas.fill_rect(0.0, 0.0, total_w, total_h, palette(options.dark).bg);
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     for (index, key) in layout.keys.iter().enumerate() {
         if let Some(days) = layout.data.get(key) {
             draw_section(&mut canvas, key, days, &weeks, CANVAS_PAD + index as f32 * SECTION_H, options.dark, today);

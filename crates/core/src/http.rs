@@ -32,14 +32,17 @@ pub struct Response {
 }
 
 impl Response {
+    #[must_use]
     pub fn header(&self, name: &str) -> Option<&str> {
         self.headers.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
     }
 
+    #[must_use]
     pub fn is_ok(&self) -> bool {
         (200..300).contains(&self.status)
     }
 
+    #[must_use]
     pub fn text(&self) -> String {
         String::from_utf8_lossy(&self.body).into_owned()
     }

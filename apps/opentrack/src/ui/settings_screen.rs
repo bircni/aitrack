@@ -77,7 +77,7 @@ fn select(ui: &mut Ui, id: &str, current: &str, options: &[(&str, &str)]) -> Opt
 
 fn select_line(
     ui: &mut Ui,
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     settings: &Settings,
     label: &str,
     current: &str,
@@ -102,9 +102,9 @@ struct Note<'a> {
 
 fn switch_line(
     ui: &mut Ui,
-    frame: &mut Frame,
+    frame: &mut Frame<'_>,
     settings: &Settings,
-    note: &Note,
+    note: &Note<'_>,
     value: bool,
     set: impl FnOnce(&mut Settings, bool),
 ) {
@@ -119,7 +119,7 @@ fn switch_line(
     rule(ui, &palette);
 }
 
-pub fn show(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
+pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
     let palette = frame.palette;
     let settings = model.settings;
     ui.horizontal(|ui| {

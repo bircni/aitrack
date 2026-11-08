@@ -18,7 +18,8 @@ pub struct ClaudePricing {
 }
 
 impl ClaudePricing {
-    pub fn rates(&self) -> FullRates {
+    #[must_use]
+    pub const fn rates(&self) -> FullRates {
         FullRates {
             input_per_million: self.input_per_million,
             output_per_million: self.output_per_million,
@@ -36,6 +37,7 @@ pub struct CodexPricing {
 }
 
 impl CodexPricing {
+    #[must_use]
     pub fn rates(&self) -> FullRates {
         FullRates {
             input_per_million: self.input_per_million,
@@ -47,7 +49,7 @@ impl CodexPricing {
 }
 
 /// `pricing` applies to usage dates strictly before `before`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Override<P> {
     pub before: String,
     pub pricing: P,
@@ -81,7 +83,7 @@ pub struct CodexSupplement {
     pub family_fallback: Vec<CodexFallbackRule>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CursorAlias {
     pub pattern: String,
     pub canonical: String,
@@ -137,6 +139,7 @@ struct CursorTable {
 }
 
 /// The supplement built from the bundled tables; its `updatedAt` is the newest table's.
+#[must_use]
 pub fn bundled_supplement() -> Supplement {
     let claude: ClaudeTable = serde_json::from_str(CLAUDE_TABLE).expect("bundled Claude table parses");
     let codex: CodexTable = serde_json::from_str(CODEX_TABLE).expect("bundled Codex table parses");

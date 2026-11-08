@@ -11,7 +11,7 @@ use aitrack_core::update::{download_verified, is_newer, latest_release, updater_
 use crate::app::{Bus, Msg};
 
 const FIRST_CHECK_DELAY: Duration = Duration::from_secs(30);
-const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+const CHECK_INTERVAL: Duration = Duration::from_hours(6);
 
 #[derive(Clone, Default)]
 pub struct Updater {

@@ -193,6 +193,7 @@ struct PackState {
 
 impl PricingStore {
     /// Reads `<dir>/pack.json` and `state.json`; an incomplete pack falls back to the bundled tables.
+    #[must_use]
     pub fn open(dir: &Path) -> Self {
         let local = bundled_supplement();
         let mut state: CacheState = std::fs::read_to_string(dir.join("state.json"))
@@ -219,6 +220,7 @@ impl PricingStore {
     }
 
     /// The bundled tables only, for tests and offline tools.
+    #[must_use]
     pub fn bundled() -> ModelPricing {
         ModelPricing::new(bundled_supplement(), Catalog::default(), Catalog::default())
     }

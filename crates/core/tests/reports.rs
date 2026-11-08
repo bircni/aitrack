@@ -1,5 +1,6 @@
 //! The loader, reports, comparisons, project breakdowns and rankings against 4.x
 //! over a data repo of machines in several zones, recorded before 4.x was removed.
+#![expect(clippy::unwrap_used, reason = "fixture helpers: a broken fixture should fail the test outright")]
 
 use jiff::tz::TimeZoneDatabase;
 use std::path::{Path, PathBuf};

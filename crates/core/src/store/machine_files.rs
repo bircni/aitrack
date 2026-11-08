@@ -56,6 +56,7 @@ pub fn read_data_file(core: &Core, path: &Path, options: ValidationOptions) -> O
 }
 
 /// The bytes every writer produces, so round trips stay stable.
+#[must_use]
 pub fn serialize_machine_file(machine: &MachineFile, passphrase: Option<&str>) -> String {
     let json = js::to_string_pretty(machine).expect("a machine file serializes");
     match passphrase {

@@ -26,6 +26,7 @@ pub struct BudgetStatus {
 /// Warn once spend crosses this fraction of the budget.
 pub const BUDGET_WARN_RATIO: f64 = 0.8;
 
+#[must_use]
 pub fn budget_status(spent_usd: f64, budget_usd: f64) -> Option<BudgetStatus> {
     if budget_usd.is_nan() || budget_usd <= 0.0 {
         return None;

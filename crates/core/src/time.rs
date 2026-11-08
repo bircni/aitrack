@@ -33,7 +33,7 @@ impl Clock {
 
     /// A zone resolved elsewhere, such as from a database other than the system's.
     #[must_use]
-    pub fn with_zone(now: Option<Timestamp>, zone: TimeZone) -> Self {
+    pub const fn with_zone(now: Option<Timestamp>, zone: TimeZone) -> Self {
         Self { now, zone }
     }
 
@@ -43,7 +43,7 @@ impl Clock {
     }
 
     #[must_use]
-    pub fn zone(&self) -> &TimeZone {
+    pub const fn zone(&self) -> &TimeZone {
         &self.zone
     }
 
@@ -157,11 +157,11 @@ pub fn calendar_date_in_zone(zone: &str, now: Timestamp) -> Option<Day> {
 struct Parser<'a>(&'a [u8]);
 
 impl Parser<'_> {
-    fn peek(&self) -> Option<u8> {
+    const fn peek(&self) -> Option<u8> {
         self.0.first().copied()
     }
 
-    fn done(&self) -> bool {
+    const fn done(&self) -> bool {
         self.0.is_empty()
     }
 

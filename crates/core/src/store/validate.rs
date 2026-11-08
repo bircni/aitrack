@@ -23,6 +23,7 @@ pub enum Diagnostic {
 }
 
 impl Diagnostic {
+    #[must_use]
     pub fn file(&self) -> &str {
         match self {
             Self::FileSkipped { file, .. } | Self::DayDropped { file, .. } | Self::ProjectsDropped { file, .. } => file,
@@ -62,6 +63,7 @@ pub struct MachineFileCheck {
 }
 
 /// Float comparison with a relative epsilon, used for cost totals.
+#[must_use]
 pub fn approximately_equal(a: f64, b: f64) -> bool {
     (a - b).abs() <= 1e-9 * 1f64.max(a.abs()).max(b.abs())
 }
@@ -79,7 +81,11 @@ const COUNT_FIELDS: [&str; 6] = [
 fn token_count(value: &Value) -> Option<u64> {
     value.as_u64().or_else(|| {
         let x = value.as_f64()?;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "the value is rounded and bounded to the target range first"
+        )]
         (x == 0.0 || (x > 0.0 && x.fract() == 0.0 && x <= 2f64.powi(53))).then(|| x.abs() as u64)
     })
 }
@@ -123,6 +129,7 @@ fn check_token_counts(value: &Value, path: &str) -> Result<TokenCounts, String> 
     })
 }
 
+#[must_use]
 pub fn is_token_counts(value: &Value) -> bool {
     check_token_counts(value, "").is_ok()
 }
@@ -138,7 +145,7 @@ fn check_counts_by_key(value: &Map<String, Value>, path: &str, what: &str) -> Re
     Ok(out)
 }
 
-fn field(counts: &TokenCounts, index: usize) -> Option<u64> {
+const fn field(counts: &TokenCounts, index: usize) -> Option<u64> {
     [
         Some(counts.input_tokens),
         Some(counts.output_tokens),
@@ -311,6 +318,7 @@ pub fn check_machine_file(data: &Value, file: &str, options: ValidationOptions) 
 }
 
 /// Parses and validates raw JSON, decrypting an encrypted file first; reports nothing.
+#[must_use]
 pub fn check_raw_machine_file(
     raw: &str,
     file: &str,

@@ -42,7 +42,7 @@ pub enum Tab {
     Machines,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     Refresh,
     Sync,
@@ -82,7 +82,7 @@ impl UpdateStatus {
         self.error.as_ref().map_or_else(|| format!("{name} is available"), |e| format!("Could not install {name}: {e}"))
     }
 
-    fn install_label(&self) -> &'static str {
+    const fn install_label(&self) -> &'static str {
         if self.error.is_some() {
             "Retry"
         } else {
@@ -189,7 +189,7 @@ impl Frame<'_> {
 pub fn draw(
     ui: &mut Ui,
     view: &mut View,
-    model: &Model,
+    model: &Model<'_>,
     marks: &ProviderMarks,
     palette: Palette,
 ) -> (Vec<Action>, f32) {
@@ -243,7 +243,7 @@ fn fade(ui: &Ui, rect: Rect, surface: Color32) {
     ui.painter().add(mesh);
 }
 
-fn handle_keys(ui: &Ui, view: &mut View, model: &Model, frame: &mut Frame) {
+fn handle_keys(ui: &Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
     let typing = ui.ctx().egui_wants_keyboard_input();
     let (escape, left, right) = ui.input(|i| {
         (i.key_pressed(egui::Key::Escape), i.key_pressed(egui::Key::ArrowLeft), i.key_pressed(egui::Key::ArrowRight))
@@ -264,7 +264,7 @@ fn handle_keys(ui: &Ui, view: &mut View, model: &Model, frame: &mut Frame) {
 }
 
 /// A note with a link that asks for `action` again.
-fn retry_banner(ui: &mut Ui, frame: &mut Frame, message: impl Into<String>, action: impl FnOnce() -> Action) {
+fn retry_banner(ui: &mut Ui, frame: &mut Frame<'_>, message: impl Into<String>, action: impl FnOnce() -> Action) {
     let palette = frame.palette;
     banner(ui, &palette, |ui| {
         ui.label(text(message, 12.0, palette.ink2));
@@ -274,7 +274,7 @@ fn retry_banner(ui: &mut Ui, frame: &mut Frame, message: impl Into<String>, acti
     });
 }
 
-fn body(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
+fn body(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
     let palette = frame.palette;
     if let Some(error) = model.settings_error {
         retry_banner(ui, frame, format!("Could not save settings: {error}"), || Action::Save(model.settings.clone()));
@@ -297,7 +297,7 @@ fn body(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
     }
 }
 
-fn footer_bar(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame, rect: Rect) {
+fn footer_bar(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>, rect: Rect) {
     let palette = frame.palette;
     let state = model.state;
     ui.painter().hline(rect.x_range(), rect.top(), Stroke::new(1.0, palette.rule));

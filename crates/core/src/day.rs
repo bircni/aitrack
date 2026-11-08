@@ -29,7 +29,7 @@ impl Day {
     }
 
     #[must_use]
-    pub fn date(self) -> Date {
+    pub const fn date(self) -> Date {
         self.0
     }
 

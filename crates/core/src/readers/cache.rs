@@ -33,6 +33,7 @@ pub struct FileStamp {
 }
 
 impl FileStamp {
+    #[must_use]
     pub fn of(path: &Path) -> Option<Self> {
         let meta = std::fs::metadata(path).ok()?;
         let mtime = meta.modified().ok()?.duration_since(UNIX_EPOCH).ok()?;
@@ -172,6 +173,7 @@ pub struct ParseCache {
 }
 
 impl ParseCache {
+    #[must_use]
     pub fn open(context: &CacheContext, name: &str) -> Self {
         let path = context.dir.as_ref().map(|dir| dir.join(context.file_name(name)));
         let previous = path.as_deref().map(|p| read_cache_file(p, &context.timezone)).unwrap_or_default();
@@ -224,6 +226,7 @@ impl ParseCache {
     }
 
     /// Total size of the files looked up and missed so far.
+    #[must_use]
     pub fn missed_bytes(&self) -> u64 {
         self.missed.values().map(|s| s.size).sum()
     }
@@ -317,6 +320,7 @@ struct SnapshotFile {
 }
 
 impl MergedSnapshot {
+    #[must_use]
     pub fn open(context: &CacheContext, name: &str, files: &[PathBuf], stamps: &[Option<FileStamp>]) -> Self {
         let name = format!("{name}-merged");
         let mut hash = Sha256::new();
@@ -333,6 +337,7 @@ impl MergedSnapshot {
         Self { path, name, sources: hex(&hash.finalize()) }
     }
 
+    #[must_use]
     pub fn read(&self) -> Option<DayMap> {
         let text = std::fs::read_to_string(self.path.as_ref()?).ok()?;
         let file: SnapshotFile = serde_json::from_str(&text).ok()?;

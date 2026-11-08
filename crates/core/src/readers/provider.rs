@@ -159,6 +159,7 @@ pub fn finish_codex_scan(scan: &CodexScan, pricing: &dyn Pricing, resolver: &dyn
     parse
 }
 
+#[must_use]
 pub fn merge_codex_parsed(parsed: &[CachedParse]) -> DayMap {
     merge_all_day_maps(parsed.iter().map(|p| &p.days))
 }

@@ -1,4 +1,5 @@
 //! Quota mappers, pacing, value parsing, JWTs and Cursor's CSV against 4.x, recorded before 4.x was removed.
+#![expect(clippy::unwrap_used, reason = "fixture helpers: a broken fixture should fail the test outright")]
 
 use jiff::tz::TimeZoneDatabase;
 use std::path::Path;
@@ -28,7 +29,7 @@ fn as_json<T: serde::Serialize>(value: &T) -> Value {
 }
 
 #[test]
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines, reason = "one layout reads better in one place than split across helpers")]
 fn matches_4x_in_every_recorded_zone() {
     let all = expected();
     for (zone, d) in all.as_object().unwrap() {
@@ -89,7 +90,10 @@ fn matches_4x_in_every_recorded_zone() {
             };
             assert_eq!(ours, row[2], "cursor {}", row[0]);
         }
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+        )]
         for row in d["pace"].as_array().unwrap() {
             let window = QuotaWindow {
                 id: String::new(),
@@ -169,7 +173,7 @@ mod cursor_export {
             Clock::system(),
             Box::new(VecOutput::default()),
         )
-        .with_http(Box::new(Shared(refuse.clone())));
+        .with_http(Box::new(Shared(std::sync::Arc::clone(&refuse))));
         let token = expected()["UTC"]["jwt"][0][0].as_str().unwrap().to_owned();
         let error = fetch_cursor_usage_csv(&core, &token, Some("cookie-encoded:subject")).unwrap_err();
         assert_eq!(error.to_string(), d["failure"].as_str().unwrap());
@@ -229,9 +233,12 @@ mod cursor_cache {
         let output = Arc::new(VecOutput::default());
         let vars =
             [("CURSOR_STATE_DB_PATH", db.to_string_lossy().into_owned()), ("AITRACK_NO_PRICING_REFRESH", "1".into())];
-        let core =
-            Core::new(Env::new(home.path(), vars), Clock::in_zone("UTC").unwrap(), Box::new(Out(output.clone())))
-                .with_http(Box::new(Client(script.clone())));
+        let core = Core::new(
+            Env::new(home.path(), vars),
+            Clock::in_zone("UTC").unwrap(),
+            Box::new(Out(std::sync::Arc::clone(&output))),
+        )
+        .with_http(Box::new(Client(std::sync::Arc::clone(&script))));
         let calls = || *script.1.lock().unwrap();
 
         script.0.lock().unwrap().push(Response { status: 200, headers: Vec::new(), body: CSV.into() });

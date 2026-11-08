@@ -4,6 +4,7 @@ use super::{Git, is_cloned};
 use crate::Core;
 
 /// An HTTPS remote can hold a token, and this output gets pasted into bug reports; an SSH user name is no secret.
+#[must_use]
 pub fn redact_url(url: &str) -> String {
     let Some(scheme_end) = url.find("://") else { return url.to_owned() };
     let scheme = &url[..scheme_end];
@@ -134,6 +135,7 @@ fn scp(url: &str) -> Option<(&str, &str)> {
 }
 
 /// Whether two URLs name one repository. A port only tells servers apart over one transport.
+#[must_use]
 pub fn same_remote(a: &str, b: &str) -> bool {
     if a == b {
         return true;
@@ -150,6 +152,7 @@ pub fn differing_origin(core: &Core, git: &Git, url: &str) -> Option<String> {
     git.clone_origin_url().filter(|origin| !same_remote(origin, url))
 }
 
+#[must_use]
 pub fn origin_mismatch_message(origin: &str, repo_url: &str) -> String {
     format!(
         "The local clone pushes to {}, but repoUrl is {}. To move to repoUrl, run: aitrack init --repo <url> (replaces the clone after asking). To stay on the clone's remote, run: aitrack config set repoUrl <url>.",

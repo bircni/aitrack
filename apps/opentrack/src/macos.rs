@@ -1,5 +1,6 @@
-//! A borderless NSWindow has square corners; the frame view is clipped to a rounded shape instead,
-//! the way native menu-bar panels do it. AppKit also knows the work area, which winit does not.
+//! A borderless `NSWindow` has square corners; the frame view is clipped to a rounded shape instead,
+//! the way native menu-bar panels do it. `AppKit` also knows the work area, which winit does not.
+#![expect(unsafe_code, reason = "AppKit is reached through objc2 calls that are unsafe by signature")]
 
 use std::ptr::NonNull;
 
@@ -40,7 +41,7 @@ pub fn refresh_shadow(handle: &impl HasWindowHandle) {
 }
 
 /// The visible frame (no menu bar or Dock) of the screen holding `point`, in top-left physical pixels.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
 pub fn work_area(point: Option<(i32, i32)>) -> Option<(Rect, f32)> {
     let mtm = MainThreadMarker::new()?;
     let screens = NSScreen::screens(mtm);

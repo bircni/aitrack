@@ -34,6 +34,7 @@ pub fn list_jsonl_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
 }
 
 /// libuv sorts with `strcmp` on Unix; NTFS returns names case-insensitively ordered.
+#[must_use]
 pub fn entry_order(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> std::cmp::Ordering {
     if cfg!(windows) {
         a.to_string_lossy().to_uppercase().cmp(&b.to_string_lossy().to_uppercase())
@@ -43,6 +44,7 @@ pub fn entry_order(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> std::cmp::Orderi
 }
 
 /// Every `.jsonl` file under `roots`, de-duplicated by real location: overlapping roots would double tokens.
+///
 /// The listed path is kept, since macOS resolves `/var` to `/private/var` and cache keys would change.
 pub fn list_unique_source_files(roots: &[PathBuf]) -> io::Result<Vec<PathBuf>> {
     let mut seen = HashSet::new();

@@ -48,7 +48,7 @@ pub enum ConfigAction {
 }
 
 impl ConfigAction {
-    pub fn json(&self) -> bool {
+    pub const fn json(&self) -> bool {
         match self {
             Self::List { json } | Self::Get { json, .. } => *json,
             Self::Set { .. } => false,

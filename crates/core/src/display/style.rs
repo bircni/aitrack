@@ -26,6 +26,7 @@ fn sgr(code: u8) -> String {
 
 impl Style {
     /// `chalk.<style>(text)`: a nested close re-opens this style, and each line break is closed and re-opened.
+    #[must_use]
     pub fn paint(self, text: &str, enabled: bool) -> String {
         if !enabled || text.is_empty() {
             return text.to_owned();
@@ -59,6 +60,7 @@ impl Style {
 }
 
 /// Whether chalk would colour a stream: `FORCE_COLOR` wins, then `NO_COLOR`, then the TTY and terminal sniffing.
+#[must_use]
 pub fn color_supported(env: &Env, is_tty: bool, windows: bool) -> bool {
     let var = |name: &str| env.raw_var(name);
     let numeric = |v: &str| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit());
@@ -114,30 +116,37 @@ pub fn enabled() -> bool {
     *ENABLED.get_or_init(|| color_supported(&Env::from_process(), std::io::stdout().is_terminal(), cfg!(windows)))
 }
 
+#[must_use]
 pub fn bold(text: &str) -> String {
     BOLD.paint(text, enabled())
 }
 
+#[must_use]
 pub fn dim(text: &str) -> String {
     DIM.paint(text, enabled())
 }
 
+#[must_use]
 pub fn red(text: &str) -> String {
     RED.paint(text, enabled())
 }
 
+#[must_use]
 pub fn green(text: &str) -> String {
     GREEN.paint(text, enabled())
 }
 
+#[must_use]
 pub fn yellow(text: &str) -> String {
     YELLOW.paint(text, enabled())
 }
 
+#[must_use]
 pub fn cyan(text: &str) -> String {
     CYAN.paint(text, enabled())
 }
 
+#[must_use]
 pub fn bold_cyan(text: &str) -> String {
     BOLD_CYAN.paint(text, enabled())
 }

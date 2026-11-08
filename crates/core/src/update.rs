@@ -190,6 +190,7 @@ pub fn download_verified(http: &dyn HttpClient, release: &Release) -> Result<Vec
 }
 
 /// Whether `signature` (a Tauri updater `.sig`: a minisign file in base64) signs `data` with `public_key`.
+#[must_use]
 pub fn verify_minisign(data: &[u8], signature: &str, public_key: &str) -> bool {
     let decode = |text: &str| STANDARD.decode(text.trim()).ok().and_then(|bytes| String::from_utf8(bytes).ok());
     let (Some(key), Some(signature)) = (decode(public_key), decode(signature)) else { return false };
@@ -198,6 +199,7 @@ pub fn verify_minisign(data: &[u8], signature: &str, public_key: &str) -> bool {
 }
 
 /// Whether `candidate` is a later release than `current`, by semver precedence.
+#[must_use]
 pub fn is_newer(candidate: &str, current: &str) -> bool {
     let parse = |text: &str| Version::parse(text.trim_start_matches('v'));
     matches!((parse(candidate), parse(current)), (Some(a), Some(b)) if a > b)

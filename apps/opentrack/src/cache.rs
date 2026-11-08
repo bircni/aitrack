@@ -226,7 +226,10 @@ fn normalize_cached_state(clock: &Clock, raw: &Map<String, Value>) -> CachedStat
 
 pub fn load_cached_state(clock: &Clock, input: &Value) -> CachedState {
     let empty = Map::new();
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     let current = |v: &&Map<String, Value>| v.get("format").and_then(Value::as_f64) == Some(CACHE_FORMAT as f64);
     let raw = input.as_object().filter(current);
     normalize_cached_state(clock, raw.unwrap_or(&empty))

@@ -29,7 +29,7 @@ pub struct TokenCounts {
 
 impl TokenCounts {
     /// Sets the cost as 4.x's assignment does: a cost new to a flagged object goes after the flag.
-    pub fn set_cost(&mut self, cost: f64) {
+    pub const fn set_cost(&mut self, cost: f64) {
         if self.cost_usd.is_none() && self.has_unpriced_tokens.is_some() {
             self.unpriced_before_cost = true;
         }
@@ -37,7 +37,7 @@ impl TokenCounts {
     }
 
     /// Drops the unpriced flag, as `delete counts.hasUnpricedTokens` does.
-    pub fn clear_unpriced(&mut self) {
+    pub const fn clear_unpriced(&mut self) {
         self.has_unpriced_tokens = None;
         self.unpriced_before_cost = false;
     }

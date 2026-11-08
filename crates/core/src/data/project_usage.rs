@@ -19,6 +19,7 @@ pub enum ProjectSelector {
 }
 
 impl ProjectSelector {
+    #[must_use]
     pub fn label(&self) -> String {
         match self {
             Self::Project(project) => project.clone(),
@@ -151,6 +152,7 @@ fn remainder(day: &DayEntry, attributed: &TokenCounts) -> Option<TokenCounts> {
 
 /// Usage per project for the synced providers (Cursor has no project data). Each day's projects plus
 /// its remainder add up to the day's total, so these rows always sum to the usage report.
+#[must_use]
 pub fn aggregate_projects(data: &ProviderData, filter: &DateFilter) -> ProjectBreakdown {
     let mut accumulators: IndexMap<String, Accumulator> = IndexMap::new();
     for (provider, days) in data {
@@ -219,6 +221,7 @@ fn slice_of(day: &DayEntry, selector: &ProjectSelector) -> Option<TokenCounts> {
 }
 
 /// Each day reduced to one project's share, as a single model row since the split has no models.
+#[must_use]
 pub fn project_provider_data(data: &ProviderData, selector: &ProjectSelector) -> ProviderData {
     let mut scoped = ProviderData::new();
     for (provider, days) in data {

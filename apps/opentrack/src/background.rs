@@ -129,7 +129,10 @@ impl Deps for LiveDeps {
         load_usage_summary(&self.core, &options)
     }
 
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     fn now(&self) -> f64 {
         SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
     }
@@ -181,7 +184,7 @@ impl Background {
         Arc::new(Self { service: QuotaService::new(deps, clock, settings, Some(cached)), settings_path })
     }
 
-    fn deps(&self) -> &LiveDeps {
+    const fn deps(&self) -> &LiveDeps {
         self.service.deps()
     }
 

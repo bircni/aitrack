@@ -73,10 +73,12 @@ fn total_row<'a>(maps: impl IntoIterator<Item = &'a DayMap>) -> StatsRow {
     }
 }
 
+#[must_use]
 pub fn tui_stats(data: &ProviderData, options: &TuiOptions) -> TuiStats {
     tui_stats_at(data, options, Clock::system().today())
 }
 
+#[must_use]
 pub fn tui_stats_at(data: &ProviderData, options: &TuiOptions, today: Day) -> TuiStats {
     let layout = resolve_provider_layout(data, options.all, options.year);
     if options.all {
@@ -90,11 +92,15 @@ pub fn tui_stats_at(data: &ProviderData, options: &TuiOptions, today: Day) -> Tu
     TuiStats { rows, footer, keys: layout.keys }
 }
 
+#[must_use]
 pub fn render_tui(data: &ProviderData, options: &TuiOptions) -> String {
     render_tui_at(data, options, Clock::system().today(), style::enabled())
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn cells(row: &StatsRow) -> Vec<String> {
     let dash = || "—".to_owned();
     vec![

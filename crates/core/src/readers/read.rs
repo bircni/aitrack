@@ -56,7 +56,7 @@ enum Kind {
 }
 
 impl Kind {
-    fn name(self) -> &'static str {
+    const fn name(self) -> &'static str {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",

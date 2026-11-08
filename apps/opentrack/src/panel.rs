@@ -17,7 +17,7 @@ pub struct PanelState {
     pub tray: Option<Rect>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ToggleAction {
     Hide,
     Show,
@@ -25,12 +25,12 @@ pub enum ToggleAction {
 }
 
 impl PanelState {
-    pub fn shown(&mut self) {
+    pub const fn shown(&mut self) {
         self.focused_since_show = false;
     }
 
     /// Given a change of the window's focus, whether the popup should hide.
-    pub fn blurred(&mut self, visible: bool, focused: bool, now: Instant) -> bool {
+    pub const fn blurred(&mut self, visible: bool, focused: bool, now: Instant) -> bool {
         if focused {
             self.focused_since_show = true;
             return false;

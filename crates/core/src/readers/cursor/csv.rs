@@ -34,13 +34,18 @@ fn parse_csv_line(line: &str) -> Vec<String> {
 }
 
 /// A positive whole count, from cells like `"1,000"`; JS `Number` then `Math.round`.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the value is rounded and bounded to the target range first"
+)]
 fn parse_cursor_number(value: Option<&str>) -> Option<u64> {
     let numeric = parse_number(&value.unwrap_or_default().replace(',', ""))?;
     let rounded = js_round(numeric);
     (numeric > 0.0 && rounded <= 2f64.powi(40)).then_some(rounded as u64)
 }
 
+#[must_use]
 pub fn parse_cursor_date(clock: &Clock, value: Option<&str>) -> Option<Day> {
     let trimmed = trim(value?);
     if trimmed.is_empty() {

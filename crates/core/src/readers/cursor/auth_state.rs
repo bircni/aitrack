@@ -99,6 +99,6 @@ mod tests {
             Some("blob"),
             "read past an exclusive lock"
         );
-        assert!(read_cursor_auth_state(&dir.path().join("missing.vscdb")).is_err());
+        read_cursor_auth_state(&dir.path().join("missing.vscdb")).unwrap_err();
     }
 }

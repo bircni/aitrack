@@ -92,6 +92,7 @@ fn pretty_model_stem(model: &str) -> String {
 }
 
 /// `effort` keeps `-thinking-medium` rows apart from `-high`.
+#[must_use]
 pub fn display_model_name(model: &str, effort: bool) -> String {
     let base = pretty_model_stem(model);
     match model_effort_label(model) {

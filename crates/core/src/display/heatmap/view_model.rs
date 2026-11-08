@@ -28,7 +28,10 @@ pub struct ProviderSectionViewModel {
     pub bottom_stats: Vec<StatCell>,
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn tokens(n: u64) -> String {
     fmt(n as f64)
 }

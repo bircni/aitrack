@@ -161,6 +161,7 @@ fn pushed_message(host: &str, days: usize) -> String {
     format!("Done! Pushed data/{host}.json ({days} days)")
 }
 
+#[must_use]
 pub fn refusal_message(host: &str, failure: Option<Failure>) -> String {
     let filename = machine_data_filename(host).unwrap_or_else(|_| format!("{host}.json"));
     let fix = match failure {

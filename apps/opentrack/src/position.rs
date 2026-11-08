@@ -69,7 +69,7 @@ pub fn window_bounds(
 
 /// A stand-in tray in the right-hand corner, above or below the work area, for a popup opened
 /// before any tray click; Linux reports none, and its tray is usually in a top bar.
-pub fn corner_tray(work: Rect, top: bool) -> Rect {
+pub const fn corner_tray(work: Rect, top: bool) -> Rect {
     let y = if top { work.y - 1 } else { work.y + work.height + 1 };
     Rect { x: work.x + work.width - 1, y, width: 1, height: 1 }
 }

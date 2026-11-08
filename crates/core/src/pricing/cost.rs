@@ -65,12 +65,18 @@ pub fn find_claude_pricing(
 }
 
 /// 1-hour writes cost twice the base input rate, even for models whose cache hits are not 0.1x.
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn claude_cost(pricing: &ClaudePricing, tokens: &TokenBuckets, one_hour: u64) -> f64 {
     cost_from_rates(&pricing.rates(), tokens) + (one_hour as f64 * pricing.input_per_million * 2.0) / 1_000_000.0
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 pub fn estimate_claude_cost_from_aggregate(
     pricing: &ModelPricing,
     model: &str,
@@ -125,7 +131,10 @@ pub fn find_codex_pricing(
 }
 
 /// Not `cost_from_rates`: its term order moves the last bit, and sync commits on any byte change.
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 pub fn estimate_codex_cost(
     pricing: &ModelPricing,
     model: &str,

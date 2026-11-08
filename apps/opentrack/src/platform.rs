@@ -13,14 +13,14 @@ pub const TRAY_ON_TOP: bool = !cfg!(windows);
 pub const TRANSPARENT: bool = cfg!(target_os = "macos");
 
 /// Linux has no tray click, so its menu opens the popup; the monitors may have changed since.
-pub fn before_tray_menu() {
+pub const fn before_tray_menu() {
     #[cfg(target_os = "linux")]
     linux::read_work_area();
 }
 
 /// Before the event loop: Wayland compositors ignore window positions and block global shortcuts,
-/// so Linux runs on XWayland unless asked not to.
-pub fn prepare() {
+/// so Linux runs on `XWayland` unless asked not to.
+pub const fn prepare() {
     #[cfg(target_os = "linux")]
     if std::env::var_os("OPENTRACK_WAYLAND").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_some() {
         std::env::remove_var("WAYLAND_DISPLAY");
@@ -56,7 +56,7 @@ pub fn refresh_shadow(window: &impl HasWindowHandle) {
 }
 
 /// The kept-open window gets a taskbar button so it can be found behind others; the popup has none.
-pub fn show_in_taskbar(window: &impl HasWindowHandle, show: bool) {
+pub const fn show_in_taskbar(window: &impl HasWindowHandle, show: bool) {
     #[cfg(windows)]
     crate::windows::show_in_taskbar(window, show);
     #[cfg(not(windows))]
@@ -80,7 +80,7 @@ pub fn work_area(point: Option<(i32, i32)>) -> Option<(Rect, f32)> {
 /// What a physical position is divided by to give winit the logical one it expects. macOS lays all
 /// screens out in points, so the target screen's scale applies; elsewhere winit converts back with
 /// the scale of the screen the window is on now, which can differ.
-pub fn position_scale(target_scale: f32, window_scale: f32) -> f32 {
+pub const fn position_scale(target_scale: f32, window_scale: f32) -> f32 {
     if cfg!(target_os = "macos") {
         target_scale
     } else {
@@ -110,7 +110,7 @@ pub mod linux {
             width: area.width() * scale,
             height: area.height() * scale,
         };
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(clippy::cast_precision_loss, reason = "a monitor scale factor is a small integer")]
         let scale = scale as f32;
         *WORK_AREA.lock().unwrap() = Some((rect, scale));
     }

@@ -21,7 +21,7 @@ impl<T> Default for Lenient<T> {
 }
 
 impl<T> Lenient<T> {
-    pub fn get(&self) -> Option<&T> {
+    pub const fn get(&self) -> Option<&T> {
         self.0.as_ref()
     }
 }
@@ -85,6 +85,7 @@ impl<'de, T: DeserializeOwned> Deserialize<'de> for Lenient<T> {
 
 /// Parses one JSON line into `T` when it holds an object, as `JSON.parse` plus an `isRecord` check would.
 /// Invalid UTF-8 is replaced with U+FFFD first, as Node's `Buffer.toString` does.
+#[must_use]
 pub fn parse_object<T: DeserializeOwned>(line: &[u8]) -> Option<T> {
     match serde_json::from_slice::<Lenient<T>>(line) {
         Ok(parsed) => parsed.0,

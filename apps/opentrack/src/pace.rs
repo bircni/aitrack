@@ -10,7 +10,10 @@ use serde::Serialize;
 
 /// `Date.parse`: epoch ms, or NaN for what V8 cannot read.
 pub fn parse_ms(clock: &Clock, text: &str) -> f64 {
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     clock.parse_timestamp(text).map_or(f64::NAN, |at| at.as_millisecond() as f64)
 }
 
@@ -51,7 +54,11 @@ pub fn meter_tone(window: &QuotaWindow, pace: &PaceProjection) -> Tone {
 const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /// "7:20 PM" today, "Sun 9:00 PM" within a week, "Oct 16" beyond, as Node's en-US formats them.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the value is rounded and bounded to the target range first"
+)]
 pub fn format_when(at: f64, now: f64, zone: &TimeZone) -> String {
     let local = |ms: f64| Timestamp::from_millisecond(ms as i64).unwrap_or_default().to_zoned(zone.clone());
     let (date, today) = (local(at), local(now));
@@ -77,7 +84,10 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     fn says_when_in_the_local_calendar() {
         let zone = TimeZone::get("Europe/Berlin").unwrap();
         let ms = |text: &str| text.parse::<Timestamp>().unwrap().as_millisecond() as f64;

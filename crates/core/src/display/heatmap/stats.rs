@@ -13,7 +13,7 @@ pub const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 /// One grid column: Sunday to Saturday, `None` outside the range.
 pub type Week = [Option<Day>; 7];
 
-fn tokens(entry: &DayEntry) -> u64 {
+const fn tokens(entry: &DayEntry) -> u64 {
     entry.counts.input_tokens + entry.counts.output_tokens
 }
 
@@ -22,6 +22,7 @@ fn has_activity(days: &DayMap, day: Day) -> bool {
 }
 
 /// An idle today does not break the streak, since today is still in progress.
+#[must_use]
 pub fn current_streak(days: &DayMap, today: Day) -> u64 {
     let mut day = if has_activity(days, today) { today } else { today.shift(-1) };
     let mut streak = 0;
@@ -32,6 +33,7 @@ pub fn current_streak(days: &DayMap, today: Day) -> u64 {
     streak
 }
 
+#[must_use]
 pub fn longest_streak(days: &DayMap) -> u64 {
     let mut active: Vec<Day> = days.iter().filter(|(_, e)| tokens(e) > 0).map(|(d, _)| *d).collect();
     active.sort_unstable();
@@ -52,6 +54,7 @@ pub struct PeakMonth {
     pub tokens: u64,
 }
 
+#[must_use]
 pub fn peak_month(days: &DayMap) -> Option<PeakMonth> {
     let mut months: IndexMap<String, u64> = IndexMap::new();
     for (date, entry) in days {
@@ -100,6 +103,7 @@ fn bump(table: &mut IndexMap<String, u64>, model: &str, delta: u64, track: Optio
     }
 }
 
+#[must_use]
 pub fn compute_model_stats(days: &DayMap, today: Day) -> ModelStats {
     let since = rolling_window(today, RECENT_WINDOW_DAYS).start;
     let (mut all_time, mut recent) = (IndexMap::new(), IndexMap::new());
@@ -132,12 +136,14 @@ fn month_name(month: i8) -> String {
 }
 
 /// `Mar 1, 2026`.
+#[must_use]
 pub fn format_peak_date(date: Day) -> String {
     let text = date.to_string();
     format!("{} {}, {}", month_name(date.date().month()), date.date().day(), &text[..4])
 }
 
 /// `YYYY-MM` as `Mar 2026`.
+#[must_use]
 pub fn format_month_label(month: &str) -> String {
     let (year, number) = month.split_once('-').unwrap_or((month, ""));
     let name = number.parse::<i8>().ok().and_then(|m| usize::try_from(m - 1).ok()).and_then(|i| MONTHS.get(i));
@@ -151,6 +157,7 @@ pub struct MonthLabel {
 }
 
 /// Grid columns that get a month label; a label is wider than one column.
+#[must_use]
 pub fn month_labels(weeks: &[Week]) -> Vec<MonthLabel> {
     let mut labels = Vec::new();
     let mut last_month = -1;
@@ -174,6 +181,7 @@ fn weekday_of(day: Day) -> i64 {
 }
 
 /// The trailing 52 weeks, or one calendar year, as Sunday-first columns.
+#[must_use]
 pub fn build_date_grid(year: Option<i16>, today: Day) -> Vec<Week> {
     let (first, last) = match year {
         None => (today.shift(-weekday_of(today) - HEATMAP_WEEKS * 7), today),

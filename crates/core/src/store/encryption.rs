@@ -40,6 +40,7 @@ pub enum DecryptError {
 }
 
 /// The passphrase exactly as set; unlike other variables it is not trimmed, and empty is unset.
+#[must_use]
 pub fn encryption_passphrase(env: &Env) -> Option<&str> {
     env.raw_var(ENCRYPTION_PASSPHRASE_ENV).filter(|value| !value.is_empty())
 }
@@ -57,6 +58,7 @@ fn derive_key(passphrase: &str, salt: &[u8]) -> [u8; 32] {
 }
 
 /// The pretty-printed envelope for `plaintext`, with a fresh salt and IV.
+#[must_use]
 pub fn encrypt_text(plaintext: &str, passphrase: &str) -> String {
     let mut salt = [0u8; SALT_BYTES];
     let mut iv = [0u8; IV_BYTES];

@@ -175,6 +175,7 @@ pub fn load_persisted_machines(core: &Core) -> Vec<PersistedMachine> {
 
 /// This machine's local logs over its persisted file, through the rule sync writes with. A machine
 /// never synced is added with an empty `lastUpdated`.
+#[must_use]
 pub fn merge_persisted_with_local(
     persisted: &[PersistedMachine],
     local: Option<&MachineFile>,
@@ -204,6 +205,7 @@ pub fn merge_persisted_with_local(
     machines
 }
 
+#[must_use]
 pub fn filter_days_by_providers(days: &MachineDays, providers: Option<&[String]>) -> MachineDays {
     let Some(providers) = providers else { return days.clone() };
     days.iter()

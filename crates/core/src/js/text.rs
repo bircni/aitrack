@@ -1,6 +1,6 @@
 /// JavaScript's `\s` and `String.prototype.trim` set: Unicode spaces, line terminators and the BOM, not NEL.
 #[must_use]
-pub fn is_space(c: char) -> bool {
+pub const fn is_space(c: char) -> bool {
     (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}'
 }
 

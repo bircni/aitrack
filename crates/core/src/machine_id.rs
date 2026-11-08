@@ -60,6 +60,6 @@ mod tests {
             assert_eq!(machine_id_validation_error(&id).map(str::to_owned), expected, "{id:?}");
         }
         assert_eq!(machine_data_filename(" laptop ").unwrap(), "laptop.json");
-        assert!(machine_data_filename("con").is_err());
+        machine_data_filename("con").unwrap_err();
     }
 }

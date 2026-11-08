@@ -35,7 +35,10 @@ struct MachineSummary {
     last_day: Option<String>,
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 pub fn run(core: &Core, json: bool) -> Outcome {
     let machines = load_reported_machines(core)?;
     if machines.is_empty() {

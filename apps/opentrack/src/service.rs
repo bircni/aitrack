@@ -20,7 +20,7 @@ pub const PULL_INTERVAL_MS: f64 = 30.0 * 60_000.0;
 pub const FAILURE_BACKOFF_MS: f64 = 60_000.0;
 
 /// How long a failure waits before the next attempt; a retry-after can only lengthen it.
-fn retry_after_failure_ms(kind: QuotaErrorKind) -> f64 {
+const fn retry_after_failure_ms(kind: QuotaErrorKind) -> f64 {
     match kind {
         QuotaErrorKind::Network
         | QuotaErrorKind::RateLimited
@@ -67,7 +67,7 @@ fn providers_key(providers: &[String]) -> String {
     sorted.join(",")
 }
 
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
 fn iso(ms: f64) -> String {
     iso_millis(jiff::Timestamp::from_millisecond(ms as i64).unwrap_or_default())
 }
@@ -114,7 +114,11 @@ impl<D: Deps> QuotaService<D> {
             if until <= now {
                 continue;
             }
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "the value is rounded and bounded to the target range first"
+            )]
             let retry_after_seconds = ((until - now) / 1000.0).ceil() as u64;
             let error = QuotaError {
                 retry_after_seconds: Some(retry_after_seconds),
@@ -141,7 +145,7 @@ impl<D: Deps> QuotaService<D> {
         Self { deps, clock, inner: Mutex::new(inner), usage_done: Condvar::new(), emitting: Mutex::new(()) }
     }
 
-    pub fn deps(&self) -> &D {
+    pub const fn deps(&self) -> &D {
         &self.deps
     }
 
@@ -338,7 +342,10 @@ impl<D: Deps> QuotaService<D> {
                     alerts
                 }
                 Err(error) => {
-                    #[allow(clippy::cast_precision_loss)]
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+                    )]
                     let declared = error.retry_after_seconds.unwrap_or(0) as f64 * 1000.0;
                     runtime.next_attempt_at = now + retry_after_failure_ms(error.kind).max(declared);
                     // A signed-out provider's old numbers would be misleading, not just stale.
@@ -552,7 +559,7 @@ mod tests {
     ) -> (Arc<Fake>, QuotaService<Arc<Fake>>) {
         *fake.now.lock().unwrap() = START;
         let fake = Arc::new(fake);
-        let service = QuotaService::new(fake.clone(), Clock::in_zone("UTC").unwrap(), settings, cache);
+        let service = QuotaService::new(std::sync::Arc::clone(&fake), Clock::in_zone("UTC").unwrap(), settings, cache);
         (fake, service)
     }
 
@@ -852,7 +859,7 @@ mod tests {
     #[test]
     fn dates_the_limits_by_their_oldest_fetch_however_fresh_the_usage_is() {
         let fail = Arc::new(AtomicBool::new(false));
-        let failing = fail.clone();
+        let failing = std::sync::Arc::clone(&fail);
         let fake = Fake {
             quota: Some(Box::new(move |provider, _| {
                 (provider == "codex" && failing.load(Ordering::SeqCst))
@@ -956,7 +963,7 @@ mod tests {
     #[test]
     fn persists_successful_update_times_and_keeps_them_when_reads_and_quotas_fail() {
         let fail = Arc::new(AtomicBool::new(false));
-        let failing = fail.clone();
+        let failing = std::sync::Arc::clone(&fail);
         let fake = Fake {
             quota: Some(Box::new(move |provider, _| {
                 (provider == "claude_code" && failing.load(Ordering::SeqCst))

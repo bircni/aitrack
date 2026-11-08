@@ -61,7 +61,11 @@ pub fn format_day(date: &str) -> String {
 }
 
 /// `Intl.NumberFormat('en-US')`: grouped, up to three decimals.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the value is rounded and bounded to the target range first"
+)]
 pub fn format_number(value: f64) -> String {
     let scaled = js_round(value.abs() * 1000.0);
     let (int, frac) = ((scaled / 1000.0).trunc() as u64, (scaled % 1000.0) as u64);
@@ -84,14 +88,14 @@ pub enum Period {
 }
 
 impl Period {
-    pub const ALL: [Period; 4] = [Period::Today, Period::Week, Period::Month, Period::All];
+    pub const ALL: [Self; 4] = [Self::Today, Self::Week, Self::Month, Self::All];
 
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
-            Period::Today => "Today",
-            Period::Week => "7 days",
-            Period::Month => "30 days",
-            Period::All => "All time",
+            Self::Today => "Today",
+            Self::Week => "7 days",
+            Self::Month => "30 days",
+            Self::All => "All time",
         }
     }
 }
@@ -145,7 +149,7 @@ pub fn usage_availability(state: &AppState) -> Availability {
     }
 }
 
-pub fn usage_note(availability: Availability) -> &'static str {
+pub const fn usage_note(availability: Availability) -> &'static str {
     match availability {
         Availability::Ready | Availability::Loading => "Reading usage…",
         Availability::Failed => "Usage could not be read",
@@ -216,7 +220,7 @@ impl ShareBasis {
         basis
     }
 
-    pub fn measure(&self, spend: &Spend) -> f64 {
+    pub const fn measure(&self, spend: &Spend) -> f64 {
         if self.by_cost {
             spend.cost_usd
         } else {
@@ -352,7 +356,10 @@ pub fn build_history(providers: &[ProviderState], range: usize, bucket: Bucket) 
         .filter(|p| p.cost_usd > 0.0 || p.has_unpriced_tokens)
         .collect();
     by_provider.sort_by(|a, b| b.cost_usd.total_cmp(&a.cost_usd));
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     let average_usd = if dates.is_empty() { 0.0 } else { total_usd / dates.len() as f64 };
     History {
         total_usd,
@@ -376,7 +383,11 @@ pub fn split_amount(value: f64) -> (String, String) {
     }
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the value is rounded and bounded to the target range first"
+)]
 pub fn format_duration(ms: f64) -> String {
     let minutes = (ms / 60_000.0).ceil().max(1.0) as u64;
     let (days, hours, rest) = (minutes / 1440, (minutes % 1440) / 60, minutes % 60);
@@ -514,7 +525,10 @@ pub fn refresh_outcome(state: &AppState) -> String {
 }
 
 /// Points for a small spend curve in a `width` × `height` box.
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 pub fn sparkline(values: &[f64], width: f64, height: f64, pad: f64) -> Option<Vec<(f64, f64)>> {
     let max = values.iter().copied().fold(0.0, f64::max);
     if values.len() < 2 || max <= 0.0 {
@@ -542,14 +556,14 @@ pub fn sync_status(clock: &Clock, machine: &MachineUsage, now: f64) -> (String, 
     if machine.current {
         return (format!("Live · synced {ago}"), false);
     }
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
     let stale = Timestamp::from_millisecond(now as i64)
         .is_ok_and(|now| aitrack_core::data::stale_sync::is_stale_sync(clock, &machine.last_updated, now));
     (format!("Synced {ago}{}", if stale { " · stale" } else { "" }), stale)
 }
 
 /// "09:42 PM" on that machine's clock, or nothing when it shares this one's zone.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
 pub fn zone_clock(clock: &Clock, timezone: &str, now: f64) -> Option<String> {
     if timezone.is_empty() || clock.zone().iana_name() == Some(timezone) {
         return None;
@@ -574,7 +588,10 @@ mod tests {
     }
 
     fn ms(text: &str) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+        )]
         let value = text.parse::<Timestamp>().unwrap().as_millisecond() as f64;
         value
     }
@@ -810,7 +827,7 @@ mod tests {
             quota_error: Some(error(QuotaErrorKind::NoCredentials, "x")),
             ..provider("codex", "Codex", None)
         };
-        let mut app = state(vec![failing.clone()]);
+        let mut app = state(vec![failing]);
         app.updated_at = Some("2026-06-01T12:00:00Z".into());
         app.quota_updated_at = Some("2026-06-01T03:00:00Z".into());
         assert_eq!(freshness_line(&clock, &app, now), "Updated 9h ago");

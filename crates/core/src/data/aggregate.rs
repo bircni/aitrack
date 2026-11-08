@@ -13,6 +13,7 @@ pub struct TokenTotals {
     pub days: u64,
 }
 
+#[must_use]
 pub fn sum_day_map(days: &DayMap) -> TokenTotals {
     let mut totals = TokenTotals::default();
     for day in days.values() {
@@ -29,6 +30,7 @@ pub fn sum_day_map(days: &DayMap) -> TokenTotals {
     totals
 }
 
+#[must_use]
 pub fn has_unpriced_usage(counts: &TokenCounts) -> bool {
     counts.has_unpriced_tokens == Some(true)
         || (counts.input_tokens + counts.output_tokens > 0 && counts.cost_usd.is_none())
@@ -53,6 +55,7 @@ pub struct DateFilter {
     pub year: Option<i16>,
 }
 
+#[must_use]
 pub fn date_in_filter(date: Day, filter: &DateFilter) -> bool {
     filter.year.is_none_or(|y| date.year() == y)
         && filter.start.is_none_or(|s| date >= s)
@@ -60,6 +63,7 @@ pub fn date_in_filter(date: Day, filter: &DateFilter) -> bool {
 }
 
 /// Per-model sums over the days in `filter`, in first-seen order; rows with no tokens and no cost are skipped.
+#[must_use]
 pub fn aggregate_models(days: &DayMap, filter: &DateFilter) -> IndexMap<String, ModelAgg> {
     let mut by_model: IndexMap<String, ModelAgg> = IndexMap::new();
     for (date, day) in days {

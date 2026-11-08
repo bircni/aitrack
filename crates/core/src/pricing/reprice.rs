@@ -17,7 +17,7 @@ pub struct RepriceResult {
 /// Providers whose rows are written to git, in display order.
 const SYNCED_PROVIDERS: [&str; 2] = ["claude_code", "codex"];
 
-fn token_sum(counts: &TokenCounts) -> u64 {
+const fn token_sum(counts: &TokenCounts) -> u64 {
     counts.input_tokens + counts.output_tokens
 }
 

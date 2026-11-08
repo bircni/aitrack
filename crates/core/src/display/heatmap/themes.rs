@@ -36,11 +36,13 @@ pub const DARK: Palette = Palette {
     muted: "#7d8590",
 };
 
-pub fn palette(dark: bool) -> Palette {
+#[must_use]
+pub const fn palette(dark: bool) -> Palette {
     if dark { DARK } else { LIGHT }
 }
 
 /// The registry's ramp, the merged view's for `all`, or the default for a provider that declared none.
+#[must_use]
 pub fn provider_cells(key: &str, dark: bool) -> CellRamp {
     match (key, provider(key)) {
         ("all", _) => {

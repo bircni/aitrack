@@ -69,7 +69,7 @@ pub struct TopArgs {
 }
 
 impl TopKind {
-    fn name(self) -> &'static str {
+    const fn name(self) -> &'static str {
         match self {
             Self::Days => "days",
             Self::Models => "models",
@@ -79,7 +79,7 @@ impl TopKind {
 }
 
 impl TopArgs {
-    fn sort(&self) -> (TopSort, &'static str) {
+    const fn sort(&self) -> (TopSort, &'static str) {
         match self.sort {
             TopSortArg::Tokens => (TopSort::Tokens, "tokens"),
             TopSortArg::Cost => (TopSort::Cost, "cost"),
@@ -132,7 +132,10 @@ struct View {
     notes: Vec<&'static str>,
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
 fn render_top(core: &Core, args: &TopArgs, view: View) {
     let window = args.window_description();
     let empty = view.items.is_empty().then(|| usage_empty_window_message(window.as_deref()));

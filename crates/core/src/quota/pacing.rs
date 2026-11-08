@@ -34,12 +34,17 @@ const LEVEL: PaceProjection = PaceProjection {
 };
 
 /// JS `Math.round`: halves go up; `x + 0.5` would round 0.49999999999999994 up as well.
+#[must_use]
 pub fn js_round(x: f64) -> f64 {
     let floor = x.floor();
     if x - floor >= 0.5 { floor + 1.0 } else { floor }
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
+#[must_use]
 pub fn project_pace(window: &QuotaWindow, now_ms: f64) -> PaceProjection {
     let used = clamp_percent(window.used_percent);
     if js_round(used) >= 100.0 {

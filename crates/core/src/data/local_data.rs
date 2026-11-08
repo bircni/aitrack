@@ -34,6 +34,7 @@ fn sorted_counts(by_key: Option<&CountsByKey>) -> Option<CountsByKey> {
 
 /// This machine's file from its providers' day maps. With `include_local_dirs`, keeps the working
 /// directories of work with no remote, for `--dir` on this machine; never synced.
+#[must_use]
 pub fn build_machine_data(
     machine_id: &str,
     providers: &IndexMap<String, DayMap>,
@@ -65,15 +66,17 @@ pub fn build_machine_data(
     }
 }
 
+#[must_use]
 pub fn machine_has_data(machine: &MachineFile) -> bool {
     !machine.days.is_empty()
 }
 
-fn day_tokens(day: &ProviderDay) -> u64 {
+const fn day_tokens(day: &ProviderDay) -> u64 {
     day.totals.input_tokens + day.totals.output_tokens
 }
 
 /// How many persisted provider-days a fresh read still covers with fewer tokens, so would not replace.
+#[must_use]
 pub fn ratcheted_provider_days(persisted: Option<&MachineDays>, fresh: &MachineDays) -> usize {
     persisted.map_or(0, |persisted| {
         persisted
@@ -91,6 +94,7 @@ pub fn ratcheted_provider_days(persisted: Option<&MachineDays>, fresh: &MachineD
 
 /// Persisted days overlaid with fresh ones: the larger day wins, because tools prune their logs.
 /// Dates are sorted and providers ordered by `localeCompare`, so the file is stable.
+#[must_use]
 pub fn merge_persisted_days(persisted: Option<&MachineDays>, fresh: &MachineDays) -> MachineDays {
     let mut dates: Vec<Day> =
         persisted.into_iter().flat_map(|p| p.keys().copied()).chain(fresh.keys().copied()).collect();
@@ -147,6 +151,7 @@ fn tokens_in_range(days: &MachineDays, provider: &str, dates: &[Day], from: Day,
 
 /// The persisted days to merge with after this machine changed timezone: a provider's days the logs
 /// fully explain are dropped so re-bucketed fresh days replace them rather than counting twice.
+#[must_use]
 pub fn rebucket_persisted_days(persisted: &MachineFile, fresh: &MachineFile) -> MachineDays {
     if persisted.timezone == fresh.timezone || persisted.timezone == UNKNOWN_TIMEZONE || persisted.timezone.is_empty() {
         return persisted.days.clone();
@@ -197,6 +202,7 @@ pub fn rebucket_persisted_days(persisted: &MachineFile, fresh: &MachineFile) -> 
 }
 
 /// The stable order a machine file is written in.
+#[must_use]
 pub fn canonical_days(days: &MachineDays) -> MachineDays {
     merge_persisted_days(Some(days), &MachineDays::new())
 }

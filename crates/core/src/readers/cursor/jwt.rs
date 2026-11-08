@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 use crate::quota::string_value;
 
 /// The payload of a JWT, without verifying it: only identity and expiry are read.
+#[must_use]
 pub fn decode_jwt_payload(token: &str) -> Option<Map<String, Value>> {
     let encoded = token.split('.').nth(1).filter(|p| !p.is_empty())?;
     let base64 = encoded.replace('-', "+").replace('_', "/");
@@ -18,6 +19,7 @@ pub fn decode_jwt_payload(token: &str) -> Option<Map<String, Value>> {
 }
 
 /// The `exp` claim in epoch ms.
+#[must_use]
 pub fn jwt_expiry_ms(token: &str) -> Option<f64> {
     decode_jwt_payload(token)
         .and_then(|p| p.get("exp").and_then(Value::as_f64))
@@ -25,11 +27,13 @@ pub fn jwt_expiry_ms(token: &str) -> Option<f64> {
         .map(|exp| exp * 1000.0)
 }
 
+#[must_use]
 pub fn jwt_subject(token: &str) -> Option<String> {
     string_value(decode_jwt_payload(token)?.get("sub"))
 }
 
 /// A stable id for the signed-in account, so a cached export is never served to another one.
+#[must_use]
 pub fn cursor_account_id(token: &str) -> String {
     let identity = jwt_subject(token).map_or_else(|| format!("token:{token}"), |subject| format!("subject:{subject}"));
     crate::hex(&Sha256::digest(identity.as_bytes()))

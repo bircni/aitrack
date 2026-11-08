@@ -111,6 +111,7 @@ pub const USAGE_PERIODS: [PeriodDefinition; 13] = [
 ];
 
 /// Bounds every day key falls within.
+#[must_use]
 pub fn all_time() -> (Day, Day) {
     (Day::new(0, 1, 1).expect("valid"), Day::new(9999, 12, 31).expect("valid"))
 }
@@ -133,16 +134,19 @@ pub struct UsageWindow {
 }
 
 impl UsagePeriod {
+    #[must_use]
     pub fn parse(key: &str) -> Option<Self> {
         USAGE_PERIODS.iter().find(|d| d.key == key).map(|d| d.period)
     }
 
+    #[must_use]
     pub fn key(self) -> &'static str {
         USAGE_PERIODS.iter().find(|d| d.period == self).expect("every period is registered").key
     }
 
     /// Windows that move with "today"; `date`, `range` and `all` do not.
-    pub fn anchors_on_today(self) -> bool {
+    #[must_use]
+    pub const fn anchors_on_today(self) -> bool {
         !matches!(self, Self::Date | Self::Range | Self::All)
     }
 
@@ -266,11 +270,13 @@ impl UsagePeriod {
     }
 }
 
+#[must_use]
 pub fn invalid_date_message(value: &str) -> String {
     format!("Invalid date: \"{value}\". Expected YYYY-MM-DD.")
 }
 
 /// Digits only, so `1e3`, `0x10` and `1.0` are rejected rather than coerced.
+#[must_use]
 pub fn parse_positive_integer(value: &str) -> Option<u64> {
     if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -279,12 +285,14 @@ pub fn parse_positive_integer(value: &str) -> Option<u64> {
 }
 
 /// The `n` days ending `today`, inclusive.
+#[must_use]
 pub fn rolling_window(today: Day, n: u64) -> UsageWindow {
     let start = today.shift(-i64::try_from(n).unwrap_or(i64::MAX / 2) + 1);
     UsageWindow { start, end: today, label: format!("last {n} days ({start} → {today})") }
 }
 
 /// `toLocaleDateString()` and `toLocaleTimeString()` for en-US: `4/5/2026 2:05:09 AM`.
+#[must_use]
 pub fn locale_now_label(now: Timestamp, zone: &TimeZone) -> String {
     let local = now.to_zoned(zone.clone());
     let hour = local.hour();

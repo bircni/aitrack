@@ -38,7 +38,7 @@ pub struct SettingErrors {
 pub struct System {
     hotkeys: Option<GlobalHotKeyManager>,
     registered: Option<HotKey>,
-    /// Writes a LaunchAgent or registry key off the UI thread, newest choice last; `None` in a dev
+    /// Writes a `LaunchAgent` or registry key off the UI thread, newest choice last; `None` in a dev
     /// build, which registering to start at login would outlive.
     launch_at_login: Option<Sender<bool>>,
 }

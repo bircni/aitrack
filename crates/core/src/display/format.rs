@@ -4,6 +4,7 @@ use crate::js::number::shortest_digits;
 use crate::js::number_to_string;
 
 /// `x.toFixed(digits)`: rounded from the exact binary value, an exact tie going away from zero.
+#[must_use]
 pub fn to_fixed(x: f64, digits: usize) -> String {
     if !x.is_finite() || x.abs() >= 1e21 {
         return number_to_string(x);
@@ -20,6 +21,7 @@ pub fn to_fixed(x: f64, digits: usize) -> String {
 
 /// `x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })`: ICU rounds
 /// the shortest decimal rather than the binary value, half away from zero, and groups thousands.
+#[must_use]
 pub fn en_us_2dp(x: f64) -> String {
     if x == 0.0 {
         return "0.00".to_owned();
@@ -67,6 +69,7 @@ fn with_point(sign: &str, digits: &[u8], decimals: usize) -> String {
 }
 
 /// `1234567` as `1,234,567`.
+#[must_use]
 pub fn group_thousands(int: &str) -> String {
     let mut out = String::with_capacity(int.len() + int.len() / 3);
     for (i, c) in int.chars().enumerate() {
@@ -84,6 +87,7 @@ fn rounds_past_unit(n: f64, divisor: f64) -> bool {
 }
 
 /// Tokens on the K/M/B scale.
+#[must_use]
 pub fn fmt(n: f64) -> String {
     if n >= 1e9 || rounds_past_unit(n, 1e6) {
         format!("{}B", to_fixed(n / 1e9, 2))
@@ -97,12 +101,17 @@ pub fn fmt(n: f64) -> String {
 }
 
 /// A token count on the K/M/B scale.
-#[allow(clippy::cast_precision_loss)] // 4.x held counts as doubles.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)] // 4.x held counts as doubles.
+#[must_use]
 pub fn fmt_count(n: u64) -> String {
     fmt(n as f64)
 }
 
 /// A USD amount; missing or non-positive shows as an em dash.
+#[must_use]
 pub fn fmt_usd(n: Option<f64>) -> String {
     match n {
         Some(n) if n > 0.0 => fmt_usd_cost(n),
@@ -111,11 +120,13 @@ pub fn fmt_usd(n: Option<f64>) -> String {
 }
 
 /// A USD amount known to exist; zero shows as $0.00.
+#[must_use]
 pub fn fmt_usd_cost(n: f64) -> String {
     if n > 0.0 && n < 0.01 { "<$0.01".to_owned() } else { format!("${}", en_us_2dp(n)) }
 }
 
 /// Pads to `width` UTF-16 units, as `String.length` counts.
+#[must_use]
 pub fn pad(value: &str, width: usize, left: bool) -> String {
     let len = value.encode_utf16().count();
     if len >= width {
@@ -126,6 +137,7 @@ pub fn pad(value: &str, width: usize, left: bool) -> String {
 }
 
 /// The footnote naming models left out of a cost, or `None` when every model was priced.
+#[must_use]
 pub fn unpriced_footnote(models: &[String]) -> Option<String> {
     (!models.is_empty()).then(|| format!("Unpriced models: {}", models.join(", ")))
 }

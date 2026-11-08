@@ -67,7 +67,11 @@ fn cubic(from: (f32, f32), c1: (f32, f32), c2: (f32, f32), to: (f32, f32), out: 
 }
 
 /// SVG's endpoint arc, flattened.
-#[allow(clippy::many_single_char_names, clippy::too_many_arguments)]
+#[expect(
+    clippy::many_single_char_names,
+    clippy::too_many_arguments,
+    reason = "geometry reads clearer with x, y, w, h; each argument is a distinct part of the layout"
+)]
 fn arc(
     from: (f32, f32),
     rx: f32,
@@ -102,8 +106,8 @@ fn arc(
     }
     let cx1 = coef * rx * y1 / ry;
     let cy1 = -coef * ry * x1 / rx;
-    let cx = cos * cx1 - sin * cy1 + (from.0 + to.0) / 2.0;
-    let cy = sin * cx1 + cos * cy1 + (from.1 + to.1) / 2.0;
+    let cx = cos * cx1 - sin * cy1 + f32::midpoint(from.0, to.0);
+    let cy = sin * cx1 + cos * cy1 + f32::midpoint(from.1, to.1);
     let angle = |ux: f32, uy: f32, vx: f32, vy: f32| {
         let dot = ux * vx + uy * vy;
         let len = (ux * ux + uy * uy).sqrt() * (vx * vx + vy * vy).sqrt();
@@ -285,7 +289,7 @@ pub fn paint_glyph(painter: &egui::Painter, rect: Rect, glyph: Glyph, color: Col
     }
 }
 
-/// Marks from OpenQuota (MIT), one path each.
+/// Marks from `OpenQuota` (MIT), one path each.
 const CLAUDE: &str = include_str!("../../icons/providers/claude.path");
 const CODEX: &str = include_str!("../../icons/providers/codex.path");
 const CURSOR: &str = include_str!("../../icons/providers/cursor.path");
@@ -293,7 +297,12 @@ const CURSOR: &str = include_str!("../../icons/providers/cursor.path");
 const MARK_SIZE: usize = 64;
 
 /// Nonzero-winding coverage of the path in a `size` square, 4×4 samples a pixel.
-#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a bounded, rounded number converted between float and integer"
+)]
 fn rasterize(lines: &Polylines, view: f32, size: usize) -> Vec<u8> {
     const SAMPLES: usize = 4;
     let scale = size as f32 / view;

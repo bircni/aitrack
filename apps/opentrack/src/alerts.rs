@@ -81,7 +81,7 @@ pub mod fixtures {
     pub const NOW: f64 = 1_780_315_200_000.0; // 2026-06-01T12:00:00.000Z
     pub const HOUR: f64 = 3_600_000.0;
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
     pub fn iso(ms: f64) -> String {
         iso_millis(Timestamp::from_millisecond(ms as i64).unwrap())
     }

@@ -16,6 +16,7 @@ pub struct DuplicateMachineDays {
 }
 
 /// One machine synced under two ids leaves identical days; distinct machines never match exactly.
+#[must_use]
 pub fn find_duplicate_machine_days(machines: &[MachineFile]) -> DuplicateMachineDays {
     let mut by_day: IndexMap<Day, IndexMap<String, Vec<&str>>> = IndexMap::new();
     for machine in machines {

@@ -39,56 +39,56 @@ const fn hex(rgb: u32) -> Color32 {
 
 pub const LIGHT: Palette = Palette {
     dark: false,
-    surface: hex(0xf6f7f9),
-    card: hex(0xffffff),
-    raised: hex(0xf1f1f3),
-    ink: hex(0x18181b),
-    ink2: hex(0x5f6068),
-    ink3: hex(0x6a6d76),
-    rule: hex(0xececef),
-    track: hex(0xe4e4e8),
-    meter: hex(0x2a2a2f),
-    warn: hex(0xb97800),
-    crit: hex(0xd8432f),
-    warn_text: hex(0x946000),
-    crit_text: hex(0xc23a27),
-    ok: hex(0x27876d),
-    focus: hex(0x2f6fe4),
+    surface: hex(0x00f6_f7f9),
+    card: hex(0x00ff_ffff),
+    raised: hex(0x00f1_f1f3),
+    ink: hex(0x0018_181b),
+    ink2: hex(0x005f_6068),
+    ink3: hex(0x006a_6d76),
+    rule: hex(0x00ec_ecef),
+    track: hex(0x00e4_e4e8),
+    meter: hex(0x002a_2a2f),
+    warn: hex(0x00b9_7800),
+    crit: hex(0x00d8_432f),
+    warn_text: hex(0x0094_6000),
+    crit_text: hex(0x00c2_3a27),
+    ok: hex(0x0027_876d),
+    focus: hex(0x002f_6fe4),
     edge: Color32::from_rgba_premultiplied(0, 0, 0, 20),
-    claude: hex(0xc96442),
-    codex: hex(0x27876d),
-    cursor: hex(0x6273bc),
+    claude: hex(0x00c9_6442),
+    codex: hex(0x0027_876d),
+    cursor: hex(0x0062_73bc),
     curve: Color32::from_rgba_premultiplied(38, 38, 42, 230),
     curve_fill: Color32::from_rgba_premultiplied(3, 3, 3, 15),
 };
 
 pub const DARK: Palette = Palette {
     dark: true,
-    surface: hex(0x191c20),
-    card: hex(0x22262b),
-    raised: hex(0x2b3036),
-    ink: hex(0xf3f3f5),
-    ink2: hex(0xa3a4ab),
-    ink3: hex(0x969ca6),
-    rule: hex(0x30363d),
-    track: hex(0x353c44),
-    meter: hex(0xe9e9ec),
-    warn: hex(0xf5b945),
-    crit: hex(0xff7a66),
-    warn_text: hex(0xf5b945),
-    crit_text: hex(0xff7a66),
-    ok: hex(0x65c3a3),
-    focus: hex(0x8ab4ff),
+    surface: hex(0x0019_1c20),
+    card: hex(0x0022_262b),
+    raised: hex(0x002b_3036),
+    ink: hex(0x00f3_f3f5),
+    ink2: hex(0x00a3_a4ab),
+    ink3: hex(0x0096_9ca6),
+    rule: hex(0x0030_363d),
+    track: hex(0x0035_3c44),
+    meter: hex(0x00e9_e9ec),
+    warn: hex(0x00f5_b945),
+    crit: hex(0x00ff_7a66),
+    warn_text: hex(0x00f5_b945),
+    crit_text: hex(0x00ff_7a66),
+    ok: hex(0x0065_c3a3),
+    focus: hex(0x008a_b4ff),
     edge: Color32::from_rgba_premultiplied(18, 18, 18, 18),
-    claude: hex(0xd97757),
-    codex: hex(0x65c3a3),
-    cursor: hex(0x9ba9ee),
+    claude: hex(0x00d9_7757),
+    codex: hex(0x0065_c3a3),
+    cursor: hex(0x009b_a9ee),
     curve: Color32::from_rgba_premultiplied(210, 210, 212, 230),
     curve_fill: Color32::from_rgba_premultiplied(19, 19, 19, 20),
 };
 
 impl Palette {
-    pub fn for_dark(dark: bool) -> Self {
+    pub const fn for_dark(dark: bool) -> Self {
         if dark {
             DARK
         } else {
@@ -114,7 +114,7 @@ impl Palette {
         }
     }
 
-    pub fn tone_text(&self, tone: Tone) -> Color32 {
+    pub const fn tone_text(&self, tone: Tone) -> Color32 {
         match tone {
             Tone::Warn => self.warn_text,
             Tone::Crit => self.crit_text,
@@ -126,7 +126,11 @@ impl Palette {
     pub fn mix(a: Color32, share: f32, b: Color32) -> Color32 {
         let lerp = |x: u8, y: u8| {
             let value = f32::from(x) * share + f32::from(y) * (1.0 - share);
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "the value is rounded and bounded to the target range first"
+            )]
             let byte = value.round().clamp(0.0, 255.0) as u8;
             byte
         };
@@ -141,7 +145,7 @@ impl Palette {
         visuals.faint_bg_color = self.raised;
         visuals.override_text_color = Some(self.ink);
         visuals.hyperlink_color = self.ink;
-        visuals.selection.bg_fill = Palette::mix(self.focus, 0.3, self.card);
+        visuals.selection.bg_fill = Self::mix(self.focus, 0.3, self.card);
         visuals.selection.stroke = Stroke::new(1.0, self.focus);
         visuals.window_stroke = Stroke::new(1.0, self.edge);
         visuals.window_corner_radius = CornerRadius::same(10);
@@ -149,8 +153,8 @@ impl Palette {
         let widgets = &mut visuals.widgets;
         for (state, fill) in [
             (&mut widgets.inactive, self.raised),
-            (&mut widgets.hovered, Palette::mix(self.ink, 0.06, self.raised)),
-            (&mut widgets.active, Palette::mix(self.ink, 0.1, self.raised)),
+            (&mut widgets.hovered, Self::mix(self.ink, 0.06, self.raised)),
+            (&mut widgets.active, Self::mix(self.ink, 0.1, self.raised)),
             (&mut widgets.open, self.raised),
         ] {
             state.bg_fill = fill;

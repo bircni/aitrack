@@ -14,7 +14,11 @@ const MAX_TOKENS_PER_RECORD: u64 = 1 << 40;
 pub fn token_count(value: &Value) -> Option<u64> {
     let n = value.as_u64().or_else(|| {
         let x = value.as_f64()?;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "the value is rounded and bounded to the target range first"
+        )]
         (x == 0.0 || (x > 0.0 && x.fract() == 0.0 && x <= 2f64.powi(40))).then(|| x.abs() as u64)
     })?;
     (n <= MAX_TOKENS_PER_RECORD).then_some(n)

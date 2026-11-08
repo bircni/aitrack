@@ -25,7 +25,10 @@ fn listen(bus: &Bus) {
     TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
         if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, rect, .. } = event
         {
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the value is rounded and bounded to the target range first"
+            )]
             let tray = Rect {
                 x: rect.position.x.round() as i32,
                 y: rect.position.y.round() as i32,

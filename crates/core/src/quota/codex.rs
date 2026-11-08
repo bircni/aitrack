@@ -36,6 +36,7 @@ fn account_id_from_jwt(token: Option<&str>) -> Option<String> {
         .or_else(|| string_value(payload.get("chatgpt_account_id")))
 }
 
+#[must_use]
 pub fn parse_codex_auth(text: &str) -> Option<CodexAuth> {
     let document: Value = serde_json::from_str(text).ok()?;
     let root = record(Some(&document));
@@ -62,6 +63,7 @@ fn read_codex_credentials(core: &Core) -> Option<CodexAuth> {
 }
 
 /// "prolite" and "pro" are `ChatGPT`'s names for the 5x and 20x Pro tiers.
+#[must_use]
 pub fn format_codex_plan(value: Option<&Value>) -> Option<String> {
     let raw = string_value(value)?;
     Some(match raw.to_lowercase().as_str() {
@@ -77,7 +79,7 @@ enum Kind {
     Weekly,
 }
 
-#[allow(clippy::float_cmp)]
+#[expect(clippy::float_cmp, reason = "exact equality is what is meant here")]
 fn exact_kind(window: &Map<String, Value>) -> Option<Kind> {
     match number_value(window.get("limit_window_seconds")) {
         Some(s) if s == SESSION_SECONDS => Some(Kind::Session),
@@ -87,7 +89,11 @@ fn exact_kind(window: &Map<String, Value>) -> Option<Kind> {
 }
 
 /// Primary is usually the session and secondary the week, but the window length decides when present.
-#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "a bounded, rounded number converted between float and integer"
+)]
 fn map_rate_limit(
     rate_limit: Option<&Map<String, Value>>,
     labels: [(&str, &str); 2],

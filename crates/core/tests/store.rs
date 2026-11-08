@@ -1,5 +1,6 @@
 //! Machine files against 4.x: validation, the writer, merges, compaction and repricing,
 //! recorded before 4.x was removed.
+#![expect(clippy::unwrap_used, reason = "fixture helpers: a broken fixture should fail the test outright")]
 
 use std::path::Path;
 

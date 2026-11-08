@@ -1,4 +1,5 @@
 //! The readers against what 4.x made of the same corpus, recorded before 4.x was removed.
+#![expect(clippy::unwrap_used, reason = "fixture helpers: a broken fixture should fail the test outright")]
 
 use jiff::tz::TimeZoneDatabase;
 use std::path::{Path, PathBuf};

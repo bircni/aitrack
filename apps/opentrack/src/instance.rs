@@ -36,7 +36,7 @@ pub enum Request {
 }
 
 impl Request {
-    fn as_str(self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::Show => "show",
             Self::Settings => "settings",
@@ -132,8 +132,8 @@ mod tests {
         assert!(second.try_lock().is_err());
         ask(&dir.path().join("opentrack.port"), Request::Settings);
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Request::Settings);
-        assert!(rx.try_recv().is_err());
+        rx.try_recv().unwrap_err();
         release();
-        assert!(second.try_lock().is_ok());
+        second.try_lock().unwrap();
     }
 }

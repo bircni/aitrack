@@ -60,12 +60,14 @@ fn compare_top(a: (u64, Option<f64>), b: (u64, Option<f64>), sort: TopSort) -> O
 }
 
 /// The provider with the most tokens; the first such on a tie.
+#[must_use]
 pub fn top_provider_key(by_provider: &IndexMap<String, u64>) -> Option<&str> {
     let mut entries: Vec<(&String, &u64)> = by_provider.iter().collect();
     entries.sort_by(|a, b| b.1.cmp(a.1));
     entries.first().map(|(key, _)| key.as_str())
 }
 
+#[must_use]
 pub fn top_days(data: &ProviderData, limit: usize, sort: TopSort, filter: &DateFilter) -> Vec<DayEntryAccumulator> {
     let mut by_date: IndexMap<String, DayEntryAccumulator> = IndexMap::new();
     for (provider, days) in data {
@@ -103,6 +105,7 @@ pub fn top_days(data: &ProviderData, limit: usize, sort: TopSort, filter: &DateF
     all
 }
 
+#[must_use]
 pub fn top_models(data: &ProviderData, limit: usize, sort: TopSort, filter: &DateFilter) -> Vec<ModelAccumulator> {
     let mut all: Vec<ModelAccumulator> = Vec::new();
     for (provider, days) in data {
@@ -142,6 +145,7 @@ pub fn top_projects(data: &ProviderData, limit: usize, sort: TopSort, filter: &D
 }
 
 /// Models left unpriced in a top-days or top-models ranking, sorted.
+#[must_use]
 pub fn unpriced_top_models(days: &[DayEntryAccumulator], models: &[ModelAccumulator]) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     let unpriced = days

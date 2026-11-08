@@ -122,7 +122,7 @@ mod tests {
         let sig = sign(&key, b"opentrack", "opentrack.app.tar.gz", 1).unwrap();
         assert!(verify_minisign(b"opentrack", &sig, &public));
         assert!(!verify_minisign(b"opentrack!", &sig, &public));
-        assert!(secret_key(&secret, "wrong").is_err());
+        secret_key(&secret, "wrong").unwrap_err();
     }
 
     #[test]

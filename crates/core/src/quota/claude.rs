@@ -61,6 +61,7 @@ fn read_claude_credentials(core: &Core) -> Option<ClaudeCredentials> {
 }
 
 /// `pro` with `default_claude_max_5x` is "Pro 5x"; Max 5x now sells as Max and Max 20x as Ultra.
+#[must_use]
 pub fn format_claude_plan(subscription: Option<&str>, tier: Option<&str>) -> Option<String> {
     let lower = subscription?.to_lowercase();
     let multiplier = tier.and_then(|tier| {

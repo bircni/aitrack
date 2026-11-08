@@ -25,6 +25,7 @@ pub struct Catalog {
 }
 
 /// `{ retrievedAt, models: { key: { i, o, cw, cr, ia?, oa?, cwa?, cra?, fast?, cre?, cwe? } } }`, validated.
+#[must_use]
 pub fn parse_compact_catalog(value: &Value) -> Option<Catalog> {
     let retrieved = value.get("retrievedAt")?.as_str()?;
     Clock::system().parse_timestamp(retrieved)?;
@@ -87,6 +88,7 @@ fn bare_alias_allowed(catalog: &Catalog, model_id: &str, providers: &[&str]) -> 
     catalog.entries.keys().filter(|key| key.ends_with(&suffix)).all(|key| key_matches_providers(key, providers))
 }
 
+#[must_use]
 pub fn find_catalog_rates(catalog: &Catalog, model_id: &str, providers: &[&str]) -> Option<ModelRates> {
     let allowed = |key: &str| {
         if key.contains('/') {

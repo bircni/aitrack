@@ -98,9 +98,15 @@ impl QuotaError {
 pub type QuotaResult = Result<QuotaSnapshot, QuotaError>;
 
 /// Seconds from a `retry-after` header, which may be delta-seconds or an HTTP date.
+#[must_use]
 pub fn parse_retry_after(value: Option<&str>, now_ms: i64) -> Option<u64> {
     let value = value.filter(|v| !trim(v).is_empty())?;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "a bounded, rounded number converted between float and integer"
+    )]
     let seconds = |s: f64| s.max(0.0).ceil() as u64;
     if let Some(n) = parse_number(value).filter(|n| n.is_finite()) {
         return Some(seconds(n));
@@ -111,7 +117,10 @@ pub fn parse_retry_after(value: Option<&str>, now_ms: i64) -> Option<u64> {
         .map(|z| z.timestamp())
         .ok()
         .or_else(|| Clock::system().parse_timestamp(value))?;
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     Some(seconds((date.as_millisecond() - now_ms) as f64 / 1000.0))
 }
 
@@ -150,7 +159,10 @@ pub fn request_json(
 }
 
 pub fn assert_not_expired(expires_at_ms: Option<f64>, now_ms: i64, message: &str) -> Result<(), QuotaError> {
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+    )]
     match expires_at_ms {
         Some(at) if at <= now_ms as f64 => Err(QuotaError::new(QuotaErrorKind::Expired, message)),
         _ => Ok(()),
@@ -162,6 +174,7 @@ pub fn record(value: Option<&Value>) -> Option<&Map<String, Value>> {
 }
 
 /// A finite number, accepting numeric strings as providers sometimes send them.
+#[must_use]
 pub fn number_value(value: Option<&Value>) -> Option<f64> {
     match value? {
         Value::String(text) if !trim(text).is_empty() => parse_number(text),
@@ -186,7 +199,7 @@ pub fn instant_value(value: Option<&Value>) -> Option<String> {
     }
     let raw = number_value(value)?;
     let ms = if raw.abs() < 10_000_000_000.0 { raw * 1000.0 } else { raw };
-    #[allow(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
     jiff::Timestamp::from_millisecond(ms.trunc() as i64).ok().map(iso_millis)
 }
 
@@ -203,6 +216,7 @@ fn has_zone(text: &str) -> bool {
 }
 
 /// `"prolite_plan"` as `"Prolite Plan"`: words split on whitespace and underscores, first letters capitalised.
+#[must_use]
 pub fn title_case(value: &str) -> String {
     value
         .split(|c: char| crate::js::is_space(c) || c == '_')
@@ -215,7 +229,8 @@ pub fn title_case(value: &str) -> String {
         .join(" ")
 }
 
-pub fn clamp_percent(value: f64) -> f64 {
+#[must_use]
+pub const fn clamp_percent(value: f64) -> f64 {
     value.clamp(0.0, 100.0)
 }
 

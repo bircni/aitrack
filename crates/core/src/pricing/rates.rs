@@ -24,7 +24,11 @@ pub struct TokenBuckets {
 }
 
 /// Raw input is inferred from the total when a stored row has no explicit split.
-#[allow(clippy::cast_precision_loss)]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
+)]
+#[must_use]
 pub fn token_buckets(counts: &TokenCounts) -> TokenBuckets {
     let cache_read = counts.cached_input_tokens.unwrap_or(0);
     let cache_write = counts.cache_creation_input_tokens.unwrap_or(0);
@@ -40,6 +44,7 @@ pub fn token_buckets(counts: &TokenCounts) -> TokenBuckets {
 }
 
 /// Term order is part of the result: sync commits on any change in the last bit.
+#[must_use]
 pub fn cost_from_rates(rates: &FullRates, tokens: &TokenBuckets) -> f64 {
     (tokens.raw * rates.input_per_million
         + tokens.output * rates.output_per_million
@@ -48,6 +53,7 @@ pub fn cost_from_rates(rates: &FullRates, tokens: &TokenBuckets) -> f64 {
         / 1_000_000.0
 }
 
+#[must_use]
 pub fn scale_rates(rates: &FullRates, factor: f64) -> FullRates {
     FullRates {
         input_per_million: rates.input_per_million * factor,
