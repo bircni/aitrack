@@ -95,6 +95,12 @@ pub fn fmt(n: f64) -> String {
     }
 }
 
+/// A token count on the K/M/B scale.
+#[allow(clippy::cast_precision_loss)] // 4.x held counts as doubles.
+pub fn fmt_count(n: u64) -> String {
+    fmt(n as f64)
+}
+
 /// A USD amount; missing or non-positive shows as an em dash.
 pub fn fmt_usd(n: Option<f64>) -> String {
     match n {

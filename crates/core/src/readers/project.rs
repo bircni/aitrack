@@ -70,6 +70,30 @@ pub fn attribute_cwd(resolver: &dyn ProjectResolver, cwd: Option<&str>) -> Attri
     }
 }
 
+/// `realpath` without Windows' `\\?\` prefix, so the result matches the working directories logs record.
+fn real_path(path: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+    let real = std::fs::canonicalize(path)?;
+    let text = real.to_string_lossy();
+    Ok(match text.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC\\") => rest.into(),
+        _ => real,
+    })
+}
+
+/// The project of a directory, or the directory itself when it has no remote.
+pub fn resolve_project_selector(path: &std::path::Path) -> Result<crate::data::project_usage::ProjectSelector, String> {
+    use crate::data::project_usage::ProjectSelector;
+    let dir = super::paths::absolute(path);
+    if !dir.is_dir() {
+        return Err(format!("Not a directory: {}", path.display()));
+    }
+    let real = real_path(&dir).map_err(|e| e.to_string())?;
+    Ok(match GitProjectResolver::default().resolve(&real.to_string_lossy()) {
+        Some(project) => ProjectSelector::Project(project),
+        None => ProjectSelector::Dir(real),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::repository_of;

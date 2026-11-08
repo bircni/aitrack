@@ -5,11 +5,13 @@ use std::path::PathBuf;
 use indexmap::IndexMap;
 
 use crate::Core;
+use crate::config::resolve_machine_id;
 use crate::data::aggregate::sum_day_map;
 use crate::data::day_map::{add_counts_by_key, add_token_counts, flag_unpriced, get_or_create_day, merge_all_day_maps};
-use crate::data::local_data::{machine_has_data, merge_persisted_days, rebucket_persisted_days};
+use crate::data::local_data::{build_machine_data, machine_has_data, merge_persisted_days, rebucket_persisted_days};
 use crate::data::types::{DayEntry, DayMap, MachineDays, MachineFile, ProviderData, ProviderDay, TokenCounts};
 use crate::day::Day;
+use crate::machine_id::machine_data_filename;
 use crate::pricing::cost::{PriceMode, resolve_model_cost};
 use crate::pricing::model_pricing::ModelPricing;
 use crate::providers::{is_synced_provider, sort_provider_keys};
@@ -276,4 +278,50 @@ pub fn provider_data_for_windows(
         }
     }
     out
+}
+
+/// This machine's file from its logs, with the working directories `--dir` needs.
+pub fn build_local_machine_file(
+    core: &Core,
+    machine_id: &str,
+    providers: Option<&[String]>,
+) -> crate::error::Result<MachineFile> {
+    let maps = crate::sync::read_local_provider_maps(core, None, providers)?;
+    Ok(build_machine_data(machine_id, &maps, core.clock.zone_name(), core.clock.now(), true))
+}
+
+/// Machines as reports show them: others as synced, this one overlaid with its local logs.
+pub fn load_reported_machines(core: &Core) -> crate::error::Result<Vec<MachineFile>> {
+    let config = core.try_load_config();
+    let machine_id = resolve_machine_id(config.as_ref()).map_err(crate::error::Error::new)?;
+    let persisted = if config.is_some() && is_cloned(core) { load_persisted_machines(core) } else { Vec::new() };
+    let local = build_local_machine_file(core, &machine_id, None)?;
+    let current_file = machine_data_filename(&machine_id).map_err(crate::error::Error::new)?;
+    Ok(merge_persisted_with_local(&persisted, Some(&local), &current_file))
+}
+
+/// Every machine's days for reports; the live providers are fetched while the logs are read.
+/// `local`, when given, is this machine's file already read from its logs.
+pub fn load_usage(
+    core: &Core,
+    providers: Option<&[String]>,
+    refresh_live: bool,
+    local: Option<MachineFile>,
+) -> crate::error::Result<Option<LoadedUsage>> {
+    let config = core.try_load_config();
+    let machine_id = resolve_machine_id(config.as_ref()).map_err(crate::error::Error::new)?;
+    let wants_cursor = providers.is_none_or(|p| p.iter().any(|k| k == "cursor"));
+    let max_age = if refresh_live { None } else { Some(crate::readers::cursor::cache_ttl_seconds(core)) };
+    let (local, cursor) = std::thread::scope(|scope| {
+        let cursor = wants_cursor.then(|| scope.spawn(|| crate::readers::cursor::read_cursor_data(core, max_age)));
+        let local = local.map_or_else(|| build_local_machine_file(core, &machine_id, providers), Ok);
+        (local, cursor.map(|handle| handle.join().unwrap_or_default()))
+    });
+    let local = local?;
+    let mut live = ProviderData::new();
+    if let Some(days) = cursor {
+        live.insert("cursor".to_owned(), days);
+    }
+    let rates = core.pricing().current();
+    Ok(load_merged_provider_data(core, &rates, &machine_id, Some(&local), providers, live))
 }
