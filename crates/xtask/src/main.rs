@@ -44,12 +44,7 @@ fn io(path: &Path) -> impl Fn(std::io::Error) -> String + '_ {
 
 /// Runs a command to completion; its stdout, or what it said on stderr when it failed.
 fn cmd(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<String> {
-    let mut command = std::process::Command::new(program);
-    command.args(args);
-    if let Some(cwd) = cwd {
-        command.current_dir(cwd);
-    }
-    let output = command.output().map_err(|e| format!("{program}: {e}"))?;
+    let output = aitrack_core::process::run(program, args, &[], cwd, None).map_err(|e| format!("{program}: {e}"))?;
     if output.status.success() {
         return Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned());
     }

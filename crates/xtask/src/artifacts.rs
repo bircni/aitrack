@@ -1,6 +1,8 @@
 //! The installers a release ships, named as Tauri's bundler named them: Homebrew, winget, 4.x's
 //! updater and the smoke test all find them by these names.
 
+use aitrack_core::update;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Installer {
     Dmg,
@@ -42,11 +44,24 @@ impl Installer {
     }
 }
 
-/// The updater's platform key for each installer it can install. 4.x's `.deb` installs read
-/// `linux-x86_64-deb` and update through pkexec; 5.0 leaves a `.deb` to the package manager.
+/// The updater's platform key for each installer it can install, as `aitrack_core::update` reads them.
+/// 4.x's `.deb` installs read `linux-x86_64-deb` and update through pkexec; 5.0 leaves a `.deb` to
+/// the package manager.
 pub const UPDATER_PLATFORMS: [(&str, Installer); 4] = [
-    ("darwin-aarch64", Installer::AppArchive),
-    ("windows-x86_64", Installer::Nsis),
-    ("linux-x86_64", Installer::AppImage),
+    (update::MAC_TARGET, Installer::AppArchive),
+    (update::WINDOWS_TARGET, Installer::Nsis),
+    (update::LINUX_TARGET, Installer::AppImage),
     ("linux-x86_64-deb", Installer::Deb),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn publishes_every_platform_the_updater_asks_for() {
+        if let Ok(target) = update::updater_target() {
+            assert!(UPDATER_PLATFORMS.iter().any(|(key, _)| *key == target), "{target}");
+        }
+    }
+}

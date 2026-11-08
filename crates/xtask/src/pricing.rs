@@ -31,7 +31,6 @@ pub const CURSOR_PROVIDERS: [&str; 5] = ["cursor", "xai", "google", "openai", "a
 
 pub type Result<T> = std::result::Result<T, String>;
 
-/// `JSON.stringify(value, null, 2)` and a newline, as every pack and table file is written.
 fn amount(value: Option<&Value>) -> Option<f64> {
     value.and_then(Value::as_f64).filter(|x| x.is_finite() && *x >= 0.0)
 }

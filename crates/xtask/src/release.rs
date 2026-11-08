@@ -69,13 +69,9 @@ pub fn bump(current: &str, bump: &str) -> Result<String> {
 
 const RELEASE_BRANCH: &str = "main";
 
+/// Whether git succeeded, with its stdout and stderr: a release check reads failures as answers.
 fn git(cwd: Option<&Path>, args: &[&str]) -> (bool, String, String) {
-    let mut command = Command::new("git");
-    command.args(args);
-    if let Some(cwd) = cwd {
-        command.current_dir(cwd);
-    }
-    match command.output() {
+    match aitrack_core::process::run("git", args, &[], cwd, None) {
         Ok(out) => (
             out.status.success(),
             String::from_utf8_lossy(&out.stdout).trim().to_owned(),

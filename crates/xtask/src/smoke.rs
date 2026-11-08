@@ -33,10 +33,6 @@ fn find(directory: &Path, matches: &impl Fn(&str) -> bool) -> Vec<PathBuf> {
     found
 }
 
-fn run(program: &str, args: &[&str], cwd: &Path) -> Result<()> {
-    cmd(program, args, Some(cwd)).map(drop)
-}
-
 fn installer(bundle: &Path, kind: Installer, version: &str) -> Result<PathBuf> {
     let name = format!("/{}", kind.file_name(version));
     only_match(&bundle.join(kind.dir()), |p| p.ends_with(&name))
@@ -49,10 +45,10 @@ fn extract_apps(bundle: &Path, version: &str, temporary: &Path) -> Result<(Vec<P
         let mount = temporary.join("volume");
         std::fs::create_dir(&mount).map_err(io(&mount))?;
         let mount_arg = mount.to_string_lossy().into_owned();
-        run(
+        cmd(
             "hdiutil",
             &["attach", &dmg.to_string_lossy(), "-readonly", "-nobrowse", "-mountpoint", &mount_arg],
-            temporary,
+            Some(temporary),
         )?;
         let app = only_match(&mount, |p| p.ends_with(".app/Contents/MacOS/opentrack"));
         return app.map(|a| (vec![a], Some(mount)));
@@ -60,10 +56,10 @@ fn extract_apps(bundle: &Path, version: &str, temporary: &Path) -> Result<(Vec<P
     if cfg!(target_os = "linux") {
         let deb = installer(bundle, Installer::Deb, version)?;
         let deb_root = temporary.join("deb");
-        run("dpkg-deb", &["-x", &deb.to_string_lossy(), &deb_root.to_string_lossy()], temporary)?;
+        cmd("dpkg-deb", &["-x", &deb.to_string_lossy(), &deb_root.to_string_lossy()], Some(temporary))?;
         let image = installer(bundle, Installer::AppImage, version)?;
         // Runs only the AppImage runtime, which unpacks to ./squashfs-root without FUSE.
-        run(&image.to_string_lossy(), &["--appimage-extract"], temporary)?;
+        cmd(&image.to_string_lossy(), &["--appimage-extract"], Some(temporary))?;
         let from_deb = only_match(&deb_root, |p| p.ends_with("/usr/bin/opentrack"))?;
         let from_image = only_match(&temporary.join("squashfs-root"), |p| p.ends_with("/usr/bin/opentrack"))?;
         return Ok((vec![from_deb, from_image], None));
@@ -71,7 +67,7 @@ fn extract_apps(bundle: &Path, version: &str, temporary: &Path) -> Result<(Vec<P
     let setup = installer(bundle, Installer::Nsis, version)?;
     let extracted = temporary.join("installer");
     // Unpacks the installer without registering or launching an installed app.
-    run("7z", &["x", &setup.to_string_lossy(), &format!("-o{}", extracted.display()), "-y"], temporary)?;
+    cmd("7z", &["x", &setup.to_string_lossy(), &format!("-o{}", extracted.display()), "-y"], Some(temporary))?;
     Ok((vec![only_match(&extracted, |p| p.ends_with("/opentrack.exe"))?], None))
 }
 
@@ -125,7 +121,7 @@ pub fn smoke_bundle(version: &str) -> Result<()> {
         .enumerate()
         .try_for_each(|(index, app)| check_app(app, &temporary.path().join(format!("data-{index}"))));
     if let Some(mount) = mounted {
-        let _ = run("hdiutil", &["detach", &mount.to_string_lossy()], temporary.path());
+        let _ = cmd("hdiutil", &["detach", &mount.to_string_lossy()], Some(temporary.path()));
     }
     result.map(|()| println!("Packaged app started, read isolated settings and reported its state."))
 }
