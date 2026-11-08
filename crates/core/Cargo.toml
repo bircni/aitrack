@@ -24,6 +24,7 @@ getrandom = "0.4.3"
 indexmap = { version = "2.14.2", features = ["serde"] }
 jiff = { version = "0.2.40", default-features = false, features = ["std", "tz-system", "tz-fat", "tzdb-bundle-platform", "tzdb-zoneinfo", "tzdb-concatenated", "serde"] }
 memchr = "2.8.3"
+minisign-verify = "0.3.0"
 png = { version = "0.18.1", optional = true }
 regex-lite = "0.1.9"
 ryu = "1.0.23"
