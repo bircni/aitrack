@@ -2,8 +2,8 @@ name: CI
 
 on:
   push:
-    # main runs fill the Rust and Nx caches that pull requests restore.
-    branches: [main]
+    # main runs fill the Rust and Nx caches that pull requests restore; `rust` keeps the 4.x oracle checked.
+    branches: [main, rust]
   pull_request:
     branches: [main]
   workflow_dispatch:

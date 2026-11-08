@@ -1,0 +1,12 @@
+[package]
+name = "aitrack-core"
+description = "Usage readers, pricing, data repo sync and live limits shared by the aitrack CLI and opentrack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

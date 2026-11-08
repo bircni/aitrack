@@ -1,0 +1,12 @@
+# Advisories and sources only; licences are reviewed at release time.
+[graph]
+all-features = true
+
+[advisories]
+yanked = "warn"
+# Unmaintained crates deep in the Tauri tree cannot be swapped; only direct dependencies fail.
+unmaintained = "workspace"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

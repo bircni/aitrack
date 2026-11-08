@@ -1,11 +1,35 @@
 [workspace]
-resolver = "2"
-members = ["apps/opentrack"]
+resolver = "3"
+members = ["apps/opentrack", "crates/cli", "crates/core"]
 
-# Size over speed: the shell only routes messages, the work happens in the sidecar.
+[workspace.package]
+version = "4.2.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+repository = "https://github.com/bircni/aitrack"
+publish = false
+
+[workspace.dependencies]
+aitrack-core = { path = "crates/core" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+# Size over speed: smallest binaries and lowest RAM are the priority.
 [profile.release]
 codegen-units = 1
 lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# Line tables keep backtraces readable while cutting what CI compiles and caches.
+[profile.dev]
+debug = "line-tables-only"
