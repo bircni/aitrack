@@ -64,7 +64,8 @@ just rust        # without cargo deny
 Clippy runs pedantic with `-D warnings`.
 
 CI (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests: format and Clippy on
-Ubuntu, tests on Ubuntu, macOS and Windows, and cargo deny. Pull requests also get GitHub's
+Ubuntu, tests on Ubuntu and macOS, Clippy and a build for Windows cross-compiled on Ubuntu with
+MinGW, and cargo deny. Pull requests also get GitHub's
 dependency review. Dependabot proposes Cargo and Actions updates.
 
 ## Desktop development
