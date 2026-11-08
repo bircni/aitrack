@@ -36,6 +36,8 @@ tiny-skia = { version = "0.12.0", default-features = false, features = ["std", "
 ureq = { version = "3.5.1", default-features = false, features = ["rustls", "platform-verifier"] }
 
 [dev-dependencies]
+# Hosts disagree on pre-1900 offsets (Debian builds with backzone), so goldens use jiff's own copy.
+jiff = { version = "0.2.40", default-features = false, features = ["tzdb-bundle-always"] }
 proptest = "1.12.0"
 tempfile = "3.27.0"
 

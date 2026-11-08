@@ -4,7 +4,12 @@ use serde_json::Value;
 /// `aitrack` in an empty home, with nothing from the developer's machine.
 fn aitrack(home: &std::path::Path) -> Command {
     let mut command = Command::cargo_bin("aitrack").unwrap();
-    command.env_clear().env("HOME", home).env("PATH", std::env::var_os("PATH").unwrap()).env("NO_COLOR", "1");
+    command.env_clear().env("HOME", home).env("USERPROFILE", home).env("NO_COLOR", "1");
+    for kept in ["PATH", "SystemRoot"] {
+        if let Some(value) = std::env::var_os(kept) {
+            command.env(kept, value);
+        }
+    }
     command.env("CURSOR_STATE_DB_PATH", home.join("none.vscdb")).env("AITRACK_NO_PRICING_REFRESH", "1");
     command.current_dir(home);
     command
