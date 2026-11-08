@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crate::data::day_map::Attribution;
@@ -7,10 +8,14 @@ use crate::data::project::{NO_REMOTE_PROJECT, normalize_remote_url};
 use crate::process::run;
 
 const GIT_TIMEOUT: Duration = Duration::from_secs(5);
+const PREFETCH_THREADS: usize = 16;
 
 /// `owner/repo` of a directory's origin, or `None` when it is gone or has no remote.
 pub trait ProjectResolver: Sync {
     fn resolve(&self, cwd: &str) -> Option<String>;
+
+    /// Resolves directories ahead of the `resolve` calls that will ask for them.
+    fn prefetch(&self, _cwds: &[&str]) {}
 }
 
 /// Asks git once per repository for the life of the resolver.
@@ -28,6 +33,29 @@ impl ProjectResolver for GitProjectResolver {
         let project = origin_url(&repository).and_then(|url| normalize_remote_url(&url));
         self.known.lock().expect("not poisoned").insert(repository, project.clone());
         project
+    }
+
+    /// Git spends most of each call starting up, so asking side by side is what keeps a cold scan fast.
+    fn prefetch(&self, cwds: &[&str]) {
+        let mut pending: Vec<&str> = Vec::new();
+        {
+            let known = self.known.lock().expect("not poisoned");
+            for repository in cwds.iter().map(|cwd| repository_of(cwd)) {
+                if !known.contains_key(repository) && !pending.contains(&repository) {
+                    pending.push(repository);
+                }
+            }
+        }
+        let next = AtomicUsize::new(0);
+        std::thread::scope(|threads| {
+            for _ in 0..pending.len().min(PREFETCH_THREADS) {
+                threads.spawn(|| {
+                    while let Some(cwd) = pending.get(next.fetch_add(1, Ordering::Relaxed)) {
+                        self.resolve(cwd);
+                    }
+                });
+            }
+        });
     }
 }
 
@@ -96,7 +124,7 @@ pub fn resolve_project_selector(path: &std::path::Path) -> Result<crate::data::p
 
 #[cfg(test)]
 mod tests {
-    use super::repository_of;
+    use super::{GitProjectResolver, ProjectResolver, repository_of};
 
     #[test]
     fn maps_agent_worktrees_to_their_repository() {
@@ -105,5 +133,27 @@ mod tests {
         assert_eq!(repository_of("/src/app/.claude/worktrees/"), "/src/app/.claude/worktrees/");
         assert_eq!(repository_of("/.claude/worktrees/x"), "/.claude/worktrees/x");
         assert_eq!(repository_of("/src/app"), "/src/app");
+    }
+
+    #[test]
+    fn prefetch_resolves_each_repository_once_for_later_lookups() {
+        let root = tempfile::tempdir().unwrap();
+        let git = |dir: &std::path::Path, args: &[&str]| {
+            assert!(std::process::Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success());
+        };
+        let (app, plain) = (root.path().join("app"), root.path().join("plain"));
+        for dir in [&app, &plain] {
+            std::fs::create_dir(dir).unwrap();
+            git(dir, &["init", "-q"]);
+        }
+        git(&app, &["remote", "add", "origin", "git@github.com:me/app.git"]);
+        let (app, plain) = (app.to_str().unwrap(), plain.to_str().unwrap());
+        let worktree = format!("{app}/.claude/worktrees/t");
+        let resolver = GitProjectResolver::default();
+        resolver.prefetch(&[app, plain, &worktree]);
+        let known = resolver.known.lock().unwrap().clone();
+        assert_eq!(known.len(), 2);
+        assert_eq!(known[app].as_deref(), Some("me/app"));
+        assert_eq!(known[plain], None);
     }
 }

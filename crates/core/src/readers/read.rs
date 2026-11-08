@@ -14,6 +14,7 @@ use super::provider::{
     CachedParse, Pricing, finish_claude_scan, finish_codex_scan, merge_claude_parsed, merge_codex_parsed,
 };
 use crate::Core;
+use crate::data::project::normalize_remote_url;
 use crate::data::types::DayMap;
 
 pub fn claude_roots(core: &Core) -> Vec<PathBuf> {
@@ -91,14 +92,21 @@ fn read_days(
     let missed: Vec<PathBuf> = files.iter().zip(&parsed).filter(|(_, p)| p.is_none()).map(|(f, _)| f.clone()).collect();
     let clock = &core.clock;
     let scans: Vec<io::Result<CachedParse>> = match kind {
-        Kind::Claude => scan_all(&missed, cache.missed_bytes(), |f| scan_claude_file(f, clock, CHUNK_BYTES))
-            .into_iter()
-            .map(|scan| scan.map(|scanned| finish_claude_scan(scanned, pricing, resolver)))
-            .collect(),
-        Kind::Codex => scan_all(&missed, cache.missed_bytes(), |f| scan_codex_file(f, clock, CHUNK_BYTES))
-            .into_iter()
-            .map(|scan| scan.map(|scan| finish_codex_scan(&scan, pricing, resolver)))
-            .collect(),
+        Kind::Claude => {
+            let scanned = scan_all(&missed, cache.missed_bytes(), |f| scan_claude_file(f, clock, CHUNK_BYTES));
+            let cwds = scanned.iter().flatten().flatten().filter_map(|m| m.cwd.as_deref());
+            resolver.prefetch(&unique(cwds));
+            scanned.into_iter().map(|scan| scan.map(|scanned| finish_claude_scan(scanned, pricing, resolver))).collect()
+        }
+        Kind::Codex => {
+            let scanned = scan_all(&missed, cache.missed_bytes(), |f| scan_codex_file(f, clock, CHUNK_BYTES));
+            let unknown = scanned
+                .iter()
+                .flatten()
+                .filter(|s| s.repository_url.as_deref().and_then(normalize_remote_url).is_none());
+            resolver.prefetch(&unique(unknown.filter_map(|s| s.cwd.as_deref())));
+            scanned.into_iter().map(|scan| scan.map(|scan| finish_codex_scan(&scan, pricing, resolver))).collect()
+        }
     };
     let mut scans = missed.iter().zip(scans);
     for slot in &mut parsed {
@@ -117,4 +125,9 @@ fn read_days(
     };
     snapshot.write(&days);
     Ok(days)
+}
+
+fn unique<'a>(cwds: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
+    let mut seen = std::collections::HashSet::new();
+    cwds.filter(|cwd| seen.insert(*cwd)).collect()
 }
