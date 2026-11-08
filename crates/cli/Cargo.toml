@@ -9,7 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "aitrack-cli"
+name = "aitrack"
 path = "src/main.rs"
 
 [lints]
