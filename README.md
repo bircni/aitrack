@@ -71,7 +71,7 @@ provider limits alongside the usage history and cost estimates used by aitrack.
 - Reset times, pacing indicators and notifications when limits are running low.
 - Today, yesterday and 30-day usage with daily trends and model breakdowns.
 - A configurable tray icon or bars for your available limits, with colour or monochrome rendering.
-- A resizable dashboard window with a compact view, global shortcut and optional launch at login.
+- A tray popup with a compact view, a keep-open mode, global shortcut and optional launch at login.
 
 Install opentrack with Homebrew on macOS 13.5+ (Apple Silicon), or with the CLI on Apple
 Silicon macOS or x86_64 Windows or Linux:

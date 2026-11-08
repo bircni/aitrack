@@ -107,16 +107,11 @@ impl Sidecar {
         let owed_since = self.owed_since.clone();
         let hang_killed = Arc::new(AtomicBool::new(false));
         watch_for_hang(self.owed_since.clone(), self.child.clone(), hang_killed.clone(), timings.hang);
+        // Reported before it is published, so nobody woken by the change can outrun the report.
         let set_status = move |next: Status| {
-            let changed = status.send_if_modified(|current| {
-                let changed = *current != next;
-                if changed {
-                    current.clone_from(&next);
-                }
-                changed
-            });
-            if changed {
+            if *status.borrow() != next {
                 on_status(&next);
+                status.send_replace(next);
             }
         };
         thread::spawn(move || {

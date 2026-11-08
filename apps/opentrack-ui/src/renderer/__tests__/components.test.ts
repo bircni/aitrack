@@ -33,9 +33,7 @@ const mocks = vi.hoisted(() => ({
     availableUpdate: vi.fn(),
     onUpdate: vi.fn(),
     installUpdate: vi.fn(),
-    resizeHeight: vi.fn(),
     hideWindow: vi.fn(),
-    minimizeWindow: vi.fn(),
     serviceStatus: vi.fn(),
     onServiceStatus: vi.fn(),
   },
@@ -206,11 +204,6 @@ describe('desktop commands and settings', () => {
     expect(mocks.api.saveSettings).toHaveBeenLastCalledWith(
       expect.objectContaining({ compact: false }),
     );
-    expect(mocks.api.resizeHeight).toHaveBeenCalledTimes(2);
-    click('[aria-label="Minimize"]');
-    click('[aria-label="Close to tray"]');
-    expect(mocks.api.minimizeWindow).toHaveBeenCalledTimes(1);
-    expect(mocks.api.hideWindow).toHaveBeenCalledTimes(1);
     mocks.api.refresh.mockRejectedValueOnce(new Error('refresh delivery'));
     click('[aria-label="Refresh"]');
     await settle();
@@ -330,7 +323,6 @@ describe('desktop commands and settings', () => {
     await settle();
     expect(document.activeElement).toBe(target.querySelector('h1'));
     expect(scroller.scrollTop).toBe(0);
-    expect(target.querySelector('[aria-label="Compact view"]')).toBeNull(); // It would size the window for Settings.
 
     const select = target.querySelector('#set-theme');
     if (!select) throw new Error('missing select');
@@ -347,7 +339,7 @@ describe('desktop commands and settings', () => {
 
     escape();
     expect(mocks.api.hideWindow).toHaveBeenCalledTimes(1);
-    listener('onSettings')({ ...DEFAULT_SETTINGS, alwaysOnTop: true });
+    listener('onSettings')({ ...DEFAULT_SETTINGS, keepOpen: true });
     await settle();
     escape();
     expect(mocks.api.hideWindow).toHaveBeenCalledTimes(1);
@@ -974,16 +966,6 @@ function sessionProvider(key: 'claude_code' | 'codex', label: string, usedPercen
   };
 }
 
-function compactSettings(...keys: string[]): Settings {
-  return {
-    ...DEFAULT_SETTINGS,
-    providers: DEFAULT_SETTINGS.providers.map((entry) => ({
-      ...entry,
-      compact: keys.includes(entry.key),
-    })),
-  };
-}
-
 function mountCompact(
   appState: AppState,
   settings: Settings,
@@ -998,20 +980,23 @@ function mountCompact(
   );
 }
 
-it('compact view shows the session limit of each chosen provider in full-view order, with plan and toggles', async () => {
+it('compact view shows one limit per provider in full-view order, session first, with plan and toggles', async () => {
   const patch = vi.fn<(value: Partial<Settings>) => void>();
   const claude = sessionProvider('claude_code', 'Claude Code', 20);
-  const noSession = { ...claude, quota: { ...claude.quota, plan: 'Max', windows: [] } };
+  const weeklyOnly = claude.quota.windows.filter(({ id }) => id === 'weekly');
+  const noSession = { ...claude, quota: { ...claude.quota, plan: 'Max', windows: weeklyOnly } };
   const codex = sessionProvider('codex', 'Codex', 70);
   const cursor = { ...codex, key: 'cursor' as const, label: 'Cursor', quota: undefined };
   const providers = [noSession, codex, cursor];
-  mountCompact({ ...state, providers }, compactSettings('cursor', 'codex', 'claude_code'), patch);
+  mountCompact({ ...state, providers }, DEFAULT_SETTINGS, patch);
   await settle();
-  expect(target.textContent).not.toContain('Weekly');
-  expect(target.querySelectorAll('[role="meter"]')).toHaveLength(1);
+  const meters = [...target.querySelectorAll('[role="meter"]')].map((node) =>
+    node.getAttribute('aria-label'),
+  );
+  expect(meters).toEqual(['Weekly used', 'Session used']); // Weekly stands in where there is no session limit.
   const headers = [...target.querySelectorAll('.p-name')].map((node) => node.textContent);
   expect(headers).toEqual(['Claude Code', 'Codex', 'Cursor']);
-  expect(target.textContent).toContain('No session limit yet.');
+  expect(target.textContent).toContain('No limits yet.');
   expect(target.textContent).toContain('Max');
   click('[title="Show used or left"]');
   click('[title="Show time or countdown"]');
@@ -1029,12 +1014,7 @@ it.each([
   ],
 ])('compact view marks limits cached while %s', async (_, serviceDown, quotaError, problem) => {
   const provider = { ...sessionProvider('claude_code', 'Claude Code', 20), quotaError };
-  mountCompact(
-    { ...state, providers: [provider] },
-    compactSettings('claude_code'),
-    vi.fn(),
-    serviceDown,
-  );
+  mountCompact({ ...state, providers: [provider] }, DEFAULT_SETTINGS, vi.fn(), serviceDown);
   await settle();
   expect(target.querySelector('[role="meter"]')?.getAttribute('aria-valuetext')).toContain(
     'cached',
@@ -1042,16 +1022,10 @@ it.each([
   expect(target.querySelector('.state')?.textContent).toBe(problem);
 });
 
-it.each([
-  [[], 'Choose providers for the compact view in Settings.'],
-  [['codex'], 'turned off or not loaded yet'],
-])('compact view explains an empty view for chosen providers %j', async (keys, message) => {
-  mountCompact(
-    { ...state, providers: [sessionProvider('claude_code', 'Claude Code', 20)] },
-    compactSettings(...keys),
-  );
+it('compact view explains an empty view', async () => {
+  mountCompact({ ...state, providers: [] }, DEFAULT_SETTINGS);
   await settle();
-  expect(target.textContent).toContain(message);
+  expect(target.textContent).toContain('No providers are turned on.');
   expect(target.querySelector('[role="meter"]')).toBeNull();
 });
 
@@ -1289,18 +1263,18 @@ it('offers a found update and retries a failed install', async () => {
   expect(target.textContent).not.toContain('3.1.0');
 });
 
-it('reports the unrounded height of the title bar, content and footer', async () => {
+it('reports the unrounded height of the content and footer', async () => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
     return {
-      height: ({ foot: 41.5, titlebar: 30 } as Record<string, number>)[this.className] ?? 600.25,
+      height: this.className === 'foot' ? 41.5 : 600.25,
     } as DOMRect;
   });
   mounted.push(mount(App, { target }));
   await settle();
   reportResize?.();
-  expect(mocks.api.fitHeight).toHaveBeenLastCalledWith(671.75);
+  expect(mocks.api.fitHeight).toHaveBeenLastCalledWith(641.75);
 });
 
 it('shows the version and checks for and installs updates from settings', async () => {

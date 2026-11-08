@@ -33,7 +33,6 @@
   let now = $state(Date.now());
   let content = $state<HTMLElement | undefined>();
   let footer = $state<HTMLElement | undefined>();
-  let titlebar = $state<HTMLElement | undefined>();
   let scroller = $state<HTMLElement | undefined>();
   let settingsButton = $state<HTMLElement | undefined>();
   let moreBelow = $state(false);
@@ -55,38 +54,19 @@
     };
   });
 
-  const parts = $derived([titlebar, content, footer].filter((part) => part instanceof HTMLElement));
-
-  // Unrounded, so a fractional pixel never leaves the content a pixel short of fitting.
-  function windowHeight(): number {
-    return parts.reduce((sum, part) => sum + part.getBoundingClientRect().height, 0);
-  }
-
-  let reportedHeight = 0;
-
+  // The window takes its height from what is shown, so there is no empty space below.
   $effect(() => {
+    const parts = [content, footer].filter((part) => part instanceof HTMLElement);
     if (parts.length === 0) return;
-    const observer = new ResizeObserver(() => {
-      const height = windowHeight();
-      if (height === reportedHeight) return; // Width changes while the user resizes.
-      reportedHeight = height;
-      api.fitHeight(height);
-    });
+    const report = () => {
+      // Unrounded, so a fractional pixel never leaves the content a pixel short of fitting.
+      api.fitHeight(parts.reduce((sum, part) => sum + part.getBoundingClientRect().height, 0));
+    };
+    const observer = new ResizeObserver(report);
     for (const part of parts) observer.observe(part);
     return () => {
       observer.disconnect();
     };
-  });
-
-  let shownCompact: boolean | undefined;
-
-  // Switching views changes the height on purpose; the first settings only set the mode.
-  $effect(() => {
-    const compact = settings?.compact;
-    if (compact === undefined || compact === shownCompact) return;
-    const first = shownCompact === undefined;
-    shownCompact = compact;
-    if (!first) void tick().then(() => api.resizeHeight(windowHeight()));
   });
 
   let announcement = $state('');
@@ -145,7 +125,7 @@
     if (target instanceof HTMLSelectElement) return;
     if (target instanceof HTMLInputElement && target.type === 'text') return;
     if (screen === 'settings') screen = 'dashboard';
-    else if (!settings?.alwaysOnTop) api.hideWindow(); // A window kept on top is meant to stay.
+    else if (!settings?.keepOpen) api.hideWindow();
   }
 
   function updateNow(): void {
@@ -291,34 +271,6 @@
 
 <main class="pop">
   <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
-  <header class="titlebar" bind:this={titlebar} data-tauri-drag-region>
-    <span class="title" data-tauri-drag-region>opentrack</span>
-    {#if settings && screen === 'dashboard'}
-      <button
-        class="icon"
-        class:active={settings.compact}
-        type="button"
-        aria-label="Compact view"
-        aria-pressed={settings.compact}
-        title={settings.compact ? 'Full view' : 'Compact view'}
-        onclick={() => patch({ compact: !settings?.compact })}><Icon name="compact" size={14} /></button
-      >
-    {/if}
-    <button
-      class="icon"
-      type="button"
-      aria-label="Minimize"
-      title="Minimize"
-      onclick={() => api.minimizeWindow()}><Icon name="minimize" size={14} /></button
-    >
-    <button
-      class="icon"
-      type="button"
-      aria-label="Close to tray"
-      title="Close (opentrack keeps running in the tray)"
-      onclick={() => api.hideWindow()}><Icon name="close" size={14} /></button
-    >
-  </header>
   <div class="scroll-frame">
     <div class="scroll" bind:this={scroller} onscroll={measureScroll}>
       <div class="content" bind:this={content}>
@@ -413,8 +365,14 @@
   </div>
 
   {#if screen === 'dashboard' && settings}
-    <footer class="foot" bind:this={footer}>
-      <span
+    {@const keepOpen = settings.keepOpen}
+    <!-- A kept-open window has no title bar; its footer is the handle. -->
+    <footer
+      class="foot"
+      bind:this={footer}
+      data-tauri-drag-region={keepOpen ? '' : undefined}
+    >
+      <span data-tauri-drag-region={keepOpen ? '' : undefined}
         >{serviceDown
           ? 'Background service stopped'
           : appState?.syncing
@@ -422,6 +380,15 @@
             : appState?.refreshing
               ? 'Updating…'
               : (syncNote ?? (appState ? freshnessLine(appState, now) : 'Not updated yet'))}</span
+      >
+      <button
+        class="icon"
+        class:active={settings.compact}
+        type="button"
+        aria-label="Compact view"
+        aria-pressed={settings.compact}
+        title={settings.compact ? 'Full view' : 'Compact view'}
+        onclick={() => patch({ compact: !settings?.compact })}><Icon name="compact" size={15} /></button
       >
       <button
         class="icon"
@@ -452,4 +419,3 @@
     </footer>
   {/if}
 </main>
-

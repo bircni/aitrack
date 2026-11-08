@@ -15,13 +15,11 @@
         "title": "opentrack",
         "width": 320,
         "height": 560,
-        "minWidth": 240,
-        "minHeight": 140,
-        "resizable": true,
+        "resizable": false,
         "decorations": false,
         "visible": false,
-        "skipTaskbar": false,
-        "alwaysOnTop": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
         "shadow": true
       }
     ],

@@ -19,8 +19,8 @@ describe('settings', () => {
       theme: 'neon',
       display: 'left',
       providers: [
-        { key: 'cursor', enabled: false, compact: 'no' },
-        { key: 'codex', compact: false },
+        { key: 'cursor', enabled: false },
+        { key: 'codex' },
         { key: 'cursor' },
         { key: 'bogus' },
         null,
@@ -36,12 +36,13 @@ describe('settings', () => {
     expect(settings.notifications).toBe(true);
     expect(settings.trayStyle).toBe('icon');
     expect(settings.trayColored).toBe(true);
-    expect(settings.alwaysOnTop).toBe(false);
-    expect(normalizeSettings({ windowMode: 'floating' }).alwaysOnTop).toBe(true);
+    expect(settings.keepOpen).toBe(false);
+    expect(normalizeSettings({ windowMode: 'floating' }).keepOpen).toBe(true);
+    expect(normalizeSettings({ alwaysOnTop: true }).keepOpen).toBe(true);
     expect(settings.providers).toEqual([
-      { key: 'cursor', label: 'Cursor', enabled: false, compact: true },
-      { key: 'codex', label: 'Codex', enabled: true, compact: false },
-      { key: 'claude_code', label: 'Claude Code', enabled: true, compact: true },
+      { key: 'cursor', label: 'Cursor', enabled: false },
+      { key: 'codex', label: 'Codex', enabled: true },
+      { key: 'claude_code', label: 'Claude Code', enabled: true },
     ]);
   });
 

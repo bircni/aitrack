@@ -12,16 +12,11 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   display: 'used',
   resetDisplay: 'absolute',
-  providers: providerKeys().map((key) => ({
-    key,
-    label: providerLabel(key),
-    enabled: true,
-    compact: true,
-  })),
+  providers: providerKeys().map((key) => ({ key, label: providerLabel(key), enabled: true })),
   launchAtLogin: false,
   globalShortcut: '',
   notifications: true,
-  alwaysOnTop: false,
+  keepOpen: false,
   compact: false,
   pullSyncedData: true,
   trayProvider: 'auto',
@@ -48,20 +43,13 @@ export function normalizeSettings(input: unknown): Settings {
   const providers: Settings['providers'] = [];
   for (const entry of Array.isArray(raw.providers) ? raw.providers : []) {
     if (!isRecord(entry)) continue;
-    const { key, enabled, compact } = entry;
+    const { key, enabled } = entry;
     if (!isProviderKey(key) || seen.has(key)) continue;
     seen.add(key);
-    providers.push({
-      key,
-      label: providerLabel(key),
-      enabled: bool(enabled, true),
-      compact: bool(compact, true),
-    });
+    providers.push({ key, label: providerLabel(key), enabled: bool(enabled, true) });
   }
   for (const key of providerKeys()) {
-    if (!seen.has(key)) {
-      providers.push({ key, label: providerLabel(key), enabled: true, compact: true });
-    }
+    if (!seen.has(key)) providers.push({ key, label: providerLabel(key), enabled: true });
   }
   const d = DEFAULT_SETTINGS;
   return {
@@ -72,7 +60,8 @@ export function normalizeSettings(input: unknown): Settings {
     launchAtLogin: bool(raw.launchAtLogin, d.launchAtLogin),
     globalShortcut: typeof raw.globalShortcut === 'string' ? raw.globalShortcut.trim() : '',
     notifications: bool(raw.notifications, d.notifications),
-    alwaysOnTop: bool(raw.alwaysOnTop, raw.windowMode === 'floating'), // A pinned window stays on top.
+    // Earlier versions saved the pin as `windowMode` and then as `alwaysOnTop`.
+    keepOpen: bool(raw.keepOpen, raw.alwaysOnTop === true || raw.windowMode === 'floating'),
     compact: bool(raw.compact, d.compact),
     pullSyncedData: bool(raw.pullSyncedData, d.pullSyncedData),
     trayProvider: pick(raw.trayProvider, ['auto', ...QUOTA_PROVIDERS], d.trayProvider),

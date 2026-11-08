@@ -5,9 +5,7 @@
     | 'chevron-up'
     | 'cloud'
     | 'laptop'
-    | 'close'
     | 'compact'
-    | 'minimize'
     | 'refresh'
     | 'sliders'
     | 'sync';
@@ -54,10 +52,6 @@
       cy="17"
       r="2"
     />
-  {:else if name === 'minimize'}
-    <path d="M5 12h14" />
-  {:else if name === 'close'}
-    <path d="M6 6l12 12M18 6L6 18" />
   {:else if name === 'compact'}
     <rect x="4" y="4" width="16" height="16" rx="2" />
     <path d="M4 12h16" />

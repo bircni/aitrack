@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Webview
 use crate::position::{corner_tray, grown_bounds, popup_bounds, Rect};
 
 const WIDTH: f64 = 320.0;
-/// A tray click takes focus from the window first, so a window that lost it just now was in front.
+/// A tray click that lands right after a blur-hide is the same click; ignore it.
 const BLUR_CLICK_GRACE: Duration = Duration::from_millis(250);
 
 pub struct Panel {
@@ -14,28 +14,44 @@ pub struct Panel {
 }
 
 struct PanelState {
+    /// Kept open: stays on blur, shows in the taskbar and keeps the place the user dragged it to.
+    floating: bool,
+    hidden_by_blur_at: Option<Instant>,
     /// Content height in CSS pixels, as the renderer measured it.
     content_height: f64,
     tray: Option<Rect>,
     deferred_show: Option<&'static str>,
-    placed: bool,
-    blurred_at: Option<Instant>,
 }
 
-/// Decisions only, fed the window's state: a window getter off the main thread waits for it,
+#[derive(Debug, PartialEq)]
+enum ToggleAction {
+    Hide,
+    Show,
+    Ignore,
+}
+
+/// Decisions only, fed the window's visibility: a window getter off the main thread waits for it,
 /// so holding this lock across one deadlocks against a main-thread event taking the lock.
 impl PanelState {
-    fn hides_on_toggle(&mut self, shown: bool, focused: bool, tray: Option<Rect>, now: Instant) -> bool {
+    fn hide_on_blur(&mut self, visible: bool, now: Instant) -> bool {
+        let hide = visible && !self.floating;
+        if hide {
+            self.hidden_by_blur_at = Some(now);
+        }
+        hide
+    }
+
+    fn toggle(&mut self, visible: bool, tray: Option<Rect>, now: Instant) -> ToggleAction {
         if tray.is_some() {
             self.tray = tray;
         }
-        let in_front = focused || self.blurred_at.is_some_and(|at| now.duration_since(at) < BLUR_CLICK_GRACE);
-        shown && in_front
-    }
-
-    /// Only the first show places the window at the tray; after that it stays where the user put it.
-    fn take_first_show(&mut self) -> bool {
-        !std::mem::replace(&mut self.placed, true)
+        if visible {
+            ToggleAction::Hide
+        } else if self.hidden_by_blur_at.is_some_and(|at| now.duration_since(at) < BLUR_CLICK_GRACE) {
+            ToggleAction::Ignore
+        } else {
+            ToggleAction::Show
+        }
     }
 }
 
@@ -43,38 +59,47 @@ impl Panel {
     pub fn new() -> Self {
         Self {
             state: Mutex::new(PanelState {
+                floating: false,
+                hidden_by_blur_at: None,
                 content_height: 560.0,
                 tray: None,
                 deferred_show: None,
-                placed: false,
-                blurred_at: None,
             }),
         }
     }
 
-    pub fn on_blur(&self) {
-        self.state.lock().unwrap().blurred_at = Some(Instant::now());
+    pub fn set_floating(&self, window: &WebviewWindow, floating: bool) {
+        self.state.lock().unwrap().floating = floating;
+        let _ = window.set_skip_taskbar(!floating);
     }
 
-    /// A covered or minimised window comes to the front; only one in front hides.
-    pub fn toggle(&self, window: &WebviewWindow, tray: Option<Rect>) {
-        let shown = window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false);
-        let focused = window.is_focused().unwrap_or(false);
-        let hide = self.state.lock().unwrap().hides_on_toggle(shown, focused, tray, Instant::now());
+    pub fn on_blur(&self, window: &WebviewWindow) {
+        let visible = window.is_visible().unwrap_or(false);
+        let hide = self.state.lock().unwrap().hide_on_blur(visible, Instant::now());
         if hide {
             let _ = window.hide();
-        } else {
-            self.show(window, None);
+        }
+    }
+
+    pub fn toggle(&self, window: &WebviewWindow, tray: Option<Rect>) {
+        let visible = window.is_visible().unwrap_or(false);
+        let action = self.state.lock().unwrap().toggle(visible, tray, Instant::now());
+        match action {
+            ToggleAction::Hide => {
+                let _ = window.hide();
+            }
+            ToggleAction::Show => self.show(window, None),
+            ToggleAction::Ignore => {}
         }
     }
 
     pub fn show(&self, window: &WebviewWindow, screen: Option<&str>) {
-        let first = self.state.lock().unwrap().take_first_show();
+        let visible = window.is_visible().unwrap_or(false);
+        let floating = self.state.lock().unwrap().floating;
         crate::deliver_skipped_state(window.app_handle());
-        if first {
+        if !floating || !visible {
             self.place(window);
         }
-        let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
         if let Some(screen) = screen {
@@ -96,27 +121,30 @@ impl Panel {
         self.state.lock().unwrap().deferred_show.take()
     }
 
-    /// Remembers the content height for the first placement; after that the user's size stays.
-    pub fn measure(&self, height: f64) -> Option<f64> {
-        let height = (height.is_finite() && height > 0.0).then(|| height.ceil())?;
-        self.state.lock().unwrap().content_height = height;
-        Some(height)
-    }
-
-    /// Fits the height to the content now shown, keeping the user's width and the window on screen.
-    pub fn resize(&self, window: &WebviewWindow, height: f64) {
-        let Some(height) = self.measure(height) else { return };
-        let (Ok(size), Ok(position), Ok(scale)) = (window.inner_size(), window.outer_position(), window.scale_factor())
-        else {
+    /// The window takes the height of what is shown; a popup is re-placed at the tray for it.
+    pub fn fit(&self, window: &WebviewWindow, height: f64) {
+        if !height.is_finite() || height <= 0.0 {
             return;
+        }
+        let floating = {
+            let mut state = self.state.lock().unwrap();
+            state.content_height = height.ceil();
+            state.floating
         };
+        if !floating {
+            self.place(window);
+            return;
+        }
+        let (Ok(position), Ok(scale)) = (window.outer_position(), window.scale_factor()) else { return };
         let height = (height * scale).round() as i32;
         let (y, height) = match window.current_monitor().ok().flatten() {
             Some(monitor) => grown_bounds(position.y, height, work_rect(&monitor)),
             None => (position.y, height),
         };
-        let _ = window.set_size(PhysicalSize::new(size.width, height as u32));
+        let _ = window.set_size(PhysicalSize::new((WIDTH * scale).round() as u32, height as u32));
         let _ = window.set_position(PhysicalPosition::new(position.x, y));
+        #[cfg(target_os = "macos")]
+        crate::macos::refresh_shadow(window);
     }
 
     fn place(&self, window: &WebviewWindow) {
@@ -136,6 +164,8 @@ impl Panel {
         let bounds = popup_bounds(tray, work, (WIDTH * scale).round() as i32, (content_height * scale).round() as i32);
         let _ = window.set_size(PhysicalSize::new(bounds.width as u32, bounds.height as u32));
         let _ = window.set_position(PhysicalPosition::new(bounds.x, bounds.y));
+        #[cfg(target_os = "macos")]
+        crate::macos::refresh_shadow(window);
     }
 }
 
@@ -154,19 +184,30 @@ pub fn main_window(app: &AppHandle) -> Option<WebviewWindow> {
 mod tests {
     use super::*;
 
+    fn state(floating: bool) -> PanelState {
+        PanelState { floating, ..Panel::new().state.into_inner().unwrap() }
+    }
+
     #[test]
-    fn a_toggle_hides_only_a_window_in_front_and_places_it_once() {
+    fn blur_hides_only_a_visible_popup() {
+        let now = Instant::now();
+        let mut popup = state(false);
+        assert!(!popup.hide_on_blur(false, now));
+        assert_eq!(popup.hidden_by_blur_at, None);
+        assert!(popup.hide_on_blur(true, now));
+        assert_eq!(popup.hidden_by_blur_at, Some(now));
+        assert!(!state(true).hide_on_blur(true, now));
+    }
+
+    #[test]
+    fn a_tray_click_right_after_a_blur_hide_does_not_reopen() {
         let now = Instant::now();
         let tray = Rect { x: 1, y: 2, width: 3, height: 4 };
-        let mut state = Panel::new().state.into_inner().unwrap();
-        assert!(!state.hides_on_toggle(false, false, Some(tray), now));
-        assert_eq!(state.tray, Some(tray));
-        assert!(state.hides_on_toggle(true, true, None, now));
-        assert!(!state.hides_on_toggle(true, false, None, now));
-        state.blurred_at = Some(now);
-        assert!(state.hides_on_toggle(true, false, None, now + BLUR_CLICK_GRACE / 2));
-        assert!(!state.hides_on_toggle(true, false, None, now + BLUR_CLICK_GRACE));
-        assert!(state.take_first_show());
-        assert!(!state.take_first_show());
+        let mut popup = state(false);
+        popup.hide_on_blur(true, now);
+        assert_eq!(popup.toggle(false, Some(tray), now + BLUR_CLICK_GRACE / 2), ToggleAction::Ignore);
+        assert_eq!(popup.tray, Some(tray));
+        assert_eq!(popup.toggle(false, None, now + BLUR_CLICK_GRACE), ToggleAction::Show);
+        assert_eq!(popup.toggle(true, None, now), ToggleAction::Hide);
     }
 }
