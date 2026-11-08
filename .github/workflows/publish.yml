@@ -210,6 +210,7 @@ jobs:
         with:
           sparse-checkout: |
             .node-version
+            README.md
             npm
             scripts/*.ts
           sparse-checkout-cone-mode: false
