@@ -9,7 +9,6 @@ Track Claude Code, Codex and Cursor with two apps built on the same usage data:
 
 [![npm version](https://img.shields.io/npm/v/aitrack?color=cb3837&logo=npm)](https://www.npmjs.com/package/aitrack)
 [![CI](https://github.com/bircni/aitrack/actions/workflows/ci.yml/badge.svg)](https://github.com/bircni/aitrack/actions/workflows/ci.yml)
-[![node](https://img.shields.io/node/v/aitrack?logo=node.js&color=339933)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/aitrack?color=blue)](LICENSE)
 
 [Install the CLI](#aitrack-command-line-app) · [Download the desktop app](https://github.com/bircni/aitrack/releases) · [Documentation](#documentation)
@@ -44,7 +43,10 @@ Or install the CLI once:
 npm install -g aitrack
 ```
 
-The CLI needs **Node.js 24+**. Git is needed for cross-machine sync.
+aitrack is a native binary for macOS (Apple Silicon), Linux (x86_64, arm64) and Windows (x86_64).
+npm picks the right one; `npx` and `npm` need Node.js 18+, aitrack itself does not. The binaries
+are also attached to each [GitHub release](https://github.com/bircni/aitrack/releases). Git is
+needed for cross-machine sync.
 
 <img src="docs/heatmap.png" alt="aitrack heatmap showing daily usage, token totals, estimated cost and streaks" width="720">
 
@@ -92,8 +94,8 @@ Or download it from [GitHub Releases](https://github.com/bircni/aitrack/releases
 
 opentrack checks GitHub for new releases and offers to install them from the dashboard.
 
-The desktop app bundles its runtime; you do not need to install Node.js or the CLI to
-view local usage and limits. Sign in to Claude Code, Codex or Cursor as usual: opentrack
+The desktop app is self-contained; you do not need Node.js or the CLI to view local usage and
+limits. Sign in to Claude Code, Codex or Cursor as usual: opentrack
 reads their saved credentials. Codex live limits require a ChatGPT login.
 
 Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
@@ -142,11 +144,10 @@ aitrack show --tui --providers claude,codex
 
 - [CLI guide](docs/cli.md) — commands, reports, configuration, sync and data format.
 - [Desktop guide](docs/opentrack.md) — live limits, credentials and desktop behaviour.
-- [Library guide](docs/library.md) — use `aitrack-lib` in your own tools.
 - [Architecture](docs/architecture.md) — how the data flows and how the apps fit together.
 - [Security & privacy](SECURITY.md) — what leaves your machine and what stays local.
 - [Contributing](CONTRIBUTING.md) — development setup, project layout, checks and releases.
-- [Changelog](CHANGELOG.md) — changes across both apps and the shared library.
+- [Changelog](CHANGELOG.md) — changes across both apps.
 
 ## Acknowledgements
 

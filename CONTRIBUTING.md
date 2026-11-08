@@ -2,14 +2,12 @@
 
 ## Development setup
 
-Install Node.js (the version in `.node-version`), Bun (the version in `package.json`), git, and
-rustup. Building needs Node 26 or newer; the published `aitrack` and `aitrack-lib` run on Node 24+,
-and CI tests them there.
-`bun nx run aitrack:build` builds only the CLI and the library. The pinned Rust version and components
-live in `rust-toolchain.toml`.
-The workspace builds both the CLI and the Tauri desktop app. On macOS, install Xcode
-Command Line Tools. On Windows, install the Visual Studio C++ build tools and WebView2.
-On Ubuntu, install the desktop app's system libraries before building:
+Install rustup (the toolchain and components are pinned in `rust-toolchain.toml`), [just](https://just.systems),
+`cargo-nextest`, `cargo-deny`, git, and, for the desktop renderer and the release scripts, Node.js (the
+version in `.node-version`) and Bun (the version in `package.json`). The CLI itself needs no Node.
+
+On macOS, install Xcode Command Line Tools. On Windows, install the Visual Studio C++ build tools and
+WebView2. On Ubuntu, install the desktop app's system libraries:
 
 ```sh
 sudo apt-get update
@@ -20,241 +18,156 @@ sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librs
 git clone https://github.com/bircni/aitrack.git
 cd aitrack
 bun install
-bun run build
-node apps/aitrack/dist/cli.js init
-node apps/aitrack/dist/cli.js sync
-node apps/aitrack/dist/cli.js show
+cargo run -p aitrack-cli -- init
+cargo run -p aitrack-cli -- sync
+cargo run -p aitrack-cli -- show
 ```
-
-Use `bun run dev init` (or `sync`, `show`) to build the CLI's dependencies, then run it from TypeScript.
-
-## Desktop development
-
-opentrack has two Nx projects: `opentrack-ui` (Svelte renderer) and `opentrack` (the Tauri 2
-app, which reads limits and usage through `aitrack-core`). The UI uses the system webview
-(WebView2, WKWebView, WebKitGTK on Linux).
-See [docs/opentrack.md](docs/opentrack.md).
-
-```sh
-bun nx run opentrack:dev
-bun nx run opentrack:package        # builds the renderer first; run on the target platform
-bun nx run opentrack:bundle:check
-```
-
-Installers (NSIS, DMG, AppImage and `.deb`) land under `target/release/bundle/`; package on
-the platform you target. macOS builds are ad hoc signed, not notarized, and need
-macOS 13.5+. The app version is the workspace `package.json` version; there is no separate
-desktop tag.
 
 ## Project layout
 
-This is an [nx](https://nx.dev/) monorepo of Bun workspace packages.
+A Cargo workspace plus one Bun workspace package for the desktop renderer.
 
 ```
-apps/
-  aitrack/            The CLI: `aitrack` on the command line
+crates/
+  core/               aitrack-core: everything that is not the command line or the window
     src/
-      cli.ts          Commander entrypoint
-      cli/            Commander program, option parsing and JSON output
-      commands/       Command handlers (show, sync, usage, …)
-  opentrack/          Tauri Rust shell, native configuration and icons
-    src/             Window, tray, commands, and the limits, usage, polling and tray state
-  opentrack-ui/       Desktop frontend
-    src/
-      renderer/      Svelte dashboard and settings
-      shared/        Types and pacing the renderer shares with its tests
-libs/
-  aitrack-lib/        The library: everything that is not the command line
-    src/
-      config.ts       Local config (~/.config/aitrack)
-      git.ts          Clone, pull, push data repo
-      index.ts        The public barrel (`import … from 'aitrack-lib'`)
-      data/           Types, validation, aggregation, usage loading
-      display/        TUI, PNG heatmap, PDF/CSV receipts
-        heatmap/      Shared heatmap stats, themes, view models
-      readers/        Provider-specific ingestion (Claude, Codex, Cursor)
-      pricing/        Cost resolution; editable rates in pricing/tables/*.json
-                      (live pack published on orphan branch `pricing`, not bundled)
-      providers/      Provider registry and descriptors
+      readers/        Provider logs (Claude, Codex) and the Cursor export into day maps
+      pricing/        Cost resolution, the pricing pack store, repricing
+      data/           Machine files, reports, periods, rankings, projects
+      store/          Machine files on disk, validation, encryption, migrations
+      git/, sync.rs   The data repo: clone, pull, rebase, push
       quota/          Live limits per provider
-      store/          Machine files on disk and their schema migrations
-  test-fixtures/      Fixtures and the isolated test environment shared by the test suites.
-                      Never published.
-scripts/              Repo tooling: release and release notes, npm publish, pricing pack
-                      build/check, bundle smoke check, updater manifest,
-                      Homebrew cask and winget manifests, reader benchmark
+      display/        Terminal table, TUI, CSV, PDF, and the PNG heatmap (feature `render`)
+      js/             Number formatting, collation and parsing as 4.x did, for byte-compatible files
+    pricing-tables/   claude.json, codex.json, cursor.json: editable first-party rates
+    tests/fixtures/   Golden outputs recorded from 4.x (see its README)
+  cli/                The `aitrack` binary (clap)
+  xtask/              `cargo xtask`: pricing pack build and check
+apps/
+  opentrack/          Tauri 2 app: window, tray, polling, alerts, settings, on aitrack-core
+  opentrack-ui/       Svelte renderer in the system webview
+npm/aitrack/          The npm launcher; one platform package per target is generated at release
+scripts/              Release, release notes, npm pack and publish, updater manifest, Homebrew cask,
+                      winget manifests, bundle smoke check
 ```
 
-### Pricing updates
+Usage is keyed by the **local** calendar day, so tests pin the zone through the `Clock` they pass
+in (`Clock::fixed`, or `Clock::with_zone` with a zone from `jiff::tz::TimeZoneDatabase::bundled()`),
+never by changing `TZ`; cover day edges in Pacific/Kiritimati, UTC and Pacific/Midway. Golden
+tests use the bundled tz database because hosts disagree on pre-1901 offsets.
 
-Editable sources of truth for first-party rates (also the offline CLI baseline):
+## Checks
 
-- `libs/aitrack-lib/src/pricing/tables/claude.json`
-- `libs/aitrack-lib/src/pricing/tables/codex.json`
-- `libs/aitrack-lib/src/pricing/tables/cursor.json`
-
-No pricing pack is shipped in the npm package. CI builds `artifacts/pricing-pack/` and publishes it to the orphan `pricing` branch daily, adding a commit when rates changed; installs refresh into `~/.config/aitrack/pricing/`.
-
-```bash
-bun run pricing:update            # fetch catalogs → artifacts/pricing-pack/
-bun run pricing:update --write    # also patch Claude/Codex IO into tables/*.json
-bun run pricing:check             # optional local compare of tables vs catalogs
+```sh
+just validate    # everything CI runs: Rust (fmt, clippy, nextest), JS (oxfmt, oxlint, knip,
+                 # tsc, svelte-check, vitest) and cargo deny
+just rust        # only the Rust checks
+just js          # only the renderer and scripts
 ```
 
-Shared pricing calculations, catalog access, table conversion, and stored-day repricing belong in `aitrack-lib`. Apps and scripts handle command arguments, presentation, and file publishing.
+Clippy runs pedantic with `-D warnings`. The opentrack crate embeds the built renderer; the Rust
+checks write a placeholder page when it has not been built.
 
-Tests are colocated per module in one `__tests__` folder each. Usage is keyed by the
-**local** calendar day, so cover day edges with `useTimeZone` and `EXTREME_TIME_ZONES` from
-`@aitrack/test-fixtures`, not by changing `TZ`. The library, CLI and UI vitest configs apply
-`isolatedTestEnv()` from `@aitrack/test-fixtures/test-env`, so their tests read neither your real home
-nor a source-root variable from your shell.
+CI (`.github/workflows/ci.yml`) runs on `main`, `rust` and pull requests: format and Clippy on
+Ubuntu, tests on Ubuntu, macOS and Windows, cargo deny, and the renderer and scripts with
+`bun audit`. Pull requests also get GitHub's dependency review. Dependabot proposes Bun, Cargo and
+Actions updates.
 
-The CLI imports the library by subpath (`import { log } from 'aitrack-lib/output'`), which
-the `exports` map resolves to `dist/`. Within a package, imports are relative with a `.js`
-extension.
+## Desktop development
 
-### How nx is configured
+```sh
+just desktop-dev                                      # build the renderer, run the app in debug
+cd apps/opentrack && bunx tauri build                 # installers under target/release/bundle/
+node scripts/smoke-opentrack-bundle.ts                # start the bundled app in smoke-test mode
+```
 
-The `@nx/js/typescript` plugins infer build and typecheck targets from the TypeScript
-configurations and `@nx/vitest` infers test targets; other targets live in each
-`project.json`, with defaults in `nx.json`. Builds run `tsc --build` with dependencies
-first. CLI tests and development use the source paths in its `tsconfig.json`; compiled CLI
-imports resolve through the library's exports to `dist/`.
+Package on the platform you target. The smoke check starts the bundled app with temporary app data
+and no provider or remote requests, from the DMG, the installer (Windows needs `7z` on `PATH`), the
+`.deb` (`dpkg-deb`) or the AppImage. See [docs/opentrack.md](docs/opentrack.md).
 
-Projects: `aitrack`, `aitrack-lib`, `opentrack-ui`, `@aitrack/test-fixtures`, `opentrack`
-(Rust) and `repo-tools` (`scripts/`: release tooling, pricing checks, script tests, root
-config checks). Lint is `nx-oxlint:lint` (type-aware for TypeScript); Svelte blocks get the
-supported Oxlint rules and `svelte-check --fail-on-warnings` stays required. Clippy runs
-with `-D warnings`. Root `.oxlintrc.json` and `.oxfmtrc.json` are Nx inputs. Shared tool
-versions live in the `workspaces.catalog` of the root `package.json`; its `overrides` pin
-patched transitive versions that `bun audit` would otherwise flag.
+## Pricing updates
 
-Tests run `vitest run`; the `ci` configuration adds coverage (`bun nx run
-aitrack-lib:test:ci`, or `bun run test:ci` for all). Aggregate thresholds are 90%
-lines/statements/functions and 80% branches, plus 80% per measured file and metric; `repo-tools`
-has 80% throughout. Fixture
-changes invalidate dependents' cached checks.
+The editable sources of first-party rates, also the offline baseline every build bundles, are
+`crates/core/pricing-tables/{claude,codex,cursor}.json`. No pricing pack ships with a release: CI
+builds `artifacts/pricing-pack/` and publishes it daily to the orphan `pricing` branch, adding a
+commit when rates changed; installs refresh into `~/.config/aitrack/pricing/`.
 
-`bun x tsx scripts/benchmark-readers.ts` runs a synthetic reader benchmark; see
-[recorded results](docs/reader-benchmarks.md).
-
-If `nx` hangs without starting tasks (usually Nx Cloud unreachable), rerun with
-`NX_NO_CLOUD=true NX_DAEMON=false`.
-
-`bun run mutation` runs [StrykerJS](https://stryker-mutator.io/) over `libs/aitrack-lib/src/data`
-and `src/pricing` (not the rate tables) and writes an HTML report to
-`libs/aitrack-lib/reports/mutation/`. It is slow and deliberately outside `validate` and CI.
-Stryker runs vitest in worker threads, where `useTimeZone` cannot move the zone, so the target
-pins `TZ=UTC` and `libs/aitrack-lib/vitest.mutation.config.ts` skips tests with `Pacific/` in their
-name; a test that depends on the zone must name one there. `os.homedir()` also ignores the test env in
-worker threads, so that config pins the process env, which keeps these runs away from your real
-`~/.config/aitrack`. Narrow a
-run with `bun nx run aitrack-lib:mutation -- --mutate 'src/data/usageReport.ts'`.
-
-CI uses `nx affected` with `nrwl/nx-set-shas`. It runs on `main` and pull requests, not on tags, which Publish validates itself. The Audit job lints the workflows with actionlint, runs GitHub's dependency review on
-pull requests and `bun audit` against the lockfile, failing on high-severity advisories. Dependency
-review sees only direct npm dependencies, since GitHub does not parse `bun.lock`, so `bun audit` is
-what covers transitive ones. Dependabot proposes Bun, Cargo and Actions updates.
-Ubuntu runs the affected checks for every project except the Rust shell in one parallel Nx
-run, plus CLI smoke and publish-tarball checks. `Check (Node 24)` runs the published packages' affected
-tests and the CLI smoke tests on Node 24. A `macos-latest` / `windows-latest` /
-`ubuntu-24.04` matrix runs opentrack's Rust checks and packaging, skipped on pull requests
-that do not affect `opentrack`; pushes to `main` save the Cargo cache those runs restore, and CI
-packages build without LTO, which only the Publish workflow keeps (the Linux row installs the WebKitGTK, AppIndicator and
-`libxdo` development packages first) and uploads the NSIS installer, Apple Silicon DMG,
-AppImage and `.deb` as workflow artifacts. `bundle:check` starts the bundled app in its smoke-test mode from the
-DMG, the installer (Windows needs `7z` on `PATH`), the `.deb` (`dpkg-deb`) or the AppImage
-(`--appimage-extract`) with temporary app data and no provider or remote requests.
-
-Run `bun run validate` before opening a PR.
+```sh
+cargo xtask pricing-pack            # fetch catalogs → artifacts/pricing-pack/
+cargo xtask pricing-pack --write    # also patch Claude/Codex IO into the tables
+cargo xtask pricing-check           # compare the tables with the catalogs
+```
 
 ## Commit messages
 
-Commits **must** follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `build:`). The changelog and version bumps are generated from commit messages, so non-conforming commits will be invisible in release notes.
-
-## Scripts
-
-Common ones (see `package.json` for the rest): `bun run validate` (format, lint, typecheck,
-unused-export check, test, build), `validate:affected` (same, scoped to the tasks a change
-against the base branch reaches), `test`, `test:ci`, `test:smoke`, `check:unused` (knip), `build`,
-`lint`, `format`, `changelog`.
-
-Scope checks to one project with e.g. `bun nx run aitrack:test` or
-`bun nx run repo-tools:check:unused`.
+Commits **must** follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat:`,
+`fix:`, `docs:`, `chore:`, `ci:`, `build:`). The changelog and version bumps are generated from
+commit messages, so non-conforming commits will be invisible in release notes.
 
 ## Releasing
 
-Releases are generated from Conventional Commits using [git-cliff](https://git-cliff.org/). Tagging and pushing happen locally; **npm publish and GitHub Release creation run in CI** when the tag lands on GitHub.
+Releases are generated from Conventional Commits using [git-cliff](https://git-cliff.org/). Tagging
+and pushing happen locally; **npm publish and the GitHub release run in CI** when the tag lands.
 
 ### One-time setup
 
-Configure the `aitrack` and `aitrack-lib` packages on npm with [GitHub Actions as a trusted publisher](https://docs.npmjs.com/trusted-publishers/) for this repository and `.github/workflows/publish.yml`. The workflow exchanges GitHub's OIDC identity for short-lived npm credentials; do not add a long-lived `NPM_TOKEN` repository secret.
+Configure `aitrack` and `@aitrack/cli-darwin-arm64`, `@aitrack/cli-linux-x64`,
+`@aitrack/cli-linux-arm64` and `@aitrack/cli-win32-x64` on npm with
+[GitHub Actions as a trusted publisher](https://docs.npmjs.com/trusted-publishers/) for this
+repository and `.github/workflows/publish.yml`. Do not add a long-lived `NPM_TOKEN` secret.
 
-opentrack's in-app updater only installs files signed with its release key. Add the
-private key from `bun x tauri signer generate` and its password as the
-`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets; the public
-key is `plugins.updater.pubkey` in `apps/opentrack/tauri.conf.json` and
-`OPENTRACK_PUBLIC_KEY` in `apps/aitrack/src/minisign.ts`. Losing the private key means
-installed apps can no longer update. The cask update pushes to
-`bircni/homebrew-tap` with the private half of a write deploy key on that repository,
-stored as the `HOMEBREW_TAP_DEPLOY_KEY` secret.
+opentrack's in-app updater only installs files signed with its release key. Add the private key
+from `bunx tauri signer generate` and its password as the `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets; the public key is `plugins.updater.pubkey` in
+`apps/opentrack/tauri.conf.json` and `OPENTRACK_PUBLIC_KEY` in
+`crates/cli/src/commands/install_opentrack.rs`, which a test keeps equal. Losing the private key
+means installed apps can no longer update. The cask update pushes to `bircni/homebrew-tap` with the
+private half of a write deploy key on that repository, stored as the `HOMEBREW_TAP_DEPLOY_KEY`
+secret.
 
 ### Cut a release locally
 
 ```sh
-bun run release
+node scripts/release.ts                 # patch bump
+node scripts/release.ts minor
+node scripts/release.ts 5.1.0-beta.1    # an exact version
+node scripts/release.ts patch --dry-run
 ```
 
-Patch bump by default. Pass a bump type if needed: `bun run release minor`.
-
-It first checks that you are on `main` with a clean tree, in sync with the remote, and that the tag is free locally and remotely, and stops otherwise. It then runs `validate`, which includes the build, sets the same version in the workspace root and both published packages, updates `CHANGELOG.md`, commits, creates the matching `v*` tag, and pushes `main` and that exact tag atomically to the configured remote, so a commit never lands without its tag. Opentrack's app and installer version comes from that workspace version. npm publish, desktop packaging and GitHub Release creation happen in CI.
-
-Preview without changing anything:
-
-```sh
-bun run release:dry-run
-```
-
-The dry run calculates and prints the next version, changelog command, commit, and exact pushes without changing repository files. It reads the remote with `git ls-remote` and prints whatever would stop a real release as a warning.
+It checks that you are on `main` with a clean tree in sync with the remote and that the tag is free,
+and stops otherwise. It then runs `just validate`, sets `[workspace.package] version` in `Cargo.toml`
+(the CLI, opentrack and the npm packages all carry it), runs `cargo update --workspace`, updates
+`CHANGELOG.md`, commits, tags `v<version>`, and pushes `main` and that tag atomically. The dry run
+prints all of this, and whatever would stop a real release, without changing anything.
 
 ### After the tag is pushed
 
-The [Publish workflow](.github/workflows/publish.yml) triggers on that same `v*` tag:
+The [Publish workflow](.github/workflows/publish.yml) triggers on that `v*` tag; started by hand it
+builds and checks every file without releasing:
 
-- **Tarballs.** The first job re-runs `validate`, which also builds, for every project
-  except the Rust shell, which the desktop jobs check. It then packs both packages with
-  `bun pm pack`, which rewrites `workspace:*` and `catalog:` to exact versions, and
-  `scripts/sbom.ts` writes a CycloneDX SBOM of each packed package's production dependencies.
-- **Desktop.** Alongside it, desktop jobs check that the tag matches the workspace version,
-  check the Rust shell's formatting, Clippy and tests, and package a Windows NSIS installer,
-  a macOS DMG for Apple Silicon and a Linux AppImage and `.deb` for x86_64 (built on
-  `ubuntu-24.04`), plus the updater's signed `.app.tar.gz` and installer signatures, then
-  upload them as workflow artifacts. Missing installers fail the build.
-- **Draft release.** After those succeed, this job extracts the tag's section from
-  `CHANGELOG.md` and creates a draft GitHub release with the installers, SBOMs and
-  `latest.json`. It runs before npm, which cannot be undone, so its failures surface first.
-- **npm.** `scripts/publish-npm.ts` publishes the built tarballs, `aitrack-lib` before `aitrack`,
-  with `npm publish --provenance`. It skips a version already on the registry. This job alone holds
-  the npm credential, so it installs nothing and runs only that script.
-- **Publish the release.** The draft goes public only now, so opentrack and `aitrack install-opentrack`,
-  which read `latest.json` from the latest non-prerelease release, never find it half uploaded.
-- **Homebrew.** The last job writes `Casks/opentrack.rb` with the new version and DMG checksum to
-  `bircni/homebrew-tap` and pushes it.
+- **CLI.** One job per npm target builds `aitrack`: macOS for Apple Silicon, Windows x64, and Linux
+  x64 and arm64 cross-built with `cargo zigbuild` against glibc 2.31. Each native build checks that
+  `--version` matches the tag.
+- **Desktop.** The renderer is built once; Windows, macOS and Ubuntu 24.04 jobs package the NSIS
+  installer, the Apple Silicon DMG, the AppImage and `.deb`, plus the updater's signed
+  `.app.tar.gz` and signatures, and smoke-check each bundle.
+- **npm tarballs.** `scripts/npm-pack.ts` wraps each binary in its `@aitrack/cli-<target>` package
+  and packs the `aitrack` launcher that pins them as exact optional dependencies.
+- **Draft release.** The tag's `CHANGELOG.md` section, the installers, `latest.json`, the
+  `aitrack-<target>` binaries and their `checksums.txt` go into a draft. It runs before npm, which
+  cannot be undone, so its failures surface first.
+- **npm.** `scripts/publish-npm.ts` publishes the platform packages, then the launcher, with
+  provenance, skipping versions already on the registry. This job alone holds the npm credential.
+- **Publish the release.** The draft goes public only now, so opentrack and
+  `aitrack install-opentrack`, which read `latest.json` from the latest release, never find it half
+  uploaded.
+- **Homebrew.** `Casks/opentrack.rb` gets the new version and DMG checksum.
 
-A tag with a `-` is a prerelease: npm publishes it under the `next` dist-tag, the GitHub release
-is marked a prerelease and never becomes latest, and the Homebrew job is skipped.
-
-After a failure, re-run the failed jobs of the same workflow run. They reuse its artifacts; the draft
-job finds the existing release and replaces assets with the same names, and the npm script skips what
-already published.
-
-CI and Publish jobs that run Nx install the toolchain from `rust-toolchain.toml` through
-`.github/actions/setup-rust`, which passes the version and components read from that file
-to a pinned `dtolnay/rust-toolchain`; the Nx Rust plugin reads Cargo metadata.
+A tag with a `-` is a prerelease: npm publishes it under `next`, the GitHub release never becomes
+latest, and the Homebrew job is skipped. After a failure, re-run the failed jobs; the draft job
+replaces assets with the same names and the npm script skips what already published.
 
 Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
-Public npm access comes from `publishConfig` in each package's `package.json`;
-authentication comes from npm trusted publishing through `id-token: write`.
 
 ### winget
 
