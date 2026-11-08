@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatWhen, meterTone } from '../../shared/pace.js';
 import type { PeriodUsage, ProviderUsage, QuotaError, QuotaWindow } from '../../shared/types.js';
 import { EMPTY_PERIOD } from '../../shared/types.js';
-import { DEFAULT_SETTINGS } from '../../sidecar/settings.js';
 import {
   buildHistory,
   combinedDaily,
@@ -36,6 +35,7 @@ import {
   usageAvailability,
   zoneClock,
 } from '../format.js';
+import { DEFAULT_SETTINGS } from './settings.js';
 
 beforeEach(() => {
   vi.stubGlobal('navigator', { language: 'en-US' });

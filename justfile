@@ -8,12 +8,22 @@ validate: fmt-check lint test audit
 fmt-check:
     cargo fmt --all --check
 
-# The shell still bundles the Node sidecar, so it is checked by the TypeScript pipeline until the fold-in.
-lint:
-    cargo clippy --workspace --exclude opentrack --all-targets -- -D warnings
+lint: renderer
+    cargo clippy --workspace --all-targets -- -D warnings
 
-test:
-    cargo nextest run --workspace --exclude opentrack
+test: renderer
+    cargo nextest run --workspace
+
+# opentrack embeds the built renderer; the checks only need the page to exist, so a placeholder stands in.
+[unix]
+renderer:
+    mkdir -p apps/opentrack-ui/dist/renderer
+    test -f apps/opentrack-ui/dist/renderer/index.html || echo '<!doctype html><title>opentrack</title>' > apps/opentrack-ui/dist/renderer/index.html
+
+[windows]
+renderer:
+    New-Item -ItemType Directory -Force apps/opentrack-ui/dist/renderer | Out-Null
+    if (-not (Test-Path apps/opentrack-ui/dist/renderer/index.html)) { Set-Content apps/opentrack-ui/dist/renderer/index.html '<!doctype html><title>opentrack</title>' }
 
 audit:
     cargo deny check advisories sources

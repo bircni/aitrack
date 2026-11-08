@@ -1,19 +1,29 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod alerts;
+mod background;
+mod cache;
 mod commands;
+#[cfg(test)]
+mod goldens;
 #[cfg(target_os = "macos")]
 mod macos;
+mod pace;
 mod panel;
 mod position;
-mod sidecar;
+mod service;
+mod settings;
+mod state;
+mod tray_icon;
 mod updater;
+mod usage;
 #[cfg(windows)]
 mod windows;
 
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use base64::Engine as _;
 use serde_json::{Map, Value};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -23,16 +33,15 @@ use tauri_plugin_autostart::ManagerExt as _;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
+use crate::background::{smoke_test_lines, Background, Event};
 use crate::panel::{main_window, Panel, MAIN_WINDOW};
 use crate::position::Rect;
-use crate::sidecar::{Sidecar, Status};
 use crate::updater::Updates;
 
 const TRAY_ID: &str = "main";
 
-#[derive(Default)]
 pub struct Shell {
-    pub sidecar: Sidecar,
+    pub background: Arc<Background>,
     pub last_state: Mutex<Option<Value>>,
     /// `last_state` is newer than what a hidden window was sent.
     state_skipped: AtomicBool,
@@ -102,22 +111,6 @@ fn is_busy(state: &Value) -> bool {
     ["refreshing", "syncing"].iter().any(|flag| state.get(flag).and_then(Value::as_bool) == Some(true))
 }
 
-/// What is left of a state once the process working on it is gone.
-fn settle(state: &mut Value) {
-    for flag in ["refreshing", "syncing"] {
-        if let Some(value) = state.get_mut(flag) {
-            *value = false.into();
-        }
-    }
-    if let Some(providers) = state.get_mut("providers").and_then(Value::as_array_mut) {
-        for provider in providers {
-            if let Some(value) = provider.get_mut("refreshing") {
-                *value = false.into();
-            }
-        }
-    }
-}
-
 fn on_state(app: &AppHandle, data: Value) {
     let shell = app.state::<Shell>();
     if shell.last_state.lock().unwrap().as_ref() == Some(&data) {
@@ -141,33 +134,13 @@ pub fn deliver_skipped_state(app: &AppHandle) {
     }
 }
 
-fn on_service_status(app: &AppHandle, status: &Status) {
-    let _ = app.emit("service-status", status.to_json());
-    if *status == Status::Running {
-        return;
-    }
-    // The process that would have finished them is gone, and "Updating…" keeps Refresh disabled.
-    let shell = app.state::<Shell>();
-    let settled = shell.last_state.lock().unwrap().as_mut().filter(|state| is_busy(state)).map(|state| {
-        settle(state);
-        state.clone()
-    });
-    if let Some(state) = settled {
-        shell.state_skipped.store(false, Ordering::Relaxed);
-        let _ = app.emit("state", &state);
-    }
-    // The next process sends its own tray update first thing, which restores the tooltip.
-    if let (Status::Down(_), Some(tray)) = (status, app.tray_by_id(TRAY_ID)) {
-        let _ = tray.set_tooltip(Some("opentrack: the background service stopped"));
-    }
-}
-
-fn on_sidecar_event(app: &AppHandle, name: &str, data: Value) {
-    match name {
-        "state" => on_state(app, data),
-        "settings" => {
+fn on_event(app: &AppHandle, event: Event<'_>) {
+    match event {
+        Event::State(state) => on_state(app, serde_json::to_value(state).unwrap_or_default()),
+        Event::Settings(settings) => {
+            let data = serde_json::to_value(settings).unwrap_or_default();
             let _ = app.emit("settings", &data);
-            // A sidecar restart resends the same settings; the OS-side ones need no reapplying.
+            // A save that changes nothing the OS applies needs no reapplying.
             let changed =
                 app.state::<Shell>().last_settings.lock().unwrap().replace(data.clone()).as_ref() != Some(&data);
             if changed {
@@ -176,25 +149,15 @@ fn on_sidecar_event(app: &AppHandle, name: &str, data: Value) {
                 let _ = app.run_on_main_thread(move || apply_settings(&main, &data));
             }
         }
-        "alert" => {
-            let text = |key: &str| data.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
-            let _ = app.notification().builder().title(text("title")).body(text("body")).show();
+        Event::Alert { title, body } => {
+            let _ = app.notification().builder().title(title).body(body).show();
         }
-        "tray" => {
+        Event::Tray(image) => {
             let Some(tray) = app.tray_by_id(TRAY_ID) else { return };
-            let size = data.get("size").and_then(Value::as_u64).unwrap_or(0) as u32;
-            let rgba = data
-                .get("rgba")
-                .and_then(Value::as_str)
-                .and_then(|encoded| base64::engine::general_purpose::STANDARD.decode(encoded).ok());
-            if let Some(rgba) = rgba.filter(|pixels| size > 0 && pixels.len() == (size * size * 4) as usize) {
-                let template = data.get("template").and_then(Value::as_bool).unwrap_or(false);
-                let _ = tray.set_icon_with_as_template(Some(Image::new_owned(rgba, size, size)), template);
-            }
-            let tooltip = data.get("tooltip").and_then(Value::as_str);
-            let _ = tray.set_tooltip(tooltip);
+            let icon = Image::new_owned(image.rgba, image.size, image.size);
+            let _ = tray.set_icon_with_as_template(Some(icon), image.template);
+            let _ = tray.set_tooltip(Some(image.tooltip));
         }
-        _ => {}
     }
 }
 
@@ -223,12 +186,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show(app, "dashboard"),
             "settings" => show(app, "settings"),
-            "refresh" => {
-                let app = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let _ = app.state::<Shell>().sidecar.request("refresh", Value::Null).await;
-                });
-            }
+            "refresh" => app.state::<Shell>().background.refresh_in_background(true),
             "quit" => app.exit(0),
             _ => {}
         })
@@ -247,7 +205,29 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// `--smoke-test --data-dir <dir>`: the installer checks that a packaged build starts and reads its
+/// settings, without touching provider credentials, usage logs or the sync repo.
+fn smoke_test() -> bool {
+    let args: Vec<String> = std::env::args().collect();
+    if !args.iter().any(|arg| arg == "--smoke-test") {
+        return false;
+    }
+    let data_dir = args
+        .iter()
+        .position(|arg| arg == "--data-dir")
+        .and_then(|index| args.get(index + 1))
+        .map_or_else(|| std::env::current_dir().unwrap_or_default(), PathBuf::from);
+    for line in smoke_test_lines(&Background::open(&data_dir)) {
+        println!("{line}");
+    }
+    true
+}
+
 fn main() {
+    if smoke_test() {
+        return;
+    }
+
     // Wayland compositors ignore window positions and block global shortcuts; XWayland honours both.
     #[cfg(target_os = "linux")]
     if std::env::var_os("GDK_BACKEND").is_none() {
@@ -285,21 +265,20 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle().clone();
-            app.manage(Shell::default());
+            let background = Background::open(&app.path().app_data_dir()?);
+            app.manage(Shell {
+                background: Arc::clone(&background),
+                last_state: Mutex::default(),
+                state_skipped: AtomicBool::default(),
+                last_settings: Mutex::default(),
+                setting_errors: Mutex::default(),
+            });
 
             build_tray(&handle)?;
             updater::watch(handle.clone());
 
-            // Before the window: on Windows, building it waits for WebView2, which the sidecar need not.
-            let program = app.path().resource_dir()?.join("opentrack-sidecar.exe");
-            let data_dir = app.path().app_data_dir()?;
-            let (events, statuses) = (handle.clone(), handle.clone());
-            app.state::<Shell>().sidecar.supervise(
-                program,
-                data_dir,
-                move |name, data| on_sidecar_event(&events, name, data),
-                move |status| on_service_status(&statuses, status),
-            );
+            let events = handle.clone();
+            background.start(move |event| on_event(&events, event));
 
             let config =
                 app.config().app.windows.iter().find(|window| window.label == MAIN_WINDOW).ok_or("no main window")?;
@@ -325,33 +304,4 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("opentrack failed to start");
-}
-
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::*;
-
-    #[test]
-    fn settling_a_state_ends_everything_a_dead_process_was_doing() {
-        let mut state = json!({
-            "refreshing": true,
-            "syncing": true,
-            "updatedAt": "then",
-            "providers": [{ "key": "codex", "refreshing": true }],
-        });
-        assert!(is_busy(&state));
-        settle(&mut state);
-        assert!(!is_busy(&state));
-        assert_eq!(
-            state,
-            json!({
-                "refreshing": false,
-                "syncing": false,
-                "updatedAt": "then",
-                "providers": [{ "key": "codex", "refreshing": false }],
-            })
-        );
-    }
 }

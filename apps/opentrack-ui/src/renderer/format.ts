@@ -159,7 +159,7 @@ export function shareBasis(spends: Spend[]): {
   return { byCost, measure, total: spends.reduce((sum, spend) => sum + measure(spend), 0) };
 }
 
-/** The sidecar keeps 90 days; the sparkline and machine strips show the latest `days`. */
+/** The shell keeps 90 days; the sparkline and machine strips show the latest `days`. */
 export function combinedDaily(usages: Array<ProviderUsage | undefined>, days = 30): DailyUsage[] {
   const byDate = new Map<string, DailyUsage>();
   for (const usage of usages) {

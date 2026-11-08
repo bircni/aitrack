@@ -106,8 +106,8 @@ after being offered stops being offered at the next check. Development builds ne
 Settings and the last snapshot live in the app's data folder
 (`~/Library/Application Support/dev.bircni.opentrack` on macOS, `%APPDATA%\dev.bircni.opentrack` on
 Windows, `~/.local/share/dev.bircni.opentrack` on Linux): `settings.json`, `cache.json` (discarded
-rather than migrated when its format is older), and `sidecar.log`, with the previous run's in
-`sidecar.log.1`. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
+rather than migrated when its format is older), and `opentrack.log`, with the previous run's in
+`opentrack.log.1`. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
 check, and for the pricing refresh the sync button runs like `aitrack sync` (at most daily).
 
 ## Downloads

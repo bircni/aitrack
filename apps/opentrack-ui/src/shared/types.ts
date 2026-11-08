@@ -2,12 +2,7 @@ import type { ProjectUsage } from 'aitrack-lib/data/types';
 import type { ProviderKey } from 'aitrack-lib/providers/descriptors';
 import type { QuotaError, QuotaProviderKey, QuotaSnapshot } from 'aitrack-lib/quota/types';
 
-export type {
-  QuotaError,
-  QuotaProviderKey,
-  QuotaSnapshot,
-  QuotaWindow,
-} from 'aitrack-lib/quota/types';
+export type { QuotaError, QuotaProviderKey, QuotaWindow } from 'aitrack-lib/quota/types';
 
 export interface Spend {
   tokens: number;
@@ -100,14 +95,14 @@ export interface AppState {
 
 type ThemeSetting = 'system' | 'light' | 'dark';
 
-export type TrayWindow = 'highest' | 'session' | 'weekly';
+type TrayWindow = 'highest' | 'session' | 'weekly';
 
 export interface Settings {
   theme: ThemeSetting;
   /** Show quotas as used or as remaining. */
   display: 'used' | 'left';
   resetDisplay: 'relative' | 'absolute';
-  /** `label` is filled in by the sidecar from the provider registry; what is saved is ignored. */
+  /** `label` is filled in by the shell from the provider registry; what is saved is ignored. */
   providers: Array<{ key: ProviderKey; label: string; enabled: boolean }>;
   launchAtLogin: boolean;
   /** Tauri global-shortcut accelerator (e.g. CommandOrControl+Shift+O), empty for none. */
