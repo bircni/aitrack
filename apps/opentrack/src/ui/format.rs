@@ -8,10 +8,9 @@ pub use aitrack_core::display::heatmap::intensity::intensity_level;
 use aitrack_core::display::heatmap::stats::MONTHS;
 use aitrack_core::quota::pacing::{js_round, PaceProjection, PaceSeverity};
 use aitrack_core::quota::{QuotaError, QuotaErrorKind, QuotaFormat, QuotaWindow};
-use aitrack_core::time::Clock;
+use aitrack_core::time::{from_js_millis, Clock};
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
-use jiff::Timestamp;
 
 use crate::pace::{format_when, parse_ms};
 use crate::state::{
@@ -558,20 +557,18 @@ pub fn sync_status(clock: &Clock, machine: &MachineUsage, now: f64) -> (String, 
     if machine.current {
         return (format!("Live · synced {ago}"), false);
     }
-    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
-    let stale = Timestamp::from_millisecond(now as i64)
-        .is_ok_and(|now| aitrack_core::data::stale_sync::is_stale_sync(clock, &machine.last_updated, now));
+    let stale = from_js_millis(now)
+        .is_some_and(|now| aitrack_core::data::stale_sync::is_stale_sync(clock, &machine.last_updated, now));
     (format!("Synced {ago}{}", if stale { " · stale" } else { "" }), stale)
 }
 
 /// "09:42 PM" on that machine's clock, or nothing when it shares this one's zone.
-#[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
 pub fn zone_clock(clock: &Clock, timezone: &str, now: f64) -> Option<String> {
     if timezone.is_empty() || clock.zone().iana_name() == Some(timezone) {
         return None;
     }
     let zone = TimeZone::get(timezone).ok()?;
-    let local = Timestamp::from_millisecond(now as i64).ok()?.to_zoned(zone);
+    let local = from_js_millis(now)?.to_zoned(zone);
     let hour = local.hour();
     let twelve = if hour % 12 == 0 { 12 } else { hour % 12 };
     Some(format!("{twelve:02}:{:02}\u{202f}{}", local.minute(), if hour < 12 { "AM" } else { "PM" }))
@@ -583,6 +580,8 @@ pub fn by_cost_then_tokens(a: &Spend, b: &Spend) -> std::cmp::Ordering {
 
 #[cfg(test)]
 mod tests {
+    use jiff::Timestamp;
+
     use super::*;
 
     fn clock() -> Clock {

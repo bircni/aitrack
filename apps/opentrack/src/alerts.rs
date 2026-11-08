@@ -76,14 +76,12 @@ pub fn prune_fired(clock: &Clock, fired: &FiredAlerts, now: f64) -> FiredAlerts 
 pub mod fixtures {
     use aitrack_core::quota::{QuotaFormat, QuotaSnapshot, QuotaWindow};
     use aitrack_core::time::iso_millis;
-    use jiff::Timestamp;
 
     pub const NOW: f64 = 1_780_315_200_000.0; // 2026-06-01T12:00:00.000Z
     pub const HOUR: f64 = 3_600_000.0;
 
-    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
     pub fn iso(ms: f64) -> String {
-        iso_millis(Timestamp::from_millisecond(ms as i64).unwrap())
+        iso_millis(aitrack_core::time::from_js_millis(ms).unwrap())
     }
 
     pub fn snapshot(windows: Vec<QuotaWindow>) -> QuotaSnapshot {

@@ -67,9 +67,8 @@ fn providers_key(providers: &[String]) -> String {
     sorted.join(",")
 }
 
-#[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
 fn iso(ms: f64) -> String {
-    iso_millis(jiff::Timestamp::from_millisecond(ms as i64).unwrap_or_default())
+    iso_millis(aitrack_core::time::from_js_millis(ms).unwrap_or_default())
 }
 
 struct Inner {

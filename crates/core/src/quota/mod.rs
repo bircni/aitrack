@@ -13,7 +13,7 @@ use serde_json::{Map, Value};
 use crate::Core;
 use crate::http::{HttpClient, Request};
 use crate::js::{parse_number, trim};
-use crate::time::{Clock, iso_millis};
+use crate::time::{Clock, from_js_millis, iso_millis};
 
 pub const SESSION_SECONDS: f64 = 5.0 * 60.0 * 60.0;
 pub const WEEK_SECONDS: f64 = 7.0 * 24.0 * 60.0 * 60.0;
@@ -207,8 +207,7 @@ pub fn instant_value(value: Option<&Value>) -> Option<String> {
     }
     let raw = number_value(value)?;
     let ms = if raw.abs() < 10_000_000_000.0 { raw * 1000.0 } else { raw };
-    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
-    jiff::Timestamp::from_millisecond(ms.trunc() as i64).ok().map(iso_millis)
+    from_js_millis(ms).map(iso_millis)
 }
 
 /// `/(?:Z|[+-]\d{2}:?\d{2})$/i`

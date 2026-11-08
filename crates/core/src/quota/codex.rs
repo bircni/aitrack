@@ -11,7 +11,7 @@ use crate::Core;
 use crate::http::Request;
 use crate::readers::cursor::jwt::{decode_jwt_payload, jwt_expiry_ms};
 use crate::readers::paths::codex_home_dirs;
-use crate::time::iso_millis;
+use crate::time::{from_js_millis, iso_millis};
 
 const CODEX_USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
 const ACCOUNT_CLAIM: &str = "https://api.openai.com/auth";
@@ -88,11 +88,7 @@ fn exact_kind(window: &Map<String, Value>) -> Option<Kind> {
 }
 
 /// Primary is usually the session and secondary the week, but the window length decides when present.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    reason = "a bounded, rounded number converted between float and integer"
-)]
+#[expect(clippy::cast_precision_loss, reason = "millisecond times stay far below 2^53, as in 4.x's JavaScript")]
 fn map_rate_limit(
     rate_limit: Option<&Map<String, Value>>,
     labels: [(&str, &str); 2],
@@ -117,7 +113,7 @@ fn map_rate_limit(
         let reset_after = number_value(window.get("reset_after_seconds"));
         let resets_at = instant_value(window.get("reset_at")).or_else(|| {
             let ms = now.as_millisecond() as f64 + reset_after? * 1000.0;
-            Timestamp::from_millisecond(ms.trunc() as i64).ok().map(iso_millis)
+            from_js_millis(ms).map(iso_millis)
         });
         windows.push(QuotaWindow {
             id: id.to_owned(),

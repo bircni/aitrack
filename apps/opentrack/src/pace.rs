@@ -3,9 +3,8 @@
 use aitrack_core::display::heatmap::stats::MONTHS;
 use aitrack_core::quota::pacing::{js_round, PaceProjection, PaceSeverity};
 use aitrack_core::quota::QuotaWindow;
-use aitrack_core::time::Clock;
+use aitrack_core::time::{from_js_millis, Clock};
 use jiff::tz::TimeZone;
-use jiff::Timestamp;
 use serde::Serialize;
 
 /// `Date.parse`: epoch ms, or NaN for what V8 cannot read.
@@ -54,13 +53,8 @@ pub fn meter_tone(window: &QuotaWindow, pace: &PaceProjection) -> Tone {
 const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /// "7:20 PM" today, "Sun 9:00 PM" within a week, "Oct 16" beyond, as Node's en-US formats them.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "the value is rounded and bounded to the target range first"
-)]
 pub fn format_when(at: f64, now: f64, zone: &TimeZone) -> String {
-    let local = |ms: f64| Timestamp::from_millisecond(ms as i64).unwrap_or_default().to_zoned(zone.clone());
+    let local = |ms: f64| from_js_millis(ms).unwrap_or_default().to_zoned(zone.clone());
     let (date, today) = (local(at), local(now));
     let days = (date.date() - today.date()).get_days();
     let hour = date.hour();
@@ -74,13 +68,15 @@ pub fn format_when(at: f64, now: f64, zone: &TimeZone) -> String {
         return clock;
     }
     if days < 7 {
-        return format!("{} {clock}", WEEKDAYS[date.weekday().to_monday_zero_offset() as usize]);
+        return format!("{} {clock}", WEEKDAYS[usize::from(date.weekday().to_monday_zero_offset().unsigned_abs())]);
     }
-    format!("{} {}", MONTHS[(date.month() - 1) as usize], date.day())
+    format!("{} {}", MONTHS[usize::from((date.month() - 1).unsigned_abs())], date.day())
 }
 
 #[cfg(test)]
 mod tests {
+    use jiff::Timestamp;
+
     use super::*;
 
     #[test]

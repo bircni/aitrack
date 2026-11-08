@@ -145,6 +145,20 @@ impl Clock {
     }
 }
 
+/// `new Date(ms)`: the instant `ms` milliseconds after the epoch, `None` when it is not one jiff can hold.
+#[must_use]
+pub fn from_js_millis(ms: f64) -> Option<Timestamp> {
+    if !ms.is_finite() {
+        return None;
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "drops the fraction as Date does; anything out of range saturates and is rejected below"
+    )]
+    let ms = ms as i64;
+    Timestamp::from_millisecond(ms).ok()
+}
+
 /// `Date.prototype.toISOString`: always milliseconds and `Z`.
 #[must_use]
 pub fn iso_millis(instant: Timestamp) -> String {
