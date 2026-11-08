@@ -44,8 +44,8 @@ is always visible, and with reduced motion enabled the spinners stop and section
 sliding.
 
 The popup opens next to the tray, takes the height of what it shows and hides when you click
-elsewhere. **Keep open** in Settings turns it into a window that stays open, shows in the taskbar
-and keeps the place you drag it to by its footer. The footer's compact button switches to the
+elsewhere. **Keep open** in Settings turns it into a window that stays open and keeps the place you
+drag it to by its footer. The footer's compact button switches to the
 **compact view**, which shows only the session limit of each enabled provider. Closing the window
 hides it; quit from the tray menu or the Quit button in Settings. Escape leaves Settings, and
 otherwise hides the popup, but not a window kept open.
@@ -100,7 +100,8 @@ pushed settings cannot overwrite those pending edits.
 
 Shortly after launch and every six hours, opentrack fetches `latest.json` from the latest
 GitHub release. When it lists a newer version, the dashboard offers **Install and restart**;
-the download must carry a signature from the release key or it is refused. A release withdrawn
+the download must carry a signature from the release key or it is refused. On Linux only
+the AppImage updates itself; a `.deb` install updates through the package manager. A release withdrawn
 after being offered stops being offered at the next check. Development builds never check.
 
 Settings and the last snapshot live in the app's data folder
@@ -150,7 +151,7 @@ not start them. The behaviour differs from macOS and Windows in a few places:
   click always opens the menu, so open the dashboard with **Open** there. The icon has no
   hover tooltip.
 - **Display backend** — opentrack runs through X11 (XWayland in a Wayland session) so it can
-  position the dashboard and register the global shortcut. Set `GDK_BACKEND=wayland` to
+  position the dashboard and register the global shortcut. Set `OPENTRACK_WAYLAND=1` to
   override this; the dashboard is then placed by the compositor, typically in the centre, and
   the shortcut only fires while an XWayland window has focus.
 - **Popup position** — the dashboard opens in the top-right corner of the screen.

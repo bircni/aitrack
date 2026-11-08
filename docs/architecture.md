@@ -19,8 +19,8 @@ local logs / Cursor export                  other machines
                      data/usage_report (periods, totals, comparisons)
                                │
         ┌──────────────────────┼───────────────────────┐
-   display/ (TUI, PNG,    crates/cli commands     apps/opentrack (Tauri; JSON
-   PDF, CSV)                                       state for the dashboard)
+   display/ (TUI, PNG,    crates/cli commands     apps/opentrack (egui popup
+   PDF, CSV)                                       on the same state)
 ```
 
 - **`Core`** owns what a run shares: environment, paths, clock, output, the HTTP client, the
@@ -63,12 +63,15 @@ To add a provider: add its descriptor, implement the reader under `readers/`, it
 ## opentrack
 
 ```text
-Svelte renderer ◄──► Tauri app (Rust)
- dashboard, settings   window, tray, shortcut, autostart, updater, and on aitrack-core:
-                       quota fetches, usage, settings, tray icon, alerts
+ui/ (egui) ◄── app.rs ──► background.rs, service.rs on aitrack-core
+ dashboard,     window,      quota fetches, usage, settings, cache,
+ settings       tray, OS     tray icon, alerts
 ```
 
-The app owns all provider access and state on background threads; the renderer only renders the
-`AppState` it is pushed and sends requests (refresh, sync, save settings). `service_status` always
-reports `running`, since the work runs in the app's own process. The renderer's copy of the shared
-types is `apps/opentrack-ui/src/shared/types.ts`.
+One native process, no webview. Background threads own all provider access and state and send each
+new `AppState`, the settings, alerts and tray pictures to the UI thread, which wakes even while the
+popup is hidden. The UI draws from that state and hands back actions (refresh, sync, save settings,
+install an update) for `app.rs` to carry out. `tray-icon`, `global-hotkey`, `auto-launch` and
+`notify-rust` cover the tray, shortcut, start at login and alerts; the updater reads the same
+`latest.json` and key as 4.x's Tauri updater through `aitrack_core::update`, which
+`aitrack install-opentrack` shares.

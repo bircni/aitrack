@@ -75,7 +75,7 @@ fn main() -> eframe::Result {
 
     // Wayland compositors ignore window positions and block global shortcuts; XWayland honours both.
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WINIT_UNIX_BACKEND").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_some() {
+    if std::env::var_os("OPENTRACK_WAYLAND").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_some() {
         std::env::remove_var("WAYLAND_DISPLAY");
     }
 
