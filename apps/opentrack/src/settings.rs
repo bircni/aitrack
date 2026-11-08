@@ -22,7 +22,7 @@ pub struct Settings {
     pub reset_display: String,
     pub providers: Vec<ProviderSetting>,
     pub launch_at_login: bool,
-    /// Tauri global-shortcut accelerator, empty for none.
+    /// Accelerator such as `CommandOrControl+Shift+O`, as 4.x saved it; empty for none.
     pub global_shortcut: String,
     pub notifications: bool,
     /// Stays open on blur, shows in the taskbar and keeps where it was dragged.
@@ -63,9 +63,44 @@ impl Default for Settings {
     }
 }
 
+const THEMES: &[&str] = &["system", "light", "dark"];
+const DISPLAYS: &[&str] = &["used", "left"];
+const RESET_DISPLAYS: &[&str] = &["relative", "absolute"];
+const TRAY_WINDOWS: &[&str] = &["highest", "session", "weekly"];
+const TRAY_STYLES: &[&str] = &["icon", "bars"];
+
+fn tray_providers() -> Vec<&'static str> {
+    std::iter::once("auto").chain(PROVIDERS.iter().map(|p| p.key)).collect()
+}
+
 impl Settings {
     pub fn enabled_providers(&self) -> Vec<String> {
         self.providers.iter().filter(|p| p.enabled).map(|p| p.key.clone()).collect()
+    }
+
+    /// [`normalize_settings`]'s rules for settings built in the app rather than read from disk.
+    #[must_use]
+    pub fn normalized(self) -> Self {
+        let d = Self::default();
+        let fix = |value: String, allowed: &[&str], fallback: String| {
+            if allowed.contains(&value.as_str()) {
+                value
+            } else {
+                fallback
+            }
+        };
+        let providers = complete_providers(self.providers.iter().map(|p| (p.key.as_str(), p.enabled)));
+        Self {
+            theme: fix(self.theme, THEMES, d.theme),
+            display: fix(self.display, DISPLAYS, d.display),
+            reset_display: fix(self.reset_display, RESET_DISPLAYS, d.reset_display),
+            providers,
+            global_shortcut: js::trim(&self.global_shortcut).to_owned(),
+            tray_provider: fix(self.tray_provider, &tray_providers(), d.tray_provider),
+            tray_window: fix(self.tray_window, TRAY_WINDOWS, d.tray_window),
+            tray_style: fix(self.tray_style, TRAY_STYLES, d.tray_style),
+            ..self
+        }
     }
 }
 
@@ -77,47 +112,42 @@ fn boolean(value: Option<&Value>, fallback: bool) -> bool {
     value.and_then(Value::as_bool).unwrap_or(fallback)
 }
 
-fn is_provider_key(key: &str) -> bool {
-    PROVIDERS.iter().any(|p| p.key == key)
+/// Known providers once each, in the order given, then any missing ones turned on.
+fn complete_providers<'a>(entries: impl IntoIterator<Item = (&'a str, bool)>) -> Vec<ProviderSetting> {
+    let mut providers: Vec<ProviderSetting> = Vec::new();
+    let mut add = |key: &str, enabled: bool| {
+        if PROVIDERS.iter().any(|p| p.key == key) && !providers.iter().any(|p| p.key == key) {
+            providers.push(ProviderSetting { key: key.into(), label: provider_label(key).into(), enabled });
+        }
+    };
+    for (key, enabled) in entries {
+        add(key, enabled);
+    }
+    for descriptor in &PROVIDERS {
+        add(descriptor.key, true);
+    }
+    providers
 }
 
-/// Settings from untrusted input (disk or the renderer): unknown fields are dropped, bad values fall
-/// back, and every provider appears exactly once.
+/// Settings from untrusted input (disk): unknown fields are dropped, bad values fall back, and every
+/// provider appears exactly once.
 pub fn normalize_settings(input: &Value) -> Settings {
     let empty = serde_json::Map::new();
     let raw = input.as_object().unwrap_or(&empty);
     let field = |key: &str| raw.get(key);
-    let mut providers: Vec<ProviderSetting> = Vec::new();
-    for entry in field("providers").and_then(Value::as_array).into_iter().flatten() {
-        let Some(entry) = entry.as_object() else { continue };
-        let Some(key) = entry.get("key").and_then(Value::as_str).filter(|k| is_provider_key(k)) else { continue };
-        if providers.iter().any(|p| p.key == key) {
-            continue;
-        }
-        providers.push(ProviderSetting {
-            key: key.into(),
-            label: provider_label(key).into(),
-            enabled: boolean(entry.get("enabled"), true),
-        });
-    }
-    for descriptor in &PROVIDERS {
-        if !providers.iter().any(|p| p.key == descriptor.key) {
-            providers.push(ProviderSetting {
-                key: descriptor.key.into(),
-                label: descriptor.label.into(),
-                enabled: true,
-            });
-        }
-    }
+    let entries = field("providers").and_then(Value::as_array).into_iter().flatten().filter_map(|entry| {
+        let entry = entry.as_object()?;
+        Some((entry.get("key")?.as_str()?, boolean(entry.get("enabled"), true)))
+    });
+    let providers = complete_providers(entries);
     let d = Settings::default();
-    let tray_providers: Vec<&str> = std::iter::once("auto").chain(PROVIDERS.iter().map(|p| p.key)).collect();
     // Earlier versions saved the pin as `windowMode` and then as `alwaysOnTop`.
     let legacy_keep_open = field("alwaysOnTop") == Some(&Value::Bool(true))
         || field("windowMode").and_then(Value::as_str) == Some("floating");
     Settings {
-        theme: pick(field("theme"), &["system", "light", "dark"], &d.theme),
-        display: pick(field("display"), &["used", "left"], &d.display),
-        reset_display: pick(field("resetDisplay"), &["relative", "absolute"], &d.reset_display),
+        theme: pick(field("theme"), THEMES, &d.theme),
+        display: pick(field("display"), DISPLAYS, &d.display),
+        reset_display: pick(field("resetDisplay"), RESET_DISPLAYS, &d.reset_display),
         providers,
         launch_at_login: boolean(field("launchAtLogin"), d.launch_at_login),
         global_shortcut: field("globalShortcut").and_then(Value::as_str).map(js::trim).unwrap_or_default().to_owned(),
@@ -125,9 +155,9 @@ pub fn normalize_settings(input: &Value) -> Settings {
         keep_open: boolean(field("keepOpen"), legacy_keep_open),
         compact: boolean(field("compact"), d.compact),
         pull_synced_data: boolean(field("pullSyncedData"), d.pull_synced_data),
-        tray_provider: pick(field("trayProvider"), &tray_providers, &d.tray_provider),
-        tray_window: pick(field("trayWindow"), &["highest", "session", "weekly"], &d.tray_window),
-        tray_style: pick(field("trayStyle"), &["icon", "bars"], &d.tray_style),
+        tray_provider: pick(field("trayProvider"), &tray_providers(), &d.tray_provider),
+        tray_window: pick(field("trayWindow"), TRAY_WINDOWS, &d.tray_window),
+        tray_style: pick(field("trayStyle"), TRAY_STYLES, &d.tray_style),
         tray_colored: boolean(field("trayColored"), d.tray_colored),
     }
 }
@@ -188,6 +218,21 @@ mod tests {
             providers,
             [("cursor", "Cursor", false), ("codex", "Codex", true), ("claude_code", "Claude Code", true)]
         );
+    }
+
+    #[test]
+    fn normalizes_settings_the_app_built_as_it_does_the_file() {
+        let codex = ProviderSetting { key: "codex".into(), label: "?".into(), enabled: false };
+        let built = Settings {
+            theme: "neon".into(),
+            global_shortcut: " Ctrl+K ".into(),
+            providers: vec![codex.clone(), ProviderSetting { key: "bogus".into(), ..codex.clone() }, codex],
+            tray_window: "monthly".into(),
+            ..Settings::default()
+        };
+        let from_file = normalize_settings(&serde_json::to_value(&built).unwrap());
+        assert_eq!(built.normalized(), from_file);
+        assert_eq!(from_file.global_shortcut, "Ctrl+K");
     }
 
     #[test]

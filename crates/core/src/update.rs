@@ -45,22 +45,114 @@ struct Asset {
     signature: String,
 }
 
+/// The manifest's platform keys, which the release workflow writes and the updater reads.
+pub const MAC_TARGET: &str = "darwin-aarch64";
+pub const WINDOWS_TARGET: &str = "windows-x86_64";
+pub const LINUX_TARGET: &str = "linux-x86_64";
+
 /// The manifest's platform key for this machine; only those the release workflow builds.
 pub fn updater_target() -> Result<&'static str, String> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => Ok("darwin-aarch64"),
-        ("windows", "x86_64") => Ok("windows-x86_64"),
-        ("linux", "x86_64") => Ok("linux-x86_64"),
+        ("macos", "aarch64") => Ok(MAC_TARGET),
+        ("windows", "x86_64") => Ok(WINDOWS_TARGET),
+        ("linux", "x86_64") => Ok(LINUX_TARGET),
         (os, arch) => Err(format!(
             "opentrack has no build for {os} {arch}; releases cover Apple Silicon Macs, 64-bit Windows and 64-bit Linux."
         )),
     }
 }
 
-/// What a fresh install is called: the app bundle on macOS, the `AppImage` on Linux.
-#[must_use]
-pub fn install_name() -> &'static str {
-    if cfg!(target_os = "macos") { APP_NAME } else { APPIMAGE_NAME }
+/// Where a verified build goes on this platform.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InstallTarget {
+    /// An app bundle, replaced whole.
+    MacBundle(PathBuf),
+    /// An `AppImage`, renamed over the old one.
+    AppImage(PathBuf),
+    /// The installer picks its own folder.
+    WindowsInstaller,
+}
+
+impl InstallTarget {
+    /// The folder a fresh install goes to when none is given; Windows' installer has its own.
+    #[must_use]
+    pub fn default_dir(home: &Path) -> Option<PathBuf> {
+        if cfg!(windows) {
+            None
+        } else if cfg!(target_os = "macos") {
+            Some(PathBuf::from("/Applications"))
+        } else {
+            Some(home.join(".local").join("bin"))
+        }
+    }
+
+    /// A fresh install into `dir`, which Windows ignores.
+    #[must_use]
+    pub fn fresh(dir: &Path) -> Self {
+        if cfg!(windows) {
+            Self::WindowsInstaller
+        } else if cfg!(target_os = "macos") {
+            Self::MacBundle(dir.join(APP_NAME))
+        } else {
+            Self::AppImage(dir.join(APPIMAGE_NAME))
+        }
+    }
+
+    /// The copy running as `exe`, or why it cannot replace itself. `app_image` is `$APPIMAGE`, set
+    /// only when Linux runs an `AppImage`; a `.deb` install is left to the package manager.
+    pub fn running(exe: &Path, app_image: Option<PathBuf>) -> Result<Self, String> {
+        if cfg!(windows) {
+            Ok(Self::WindowsInstaller)
+        } else if cfg!(target_os = "macos") {
+            app_bundle(exe).map(Self::MacBundle).ok_or_else(|| "opentrack is not running from an app bundle".into())
+        } else {
+            app_image
+                .map(Self::AppImage)
+                .ok_or_else(|| "Only the AppImage updates itself; update the .deb with your package manager.".into())
+        }
+    }
+
+    /// The folder the install writes to, to create before a download a bad one would waste.
+    #[must_use]
+    pub fn folder(&self) -> Option<&Path> {
+        match self {
+            Self::MacBundle(path) | Self::AppImage(path) => path.parent(),
+            Self::WindowsInstaller => None,
+        }
+    }
+
+    /// Puts a verified build in place and waits for it; the installed path, which Windows' installer
+    /// does not report.
+    pub fn install(&self, file: &[u8]) -> Result<Option<PathBuf>, String> {
+        match self {
+            Self::MacBundle(path) => install_mac_app(file, path).map(Some),
+            Self::AppImage(path) => install_app_image(file, path).map(Some),
+            Self::WindowsInstaller => run_windows_installer(file).map(|()| None),
+        }
+    }
+
+    /// Replaces the running copy: the command that starts the new one, or `None` when Windows'
+    /// installer closes this process and restarts it itself.
+    pub fn replace_running(&self, file: &[u8]) -> Result<Option<Command>, String> {
+        match self {
+            Self::MacBundle(path) => {
+                install_mac_app(file, path)?;
+                let mut open = Command::new("open");
+                open.arg("-n").arg(path);
+                Ok(Some(open))
+            }
+            Self::AppImage(path) => {
+                install_app_image(file, path)?;
+                Ok(Some(Command::new(path)))
+            }
+            Self::WindowsInstaller => start_windows_update(file).map(|()| None),
+        }
+    }
+}
+
+/// `…/opentrack.app` from `…/opentrack.app/Contents/MacOS/opentrack`.
+fn app_bundle(exe: &Path) -> Option<PathBuf> {
+    exe.ancestors().find(|p| p.extension().is_some_and(|e| e == "app")).map(Path::to_path_buf)
 }
 
 pub fn parse_manifest(body: &[u8], target: &str) -> Result<Release, String> {
@@ -140,18 +232,6 @@ fn staging_dir(parent: &Path, prefix: &str) -> Result<Staging, String> {
     Ok(Staging(path))
 }
 
-/// Puts a verified build in place. `destination` is the app bundle or `AppImage` to replace; Windows
-/// ignores it because its installer picks the folder. `replace_running` leaves the Windows installer
-/// to close and restart this process; elsewhere the caller relaunches the path this returns.
-pub fn install(file: &[u8], destination: Option<&Path>, replace_running: bool) -> Result<Option<PathBuf>, String> {
-    if cfg!(windows) {
-        return run_windows_installer(file, replace_running).map(|()| None);
-    }
-    let destination = destination.ok_or("No folder to install opentrack into")?;
-    if cfg!(target_os = "macos") { install_mac_app(file, destination) } else { install_app_image(file, destination) }
-        .map(Some)
-}
-
 /// Unpacks next to the destination so swapping in the new app is a same-volume rename.
 fn install_mac_app(archive: &[u8], destination: &Path) -> Result<PathBuf, String> {
     let dir = destination.parent().ok_or("The app bundle has no folder")?;
@@ -178,22 +258,26 @@ fn install_app_image(app_image: &[u8], destination: &Path) -> Result<PathBuf, St
     Ok(destination.to_owned())
 }
 
-/// A waiting install cleans up after itself; one that replaces this process keeps its folder, as the
-/// installer still runs from it once this process is gone.
-fn run_windows_installer(installer: &[u8], replace_running: bool) -> Result<(), String> {
-    let write = |dir: &Path| -> Result<PathBuf, String> {
-        let path = dir.join("opentrack-setup.exe");
-        std::fs::write(&path, installer).map_err(|e| e.to_string())?;
-        Ok(path)
-    };
-    if replace_running {
-        let dir = std::env::temp_dir().join(format!("opentrack-update-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        // Passive mode closes this process and starts the new one, as Tauri's updater did.
-        return Command::new(write(&dir)?).args(["/P", "/R"]).spawn().map(drop).map_err(|e| e.to_string());
-    }
+fn write_installer(dir: &Path, installer: &[u8]) -> Result<PathBuf, String> {
+    let path = dir.join("opentrack-setup.exe");
+    std::fs::write(&path, installer).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
+/// Runs the installer in this console and removes it afterwards.
+fn run_windows_installer(installer: &[u8]) -> Result<(), String> {
     let staging = staging_dir(&std::env::temp_dir(), "opentrack-update-")?;
-    exec(&write(&staging.0)?.to_string_lossy(), &[])
+    let path = write_installer(&staging.0, installer)?;
+    let status = process::run_interactive(&path.to_string_lossy(), &[]).map_err(|e| e.to_string())?;
+    if status.success() { Ok(()) } else { Err(format!("The opentrack installer exited with {status}")) }
+}
+
+/// Its folder stays: the installer still runs from it once this process is gone.
+fn start_windows_update(installer: &[u8]) -> Result<(), String> {
+    let dir = std::env::temp_dir().join(format!("opentrack-update-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    // Passive mode closes this process and starts the new one, as Tauri's updater did.
+    Command::new(write_installer(&dir, installer)?).args(["/P", "/R"]).spawn().map(drop).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -233,6 +317,24 @@ mod tests {
         assert!(!is_newer("5.0.0-beta.1", "5.0.0"));
         assert!(!is_newer("4.2.1", "5.0.0"));
         assert!(!is_newer("garbage", "5.0.0"));
+    }
+
+    #[test]
+    fn finds_the_bundle_the_binary_runs_from() {
+        let exe = Path::new("/Applications/opentrack 2.app/Contents/MacOS/opentrack");
+        assert_eq!(app_bundle(exe), Some(PathBuf::from("/Applications/opentrack 2.app")));
+        assert_eq!(app_bundle(Path::new("/usr/bin/opentrack")), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn leaves_a_deb_install_to_the_package_manager() {
+        assert!(InstallTarget::running(Path::new("/usr/bin/opentrack"), None).is_err());
+        let app_image = PathBuf::from("/home/me/opentrack.AppImage");
+        assert_eq!(
+            InstallTarget::running(Path::new("/tmp/.mount/usr/bin/opentrack"), Some(app_image.clone())),
+            Ok(InstallTarget::AppImage(app_image))
+        );
     }
 
     #[cfg(unix)]

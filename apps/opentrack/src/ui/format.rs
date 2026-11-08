@@ -20,8 +20,6 @@ use crate::state::{
 };
 
 pub const INIT_HINT: &str = "npx aitrack init";
-const STALE_SYNC_MS: f64 = 3.0 * 86_400_000.0;
-
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Spend {
     pub tokens: f64,
@@ -544,7 +542,9 @@ pub fn sync_status(clock: &Clock, machine: &MachineUsage, now: f64) -> (String, 
     if machine.current {
         return (format!("Live · synced {ago}"), false);
     }
-    let stale = now - at > STALE_SYNC_MS;
+    #[allow(clippy::cast_possible_truncation)]
+    let stale = Timestamp::from_millisecond(now as i64)
+        .is_ok_and(|now| aitrack_core::data::stale_sync::is_stale_sync(clock, &machine.last_updated, now));
     (format!("Synced {ago}{}", if stale { " · stale" } else { "" }), stale)
 }
 

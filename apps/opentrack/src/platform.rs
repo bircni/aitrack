@@ -1,4 +1,5 @@
-//! What differs per OS, behind one set of calls with fallbacks, so the app itself has no `cfg`.
+//! What differs per OS for the window, behind one set of calls with no-op fallbacks. The tray keeps
+//! its own: Linux runs it on a GTK thread, and only macOS has template icons.
 
 use raw_window_handle::HasWindowHandle;
 use winit::event_loop::EventLoopBuilder;
@@ -7,6 +8,15 @@ use crate::position::Rect;
 
 /// macOS and most Linux desktops put the tray in a bar along the top; Windows' taskbar is at the bottom.
 pub const TRAY_ON_TOP: bool = !cfg!(windows);
+
+/// macOS rounds the window by clipping it, which needs a see-through one.
+pub const TRANSPARENT: bool = cfg!(target_os = "macos");
+
+/// Linux has no tray click, so its menu opens the popup; the monitors may have changed since.
+pub fn before_tray_menu() {
+    #[cfg(target_os = "linux")]
+    linux::read_work_area();
+}
 
 /// Before the event loop: Wayland compositors ignore window positions and block global shortcuts,
 /// so Linux runs on XWayland unless asked not to.

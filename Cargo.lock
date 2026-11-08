@@ -3281,6 +3281,7 @@ dependencies = [
  "aitrack-core",
  "auto-launch",
  "eframe",
+ "getrandom 0.4.3",
  "global-hotkey",
  "gtk",
  "indexmap",

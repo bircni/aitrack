@@ -2,15 +2,15 @@
 //! the first one forward instead of starting.
 
 use std::fs::File;
-use std::hash::{BuildHasher, RandomState};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::sync::{Mutex, PoisonError};
+use std::time::Duration;
+
+use aitrack_core::fs::write_file_atomic;
 
 const ID: &str = "dev.bircni.opentrack";
-/// How long a relaunched copy waits for the one that installed it to exit.
-const RELAUNCH_WAIT: Duration = Duration::from_secs(10);
 
 /// Where Tauri kept settings.json and cache.json for this identifier, so 4.x data carries over.
 pub fn data_dir() -> PathBuf {
@@ -54,33 +54,43 @@ pub struct Listener {
     token: String,
 }
 
-/// The listener when this is the only opentrack, which then holds the lock until it exits; `None`
-/// after asking the running one for `request`. `relaunch` waits for an updating predecessor to exit.
-pub fn claim(dir: &Path, request: Request, relaunch: bool) -> std::io::Result<Option<Listener>> {
+/// The lock this instance holds, until it exits or hands over to an updated copy.
+static LOCK: Mutex<Option<File>> = Mutex::new(None);
+
+/// Lets an updated copy start as the only opentrack while this one finishes exiting.
+pub fn release() {
+    LOCK.lock().unwrap_or_else(PoisonError::into_inner).take();
+}
+
+/// The listener when this is the only opentrack; `None` after asking the running one for `request`.
+pub fn claim(dir: &Path, request: Request) -> std::io::Result<Option<Listener>> {
     std::fs::create_dir_all(dir)?;
     let lock = File::options().create(true).truncate(false).write(true).open(dir.join("opentrack.lock"))?;
     let port_file = dir.join("opentrack.port");
-    let deadline = Instant::now() + if relaunch { RELAUNCH_WAIT } else { Duration::ZERO };
-    while lock.try_lock().is_err() {
-        if Instant::now() >= deadline {
-            ask(&port_file, request);
-            return Ok(None);
-        }
-        std::thread::sleep(Duration::from_millis(100));
+    if lock.try_lock().is_err() {
+        ask(&port_file, request);
+        return Ok(None);
     }
-    std::mem::forget(lock); // Held until the process exits.
+    *LOCK.lock().unwrap_or_else(PoisonError::into_inner) = Some(lock);
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
-    let token = format!("{:016x}{:016x}", RandomState::new().hash_one(0), RandomState::new().hash_one(1));
-    std::fs::write(&port_file, format!("{} {token}", listener.local_addr()?.port()))?;
+    let mut secret = [0u8; 16];
+    getrandom::fill(&mut secret).map_err(std::io::Error::other)?;
+    let token = aitrack_core::hex(&secret);
+    write_file_atomic(&port_file, format!("{} {token}", listener.local_addr()?.port()), Some(0o600))?;
     Ok(Some(Listener { listener, token }))
 }
 
+/// A port file without a token is from a build before tokens, which took the bare request.
 fn ask(port_file: &Path, request: Request) {
     let Ok(text) = std::fs::read_to_string(port_file) else { return };
-    let Some((port, token)) = text.trim().split_once(' ') else { return };
+    let text = text.trim();
+    let (port, line) = match text.split_once(' ') {
+        Some((port, token)) => (port, format!("{token} {}\n", request.as_str())),
+        None => (text, format!("{}\n", request.as_str())),
+    };
     let Ok(port) = port.parse::<u16>() else { return };
     if let Ok(mut stream) = TcpStream::connect_timeout(&(Ipv4Addr::LOCALHOST, port).into(), Duration::from_secs(2)) {
-        let _ = stream.write_all(format!("{token} {}\n", request.as_str()).as_bytes());
+        let _ = stream.write_all(line.as_bytes());
     }
 }
 
@@ -107,32 +117,23 @@ mod tests {
 
     use super::*;
 
+    /// One test, as the lock is held process-wide.
     #[test]
-    fn a_second_launch_asks_the_first_to_show_and_strangers_are_ignored() {
+    fn a_second_launch_asks_the_first_and_an_update_hands_the_lock_over() {
         let dir = tempfile::tempdir().unwrap();
-        let listener = claim(dir.path(), Request::Show, false).unwrap().expect("first launch");
+        let listener = claim(dir.path(), Request::Show).unwrap().expect("first launch");
         let port = listener.listener.local_addr().unwrap().port();
         let (tx, rx) = mpsc::channel();
         listen(listener, move |request| tx.send(request).unwrap());
         let mut stranger = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
         stranger.write_all(b"GET / HTTP/1.1\r\n").unwrap();
         drop(stranger);
-        assert!(claim(dir.path(), Request::Settings, false).unwrap().is_none());
+        let second = File::options().write(true).open(dir.path().join("opentrack.lock")).unwrap();
+        assert!(second.try_lock().is_err());
+        ask(&dir.path().join("opentrack.port"), Request::Settings);
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Request::Settings);
         assert!(rx.try_recv().is_err());
-    }
-
-    #[test]
-    fn a_relaunch_waits_for_the_previous_copy_to_let_go() {
-        let dir = tempfile::tempdir().unwrap();
-        let held = File::options().create(true).truncate(false).write(true).open(dir.path().join("opentrack.lock"));
-        let held = held.unwrap();
-        held.lock().unwrap();
-        let release = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(300));
-            drop(held);
-        });
-        assert!(claim(dir.path(), Request::Show, true).unwrap().is_some());
-        release.join().unwrap();
+        release();
+        assert!(second.try_lock().is_ok());
     }
 }

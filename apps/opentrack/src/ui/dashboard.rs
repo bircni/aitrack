@@ -7,8 +7,6 @@ use eframe::egui::{
     StrokeKind, Ui, Vec2, WidgetInfo,
 };
 
-use std::borrow::Cow;
-
 use super::format::{
     combined_daily, empty_usage_guidance, fill_percent, format_cost, format_limit_value, format_number, format_reset,
     format_tokens, format_updated, is_priced, pace_label, period_spend, period_value, problem_line, sparkline,
@@ -28,15 +26,15 @@ const NO_PACE: PaceProjection = PaceProjection {
     run_out_at: None,
 };
 
-pub fn tabs(state: &AppState) -> Vec<(Tab, Cow<'static, str>)> {
+pub fn tabs(state: &AppState) -> Vec<(Tab, String)> {
     let mut tabs = vec![
-        (Tab::Providers, "Providers".into()),
-        (Tab::History, "History".into()),
-        (Tab::Projects, "Projects".into()),
+        (Tab::Providers, "Providers".to_owned()),
+        (Tab::History, "History".to_owned()),
+        (Tab::Projects, "Projects".to_owned()),
     ];
     let machines = state.machines.as_ref().map_or(0, Vec::len);
     if machines > 0 {
-        tabs.push((Tab::Machines, format!("Machines {machines}").into()));
+        tabs.push((Tab::Machines, format!("Machines {machines}")));
     }
     tabs
 }
@@ -117,13 +115,10 @@ fn tab_bar(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame) {
                         );
                     }
                     let color = if selected { palette.ink } else { palette.ink2 };
-                    let galley = ui.painter().layout_no_wrap(
-                        label.clone().into_owned(),
-                        FontId::new(12.0, super::theme::bold()),
-                        color,
-                    );
+                    let galley =
+                        ui.painter().layout_no_wrap(label.clone(), FontId::new(12.0, super::theme::bold()), color);
                     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, color);
-                    response.widget_info(|| WidgetInfo::selected(Role::Button, true, selected, label.as_ref()));
+                    response.widget_info(|| WidgetInfo::selected(Role::Button, true, selected, label));
                     paint_focus(ui, &palette, &response, rect, 7);
                     if response.clicked() {
                         view.tab = *tab;
@@ -224,9 +219,10 @@ impl Spark {
                 let quad = vec![pair[0], pair[1], Pos2::new(pair[1].x, baseline), Pos2::new(pair[0].x, baseline)];
                 ui.painter().add(Shape::convex_polygon(quad, palette.curve_fill, Stroke::NONE));
             }
-            ui.painter().add(Shape::line(line.clone(), Stroke::new(1.4, palette.curve)));
-            if let Some(end) = line.last() {
-                ui.painter().circle(*end, 2.6, palette.surface, Stroke::new(1.4, palette.curve));
+            let end = line.last().copied();
+            ui.painter().add(Shape::line(line, Stroke::new(1.4, palette.curve)));
+            if let Some(end) = end {
+                ui.painter().circle(end, 2.6, palette.surface, Stroke::new(1.4, palette.curve));
             }
             response.widget_info(|| {
                 let label = format!("Estimated cost per day, last 30 days, peak {}", format_cost(self.peak));

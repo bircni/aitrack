@@ -19,7 +19,7 @@ use serde::Serialize;
 use crate::alerts::Alert;
 use crate::cache::{cache_json, load_cached_state, CachedState};
 use crate::service::{Deps, QuotaService};
-use crate::settings::{load_settings, normalize_settings, read_json_file, write_settings, Settings};
+use crate::settings::{load_settings, read_json_file, write_settings, Settings};
 use crate::state::AppState;
 use crate::tray_icon::{render_tray_icon, summarize_tray, TrayAppearance, TrayChoice, TraySummary};
 use crate::usage::{load_usage_summary, UsageLoadOptions, UsageLoadResult, GIT_TIMEOUT};
@@ -134,9 +134,10 @@ impl Deps for LiveDeps {
         SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
     }
 
+    /// The popup first; the tray icon may need redrawing.
     fn on_state(&self, state: Arc<AppState>) {
+        self.send(Event::State(Arc::clone(&state)));
         self.update_tray(&state);
-        self.send(Event::State(state));
     }
 
     fn on_alert(&self, alert: &Alert) {
@@ -196,31 +197,23 @@ impl Background {
         });
     }
 
-    /// Saves on one thread in the order they were made, so an older save never lands last; of a burst
-    /// of changes only the newest is written. Failures go to `on_error`.
-    pub fn saver(self: &Arc<Self>, on_error: impl Fn(String) + Send + 'static) -> Sender<Settings> {
-        let (tx, rx) = channel::<Settings>();
+    /// Saves numbered settings in order, so an older save never lands last; of a burst only the newest
+    /// is written. `on_done` gets its number and the normalized settings, or why they were not saved.
+    pub fn saver(
+        self: &Arc<Self>,
+        on_done: impl Fn(u64, Result<Settings, String>) + Send + 'static,
+    ) -> Sender<(u64, Settings)> {
         let background = Arc::clone(self);
-        std::thread::spawn(move || {
-            while let Ok(mut settings) = rx.recv() {
-                while let Ok(newer) = rx.try_recv() {
-                    settings = newer;
-                }
-                if let Err(error) = background.save_settings(settings) {
-                    on_error(error);
-                }
-            }
-        });
-        tx
+        latest_worker(move |(seq, settings)| on_done(seq, background.save_settings(settings)))
     }
 
-    fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<(), String> {
-        let settings = normalize_settings(&serde_json::to_value(settings).expect("settings serialize"));
+    fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<Settings, String> {
+        let settings = settings.normalized();
         write_settings(&self.settings_path, &settings).map_err(|error| error.to_string())?;
         settings.clone_into(&mut self.deps().settings.lock().unwrap());
-        self.service.set_settings(settings);
+        self.service.set_settings(settings.clone());
         self.refresh_in_background(false);
-        Ok(())
+        Ok(settings)
     }
 
     /// Progress reaches the shell as state events, so a caller need not wait for a cold parse.
@@ -233,6 +226,20 @@ impl Background {
         let background = Arc::clone(self);
         std::thread::spawn(move || background.service.sync());
     }
+}
+
+/// One thread that handles values in the order sent and, of a burst, only the newest.
+pub fn latest_worker<T: Send + 'static>(mut handle: impl FnMut(T) + Send + 'static) -> Sender<T> {
+    let (tx, rx) = channel::<T>();
+    std::thread::spawn(move || {
+        while let Ok(mut value) = rx.recv() {
+            while let Ok(newer) = rx.try_recv() {
+                value = newer;
+            }
+            handle(value);
+        }
+    });
+    tx
 }
 
 #[derive(Serialize)]

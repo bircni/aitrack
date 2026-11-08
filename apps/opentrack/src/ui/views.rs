@@ -139,11 +139,8 @@ fn row(
         .collect();
     let mut models: Vec<&ModelUsage> = spends.iter().flat_map(|(_, spend)| &spend.models).collect();
     let by_spend = |a: &&ModelUsage, b: &&ModelUsage| by_cost_then_tokens(&Spend::from(*a), &Spend::from(*b));
-    if models.len() > 3 {
-        models.select_nth_unstable_by(2, by_spend);
-        models.truncate(3);
-    }
     models.sort_by(by_spend);
+    models.truncate(3);
     Row {
         id,
         name,
@@ -200,9 +197,8 @@ fn share_bar<'a>(
     if basis.total <= 0.0 || basis.measure(spend) <= 0.0 {
         return;
     }
-    let total = basis.total.max(f64::MIN_POSITIVE);
     #[allow(clippy::cast_possible_truncation)]
-    let parts: Vec<(&str, f32)> = parts.map(|(key, part)| (key, (basis.measure(&part) / total) as f32)).collect();
+    let parts: Vec<(&str, f32)> = parts.map(|(key, part)| (key, (basis.measure(&part) / basis.total) as f32)).collect();
     let what = if basis.by_cost { "cost" } else { "tokens" };
     let share = basis.measure(spend) / basis.total;
     let percent = format_percent(share);

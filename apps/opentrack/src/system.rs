@@ -2,12 +2,14 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::mpsc::Sender;
 use std::sync::LazyLock;
 
 use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 
 use crate::app::{Bus, Msg};
+use crate::background::latest_worker;
 
 /// Same JSON the 4.x renderer shipped.
 static DASHBOARDS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
@@ -36,6 +38,9 @@ pub struct SettingErrors {
 pub struct System {
     hotkeys: Option<GlobalHotKeyManager>,
     registered: Option<HotKey>,
+    /// Writes a LaunchAgent or registry key off the UI thread, newest choice last; `None` in a dev
+    /// build, which registering to start at login would outlive.
+    launch_at_login: Option<Sender<bool>>,
 }
 
 impl System {
@@ -43,13 +48,23 @@ impl System {
     pub fn new(bus: &Bus) -> Self {
         #[cfg(target_os = "macos")]
         let _ = notify_rust::set_application("dev.bircni.opentrack");
-        let bus = bus.clone();
+        let hotkey_bus = bus.clone();
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             if event.state == HotKeyState::Pressed {
-                bus.send(Msg::Toggle(None));
+                hotkey_bus.send(Msg::Toggle(None));
             }
         }));
-        Self { hotkeys: GlobalHotKeyManager::new().ok(), registered: None }
+        let launch_bus = bus.clone();
+        let launch_at_login = (!cfg!(debug_assertions))
+            .then(|| latest_worker(move |enabled| launch_bus.send(Msg::LaunchAtLogin(autostart(enabled).err()))));
+        Self { hotkeys: GlobalHotKeyManager::new().ok(), registered: None, launch_at_login }
+    }
+
+    /// The outcome comes back on the bus.
+    pub fn set_launch_at_login(&self, enabled: bool) {
+        if let Some(worker) = &self.launch_at_login {
+            let _ = worker.send(enabled);
+        }
     }
 
     /// Registers the open/close shortcut, here on the main thread as macOS requires; why it did not take.
@@ -73,15 +88,6 @@ impl System {
             Err(error) => Some(error),
         }
     }
-}
-
-/// Off the UI thread, since it writes a LaunchAgent or registry key; the outcome comes back on the bus.
-pub fn set_launch_at_login(enabled: bool, bus: Bus) {
-    // A dev build registering itself to start at login would outlive the checkout.
-    if cfg!(debug_assertions) {
-        return;
-    }
-    std::thread::spawn(move || bus.send(Msg::LaunchAtLogin(autostart(enabled).err())));
 }
 
 fn autostart(enabled: bool) -> Result<(), String> {
