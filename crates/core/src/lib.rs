@@ -14,6 +14,7 @@ pub mod output;
 pub mod pricing;
 pub mod process;
 pub mod providers;
+pub mod quota;
 pub mod readers;
 pub mod recompute;
 pub mod store;
@@ -60,6 +61,8 @@ pub struct Core {
     repo_lock: Mutex<()>,
     pub http: Box<dyn HttpClient>,
     pricing: OnceLock<PricingStore>,
+    /// Cursor's retry window and last aggregated export, for the life of the process.
+    pub(crate) cursor: Mutex<readers::cursor::CursorState>,
 }
 
 impl Core {
@@ -75,6 +78,7 @@ impl Core {
             repo_lock: Mutex::default(),
             http: Box::new(UreqClient::default()),
             pricing: OnceLock::new(),
+            cursor: Mutex::default(),
         }
     }
 
