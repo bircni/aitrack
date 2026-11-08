@@ -33,7 +33,7 @@
     },
     "apps/aitrack": {
       "name": "aitrack",
-      "version": "4.2.0",
+      "version": "4.2.1",
       "bin": {
         "aitrack": "./dist/cli.js",
       },
@@ -75,7 +75,7 @@
     },
     "libs/aitrack-lib": {
       "name": "aitrack-lib",
-      "version": "4.2.0",
+      "version": "4.2.1",
       "dependencies": {
         "@napi-rs/canvas": "^1.1.0",
         "chalk": "catalog:",

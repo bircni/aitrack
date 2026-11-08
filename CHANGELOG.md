@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v4.2.1] - 2026-11-08
+
+
+
+### Bug Fixes
+
+- **opentrack:** Restore the tray popup and round its corners (#143)
+
 ## [v4.2.0] - 2026-11-07
 
 
