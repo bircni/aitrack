@@ -112,13 +112,9 @@ pub const USAGE_PERIODS: [PeriodDefinition; 13] = [
 
 /// Bounds every day key falls within.
 ///
-/// # Panics
-///
-/// Never: both dates are constants within range.
 #[must_use]
-#[expect(clippy::expect_used, reason = "constant dates within 0000-9999")]
-pub fn all_time() -> (Day, Day) {
-    (Day::new(0, 1, 1).expect("valid"), Day::new(9999, 12, 31).expect("valid"))
+pub const fn all_time() -> (Day, Day) {
+    (Day::MIN, Day::MAX)
 }
 
 /// A century: beyond it the window leaves the calendar range, and `usage all` is what is meant.
@@ -223,11 +219,6 @@ impl UsagePeriod {
     /// # Errors
     ///
     /// With the message to show when the arguments describe no valid window.
-    ///
-    /// # Panics
-    ///
-    /// Never in practice: years stay within 0000-9999.
-    #[expect(clippy::expect_used, reason = "a Day year is always within 0000-9999")]
     pub fn window(self, today: Day, now_label: &str, args: PeriodArgs) -> Result<UsageWindow, String> {
         let span = |start: Day, end: Day, label: String| Ok(UsageWindow { start, end, label });
         match self {
@@ -268,7 +259,7 @@ impl UsagePeriod {
             Self::Last => Ok(rolling_window(today, args.n.filter(|n| *n > 0).ok_or("n is required for last period")?)),
             Self::Year => {
                 let year = today.year();
-                span(Day::new(year, 1, 1).expect("valid"), Day::new(year, 12, 31).expect("valid"), year.to_string())
+                span(Day::year_start(year), Day::year_end(year), year.to_string())
             }
             Self::All => {
                 let (start, end) = all_time();
@@ -282,11 +273,6 @@ impl UsagePeriod {
     /// # Errors
     ///
     /// With the message to show when the window has no previous one.
-    ///
-    /// # Panics
-    ///
-    /// Never in practice: years stay within 0000-9999.
-    #[expect(clippy::expect_used, reason = "a Day year is always within 0000-9999")]
     pub fn previous(self, today: Day, current: &UsageWindow) -> Result<UsageWindow, String> {
         let span = |start: Day, end: Day, label: String| Ok(UsageWindow { start, end, label });
         match self {
@@ -306,7 +292,7 @@ impl UsagePeriod {
             // The current window is the whole year, so the comparable slice comes from today.
             Self::Year => {
                 let year = today.year() - 1;
-                let (start, end) = (Day::new(year, 1, 1).expect("valid"), today.same_day_in_year(year));
+                let (start, end) = (Day::year_start(year), today.same_day_in_year(year));
                 span(start, end, format!("previous year to date ({start} → {end})"))
             }
             Self::All => Err("All-time usage does not have a comparable previous period.".to_owned()),

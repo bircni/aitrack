@@ -9,6 +9,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub struct Day(Date);
 
 impl Day {
+    /// The first and last days a data file can name; arithmetic stops at them.
+    pub const MIN: Self = Self(Date::constant(0, 1, 1));
+    pub const MAX: Self = Self(Date::constant(9999, 12, 31));
+
     #[must_use]
     pub fn new(year: i16, month: i8, day: i8) -> Option<Self> {
         Date::new(year, month, day).ok().filter(|_| (0..=9999).contains(&year)).map(Self)
@@ -38,27 +42,30 @@ impl Day {
         self.0.year()
     }
 
-    /// # Panics
-    ///
-    /// If the result leaves the years 0000-9999.
+    /// January 1st of `year`, kept within 0000-9999.
     #[must_use]
-    #[expect(clippy::expect_used, reason = "report windows stay within years 0000-9999")]
+    pub fn year_start(year: i16) -> Self {
+        Self(Self::MIN.0.saturating_add(i64::from(year.clamp(0, 9999)).years()))
+    }
+
+    /// December 31st of `year`, kept within 0000-9999.
+    #[must_use]
+    pub fn year_end(year: i16) -> Self {
+        Self(Self::year_start(year).0.last_of_year())
+    }
+
+    #[must_use]
     pub fn shift(self, days: i64) -> Self {
-        Self(self.0.checked_add(days.days()).expect("day stays within years 0000-9999"))
+        // Wider than 0000-9999 and within what a span holds, so clamping changes no in-range result.
+        let days = days.clamp(-4_000_000, 4_000_000);
+        Self(self.0.saturating_add(days.days()).clamp(Self::MIN.0, Self::MAX.0))
     }
 
     /// First day of the month `offset` months from this one.
-    ///
-    /// # Panics
-    ///
-    /// If the result leaves the years 0000-9999.
     #[must_use]
-    #[expect(clippy::expect_used, reason = "month arithmetic on a valid date stays in range")]
     pub fn month_start(self, offset: i32) -> Self {
-        let months = i32::from(self.0.year()) * 12 + i32::from(self.0.month()) - 1 + offset;
-        let year = i16::try_from(months.div_euclid(12)).expect("year in range");
-        let month = i8::try_from(months.rem_euclid(12) + 1).expect("month in range");
-        Self(Date::new(year, month, 1).expect("the first of a month exists"))
+        let months = i64::from(self.0.year()) * 12 + i64::from(self.0.month()) - 1 + i64::from(offset);
+        Self(Self::MIN.0.saturating_add(months.clamp(0, 9999 * 12 + 11).months()))
     }
 
     /// Last day of the month `offset` months from this one.
@@ -68,27 +75,22 @@ impl Day {
     }
 
     /// The same day of the month `offset` months away, clamped to that month's length.
-    ///
-    /// # Panics
-    ///
-    /// If the result leaves the years 0000-9999.
     #[must_use]
-    #[expect(clippy::expect_used, reason = "the day is clamped to the month length first")]
     pub fn same_day_months_away(self, offset: i32) -> Self {
-        let start = self.month_start(offset).0;
-        Self(start.with().day(self.0.day().min(start.days_in_month())).build().expect("clamped day exists"))
+        self.month_start(offset).with_day_of(self)
     }
 
     /// The same month and day in `year`, so Feb 29 becomes Feb 28 in a common year.
-    ///
-    /// # Panics
-    ///
-    /// Never: the day is clamped to the month first.
     #[must_use]
-    #[expect(clippy::expect_used, reason = "the day is clamped to the month length first")]
     pub fn same_day_in_year(self, year: i16) -> Self {
-        let first = Date::new(year, self.0.month(), 1).expect("the first of a month exists");
-        Self(first.with().day(self.0.day().min(first.days_in_month())).build().expect("clamped day exists"))
+        let first = Self::year_start(year).0.saturating_add(i64::from(self.0.month() - 1).months());
+        Self(first).with_day_of(self)
+    }
+
+    /// `other`'s day of the month in this day's month, clamped to its length.
+    fn with_day_of(self, other: Self) -> Self {
+        let first = self.0.first_of_month();
+        Self(first.saturating_add(i64::from(other.0.day().min(first.days_in_month()) - 1).days()))
     }
 
     #[must_use]
@@ -161,6 +163,16 @@ mod tests {
         assert_eq!(shifted("2026-06-30", |d| d.shift(1)), "2026-07-01");
         assert_eq!(shifted("2026-01-01", |d| d.shift(-1)), "2025-12-31");
         assert_eq!(shifted("2026-03-15", |d| d.shift(-30)), "2026-02-13");
+    }
+
+    #[test]
+    fn stops_at_the_years_a_data_file_can_name() {
+        assert_eq!(Day::MAX.shift(1), Day::MAX, "past 9999-12-31");
+        assert_eq!(Day::MIN.shift(-i64::MAX), Day::MIN, "before 0000-01-01");
+        assert_eq!(Day::MIN.month_start(-1), Day::MIN, "before the first month");
+        assert_eq!(Day::year_start(-1), Day::MIN, "year below 0");
+        assert_eq!(Day::year_end(20_000), Day::MAX, "year above 9999");
+        assert_eq!(day("2024-02-29").same_day_in_year(2025).to_string(), "2025-02-28", "leap day");
     }
 
     #[test]
