@@ -11,6 +11,7 @@ pub mod machine_id;
 pub mod output;
 pub mod pricing;
 pub mod process;
+pub mod providers;
 pub mod readers;
 pub mod store;
 pub mod time;
