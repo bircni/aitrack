@@ -1,9 +1,0 @@
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "resolveJsonModule": true
-  },
-  "include": ["src/**/*.ts", "src/**/*.json", "*.ts"],
-  "exclude": ["node_modules", "dist", "src/renderer/main.ts"]
-}

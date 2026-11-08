@@ -21,6 +21,7 @@ pub mod recompute;
 pub mod store;
 pub mod sync;
 pub mod time;
+pub mod update;
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};

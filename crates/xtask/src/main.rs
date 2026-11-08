@@ -5,6 +5,7 @@ mod npm;
 mod pricing;
 mod release;
 mod smoke;
+mod updater_artifacts;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -211,6 +212,7 @@ const USAGE: &str = "Usage: cargo xtask <command>
   winget-manifest <tag> <setup-exe> [out]
   npm-pack <version> <binaries-dir> <out-dir>
   publish-npm <tag> <tarball-dir>
+  updater-artifacts <packager-out> <bundle-dir>
   smoke-bundle                         start the app inside each built installer";
 
 fn print(text: &str) -> bool {
@@ -259,6 +261,9 @@ fn dispatch(args: &[String]) -> Option<Result<bool>> {
         ("publish-npm", Some(tag), Some(dir), _) => {
             let cwd = std::env::current_dir().map_err(|e| e.to_string());
             cwd.and_then(|cwd| npm::publish(tag, dir, Path::new("npm"), &cwd)).map(|()| true)
+        }
+        ("updater-artifacts", Some(out), Some(bundle), None) => {
+            updater_artifacts::run(Path::new(out), Path::new(bundle)).map(|()| true)
         }
         ("smoke-bundle", ..) => version().and_then(|v| smoke::smoke_bundle(&v)).map(|()| true),
         _ => return None,

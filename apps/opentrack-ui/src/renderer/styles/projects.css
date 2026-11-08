@@ -1,5 +1,0 @@
-/* Projects tab: reuses the machine cards. */
-.project.remainder .m-name {
-  color: var(--ink-2);
-  font-style: italic;
-}

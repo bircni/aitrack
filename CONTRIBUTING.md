@@ -6,12 +6,12 @@ Install rustup (the toolchain and components are pinned in `rust-toolchain.toml`
 `cargo-nextest`, `cargo-deny` and git. Releasing also needs [git-cliff](https://git-cliff.org/). Nothing
 needs Node except the npm launcher in `npm/aitrack`, which has no dependencies.
 
-On macOS, install Xcode Command Line Tools. On Windows, install the Visual Studio C++ build tools and
-WebView2. On Ubuntu, install the desktop app's system libraries:
+On macOS, install Xcode Command Line Tools. On Windows, install the Visual Studio C++ build tools. On
+Ubuntu, install the desktop app's system libraries:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
+sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
 ```
 
 ```sh
@@ -44,8 +44,7 @@ crates/
   cli/                The `aitrack` binary (clap)
   xtask/              `cargo xtask`: pricing pack, release, packaging and publishing
 apps/
-  opentrack/          Tauri 2 app: window, tray, polling, alerts, settings, on aitrack-core
-  opentrack-ui/       Svelte renderer in the system webview
+  opentrack/          Native popup (egui): tray, polling, alerts, settings, updater, on aitrack-core
 npm/aitrack/          The npm launcher; one platform package per target is generated at release
 .githooks/            commit-msg: the Conventional Commits check
 ```
@@ -62,8 +61,7 @@ just validate    # everything CI runs: fmt, clippy, nextest and cargo deny
 just rust        # without cargo deny
 ```
 
-Clippy runs pedantic with `-D warnings`. The opentrack crate embeds the built renderer; the Rust
-checks write a placeholder page when it has not been built.
+Clippy runs pedantic with `-D warnings`.
 
 CI (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests: format and Clippy on
 Ubuntu, tests on Ubuntu, macOS and Windows, and cargo deny. Pull requests also get GitHub's
@@ -72,9 +70,9 @@ dependency review. Dependabot proposes Cargo and Actions updates.
 ## Desktop development
 
 ```sh
-just desktop-dev                                      # build the renderer, run the app in debug
-cd apps/opentrack && bunx tauri build                 # installers under target/release/bundle/
-cargo xtask smoke-bundle                              # start the bundled app in smoke-test mode
+just desktop-dev          # the app in debug, with its own data dir under target/
+just package app,dmg      # installers under target/release/bundle/ (appimage,deb or nsis elsewhere)
+cargo xtask smoke-bundle  # start the bundled app in smoke-test mode
 ```
 
 Package on the platform you target. The smoke check starts the bundled app with temporary app data
@@ -114,10 +112,10 @@ Configure `aitrack` and `@aitrack/cli-darwin-arm64`, `@aitrack/cli-linux-x64`,
 repository and `.github/workflows/publish.yml`. Do not add a long-lived `NPM_TOKEN` secret.
 
 opentrack's in-app updater only installs files signed with its release key. Add the private key
-from `bunx tauri signer generate` and its password as the `TAURI_SIGNING_PRIVATE_KEY` and
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets; the public key is `plugins.updater.pubkey` in
-`apps/opentrack/tauri.conf.json` and `OPENTRACK_PUBLIC_KEY` in
-`crates/cli/src/commands/install_opentrack.rs`, which a test keeps equal. Losing the private key
+(a minisign secret key file, base64-encoded, as `tauri signer generate` wrote it for 4.x) and its
+password as the `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets;
+`cargo xtask updater-artifacts` signs with them. The public key is `PUBLIC_KEY` in
+`crates/core/src/update.rs`, which both the app's updater and `aitrack install-opentrack` use. Losing the private key
 means installed apps can no longer update. The cask update pushes to `bircni/homebrew-tap` with the
 private half of a write deploy key on that repository, stored as the `HOMEBREW_TAP_DEPLOY_KEY`
 secret.
@@ -145,7 +143,7 @@ builds and checks every file without releasing:
 - **CLI.** One job per npm target builds `aitrack`: macOS for Apple Silicon, Windows x64, and Linux
   x64 and arm64 cross-built with `cargo zigbuild` against glibc 2.31. Each native build checks that
   `--version` matches the tag.
-- **Desktop.** The renderer is built once; Windows, macOS and Ubuntu 24.04 jobs package the NSIS
+- **Desktop.** Windows, macOS and Ubuntu 24.04 jobs package with `cargo packager` the NSIS
   installer, the Apple Silicon DMG, the AppImage and `.deb`, plus the updater's signed
   `.app.tar.gz` and signatures, and smoke-check each bundle.
 - **npm tarballs.** `cargo xtask npm-pack` wraps each binary in its `@aitrack/cli-<target>` package
@@ -184,4 +182,5 @@ On Windows, `winget validate --manifest manifests/b/bircni/opentrack/X.Y.Z` chec
 `winget settings --enable LocalManifestFiles`) installs from them. Commit them in a fork as
 `New package: bircni.opentrack version X.Y.Z` and open a pull request to
 `microsoft/winget-pkgs`. The manifest's publisher and product code must match what the
-installer registers: `bundle.publisher` and `productName` in `apps/opentrack/tauri.conf.json`.
+installer registers: `publisher` and `product-name` under `[package.metadata.packager]` in
+`apps/opentrack/Cargo.toml`.
