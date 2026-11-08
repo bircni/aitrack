@@ -357,7 +357,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn leaves_a_deb_install_to_the_package_manager() {
-        assert!(InstallTarget::running(Path::new("/usr/bin/opentrack"), None).is_err());
+        InstallTarget::running(Path::new("/usr/bin/opentrack"), None).unwrap_err();
         let app_image = PathBuf::from("/home/me/opentrack.AppImage");
         assert_eq!(
             InstallTarget::running(Path::new("/tmp/.mount/usr/bin/opentrack"), Some(app_image.clone())),

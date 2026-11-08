@@ -30,6 +30,7 @@ pub fn prepare() {
 }
 
 /// A menu-bar app on macOS: no Dock icon and no app menu.
+#[cfg_attr(not(target_os = "macos"), expect(clippy::missing_const_for_fn, reason = "only macOS does work here"))]
 pub fn configure_event_loop(builder: &mut EventLoopBuilder<eframe::UserEvent>) {
     #[cfg(target_os = "macos")]
     {
@@ -40,6 +41,7 @@ pub fn configure_event_loop(builder: &mut EventLoopBuilder<eframe::UserEvent>) {
     let _ = builder;
 }
 
+#[cfg_attr(target_os = "linux", expect(clippy::missing_const_for_fn, reason = "Linux leaves corners square"))]
 pub fn round_corners(window: &impl HasWindowHandle) {
     #[cfg(target_os = "macos")]
     crate::macos::round_corners(window);
@@ -50,6 +52,7 @@ pub fn round_corners(window: &impl HasWindowHandle) {
 }
 
 /// After a resize; only macOS caches the window's shadow.
+#[cfg_attr(not(target_os = "macos"), expect(clippy::missing_const_for_fn, reason = "only macOS does work here"))]
 pub fn refresh_shadow(window: &impl HasWindowHandle) {
     #[cfg(target_os = "macos")]
     crate::macos::refresh_shadow(window);

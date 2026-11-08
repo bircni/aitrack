@@ -106,7 +106,7 @@ pub struct Tray;
 
 #[cfg(target_os = "linux")]
 impl Tray {
-    /// AppIndicator needs GTK's loop, which egui's window does not run.
+    /// `AppIndicator` needs GTK's loop, which egui's window does not run.
     pub fn new(bus: &Bus) -> Self {
         listen(bus);
         std::thread::spawn(|| {
@@ -120,6 +120,7 @@ impl Tray {
         Self
     }
 
+    #[expect(clippy::unused_self, reason = "the same API as the other platforms' tray, which holds its icon")]
     pub fn set(&self, image: TrayImage) {
         gtk::glib::MainContext::default().invoke(move || {
             TRAY.with(|tray| {

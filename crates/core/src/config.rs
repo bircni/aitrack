@@ -208,6 +208,7 @@ fn file_mode(path: &Path) -> std::io::Result<Option<u32>> {
 
 #[cfg(not(unix))]
 #[expect(clippy::unnecessary_wraps, reason = "same signature as the Unix version")]
+#[expect(clippy::missing_const_for_fn, reason = "same signature as the Unix version")]
 fn file_mode(_: &Path) -> std::io::Result<Option<u32>> {
     Ok(None)
 }

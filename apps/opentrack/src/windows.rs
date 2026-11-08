@@ -53,13 +53,15 @@ pub fn work_area(point: Option<(i32, i32)>) -> Option<(Rect, f32)> {
     unsafe {
         let monitor = MonitorFromPoint(POINT { x, y }, MONITOR_DEFAULTTONEAREST);
         let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
-        if !GetMonitorInfoW(monitor, &mut info).as_bool() {
+        if !GetMonitorInfoW(monitor, &raw mut info).as_bool() {
             return None;
         }
         let (mut dpi_x, mut dpi_y) = (96u32, 96u32);
-        let _ = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y);
+        let _ = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &raw mut dpi_x, &raw mut dpi_y);
         let work = info.rcWork;
         let rect = Rect { x: work.left, y: work.top, width: work.right - work.left, height: work.bottom - work.top };
-        Some((rect, dpi_x as f32 / 96.0))
+        #[expect(clippy::cast_precision_loss, reason = "DPI values are far below f32's exact integer range")]
+        let scale = dpi_x as f32 / 96.0;
+        Some((rect, scale))
     }
 }
