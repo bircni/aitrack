@@ -236,7 +236,7 @@ case "$2" in */"{fail}"-*) exit 1 ;; esac
             let fail = if fail.is_empty() { "nothing-fails" } else { fail };
             std::fs::write(&npm, fake_npm(published, fail, &log)).unwrap();
             std::fs::set_permissions(&npm, std::fs::Permissions::from_mode(0o755)).unwrap();
-            std::fs::create_dir(dir.path().join("packs")).unwrap();
+            std::fs::create_dir_all(dir.path().join("packs")).unwrap();
             if tarballs {
                 for name in publish_order().unwrap() {
                     std::fs::write(dir.path().join("packs").join(tarball_name(&name, version)), "").unwrap();

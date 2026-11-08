@@ -43,7 +43,7 @@ fn extract_apps(bundle: &Path, version: &str, temporary: &Path) -> Result<(Vec<P
     if cfg!(target_os = "macos") {
         let dmg = installer(bundle, Installer::Dmg, version)?;
         let mount = temporary.join("volume");
-        std::fs::create_dir(&mount).map_err(io(&mount))?;
+        std::fs::create_dir_all(&mount).map_err(io(&mount))?;
         let mount_arg = mount.to_string_lossy().into_owned();
         cmd(
             "hdiutil",
@@ -73,7 +73,7 @@ fn extract_apps(bundle: &Path, version: &str, temporary: &Path) -> Result<(Vec<P
 
 /// Starts the packaged app in its smoke-test mode, which answers before any window or tray exists.
 fn check_app(program: &Path, data_dir: &Path) -> Result<()> {
-    std::fs::create_dir(data_dir).map_err(io(data_dir))?;
+    std::fs::create_dir_all(data_dir).map_err(io(data_dir))?;
     let settings = data_dir.join("settings.json");
     std::fs::write(&settings, r#"{"theme":"dark"}"#).map_err(io(&settings))?;
     let mut child = Command::new(program)

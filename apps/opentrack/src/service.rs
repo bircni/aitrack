@@ -238,6 +238,7 @@ impl<D: Deps> QuotaService<D> {
                 inner.sync_result = Some(SyncOutcome { ok: true, message });
                 inner.next_pull_at = now + PULL_INTERVAL_MS;
                 inner.cache.pull_error = None;
+                drop(inner);
                 Some(machine)
             }
             Err(message) => {
@@ -291,6 +292,7 @@ impl<D: Deps> QuotaService<D> {
             if usage_due {
                 inner.usage_running = true;
             }
+            drop(inner);
             (due, usage_due.then_some(providers))
         };
         std::thread::scope(|scope| {
@@ -331,7 +333,7 @@ impl<D: Deps> QuotaService<D> {
             let Inner { runtime, cache, settings, .. } = &mut *inner;
             let runtime = runtime.entry(key.to_owned()).or_default();
             runtime.refreshing = false;
-            match result {
+            let alerts = match result {
                 Ok(snapshot) => {
                     runtime.error = None;
                     runtime.next_attempt_at = now + REFRESH_INTERVAL_MS;
@@ -355,7 +357,9 @@ impl<D: Deps> QuotaService<D> {
                     runtime.error = Some(error);
                     vec![]
                 }
-            }
+            };
+            drop(inner);
+            alerts
         };
         for alert in &alerts {
             self.deps.on_alert(alert);
@@ -457,8 +461,8 @@ mod tests {
         }
     }
 
-    fn ok(provider: &str, used_percent: f64, now: f64) -> QuotaResult {
-        Ok(QuotaSnapshot {
+    fn ok(provider: &str, used_percent: f64, now: f64) -> QuotaSnapshot {
+        QuotaSnapshot {
             provider: provider.into(),
             plan: None,
             windows: vec![QuotaWindow {
@@ -473,7 +477,7 @@ mod tests {
             }],
             values: vec![],
             fetched_at: iso(now),
-        })
+        }
     }
 
     fn failure(kind: QuotaErrorKind, message: &str, retry_after_seconds: Option<u64>) -> QuotaResult {
@@ -505,7 +509,7 @@ mod tests {
         fn fetch_quota(&self, provider: &str) -> QuotaResult {
             self.calls.lock().unwrap().push(provider.to_owned());
             let now = self.now();
-            self.quota.as_ref().and_then(|f| f(provider, now)).unwrap_or_else(|| ok(provider, 10.0, now))
+            self.quota.as_ref().and_then(|f| f(provider, now)).unwrap_or_else(|| Ok(ok(provider, 10.0, now)))
         }
         fn load_usage(&self, options: UsageLoadOptions) -> UsageLoadResult {
             self.loads.lock().unwrap().push(options.clone());
@@ -696,7 +700,7 @@ mod tests {
 
     fn almost_out() -> Fake {
         Fake {
-            quota: Some(Box::new(|provider, now| (provider == "claude_code").then(|| ok(provider, 95.0, now)))),
+            quota: Some(Box::new(|provider, now| (provider == "claude_code").then(|| Ok(ok(provider, 95.0, now))))),
             ..Fake::default()
         }
     }
@@ -704,7 +708,7 @@ mod tests {
     #[test]
     fn alerts_once_per_reset_and_only_when_enabled() {
         let pinned = Fake {
-            quota: Some(Box::new(|provider, _| (provider == "claude_code").then(|| ok(provider, 95.0, START)))),
+            quota: Some(Box::new(|provider, _| (provider == "claude_code").then(|| Ok(ok(provider, 95.0, START))))),
             ..Fake::default()
         };
         let (fake, service) = harness(pinned);

@@ -146,7 +146,7 @@ mod tests {
         };
         let (app, plain) = (root.path().join("app"), root.path().join("plain"));
         for dir in [&app, &plain] {
-            std::fs::create_dir(dir).unwrap();
+            std::fs::create_dir_all(dir).unwrap();
             git(dir, &["init", "-q"]);
         }
         git(&app, &["remote", "add", "origin", "git@github.com:me/app.git"]);

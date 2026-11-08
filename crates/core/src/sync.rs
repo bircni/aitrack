@@ -277,8 +277,7 @@ fn push_local_usage(
 
     let raw = read_machine_file_raw(&path)?;
     let mut existing = None;
-    let mut encrypted_now = false;
-    if let Some(raw) = &raw {
+    let  encrypted_now = if let Some(raw) = &raw {
         let check = check_raw_machine_file(
             raw,
             &path.to_string_lossy(),
@@ -289,8 +288,8 @@ fn push_local_usage(
         // Merging an invalid file as empty would push the loss of its history.
         let machine = check.machine.ok_or_else(|| Error::new(refusal_message(host, check.failure)))?;
         existing = Some(machine.days);
-        encrypted_now = check.encrypted;
-    }
+         check.encrypted
+    } else {false};
     let outgoing = outgoing_days(
         &core.pricing().current(),
         existing.as_ref(),
@@ -311,11 +310,11 @@ fn push_local_usage(
     let unchanged = js::to_string(&normalized_existing).expect("days serialize")
         == js::to_string(&outgoing).expect("days serialize");
     if !encryption_change && unchanged {
-        let mut pushed = false;
-        if !options.dry_run {
+        let  pushed=
+        if options.dry_run {false} else {
             remove_pending_machine_file(core, host)?;
-            pushed = push_machine_data(core, guard, git, host)?;
-        }
+            push_machine_data(core, guard, git, host)?
+        };
         return done(
             if pushed { pushed_message(host, synced_days) } else { NO_CHANGES_MESSAGE.to_owned() },
             pushed,

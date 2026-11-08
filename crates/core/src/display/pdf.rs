@@ -322,8 +322,7 @@ impl Layout {
                 while !rest.is_empty() {
                     let len = rest.len();
                     let mut l;
-                    let mut might_grow = false;
-                    if w > wrap.space_left {
+                    let mut might_grow = if w > wrap.space_left {
                         #[expect(
                             clippy::cast_precision_loss,
                             clippy::cast_possible_truncation,
@@ -333,10 +332,11 @@ impl Layout {
                         let fit = (wrap.space_left / (w / len as f64)).ceil().max(0.0) as usize;
                         l = fit.min(len);
                         w = self.word_width(&rest[..l]);
-                        might_grow = w <= wrap.space_left && l < len;
+                        w <= wrap.space_left && l < len
                     } else {
                         l = len;
-                    }
+                        false
+                    };
                     let mut must_shrink = w > wrap.space_left && l > 0;
                     while must_shrink || might_grow {
                         if must_shrink {

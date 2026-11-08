@@ -429,6 +429,7 @@ mod tests {
                 .position(|(file, ..)| request.url.ends_with(file))
                 .ok_or_else(|| HttpError(format!("unexpected {}", request.url)))?;
             let (_, status, etag, body) = replies.remove(index).unwrap();
+            drop(replies);
             Ok(Response {
                 status,
                 headers: etag.map(|e| vec![("etag".into(), e.into())]).unwrap_or_default(),

@@ -119,6 +119,7 @@ fn switch_line(
     rule(ui, &palette);
 }
 
+#[expect(clippy::too_many_lines, reason = "This function is long due to the UI layout code.")]
 pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
     let palette = frame.palette;
     let settings = model.settings;

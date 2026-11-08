@@ -100,7 +100,7 @@ impl Period {
     }
 }
 
-pub fn period_spend(usage: Option<&ProviderUsage>, period: Period) -> Option<&PeriodUsage> {
+pub fn period_spend_opt(usage: Option<&ProviderUsage>, period: Period) -> Option<&PeriodUsage> {
     usage.map(|usage| match period {
         Period::Today => &usage.today,
         Period::Week => &usage.last7_days,
@@ -111,7 +111,7 @@ pub fn period_spend(usage: Option<&ProviderUsage>, period: Period) -> Option<&Pe
 
 /// The period's spend, nothing when the provider has no usage.
 pub fn period_value(usage: Option<&ProviderUsage>, period: Period) -> Spend {
-    period_spend(usage, period).map_or_else(Spend::default, Spend::from)
+    period_spend_opt(usage, period).map_or_else(Spend::default, Spend::from)
 }
 
 pub fn period_projects(projects: Option<&ProjectUsages>, period: Period) -> &[ProjectUsageEntry] {
@@ -675,9 +675,11 @@ mod tests {
     fn reads_each_period_and_totals_spend() {
         let claude = usage(&[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 3.0], 3.0);
         assert!((period_value(Some(&claude), Period::Today).cost_usd - 3.0).abs() < f64::EPSILON);
+        assert!((period_value(Some(&claude), Period::Week).cost_usd - 7.5).abs() < f64::EPSILON);
         assert!((period_value(Some(&claude), Period::Month).cost_usd - 13.0).abs() < f64::EPSILON);
         assert!((period_value(Some(&claude), Period::All).cost_usd - 23.0).abs() < f64::EPSILON);
-        assert!(period_spend(None, Period::Week).is_none());
+        assert!(period_spend_opt(None, Period::Week).is_none());
+        assert_eq!(period_value(None, Period::Week), Spend::default());
         assert_eq!(spend_label(&Spend::default()), "$0.00");
         assert_eq!(spend_label(&Spend { tokens: 500.0, ..Spend::default() }), "—");
         let zero = usage(&[0.0], 0.0);

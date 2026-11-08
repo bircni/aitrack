@@ -217,10 +217,10 @@ pub fn render_tray_icon(size: u32, used_percent: f64, tone: Tone, appearance: &T
         for x in 0..size {
             let xf = f64::from(x);
             let mut alpha = 0.0;
-            let mut sy = step / 2.0;
-            while sy < 1.0 {
-                let mut sx = step / 2.0;
-                while sx < 1.0 {
+            for sample_y in 0..SUBSAMPLES {
+                let sy = (f64::from(sample_y) + 0.5) * step;
+                for sample_x in 0..SUBSAMPLES {
+                    let sx = (f64::from(sample_x) + 0.5) * step;
                     alpha += if bars_style {
                         bar_alpha(
                             xf + sx,
@@ -232,9 +232,7 @@ pub fn render_tray_icon(size: u32, used_percent: f64, tone: Tone, appearance: &T
                     } else {
                         shape_alpha(xf + sx - centre, yf + sy - centre, &shape)
                     };
-                    sx += step;
                 }
-                sy += step;
             }
             let offset = ((y * size + x) * 4) as usize;
             pixels[offset..offset + 3].copy_from_slice(&rgb);

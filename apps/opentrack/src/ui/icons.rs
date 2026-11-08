@@ -5,6 +5,9 @@ use eframe::egui::{self, Color32, ColorImage, Pos2, Rect, Shape, Stroke, Texture
 /// A path's subpaths as polylines, in its own units.
 type Polylines = Vec<Vec<(f32, f32)>>;
 
+const STEPS: u16 = 16;
+
+
 fn numbers(text: &str) -> Vec<f32> {
     let mut out = Vec::new();
     let mut current = String::new();
@@ -121,7 +124,6 @@ fn arc(
     } else if sweep && delta < 0.0 {
         delta += std::f32::consts::TAU;
     }
-    const STEPS: u16 = 16;
     for step in 1..=STEPS {
         let theta = start + delta * f32::from(step) / f32::from(STEPS);
         let (s, c) = theta.sin_cos();

@@ -1,6 +1,7 @@
 //! The tray pixels, settings and cache.json normalization against 4.x's sidecar, recorded before 4.x was removed.
 
 use aitrack_core::time::Clock;
+use std::fmt::Write as _;
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -58,7 +59,10 @@ fn expected() -> Expected {
 }
 
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut output, byte| {
+        write!(&mut output, "{byte:02x}").unwrap();
+        output
+    })
 }
 
 #[test]

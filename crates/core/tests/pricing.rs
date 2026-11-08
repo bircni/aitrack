@@ -22,10 +22,10 @@ fn bits(cost: Option<f64>) -> Value {
 
 fn check(pricing: &ModelPricing, recorded: &str) {
     let expected: Value = serde_json::from_str(recorded).unwrap();
-    assert_eq!(pricing.updated_at(), expected["updatedAt"]);
+    assert_eq!(pricing.updated_at(), expected["updatedAt"], "pricing updated_at should match the recorded fixture");
     let counts: Vec<TokenCounts> = serde_json::from_value(expected["counts"].clone()).unwrap();
     let rows = expected["rows"].as_array().unwrap();
-    assert!(rows.len() > 500);
+    assert!(rows.len() > 500, "expected more than 500 rows in the fixture");
     for row in rows {
         let model = row[0].as_str().unwrap();
         let c = &counts[usize::try_from(row[1].as_u64().unwrap()).unwrap()];

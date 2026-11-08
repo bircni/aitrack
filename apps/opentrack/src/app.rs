@@ -126,7 +126,7 @@ impl App {
             });
         });
         let saved = bus.clone();
-        let saves = background.saver(move |seq, result| saved.send(Msg::Saved(seq, result.map(Box::new))));
+        let save_count = background.saver(move |seq, result| saved.send(Msg::Saved(seq, result.map(Box::new))));
         platform::round_corners(cc);
         let mut app = Self {
             state: Arc::new(background.service.state()),
@@ -134,7 +134,7 @@ impl App {
             background,
             rx,
             bus,
-            saves,
+            saves: save_count,
             save_seq: 0,
             clock: Clock::system(),
             view: View::default(),

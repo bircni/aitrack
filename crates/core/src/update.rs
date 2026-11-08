@@ -375,7 +375,7 @@ mod tests {
         let archive = dir.path().join("a.tar.gz");
         exec("tar", &["-czf", &archive.to_string_lossy(), "-C", &source.to_string_lossy(), APP_NAME]).unwrap();
         let running = dir.path().join("opentrack 2.app");
-        std::fs::create_dir(&running).unwrap();
+        std::fs::create_dir_all(&running).unwrap();
         let installed = install_mac_app(&std::fs::read(&archive).unwrap(), &running).unwrap();
         assert_eq!(installed, running);
         assert!(running.join("new").exists());

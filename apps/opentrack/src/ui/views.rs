@@ -7,7 +7,7 @@ use eframe::egui::{
 use super::dashboard::{chip, chip_width, mark};
 use super::format::{
     build_history, by_cost_then_tokens, combined_daily, day_cost_label, format_cost, format_day, format_percent,
-    format_tokens, intensity_level, period_projects, period_spend, spend_label, spend_reading, sync_status,
+    format_tokens, intensity_level, period_projects, period_spend_opt, spend_label, spend_reading, sync_status,
     total_spend, zone_clock, Bucket, Period, ShareBasis, Spend, INIT_HINT,
 };
 use super::icons::{paint_glyph, square, Glyph};
@@ -140,7 +140,7 @@ fn row(
 ) -> Row {
     let keys: Vec<&str> = state.providers.iter().map(|p| p.key.as_str()).collect();
     let spends: Vec<_> =
-        keys.iter().filter_map(|key| period_spend(usages.get(*key), period).map(|s| (*key, s))).collect();
+        keys.iter().filter_map(|key| period_spend_opt(usages.get(*key), period).map(|s| (*key, s))).collect();
     let parts = spends
         .iter()
         .map(|(key, spend)| ((*key).to_owned(), Spend::from(*spend)))
@@ -179,7 +179,7 @@ fn rows(state: &AppState, period: Period) -> Vec<Row> {
     rows
 }
 
-fn expander(ui: &mut Ui, view: &mut View, id: &str, rect: Rect) -> bool {
+fn expander(ui: & Ui, view: &mut View, id: &str, rect: Rect) -> bool {
     let response = ui.interact(rect, ui.scope_id().with(("row", id)), Sense::click());
     let open = view.open_row.as_deref() == Some(id);
     response.widget_info(|| WidgetInfo::selected(Role::Button, true, open, id));
@@ -235,6 +235,7 @@ fn provider_spend_row(ui: &mut Ui, frame: &Frame<'_>, key: &str, label: &str, sp
     });
 }
 
+#[expect(clippy::too_many_lines, reason = "This function is long due to the UI layout code.")]
 pub fn machines(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) {
     let palette = frame.palette;
     let state = model.state;

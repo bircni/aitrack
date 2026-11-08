@@ -55,6 +55,11 @@ wildcard_enum_match_arm = "warn"
 # Costs and amounts must round exactly as 4.x's JavaScript did; fused or "precise" float forms change bytes.
 suboptimal_flops = "allow"
 imprecise_flops = "allow"
+similar_names = "allow"
+cast_possible_truncation = "allow"
+float_cmp = "allow"
+many_single_char_names = "allow"
+too_long_first_doc_paragraph = "allow"
 
 # Size over speed: smallest binaries and lowest RAM are the priority.
 [profile.release]
