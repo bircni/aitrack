@@ -13,7 +13,18 @@ fn provider_names() -> String {
 }
 
 /// Canonical, de-duplicated keys for a comma-separated, alias-tolerant list.
-pub fn parse_providers(value: &str) -> Result<Vec<String>, String> {
+/// Clap reads a bare `Vec` as a repeated flag, so the parsed list is wrapped.
+#[derive(Clone, Debug)]
+pub struct Providers(Vec<String>);
+
+impl std::ops::Deref for Providers {
+    type Target = [String];
+    fn deref(&self) -> &[String] {
+        &self.0
+    }
+}
+
+pub fn parse_providers(value: &str) -> Result<Providers, String> {
     let mut keys: Vec<String> = Vec::new();
     for name in value.split(',').map(aitrack_core::js::trim).filter(|n| !n.is_empty()) {
         let key = normalize_provider_key(name)
@@ -25,7 +36,7 @@ pub fn parse_providers(value: &str) -> Result<Vec<String>, String> {
     if keys.is_empty() {
         return Err(format!("No valid providers given. Expected one of: {}.", provider_names()));
     }
-    Ok(keys)
+    Ok(Providers(keys))
 }
 
 pub fn parse_positive_int(value: &str) -> Result<u64, String> {

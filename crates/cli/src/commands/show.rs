@@ -14,7 +14,7 @@ use aitrack_core::sync::read_local_provider_maps;
 use clap::Args;
 use serde_json::{Value, json};
 
-use super::args::{PROVIDERS_HELP, REFRESH_HELP, parse_providers, parse_year, warn_stdout_path};
+use super::args::{PROVIDERS_HELP, Providers, REFRESH_HELP, parse_providers, parse_year, warn_stdout_path};
 use super::report::{load, not_configured, print_empty_result};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
@@ -28,7 +28,7 @@ pub struct ShowArgs {
     #[arg(long)]
     pub dark: bool,
     #[arg(long, value_name = "list", help = PROVIDERS_HELP, value_parser = parse_providers)]
-    pub providers: Option<Vec<String>>,
+    pub providers: Option<Providers>,
     /// single merged heatmap across all providers instead of one row per provider
     #[arg(long)]
     pub all: bool,

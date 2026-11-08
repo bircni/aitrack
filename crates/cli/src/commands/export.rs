@@ -10,7 +10,7 @@ use aitrack_core::display::style;
 use clap::Args;
 use serde_json::json;
 
-use super::args::{PROVIDERS_HELP, REFRESH_HELP, parse_providers, warn_stdout_path};
+use super::args::{PROVIDERS_HELP, Providers, REFRESH_HELP, parse_providers, warn_stdout_path};
 use super::report::{load, not_configured};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
@@ -27,7 +27,7 @@ pub struct ExportArgs {
     #[arg(long)]
     pub csv: bool,
     #[arg(long, value_name = "list", help = PROVIDERS_HELP, value_parser = parse_providers)]
-    pub providers: Option<Vec<String>>,
+    pub providers: Option<Providers>,
     #[arg(long, help = REFRESH_HELP)]
     pub refresh: bool,
     /// print machine-readable JSON

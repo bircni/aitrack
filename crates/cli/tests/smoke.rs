@@ -70,7 +70,7 @@ fn reports_read_local_logs_without_a_data_repo() {
         (&["show", "--tui"][..], "show"),
         (&["export", "all", "--csv", "-o", csv.to_str().unwrap()][..], "export"),
     ] {
-        let output = aitrack(home.path()).args(args).arg("--json").output().unwrap();
+        let output = aitrack(home.path()).args(args).args(["--providers", "claude", "--json"]).output().unwrap();
         assert_eq!(output.status.code(), Some(0), "{args:?}");
         let document: Value = serde_json::from_str(&stdout(&output)).unwrap();
         assert_eq!(document["command"], command, "{args:?}");

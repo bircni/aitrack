@@ -18,7 +18,7 @@ use aitrack_core::readers::project::resolve_project_selector;
 use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 
-use super::args::{PROVIDERS_HELP, REFRESH_HELP, parse_providers, parse_watch_seconds};
+use super::args::{PROVIDERS_HELP, Providers, REFRESH_HELP, parse_providers, parse_watch_seconds};
 use super::report::{load, not_configured};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
@@ -34,7 +34,7 @@ pub struct UsageArgs {
 #[derive(Args, Clone)]
 pub struct UsageOptions {
     #[arg(long, value_name = "list", help = PROVIDERS_HELP, value_parser = parse_providers)]
-    pub providers: Option<Vec<String>>,
+    pub providers: Option<Providers>,
     #[arg(long, help = REFRESH_HELP)]
     pub refresh: bool,
     /// compare with the equivalent previous period

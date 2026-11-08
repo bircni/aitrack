@@ -17,7 +17,9 @@ use clap::{Args, ValueEnum};
 use indexmap::IndexMap;
 use serde_json::{Map, Value, json};
 
-use super::args::{PROVIDERS_HELP, REFRESH_HELP, parse_date, parse_positive_int, parse_providers, parse_year};
+use super::args::{
+    PROVIDERS_HELP, Providers, REFRESH_HELP, parse_date, parse_positive_int, parse_providers, parse_year,
+};
 use super::report::{load, not_configured, print_empty_result};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
@@ -49,7 +51,7 @@ pub struct TopArgs {
     #[arg(long, value_name = "field", value_enum, default_value = "cost")]
     pub sort: TopSortArg,
     #[arg(long, value_name = "list", help = PROVIDERS_HELP, value_parser = parse_providers)]
-    pub providers: Option<Vec<String>>,
+    pub providers: Option<Providers>,
     /// only include days from this calendar year
     #[arg(long, value_name = "year", value_parser = parse_year)]
     pub year: Option<u64>,
