@@ -4,16 +4,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
 
-use crate::{Result, sha256_file};
-
-/// The updater target per installer the release workflow builds.
-const PLATFORMS: [(&str, &str); 4] = [
-    ("darwin-aarch64", ".app.tar.gz"),
-    ("windows-x86_64", "-setup.exe"),
-    ("linux-x86_64", "_amd64.AppImage"),
-    // Read only by .deb installs; the updater installs it through pkexec.
-    ("linux-x86_64-deb", "_amd64.deb"),
-];
+use crate::artifacts::{Installer, UPDATER_PLATFORMS};
+use crate::{Result, io, sha256_file};
 
 pub fn version_from_tag(tag: &str) -> &str {
     tag.strip_prefix('v').unwrap_or(tag)
@@ -34,12 +26,13 @@ fn encode_component(text: &str) -> String {
 /// The `latest.json` installed apps poll, with each installer's minisign signature.
 pub fn updater_manifest(tag: &str, directory: &Path, repository: &str, pub_date: &str) -> Result<Value> {
     let mut files: Vec<String> = std::fs::read_dir(directory)
-        .map_err(|e| format!("{}: {e}", directory.display()))?
+        .map_err(io(directory))?
         .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
         .collect();
     files.sort();
     let mut platforms = Map::new();
-    for (key, suffix) in PLATFORMS {
+    for (key, installer) in UPDATER_PLATFORMS {
+        let suffix = installer.suffix();
         let matches: Vec<&String> = files.iter().filter(|f| f.ends_with(suffix)).collect();
         let [file] = matches.as_slice() else {
             return Err(format!("Expected one *{suffix} in {}, found {}.", directory.display(), matches.len()));
@@ -111,6 +104,7 @@ fn winget_file(kind: &str, body: &str) -> String {
 pub fn winget_manifests(version: &str, sha256: &str) -> Vec<(String, String)> {
     let id = format!("PackageIdentifier: {WINGET_ID}\nPackageVersion: {version}\n");
     let sha = sha256.to_uppercase();
+    let setup = Installer::Nsis.file_name(version);
     vec![
         (format!("{WINGET_ID}.yaml"), winget_file("version", &format!("{id}DefaultLocale: en-US\n"))),
         (
@@ -129,7 +123,7 @@ UpgradeBehavior: install
 ProductCode: opentrack
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/bircni/aitrack/releases/download/v{version}/opentrack_{version}_x64-setup.exe
+  InstallerUrl: https://github.com/bircni/aitrack/releases/download/v{version}/{setup}
   InstallerSha256: {sha}
 "
                 ),

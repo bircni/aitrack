@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use aitrack_core::http::{HttpClient, Request};
-use aitrack_core::js::{locale_compare, number_to_string, to_string_pretty};
+use aitrack_core::js::{locale_compare, number_to_string};
 use aitrack_core::pricing::catalog::{Catalog, ModelRates, find_catalog_rates, parse_compact_catalog};
 use aitrack_core::time::{Clock, iso_millis};
 use jiff::Timestamp;
@@ -32,10 +32,6 @@ pub const CURSOR_PROVIDERS: [&str; 5] = ["cursor", "xai", "google", "openai", "a
 pub type Result<T> = std::result::Result<T, String>;
 
 /// `JSON.stringify(value, null, 2)` and a newline, as every pack and table file is written.
-pub fn pretty(value: &Value) -> String {
-    format!("{}\n", to_string_pretty(value).expect("JSON values serialize"))
-}
-
 fn amount(value: Option<&Value>) -> Option<f64> {
     value.and_then(Value::as_f64).filter(|x| x.is_finite() && *x >= 0.0)
 }
@@ -337,6 +333,8 @@ pub fn compare_table<'a>(
 
 #[cfg(test)]
 mod tests {
+    use aitrack_core::js::to_string_pretty;
+
     use super::*;
 
     #[test]

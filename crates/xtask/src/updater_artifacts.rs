@@ -5,13 +5,14 @@
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use minisign::{SecretKey, SecretKeyBox};
 
+use crate::artifacts::Installer;
 use crate::pricing::Result;
+use crate::{cmd, io};
 
 /// The key as `tauri signer generate` prints it: a minisign secret key file, base64-encoded.
 pub fn secret_key(encoded: &str, password: &str) -> Result<SecretKey> {
@@ -29,10 +30,6 @@ pub fn sign(key: &SecretKey, data: &[u8], file_name: &str, timestamp: i64) -> Re
         minisign::sign(None, key, Cursor::new(data), Some(&trusted), Some("signature from tauri secret key"))
             .map_err(|e| format!("signing {file_name}: {e}"))?;
     Ok(STANDARD.encode(signature.to_string()))
-}
-
-fn io(path: &Path) -> impl Fn(std::io::Error) -> String + '_ {
-    move |e| format!("{}: {e}", path.display())
 }
 
 fn has_extension(path: &Path, extension: &str) -> bool {
@@ -58,17 +55,7 @@ fn archive_app(app: &Path) -> Result<PathBuf> {
     let name = app.file_name().ok_or("the app has no name")?.to_string_lossy().into_owned();
     let archive = app.with_file_name(format!("{name}.tar.gz"));
     let dir = app.parent().ok_or("the app has no folder")?;
-    let status = Command::new("tar")
-        .arg("-czf")
-        .arg(&archive)
-        .arg("-C")
-        .arg(dir)
-        .arg(&name)
-        .status()
-        .map_err(|e| format!("tar: {e}"))?;
-    if !status.success() {
-        return Err(format!("tar exited with {status}"));
-    }
+    cmd("tar", &["-czf", &archive.to_string_lossy(), "-C", &dir.to_string_lossy(), &name], None)?;
     Ok(archive)
 }
 
@@ -89,17 +76,19 @@ fn lay_out(from: &Path, to: &Path, key: Option<&SecretKey>) -> Result<()> {
     for entry in entries {
         let path = entry.map_err(io(from))?.path();
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let dir = |kind: Installer| to.join(kind.dir());
         if path.extension().is_some_and(|e| e == "app") {
-            let app = place(&path, &to.join("macos"), &name)?;
+            let app = place(&path, &dir(Installer::AppArchive), &name)?;
             signed.push(archive_app(&app)?);
         } else if has_extension(&path, "dmg") {
-            place(&path, &to.join("dmg"), &name)?;
+            place(&path, &dir(Installer::Dmg), &name)?;
         } else if name.ends_with("-setup.exe") {
-            signed.push(place(&path, &to.join("nsis"), &name)?);
+            signed.push(place(&path, &dir(Installer::Nsis), &name)?);
         } else if name.ends_with(".AppImage") {
-            signed.push(place(&path, &to.join("appimage"), &name.replace("_x86_64.AppImage", "_amd64.AppImage"))?);
+            let renamed = name.replace("_x86_64.AppImage", Installer::AppImage.suffix());
+            signed.push(place(&path, &dir(Installer::AppImage), &renamed)?);
         } else if has_extension(&path, "deb") {
-            signed.push(place(&path, &to.join("deb"), &name)?);
+            signed.push(place(&path, &dir(Installer::Deb), &name)?);
         }
     }
     let Some(key) = key else {

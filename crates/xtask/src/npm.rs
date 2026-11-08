@@ -6,17 +6,23 @@ use std::process::Command;
 
 use serde_json::{Map, Value, json};
 
-use crate::{Result, read_json, root};
+use crate::manifests::version_from_tag;
+use crate::{Result, cmd, io, pretty, read_json, root};
 
 /// npm's own fixed mtime, so a pack is reproducible.
 const NPM_MTIME: u64 = 499_162_500;
 
-/// `<platform>-<arch>` to the npm package holding that binary, as the launcher resolves it.
-pub fn targets() -> Result<Map<String, Value>> {
-    match read_json(&root().join("npm/aitrack/targets.json"))? {
-        Value::Object(map) => Ok(map),
-        _ => Err("npm/aitrack/targets.json is not an object".into()),
-    }
+/// `<platform>-<arch>` to the npm package holding that binary, as the launcher resolves it, in order.
+pub fn targets() -> Result<Vec<(String, String)>> {
+    let Value::Object(map) = read_json(&root().join("npm/aitrack/targets.json"))? else {
+        return Err("npm/aitrack/targets.json is not an object".into());
+    };
+    map.into_iter()
+        .map(|(target, name)| match name {
+            Value::String(name) => Ok((target, name)),
+            _ => Err(format!("targets.json: {target} does not name a package")),
+        })
+        .collect()
 }
 
 /// The release asset and the file inside the platform package.
@@ -32,16 +38,14 @@ pub fn tarball_name(name: &str, version: &str) -> String {
 
 /// Platform packages first: the launcher pins their exact version.
 pub fn publish_order() -> Result<Vec<String>> {
-    let mut names: Vec<String> = targets()?.values().filter_map(|v| v.as_str().map(str::to_owned)).collect();
+    let mut names: Vec<String> = targets()?.into_iter().map(|(_, name)| name).collect();
     names.push("aitrack".into());
     Ok(names)
 }
 
-use crate::pricing::pretty;
-
 /// A gzipped tar with every file under `package/`, as `npm pack` writes it.
 fn write_tarball(path: &Path, files: &[(&str, Vec<u8>, u32)]) -> Result<()> {
-    let file = std::fs::File::create(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let file = std::fs::File::create(path).map_err(io(path))?;
     let mut tar = tar::Builder::new(flate2::write::GzEncoder::new(file, flate2::Compression::best()));
     for (name, data, mode) in files {
         let mut header = tar::Header::new_ustar();
@@ -55,13 +59,13 @@ fn write_tarball(path: &Path, files: &[(&str, Vec<u8>, u32)]) -> Result<()> {
 }
 
 fn read(path: &Path) -> Result<Vec<u8>> {
-    std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))
+    std::fs::read(path).map_err(io(path))
 }
 
 /// Builds the launcher and one package per platform from the release binaries.
 pub fn pack(version: &str, binaries: &Path, out: &Path) -> Result<Vec<PathBuf>> {
     let targets = targets()?;
-    for target in targets.keys() {
+    for (target, _) in &targets {
         let path = binaries.join(binary_name(target).0);
         if !path.exists() {
             return Err(format!("Missing binary: {}", path.display()));
@@ -70,10 +74,9 @@ pub fn pack(version: &str, binaries: &Path, out: &Path) -> Result<Vec<PathBuf>> 
     let Value::Object(launcher) = read_json(&root().join("npm/aitrack/package.json"))? else {
         return Err("npm/aitrack/package.json is not an object".into());
     };
-    std::fs::create_dir_all(out).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(out).map_err(io(out))?;
     let mut written = Vec::new();
     for (target, name) in &targets {
-        let name = name.as_str().ok_or("targets.json values are package names")?;
         let (os, cpu) = target.split_once('-').ok_or_else(|| format!("bad target {target}"))?;
         let (asset, file) = binary_name(target);
         let mut manifest = json!({
@@ -86,12 +89,12 @@ pub fn pack(version: &str, binaries: &Path, out: &Path) -> Result<Vec<PathBuf>> 
             "repository": launcher["repository"],
             "os": [os],
             "cpu": [cpu],
+            "files": [format!("bin/{file}")],
+            "publishConfig": launcher["publishConfig"],
         });
         if os == "linux" {
             manifest["libc"] = json!(["glibc"]);
         }
-        manifest["files"] = json!([format!("bin/{file}")]);
-        manifest["publishConfig"] = launcher["publishConfig"].clone();
         let path = out.join(tarball_name(name, version));
         write_tarball(
             &path,
@@ -104,8 +107,7 @@ pub fn pack(version: &str, binaries: &Path, out: &Path) -> Result<Vec<PathBuf>> 
     }
     let mut manifest = launcher.clone();
     manifest.insert("version".into(), json!(version));
-    let pins: Map<String, Value> =
-        targets.values().filter_map(|n| Some((n.as_str()?.to_owned(), json!(version)))).collect();
+    let pins: Map<String, Value> = targets.into_iter().map(|(_, name)| (name, json!(version))).collect();
     manifest.insert("optionalDependencies".into(), Value::Object(pins));
     let path = out.join(tarball_name("aitrack", version));
     write_tarball(
@@ -123,7 +125,7 @@ pub fn pack(version: &str, binaries: &Path, out: &Path) -> Result<Vec<PathBuf>> 
 
 /// Publishes in order with provenance, skipping what the registry has; a prerelease goes to `next`.
 pub fn publish(tag: &str, directory: &str, npm: &Path, cwd: &Path) -> Result<()> {
-    let version = tag.strip_prefix('v').unwrap_or(tag);
+    let version = version_from_tag(tag);
     // The leading ./ stops npm reading the path as a GitHub shorthand.
     let tarballs: Vec<(String, String)> = publish_order()?
         .into_iter()
@@ -136,8 +138,8 @@ pub fn publish(tag: &str, directory: &str, npm: &Path, cwd: &Path) -> Result<()>
         return Err(format!("Missing tarball: {missing}"));
     }
     for (name, path) in &tarballs {
-        let view = Command::new(npm).current_dir(cwd).args(["view", &format!("{name}@{version}"), "version"]).output();
-        if view.is_ok_and(|v| v.status.success() && String::from_utf8_lossy(&v.stdout).trim() == version) {
+        let view = cmd(&npm.to_string_lossy(), &["view", &format!("{name}@{version}"), "version"], Some(cwd));
+        if view.is_ok_and(|published| published == version) {
             println!("{name}@{version} is already on the registry, skipping.");
             continue;
         }
@@ -173,8 +175,8 @@ mod tests {
     #[test]
     fn packs_the_launcher_pinned_to_every_platform_package() {
         let dir = tempfile::tempdir().unwrap();
-        for target in targets().unwrap().keys() {
-            std::fs::write(dir.path().join(binary_name(target).0), target).unwrap();
+        for (target, _) in targets().unwrap() {
+            std::fs::write(dir.path().join(binary_name(&target).0), &target).unwrap();
         }
         let packs = pack("1.2.3", dir.path(), &dir.path().join("out")).unwrap();
         assert_eq!(packs.len(), targets().unwrap().len() + 1);

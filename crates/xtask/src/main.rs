@@ -1,5 +1,6 @@
 //! Maintainer tasks: pricing pack, release, packaging and publishing.
 
+mod artifacts;
 mod manifests;
 mod npm;
 mod pricing;
@@ -16,9 +17,11 @@ use jiff::Timestamp;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
+use aitrack_core::hex;
+use aitrack_core::js::to_string_pretty;
+
 use crate::pricing::{
-    CURSOR_PROVIDERS, Catalogs, Finding, Result, Tables, apply_catalog_rates, compare_table, fetch_catalogs, pretty,
-    summary,
+    CURSOR_PROVIDERS, Catalogs, Finding, Result, Tables, apply_catalog_rates, compare_table, fetch_catalogs, summary,
 };
 
 fn root() -> PathBuf {
@@ -34,12 +37,28 @@ fn pack_dir() -> PathBuf {
     root().join("artifacts/pricing-pack")
 }
 
-fn hex(bytes: &[u8]) -> String {
-    use std::fmt::Write;
-    bytes.iter().fold(String::new(), |mut hex, b| {
-        let _ = write!(hex, "{b:02x}");
-        hex
-    })
+/// An I/O error with the path it happened on.
+fn io(path: &Path) -> impl Fn(std::io::Error) -> String + '_ {
+    move |e| format!("{}: {e}", path.display())
+}
+
+/// Runs a command to completion; its stdout, or what it said on stderr when it failed.
+fn cmd(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<String> {
+    let mut command = std::process::Command::new(program);
+    command.args(args);
+    if let Some(cwd) = cwd {
+        command.current_dir(cwd);
+    }
+    let output = command.output().map_err(|e| format!("{program}: {e}"))?;
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned());
+    }
+    Err(format!("{program} exited with {}: {}", output.status, String::from_utf8_lossy(&output.stderr).trim()))
+}
+
+/// JSON as the repo's files keep it: two-space indents, a final newline.
+fn pretty(value: &Value) -> String {
+    format!("{}\n", to_string_pretty(value).expect("JSON values serialize"))
 }
 
 fn sha256(text: &str) -> String {
@@ -47,16 +66,15 @@ fn sha256(text: &str) -> String {
 }
 
 fn sha256_file(path: &Path) -> Result<String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    Ok(hex(&Sha256::digest(bytes)))
+    Ok(hex(&Sha256::digest(std::fs::read(path).map_err(io(path))?)))
 }
 
 fn write(path: &Path, text: &str) -> Result<()> {
-    std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
+    std::fs::write(path, text).map_err(io(path))
 }
 
 fn read_json(path: &Path) -> Result<Value> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = std::fs::read_to_string(path).map_err(io(path))?;
     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
@@ -242,7 +260,7 @@ fn dispatch(args: &[String]) -> Option<Result<bool>> {
         ("updater-manifest", Some(tag), Some(dir), repo) => {
             let repo = repo.map(str::to_owned).or_else(|| std::env::var("GITHUB_REPOSITORY").ok())?;
             manifests::updater_manifest(tag, Path::new(dir), &repo, &iso_millis(Timestamp::now()))
-                .map(|manifest| print(&pricing::pretty(&manifest)))
+                .map(|manifest| print(&pretty(&manifest)))
         }
         ("homebrew-cask", Some(tag), Some(dmg), _) => sha256_file(Path::new(dmg))
             .map(|sha| print(&manifests::homebrew_cask(manifests::version_from_tag(tag), &sha))),

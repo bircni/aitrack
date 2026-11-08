@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use crate::{Result, root};
+use crate::artifacts::Installer;
+use crate::{Result, cmd, io, root};
 
 fn only_match(directory: &Path, matches: impl Fn(&str) -> bool) -> Result<PathBuf> {
     let found = find(directory, &matches);
@@ -33,21 +34,20 @@ fn find(directory: &Path, matches: &impl Fn(&str) -> bool) -> Vec<PathBuf> {
 }
 
 fn run(program: &str, args: &[&str], cwd: &Path) -> Result<()> {
-    let output = Command::new(program).args(args).current_dir(cwd).output().map_err(|e| format!("{program}: {e}"))?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!("{program} failed: {}", String::from_utf8_lossy(&output.stderr)))
-    }
+    cmd(program, args, Some(cwd)).map(drop)
+}
+
+fn installer(bundle: &Path, kind: Installer, version: &str) -> Result<PathBuf> {
+    let name = format!("/{}", kind.file_name(version));
+    only_match(&bundle.join(kind.dir()), |p| p.ends_with(&name))
 }
 
 /// The app binaries inside each installer for this OS, plus cleanup for anything mounted.
 fn extract_apps(bundle: &Path, version: &str, temporary: &Path) -> Result<(Vec<PathBuf>, Option<PathBuf>)> {
     if cfg!(target_os = "macos") {
-        let dmg_name = format!("opentrack_{version}_aarch64.dmg");
-        let dmg = only_match(&bundle.join("dmg"), |p| p.ends_with(&format!("/{dmg_name}")))?;
+        let dmg = installer(bundle, Installer::Dmg, version)?;
         let mount = temporary.join("volume");
-        std::fs::create_dir(&mount).map_err(|e| e.to_string())?;
+        std::fs::create_dir(&mount).map_err(io(&mount))?;
         let mount_arg = mount.to_string_lossy().into_owned();
         run(
             "hdiutil",
@@ -58,29 +58,28 @@ fn extract_apps(bundle: &Path, version: &str, temporary: &Path) -> Result<(Vec<P
         return app.map(|a| (vec![a], Some(mount)));
     }
     if cfg!(target_os = "linux") {
-        let deb = only_match(&bundle.join("deb"), |p| p.ends_with(&format!("/opentrack_{version}_amd64.deb")))?;
+        let deb = installer(bundle, Installer::Deb, version)?;
         let deb_root = temporary.join("deb");
         run("dpkg-deb", &["-x", &deb.to_string_lossy(), &deb_root.to_string_lossy()], temporary)?;
-        let image =
-            only_match(&bundle.join("appimage"), |p| p.ends_with(&format!("/opentrack_{version}_amd64.AppImage")))?;
+        let image = installer(bundle, Installer::AppImage, version)?;
         // Runs only the AppImage runtime, which unpacks to ./squashfs-root without FUSE.
         run(&image.to_string_lossy(), &["--appimage-extract"], temporary)?;
         let from_deb = only_match(&deb_root, |p| p.ends_with("/usr/bin/opentrack"))?;
         let from_image = only_match(&temporary.join("squashfs-root"), |p| p.ends_with("/usr/bin/opentrack"))?;
         return Ok((vec![from_deb, from_image], None));
     }
-    let installer = only_match(&bundle.join("nsis"), |p| p.ends_with(&format!("/opentrack_{version}_x64-setup.exe")))?;
+    let setup = installer(bundle, Installer::Nsis, version)?;
     let extracted = temporary.join("installer");
     // Unpacks the installer without registering or launching an installed app.
-    run("7z", &["x", &installer.to_string_lossy(), &format!("-o{}", extracted.display()), "-y"], temporary)?;
+    run("7z", &["x", &setup.to_string_lossy(), &format!("-o{}", extracted.display()), "-y"], temporary)?;
     Ok((vec![only_match(&extracted, |p| p.ends_with("/opentrack.exe"))?], None))
 }
 
 /// Starts the packaged app in its smoke-test mode, which answers before any window or tray exists.
 fn check_app(program: &Path, data_dir: &Path) -> Result<()> {
-    std::fs::create_dir(data_dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir(data_dir).map_err(io(data_dir))?;
     let settings = data_dir.join("settings.json");
-    std::fs::write(&settings, r#"{"theme":"dark"}"#).map_err(|e| e.to_string())?;
+    std::fs::write(&settings, r#"{"theme":"dark"}"#).map_err(io(&settings))?;
     let mut child = Command::new(program)
         .args(["--smoke-test", "--data-dir"])
         .arg(data_dir)
@@ -100,25 +99,17 @@ fn check_app(program: &Path, data_dir: &Path) -> Result<()> {
     if !output.status.success() {
         return Err(format!("Packaged app failed: {}", String::from_utf8_lossy(&output.stderr)));
     }
-    let lines: Vec<Value> = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .lines()
-        .map(serde_json::from_str)
-        .collect::<std::result::Result<_, _>>()
-        .map_err(|e| e.to_string())?;
-    let [settings_line, state] = lines.as_slice() else {
-        return Err("Expected the settings and the state".into());
-    };
-    let ok = settings_line["id"] == 1
-        && settings_line["result"]["theme"] == "dark"
-        && state["id"] == 2
-        && state["result"]["providers"].as_array().is_some_and(|p| p.len() == 3)
-        && state["result"]["refreshing"] == false;
+    let answer = String::from_utf8_lossy(&output.stdout);
+    let started: Value =
+        serde_json::from_str(answer.trim()).map_err(|e| format!("The smoke test did not answer in JSON: {e}"))?;
+    let ok = started["settings"]["theme"] == "dark"
+        && started["state"]["providers"].as_array().is_some_and(|p| p.len() == 3)
+        && started["state"]["refreshing"] == false;
     if !ok {
-        return Err(format!("Unexpected smoke-test answer: {lines:?}"));
+        return Err(format!("Unexpected smoke-test answer: {answer}"));
     }
-    let after: Value = serde_json::from_str(&std::fs::read_to_string(&settings).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
+    let after: Value =
+        serde_json::from_str(&std::fs::read_to_string(&settings).map_err(io(&settings))?).map_err(|e| e.to_string())?;
     if after != serde_json::json!({ "theme": "dark" }) {
         return Err("The smoke test changed settings.json".into());
     }
