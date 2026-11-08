@@ -4,16 +4,109 @@ on:
   push:
     tags:
       - v*
+  # Builds and checks every release file without releasing anything.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
   NX_NO_CLOUD: true # Never restore release builds from PR runs' remote cache.
 
 jobs:
-  npm-tarballs:
-    name: Build npm tarballs
+  version:
+    name: Check the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: |
+            .node-version
+            Cargo.toml
+            scripts/*.ts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+
+      - id: version
+        shell: bash
+        run: |
+          version=$(node -e "import('./scripts/workspace-version.ts').then((m) => console.log(m.getWorkspaceVersion()))")
+          if [[ "$GITHUB_REF_TYPE" == tag && "v$version" != "$GITHUB_REF_NAME" ]]; then
+            echo "::error::$GITHUB_REF_NAME does not match version $version in Cargo.toml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  cli:
+    name: Build the CLI (${{ matrix.npm }})
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: aarch64-apple-darwin, npm: darwin-arm64 }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, npm: win32-x64 }
+          # zig links against glibc 2.31, so older distributions run the binary too.
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, npm: linux-x64, zig: true }
+          - { os: ubuntu-latest, target: aarch64-unknown-linux-gnu, npm: linux-arm64, zig: true }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix.target }}
+
+      - if: matrix.zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.13.0
+
+      - if: matrix.zig
+        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Build
+        shell: bash
+        run: |
+          if [[ -n "${{ matrix.zig }}" ]]; then
+            cargo zigbuild --release --locked -p aitrack-cli --target "${{ matrix.target }}.2.31"
+          else
+            cargo build --release --locked -p aitrack-cli --target "${{ matrix.target }}"
+          fi
+          exe=""; [[ "${{ runner.os }}" == Windows ]] && exe=.exe
+          mkdir out
+          cp "target/${{ matrix.target }}/release/aitrack$exe" "out/aitrack-${{ matrix.npm }}$exe"
+
+      - name: Check the binary reports the release version
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          reported=$(out/aitrack-* --version)
+          if [[ "$reported" != "$VERSION" ]]; then
+            echo "::error::the binary reports $reported, expected $VERSION"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-${{ matrix.npm }}
+          path: out
+          if-no-files-found: error
+
+  renderer:
+    name: Build the renderer
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -26,46 +119,20 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
 
-      # The Nx Rust plugin reads Cargo metadata to build the project graph.
-      - name: Set up Rust
-        uses: ./.github/actions/setup-rust
+      - run: bun nx run opentrack-ui:build
 
-      # The opentrack jobs check the Rust shell, which needs WebKitGTK on Linux.
-      - name: Validate and build
-        run: bun run validate --exclude opentrack
-
-      # Library first: bun rewrites the CLI's `workspace:*` to its exact version.
-      - name: Pack
-        run: |
-          for package in libs/aitrack-lib apps/aitrack; do
-            (cd "$package" && bun pm pack --quiet --destination "$GITHUB_WORKSPACE/packs")
-          done
-
-      - name: Generate SBOMs
-        run: node scripts/sbom.ts sbom packs/*.tgz
-
-      - name: Upload SBOMs
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: sbom
-          path: sbom
-          if-no-files-found: error
-
-      - name: Upload tarballs
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: npm-tarballs
-          path: packs
+          name: renderer
+          path: apps/opentrack-ui/dist/renderer
           if-no-files-found: error
 
   opentrack:
     name: Package Opentrack (${{ matrix.platform }})
+    needs: [version, renderer]
     runs-on: ${{ matrix.os }}
-    env:
-      NX_NATIVE_COMMAND_RUNNER: ${{ matrix.os == 'windows-latest' && 'false' || 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -91,17 +158,13 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      # Only for the Tauri CLI.
+      - run: bun install --frozen-lockfile
 
-      - name: Check the tag matches the app version
-        shell: bash
-        run: |
-          version=$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::$GITHUB_REF_NAME does not match version $version in package.json"
-            exit 1
-          fi
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: renderer
+          path: apps/opentrack-ui/dist/renderer
 
       - name: Set up Rust
         uses: ./.github/actions/setup-rust
@@ -112,22 +175,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
 
-      - name: Build the renderer
-        run: bun nx run opentrack-ui:build
-
-      - name: Check the Rust shell
-        run: bun nx run-many -t format:check,lint,test -p opentrack
-
-      # The renderer build ran above without the signing key and is restored from
-      # Nx's local cache here; the Tauri build and its cargo build scripts do see it.
       - name: Package
-        run: bun nx run opentrack:package -c release
+        working-directory: apps/opentrack
+        run: bunx tauri build --config tauri.updater.conf.json
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Check the bundle
-        run: bun nx run opentrack:bundle:check --excludeTaskDependencies
+        run: node scripts/smoke-opentrack-bundle.ts
 
       # One flat folder, so the release job finds every file at the top of the artifact.
       - name: Collect installer files
@@ -145,10 +201,42 @@ jobs:
           path: installers
           if-no-files-found: error
 
+  npm-tarballs:
+    name: Pack the npm packages
+    needs: [version, cli]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: |
+            .node-version
+            npm
+            scripts/*.ts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .node-version
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: cli-*
+          path: binaries
+          merge-multiple: true
+
+      - run: node scripts/npm-pack.ts "${{ needs.version.outputs.version }}" binaries packs
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-tarballs
+          path: packs
+          if-no-files-found: error
+
   # Runs before npm, the one step that cannot be undone, so its failures surface first. Installed
   # apps read releases/latest, so the release stays a draft until its assets are all uploaded.
   draft-release:
     name: Draft GitHub release
+    if: github.ref_type == 'tag'
     needs: [npm-tarballs, opentrack]
     runs-on: ubuntu-latest
     permissions:
@@ -170,7 +258,7 @@ jobs:
       - name: Extract GitHub release notes
         run: |
           node scripts/release-notes.ts "$GITHUB_REF_NAME" CHANGELOG.md > release-notes.md
-          printf '\nOpentrack installers: Windows builds are unsigned; macOS builds are ad hoc signed and not notarized. Windows SmartScreen and macOS Gatekeeper may block the first launch. Linux AppImage and .deb packages are built on Ubuntu 24.04 for x86_64.\n' >> release-notes.md
+          printf '\nOpentrack installers: Windows builds are unsigned; macOS builds are ad hoc signed and not notarized. Windows SmartScreen and macOS Gatekeeper may block the first launch. Linux AppImage and .deb packages are built on Ubuntu 24.04 for x86_64.\n\nThe aitrack-* files are the CLI for each platform; npm installs the right one for you.\n' >> release-notes.md
 
       - name: Download installers
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -179,14 +267,18 @@ jobs:
           path: installers
           merge-multiple: true
 
-      - name: Download SBOMs
+      # The npm launcher falls back to these, checked against checksums.txt.
+      - name: Download CLI binaries
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: sbom
-          path: sbom
+          pattern: cli-*
+          path: cli
+          merge-multiple: true
 
-      - name: Write the updater manifest
-        run: node scripts/updater-manifest.ts "$GITHUB_REF_NAME" installers > installers/latest.json
+      - name: Write the checksums and the updater manifest
+        run: |
+          (cd cli && sha256sum aitrack-* > checksums.txt)
+          node scripts/updater-manifest.ts "$GITHUB_REF_NAME" installers > installers/latest.json
 
       - name: Create or update the draft
         shell: bash
@@ -208,13 +300,13 @@ jobs:
               --notes-file release-notes.md
           fi
 
-      - name: Upload installers to the release
+      - name: Upload files to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber
           installers/*.exe installers/*.dmg installers/*.app.tar.gz installers/*.AppImage
-          installers/*.deb installers/latest.json sbom/*.cdx.json
+          installers/*.deb installers/latest.json cli/aitrack-* cli/checksums.txt
 
   # Holds the npm credential, so it installs nothing and runs only the repo's own script.
   publish:
@@ -230,6 +322,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             .node-version
+            npm/aitrack/targets.json
             scripts/*.ts
           sparse-checkout-cone-mode: false
 

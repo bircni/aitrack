@@ -3,9 +3,9 @@ import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from 'node:ch
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { runMain } from './runMain.ts';
+import { CARGO_TOML, getWorkspaceVersion, WORKSPACE_VERSION } from './workspace-version.ts';
 
 const IS_WIN = platform() === 'win32';
 
@@ -36,6 +36,9 @@ function spawnCommand(
       : spawnSync(command, arguments_, options)
   ) as SpawnSyncReturns<string>;
 }
+
+/** An exact version, such as the first of a prerelease series. */
+const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[\dA-Za-z.-]+)?$/u;
 
 const ALLOWED_BUMPS = new Set([
   'none',
@@ -83,39 +86,19 @@ function optionalOutput(command: string, arguments_: string[]): string | undefin
   return result.status === 0 ? result.stdout.trim() || undefined : undefined;
 }
 
-const REPO_ROOT = new URL('../', import.meta.url);
-const RELEASE_BRANCH = 'main';
-
-/**
- * Every package.json the release moves, the workspace root included.
- *
- * `aitrack` and `aitrack-lib` are released in lockstep — the CLI depends on the
- * library by `workspace:*`, which bun rewrites to the exact version at publish
- * time, so a split version would ship a CLI pinned to a library that was never
- * tagged.
- */
-const VERSIONED_PACKAGES = [
-  'package.json',
-  'libs/aitrack-lib/package.json',
-  'apps/aitrack/package.json',
-];
-
-/** The CLI's version: it is what the `vX.Y.Z` tag names. */
-function getPackageVersion(): string {
-  const package_ = JSON.parse(
-    readFileSync(new URL('apps/aitrack/package.json', REPO_ROOT), 'utf8'),
-  ) as { version: string };
-  return package_.version;
+/** Betas come from `rust` until it merges into main as 5.0.0. */
+export function releaseBranch(tag: string): string {
+  return tag.includes('-') ? 'rust' : 'main';
 }
 
-/** Write one exact version into every package, rather than bumping each. */
-function setPackageVersions(version: string, options: RunOptions): void {
-  for (const packageFile of VERSIONED_PACKAGES) {
-    run('bun', ['pm', 'version', version, '--no-git-tag-version'], {
-      ...options,
-      cwd: fileURLToPath(new URL(packageFile.replace(/package\.json$/u, ''), REPO_ROOT)),
-    });
+function setWorkspaceVersion(version: string, options: RunOptions): void {
+  if (options.dryRun) {
+    console.log(`[dry-run] set [workspace.package] version = "${version}"`);
+  } else {
+    const cargoToml = readFileSync(CARGO_TOML, 'utf8');
+    writeFileSync(CARGO_TOML, cargoToml.replace(WORKSPACE_VERSION, `$1${version}$3`));
   }
+  run('cargo', ['update', '--workspace'], options); // Cargo.lock records each crate's version.
 }
 
 /** Ask bun to calculate a bump in an isolated directory without touching the checkout. */
@@ -175,9 +158,9 @@ interface ParsedArguments {
 
 function parseArguments(argv: string[]): ParsedArguments {
   const bumpArgument = argv.find((argument) => !argument.startsWith('--')) ?? 'patch';
-  if (!ALLOWED_BUMPS.has(bumpArgument)) {
+  if (!ALLOWED_BUMPS.has(bumpArgument) && !EXACT_VERSION.test(bumpArgument)) {
     throw new Error(
-      `Invalid bump type: ${bumpArgument}. Use one of: ${[...ALLOWED_BUMPS].join(', ')}`,
+      `Invalid bump type: ${bumpArgument}. Use one of: ${[...ALLOWED_BUMPS].join(', ')}, or a version`,
     );
   }
 
@@ -191,12 +174,11 @@ function parseArguments(argv: string[]): ParsedArguments {
 export function releaseProblems(tag: string, remote: string, cwd?: string): string[] {
   const git = (arguments_: string[]) => spawnCommand('git', arguments_, { cwd, encoding: 'utf8' });
   const problems: string[] = [];
+  const expected = releaseBranch(tag);
 
   const branch = git(['branch', '--show-current']).stdout.trim();
-  if (branch !== RELEASE_BRANCH) {
-    problems.push(
-      `Releases are cut from ${RELEASE_BRANCH}, but this is ${branch || 'detached HEAD'}.`,
-    );
+  if (branch !== expected) {
+    problems.push(`${tag} is cut from ${expected}, but this is ${branch || 'detached HEAD'}.`);
   }
   if (git(['status', '--porcelain']).stdout.trim() !== '') {
     problems.push('Working tree is not clean. Commit or stash your changes before releasing.');
@@ -205,7 +187,7 @@ export function releaseProblems(tag: string, remote: string, cwd?: string): stri
     problems.push(`Tag ${tag} already exists locally.`);
   }
 
-  const branchRef = `refs/heads/${RELEASE_BRANCH}`;
+  const branchRef = `refs/heads/${expected}`;
   const tagRef = `refs/tags/${tag}`;
   const remoteRefs = git(['ls-remote', remote, branchRef, tagRef]); // Unlike fetch, changes nothing here.
   if (remoteRefs.status !== 0) {
@@ -223,7 +205,7 @@ export function releaseProblems(tag: string, remote: string, cwd?: string): stri
   );
   if (refs.has(tagRef)) problems.push(`Tag ${tag} already exists on ${remote}.`);
   if (refs.get(branchRef) !== git(['rev-parse', 'HEAD']).stdout.trim()) {
-    problems.push(`HEAD is not in sync with ${remote}/${RELEASE_BRANCH}.`);
+    problems.push(`HEAD is not in sync with ${remote}/${expected}.`);
   }
   return problems;
 }
@@ -233,31 +215,27 @@ function main(): void {
   const options = { dryRun };
 
   const pushRemote = getPushRemote({ allowPlaceholder: dryRun });
-  const version = previewVersionBump(getPackageVersion(), bump);
+  const version = previewVersionBump(getWorkspaceVersion(), bump);
   const tag = `v${version}`;
 
   const problems = releaseProblems(tag, pushRemote);
   if (problems.length > 0 && !dryRun) throw new Error(problems.join('\n'));
   for (const problem of problems) console.warn(`A real release would stop here: ${problem}`);
 
-  run('bun', ['run', 'validate'], options);
+  run('just', ['validate'], options);
 
-  if (bump !== 'none') {
-    setPackageVersions(version, options);
-    // bun.lock records each workspace's version.
-    run('bun', ['install', '--lockfile-only'], options);
-  }
+  if (bump !== 'none') setWorkspaceVersion(version, options);
 
   run('git-cliff', ['--config', '.cliff.toml', '--tag', tag, '-o', 'CHANGELOG.md'], options);
 
-  run('git', ['add', ...VERSIONED_PACKAGES, 'bun.lock', 'CHANGELOG.md'], options);
+  run('git', ['add', 'Cargo.toml', 'Cargo.lock', 'CHANGELOG.md'], options);
   run('git', ['commit', '-m', `chore(release): ${tag}`], options);
   run('git', ['tag', tag], options);
 
-  // Atomic: a commit on main without its tag would never publish.
+  // Atomic: a release commit without its tag would never publish.
   run(
     'git',
-    ['push', '--atomic', pushRemote, `HEAD:refs/heads/${RELEASE_BRANCH}`, `refs/tags/${tag}`],
+    ['push', '--atomic', pushRemote, `HEAD:refs/heads/${releaseBranch(tag)}`, `refs/tags/${tag}`],
     options,
   );
 

@@ -1,6 +1,6 @@
 [package]
 name = "opentrack"
-version = "0.1.0"
+version.workspace = true
 description = "opentrack: the tray popup for aitrack's live limits and usage."
 license = "MIT"
 edition = "2021"

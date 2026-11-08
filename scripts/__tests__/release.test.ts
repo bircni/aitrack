@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { previewVersionBump, releaseProblems } from '../release.js';
+import { getWorkspaceVersion } from '../workspace-version.js';
 
 const RELEASE_SCRIPT_PATH = fileURLToPath(new URL('../release.ts', import.meta.url));
 
@@ -45,6 +46,7 @@ describe('release tooling', () => {
     ['1.2.3', 'preminor', '1.3.0-0'],
     ['1.2.3-beta.2', 'prerelease', '1.2.3-beta.3'],
     ['1.2.3', 'none', '1.2.3'],
+    ['4.2.0', '5.0.0-beta.1', '5.0.0-beta.1'],
   ])('previews %s with a %s bump as %s', (current, bump, expected) => {
     expect(previewVersionBump(current, bump)).toBe(expected);
   });
@@ -70,12 +72,7 @@ describe('release tooling', () => {
     const problems = () => releaseProblems('v1.2.3', 'origin', checkout);
 
     it('previews the next tag and pushes branch and tag atomically', () => {
-      const package_ = JSON.parse(
-        readFileSync(new URL('../../apps/aitrack/package.json', import.meta.url), 'utf8'),
-      ) as {
-        version: string;
-      };
-      const expectedTag = `v${expectedPatchVersion(package_.version)}`;
+      const expectedTag = `v${expectedPatchVersion(getWorkspaceVersion())}`;
 
       const result = runRelease(['patch', '--dry-run'], checkout);
 
@@ -93,9 +90,16 @@ describe('release tooling', () => {
       expect(problems()).toEqual([]);
     });
 
+    it('cuts a prerelease from rust and nothing else', () => {
+      git(checkout, 'switch', '--quiet', '--create', 'rust');
+      git(checkout, 'push', '--quiet', '--set-upstream', 'origin', 'rust');
+      expect(releaseProblems('v1.3.0-beta.1', 'origin', checkout)).toEqual([]);
+      expect(problems()).toEqual(['v1.2.3 is cut from main, but this is rust.']);
+    });
+
     it('rejects another branch', () => {
       git(checkout, 'switch', '--quiet', '--create', 'feature');
-      expect(problems()).toEqual(['Releases are cut from main, but this is feature.']);
+      expect(problems()).toEqual(['v1.2.3 is cut from main, but this is feature.']);
     });
 
     it('rejects a dirty tree', () => {
@@ -136,7 +140,7 @@ describe('release tooling', () => {
       const result = runRelease(['patch'], checkout);
 
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('Releases are cut from main');
+      expect(result.stderr).toContain('is cut from main');
       expect(result.stdout).toBe('');
       expect(git(checkout, 'rev-parse', 'HEAD')).toBe(head);
       expect(git(checkout, 'tag')).toBe('');

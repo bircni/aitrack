@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { getWorkspaceVersion } from './workspace-version.ts';
+
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
-const { version } = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as {
-  version: string;
-};
+const version = getWorkspaceVersion();
 const bundleRoot = join(repoRoot, 'target/release/bundle');
 const temporary = mkdtempSync(join(tmpdir(), 'opentrack-bundle-smoke-'));
 const cleanup: Array<() => void> = [];
