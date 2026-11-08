@@ -13,17 +13,12 @@
   }
 
   let { appState, settings, now, serviceDown, onPatch }: Props = $props();
-
-  const compactKeys = $derived(
-    new Set(settings.providers.filter((entry) => entry.compact).map((entry) => entry.key)),
-  );
-  // In the order of the full view.
-  const chosen = $derived(appState.providers.filter((provider) => compactKeys.has(provider.key)));
 </script>
 
 <section class="compact" aria-label="Session limits">
-  {#each chosen as provider (provider.key)}
-    {@const session = provider.quota?.windows.find(({ id }) => id === 'session')}
+  {#each appState.providers as provider (provider.key)}
+    {@const windows = provider.quota?.windows ?? []}
+    {@const session = windows.find(({ id }) => id === 'session') ?? windows.find(({ id }) => id === 'weekly') ?? windows[0]}
     <div class="provider provider--{provider.key}">
       <header class="c-head"><ProviderHeading {provider} /></header>
       {#if provider.quotaError}
@@ -39,14 +34,10 @@
           onToggleReset={() => onPatch(toggledResetDisplay(settings))}
         />
       {:else if !provider.quotaError}
-        <p class="empty">No session limit yet.</p>
+        <p class="empty">No limits yet.</p>
       {/if}
     </div>
   {:else}
-    <p class="empty">
-      {compactKeys.size === 0
-        ? 'Choose providers for the compact view in Settings.'
-        : 'The providers chosen for compact view are turned off or not loaded yet.'}
-    </p>
+    <p class="empty">No providers are turned on.</p>
   {/each}
 </section>

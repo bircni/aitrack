@@ -43,13 +43,12 @@ value to screen readers, the results of a refresh or sync you start are announce
 is always visible, and with reduced motion enabled the spinners stop and sections expand without
 sliding.
 
-The window first opens next to the tray; after that it keeps the size and place you give it, and
-stays open when another window takes focus. A tray click brings a covered or minimized window to the
-front and hides one already in front. Its title bar minimizes it, closes it to the tray and switches
-to the **compact view**, which shows only the session limit of each provider whose right-hand switch
-is on under Settings → Providers. **Always on top** in Settings keeps it above other windows.
-Closing the window hides it; quit from the tray menu or the Quit button in Settings. Escape leaves
-Settings, and otherwise hides the window unless it is kept on top.
+The popup opens next to the tray, takes the height of what it shows and hides when you click
+elsewhere. **Keep open** in Settings turns it into a window that stays open, shows in the taskbar
+and keeps the place you drag it to by its footer. The footer's compact button switches to the
+**compact view**, which shows only the session limit of each enabled provider. Closing the window
+hides it; quit from the tray menu or the Quit button in Settings. Escape leaves Settings, and
+otherwise hides the popup, but not a window kept open.
 
 ## When something is wrong
 
@@ -154,7 +153,7 @@ not start them. The behaviour differs from macOS and Windows in a few places:
   position the dashboard and register the global shortcut. Set `GDK_BACKEND=wayland` to
   override this; the dashboard is then placed by the compositor, typically in the centre, and
   the shortcut only fires while an XWayland window has focus.
-- **Window position** — the dashboard opens in the top-right corner of the screen.
+- **Popup position** — the dashboard opens in the top-right corner of the screen.
 - **Global shortcut** — needs X11 or XWayland; without it Settings shows why it could not be
   registered.
 - **Launch at login** — writes `~/.config/autostart/opentrack.desktop`, pointing at the

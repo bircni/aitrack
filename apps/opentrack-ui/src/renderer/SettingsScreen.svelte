@@ -24,7 +24,7 @@
   }
 
   type SelectKey = 'theme' | 'display' | 'resetDisplay' | 'trayWindow' | 'trayStyle';
-  type SwitchKey = 'trayColored' | 'notifications' | 'alwaysOnTop' | 'pullSyncedData';
+  type SwitchKey = 'trayColored' | 'notifications' | 'keepOpen' | 'pullSyncedData';
 
   let { settings, update, installing, updateError, onInstallUpdate, onPatch, onBack }: Props =
     $props();
@@ -81,9 +81,9 @@
     return errors[key] === undefined ? undefined : `${key}-error`;
   }
 
-  function setProvider(key: QuotaProviderKey, change: { enabled: boolean } | { compact: boolean }): void {
+  function toggleProvider(key: QuotaProviderKey, enabled: boolean): void {
     onPatch({
-      providers: settings.providers.map((entry) => (entry.key === key ? { ...entry, ...change } : entry)),
+      providers: settings.providers.map((entry) => (entry.key === key ? { ...entry, enabled } : entry)),
     });
   }
 </script>
@@ -134,7 +134,6 @@
 
 <section class="group" aria-labelledby="g-providers">
   <h2 id="g-providers">Providers</h2>
-  <p><small>Left switch: show in the full view. Right switch: show in the compact view.</small></p>
   {#each settings.providers as provider, index (provider.key)}
     <div class="row">
       <span class="row-label"
@@ -161,15 +160,7 @@
           role="switch"
           aria-label="Track {provider.label}"
           checked={provider.enabled}
-          onchange={(event) => setProvider(provider.key, { enabled: event.currentTarget.checked })}
-        />
-        <input
-          class="switch"
-          type="checkbox"
-          role="switch"
-          aria-label="Show {provider.label} in compact view"
-          checked={provider.compact}
-          onchange={(event) => setProvider(provider.key, { compact: event.currentTarget.checked })}
+          onchange={(event) => toggleProvider(provider.key, event.currentTarget.checked)}
         />
       </span>
     </div>
@@ -228,7 +219,7 @@
     'Alerts',
     'When a limit is almost used up or will run out',
   )}
-  {@render switchRow('alwaysOnTop', 'set-on-top', 'Always on top', 'Keeps the window above others')}
+  {@render switchRow('keepOpen', 'set-keep-open', 'Keep open', 'Stays open when you click elsewhere')}
   {@render switchRow(
     'pullSyncedData',
     'set-pull',

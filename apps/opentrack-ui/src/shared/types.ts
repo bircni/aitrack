@@ -108,15 +108,14 @@ export interface Settings {
   display: 'used' | 'left';
   resetDisplay: 'relative' | 'absolute';
   /** `label` is filled in by the sidecar from the provider registry; what is saved is ignored. */
-  /** `enabled` shows a provider in the full view, `compact` in the compact view. */
-  providers: Array<{ key: ProviderKey; label: string; enabled: boolean; compact: boolean }>;
+  providers: Array<{ key: ProviderKey; label: string; enabled: boolean }>;
   launchAtLogin: boolean;
   /** Tauri global-shortcut accelerator (e.g. CommandOrControl+Shift+O), empty for none. */
   globalShortcut: string;
   notifications: boolean;
-  /** Keeps the window above other windows. */
-  alwaysOnTop: boolean;
-  /** Shows only the session limits of the providers marked `compact`. */
+  /** Stays open on blur, shows in the taskbar and keeps where it was dragged. */
+  keepOpen: boolean;
+  /** Shows only the session limit of each enabled provider. */
   compact: boolean;
   /** `git pull` the aitrack data repo so other machines' usage stays current. */
   pullSyncedData: boolean;
@@ -147,10 +146,7 @@ export interface OpentrackApi {
   quit: () => Promise<void>;
   /** Report the content height so the window can fit it. */
   fitHeight: (height: number) => void;
-  /** Sets the window height for the content now shown. */
-  resizeHeight: (height: number) => void;
   hideWindow: () => void;
-  minimizeWindow: () => void;
   onState: (listener: (state: AppState) => void) => () => void;
   onSettings: (listener: (settings: Settings) => void) => () => void;
   onScreen: (listener: (screen: Screen) => void) => () => void;
