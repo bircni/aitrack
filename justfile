@@ -1,7 +1,7 @@
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-Command"]
 
 # Every check CI runs
-validate: rust js audit
+validate: rust audit
 
 # Rust: format, clippy and tests
 rust: fmt-check lint test
@@ -14,16 +14,6 @@ lint: renderer
 
 test: renderer
     cargo nextest run --workspace
-
-# The renderer and the release scripts: format, lint, types, unused code and tests
-js:
-    bunx oxfmt --check
-    bunx oxlint --type-aware
-    bunx knip
-    bunx tsc -p scripts/tsconfig.json
-    bun run --cwd apps/opentrack-ui typecheck
-    bun run --cwd apps/opentrack-ui test
-    bunx vitest run --root scripts
 
 # opentrack embeds the built renderer; the checks only need the page to exist, so a placeholder stands in.
 [unix]

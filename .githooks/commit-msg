@@ -1,0 +1,15 @@
+#!/bin/sh
+# Conventional Commits: the changelog and release notes are generated from them.
+header=$(head -n 1 "$1")
+case "$header" in
+  Merge\ * | Revert\ * | fixup!\ * | squash!\ *) exit 0 ;;
+esac
+if ! printf '%s\n' "$header" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|test)(\([^)]+\))?!?: [^ ]'; then
+  echo "commit-msg: \"$header\" is not <type>(<scope>)?!?: <subject>" >&2
+  echo "commit-msg: types are build, chore, ci, docs, feat, fix, perf, refactor, revert, test" >&2
+  exit 1
+fi
+if [ "${#header}" -gt 100 ]; then
+  echo "commit-msg: the header is ${#header} characters; keep it to 100" >&2
+  exit 1
+fi
