@@ -48,19 +48,26 @@ fn build() -> Option<TrayIcon> {
     let _ = menu.append(&MenuItem::with_id("quit", "Quit opentrack", true, None));
     let appearance = TrayAppearance { style: "icon".into(), colored: false, bars: Vec::new() };
     let rgba = render_tray_icon(32, 0.0, crate::pace::Tone::Neutral, &appearance);
-    TrayIconBuilder::new()
+    let icon = Icon::from_rgba(rgba, 32, 32).ok()?;
+    let builder = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
         .with_tooltip("opentrack")
-        .with_autosave_name("opentrack")
-        .with_icon_templated(Icon::from_rgba(rgba, 32, 32).ok()?)
-        .build()
-        .ok()
+        .with_autosave_name("opentrack");
+    // Template images, recoloured to the menu bar, exist only on macOS.
+    #[cfg(target_os = "macos")]
+    let builder = builder.with_icon_templated(icon);
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.with_icon(icon);
+    builder.build().ok()
 }
 
 fn apply(tray: &TrayIcon, image: TrayImage) {
     if let Ok(icon) = Icon::from_rgba(image.rgba, image.size, image.size) {
+        #[cfg(target_os = "macos")]
         let _ = if image.template { tray.set_icon_templated(Some(icon)) } else { tray.set_icon(Some(icon)) };
+        #[cfg(not(target_os = "macos"))]
+        let _ = (image.template, tray.set_icon(Some(icon)));
     }
     let _ = tray.set_tooltip(Some(image.tooltip));
 }

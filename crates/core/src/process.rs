@@ -87,11 +87,10 @@ fn kill_tree(child: &mut Child) {
     let _ = child.wait();
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
     #[test]
     fn drains_large_output_and_times_out() {
         let big = run("sh", &["-c", "head -c 3000000 /dev/zero"], &[], None, Some(Duration::from_secs(20))).unwrap();
