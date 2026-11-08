@@ -395,8 +395,9 @@ impl<D: Deps> QuotaService<D> {
                     inner.cache.usage = Some(summary);
                     inner.usage_loaded_for = Some(key);
                     inner.usage_error = None;
-                    inner.cache.usage_updated_at = Some(iso(completed_at));
-                    inner.cache.updated_at = inner.cache.usage_updated_at.clone();
+                    let updated = Some(iso(completed_at));
+                    inner.cache.usage_updated_at.clone_from(&updated);
+                    inner.cache.updated_at = updated;
                     let failing_pull = inner.cache.pull_error.is_some() && inner.settings.pull_synced_data;
                     inner.next_usage_at =
                         completed_at + if failing_pull { FAILURE_BACKOFF_MS } else { REFRESH_INTERVAL_MS };

@@ -271,13 +271,15 @@ pub fn read_cursor_data(core: &Core, max_age_seconds: Option<f64>) -> DayMap {
     if let Some(retry) = retry.filter(|r| r.key == retry_key)
         && now_ms < if forced { retry.server_until_ms } else { retry.until_ms }
     {
-        core.output.warn(&match &cached {
-            Some(entry) => format!(
-                "aitrack: Cursor — using cached export from {} (retrying after a failed refresh).",
-                entry.fetched_at
-            ),
-            None => "aitrack: Cursor skipped — retrying after a failed refresh.".to_owned(),
-        });
+        core.output.warn(&cached.as_ref().map_or_else(
+            || "aitrack: Cursor skipped — retrying after a failed refresh.".to_owned(),
+            |entry| {
+                format!(
+                    "aitrack: Cursor — using cached export from {} (retrying after a failed refresh).",
+                    entry.fetched_at
+                )
+            },
+        ));
         return from_cache(cached.as_ref());
     }
     if !forced
@@ -300,13 +302,15 @@ pub fn read_cursor_data(core: &Core, max_age_seconds: Option<f64>) -> DayMap {
                 let server_until_ms = now_ms + i64::try_from(server_seconds).unwrap_or(i64::MAX / 2_000) * 1000;
                 core.cursor.locked().retry =
                     Some(Retry { key: retry_key, until_ms: (now_ms + 60_000).max(server_until_ms), server_until_ms });
-                core.output.warn(&match &cached {
-                    Some(entry) => format!(
-                        "aitrack: Cursor — using cached export from {} (refresh failed: {error}).",
-                        entry.fetched_at
-                    ),
-                    None => format!("aitrack: Cursor skipped — {error}"),
-                });
+                core.output.warn(&cached.as_ref().map_or_else(
+                    || format!("aitrack: Cursor skipped — {error}"),
+                    |entry| {
+                        format!(
+                            "aitrack: Cursor — using cached export from {} (refresh failed: {error}).",
+                            entry.fetched_at
+                        )
+                    },
+                ));
                 return from_cache(cached.as_ref());
             }
         };

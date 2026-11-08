@@ -315,18 +315,15 @@ pub fn compare_table<'a>(
     table
         .iter()
         .map(|(id, row)| {
-            let finding = match catalogs.rates(id, providers) {
-                None => Finding::Unverified,
-                Some(rates) => {
-                    let input_ok = rates_equal(field(row, "inputPerMillion"), rates.input);
-                    let output_ok = rates_equal(field(row, "outputPerMillion"), rates.output);
-                    if input_ok && output_ok {
-                        Finding::Ok
-                    } else {
-                        Finding::Drift { input_ok, output_ok, saw: (rates.input, rates.output) }
-                    }
+            let finding = catalogs.rates(id, providers).map_or(Finding::Unverified, |rates| {
+                let input_ok = rates_equal(field(row, "inputPerMillion"), rates.input);
+                let output_ok = rates_equal(field(row, "outputPerMillion"), rates.output);
+                if input_ok && output_ok {
+                    Finding::Ok
+                } else {
+                    Finding::Drift { input_ok, output_ok, saw: (rates.input, rates.output) }
                 }
-            };
+            });
             (id.as_str(), row, finding)
         })
         .collect()

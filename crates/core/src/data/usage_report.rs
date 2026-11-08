@@ -281,10 +281,10 @@ fn project_scope(
 }
 
 fn scoped_data<'a>(data: &'a ProviderData, options: &ReportOptions) -> Cow<'a, ProviderData> {
-    match &options.project {
-        Some(selector) => Cow::Owned(project_provider_data(data, selector)),
-        None => Cow::Borrowed(data),
-    }
+    options
+        .project
+        .as_ref()
+        .map_or_else(|| Cow::Borrowed(data), |selector| Cow::Owned(project_provider_data(data, selector)))
 }
 
 fn report_from_data(
@@ -383,10 +383,10 @@ fn rows_by_provider_and_model(report: &UsageReport) -> IndexMap<(String, String)
 )]
 fn compare_reports(current: &UsageReport, previous: &UsageReport) -> UsageComparison {
     let (current_rows, previous_rows) = (rows_by_provider_and_model(current), rows_by_provider_and_model(previous));
-    let mut keys: Vec<&(String, String)> = current_rows.keys().collect();
-    keys.extend(previous_rows.keys().filter(|k| !current_rows.contains_key(*k)));
-    let mut models: Vec<UsageModelComparison> = keys
-        .into_iter()
+
+    let mut models: Vec<UsageModelComparison> = current_rows
+        .keys()
+        .chain(previous_rows.keys().filter(|k| !current_rows.contains_key(*k)))
         .map(|key| {
             let (now, before) = (current_rows.get(key), previous_rows.get(key));
             let tokens = |row: Option<&&UsageReportRow>| row.map_or(0.0, |r| r.tokens as f64);

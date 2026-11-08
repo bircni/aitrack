@@ -464,13 +464,15 @@ pub fn problem_line(error: &QuotaError, now: f64, retry_at: Option<f64>) -> (Str
     match error.kind {
         QuotaErrorKind::NoCredentials | QuotaErrorKind::Expired => (error.message.clone(), ProblemAction::Retry),
         QuotaErrorKind::Auth => (format!("{}. Sign in again with that tool.", error.message), ProblemAction::Retry),
-        QuotaErrorKind::RateLimited => match retry_at.filter(|at| *at > now) {
-            Some(at) => (
-                format!("Rate limited by the provider, retrying in {}", format_duration(at - now)),
-                ProblemAction::Dashboard,
-            ),
-            None => ("Rate limited by the provider".into(), ProblemAction::Retry),
-        },
+        QuotaErrorKind::RateLimited => retry_at.filter(|at| *at > now).map_or_else(
+            || ("Rate limited by the provider".into(), ProblemAction::Retry),
+            |at| {
+                (
+                    format!("Rate limited by the provider, retrying in {}", format_duration(at - now)),
+                    ProblemAction::Dashboard,
+                )
+            },
+        ),
         QuotaErrorKind::Network => ("Could not reach the service".into(), ProblemAction::Retry),
         QuotaErrorKind::InvalidResponse => ("Limits unavailable right now".into(), ProblemAction::Retry),
     }

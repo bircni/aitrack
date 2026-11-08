@@ -147,7 +147,7 @@ fn fingerprint(supplement: &Supplement, primary: &Catalog, secondary: &Catalog) 
                 Value::Object(entries.into_iter().map(|(k, v)| (k, canonical(v))).collect())
             }
             Value::Array(items) => Value::Array(items.into_iter().map(canonical).collect()),
-            other => other,
+            other @ (Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_)) => other,
         }
     }
     let mut rates = supplement.clone();

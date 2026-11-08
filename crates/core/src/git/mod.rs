@@ -343,7 +343,9 @@ fn error_clone(error: &GitError) -> GitError {
         GitError::Command { args, status, output } => {
             GitError::Command { args: args.clone(), status: *status, output: output.clone() }
         }
-        other => GitError::Other(other.to_string()),
+        other @ (GitError::NotFound | GitError::Timeout { .. } | GitError::Other(_)) => {
+            GitError::Other(other.to_string())
+        }
     }
 }
 

@@ -237,8 +237,8 @@ pub fn parse_supplement(value: &Value) -> Option<Supplement> {
 ///
 /// When the pattern is not a valid regular expression.
 pub fn compile_pattern(pattern: &str) -> Result<regex_lite::Regex, regex_lite::Error> {
-    match pattern.strip_prefix("(?i)") {
-        Some(rest) => regex_lite::RegexBuilder::new(rest).case_insensitive(true).build(),
-        None => regex_lite::Regex::new(pattern),
-    }
+    pattern.strip_prefix("(?i)").map_or_else(
+        || regex_lite::Regex::new(pattern),
+        |rest| regex_lite::RegexBuilder::new(rest).case_insensitive(true).build(),
+    )
 }

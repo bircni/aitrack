@@ -408,7 +408,7 @@ pub fn projects(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'
         let span = match view.period {
             Period::All => "yet".to_owned(),
             Period::Today => "today".to_owned(),
-            period => format!("in the last {}", period.label()),
+            period @ (Period::Week | Period::Month) => format!("in the last {}", period.label()),
         };
         let message = if projects.is_some() {
             format!("No project usage {span}.")

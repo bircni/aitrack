@@ -124,10 +124,10 @@ pub fn render_tui_at(data: &ProviderData, options: &TuiOptions, today: Day, colo
         return String::new();
     }
     let style = default_table_style(options.dark);
-    let title = match options.year {
-        None => BOLD.paint("aitrack stats", color),
-        Some(year) => BOLD.paint(&format!("aitrack stats ({year})"), color),
-    };
+    let title = options.year.map_or_else(
+        || BOLD.paint("aitrack stats", color),
+        |year| BOLD.paint(&format!("aitrack stats ({year})"), color),
+    );
     let subtitle = DIM.paint("Streak = current / longest (days)", color);
     let cost_header = match stats.keys.as_slice() {
         [only] => cost_column_label(only, false),

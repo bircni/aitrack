@@ -98,7 +98,8 @@ pub fn write_machine_file(
             || "it failed validation".to_owned(),
             |d| match d {
                 super::validate::Diagnostic::FileSkipped { reason, .. } => reason.clone(),
-                other => other.to_string(),
+                other @ (super::validate::Diagnostic::DayDropped { .. }
+                | super::validate::Diagnostic::ProjectsDropped { .. }) => other.to_string(),
             },
         );
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();

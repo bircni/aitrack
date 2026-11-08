@@ -128,10 +128,10 @@ pub fn merge_claude_parsed(parsed: &[CachedParse]) -> DayMap {
 }
 
 fn attribute_scan(scan: &CodexScan, resolver: &dyn ProjectResolver) -> Attribution {
-    match scan.repository_url.as_deref().and_then(normalize_remote_url) {
-        Some(project) => Attribution { project, cwd: None },
-        None => attribute_cwd(resolver, scan.cwd.as_deref()),
-    }
+    scan.repository_url
+        .as_deref()
+        .and_then(normalize_remote_url)
+        .map_or_else(|| attribute_cwd(resolver, scan.cwd.as_deref()), |project| Attribution { project, cwd: None })
 }
 
 pub fn finish_codex_scan(scan: &CodexScan, pricing: &dyn Pricing, resolver: &dyn ProjectResolver) -> CachedParse {

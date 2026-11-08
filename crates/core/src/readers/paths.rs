@@ -124,7 +124,7 @@ pub fn absolute(path: &Path) -> PathBuf {
             Component::ParentDir => {
                 out.pop();
             }
-            other => out.push(other),
+            other @ (Component::Prefix(_) | Component::RootDir | Component::Normal(_)) => out.push(other),
         }
     }
     out

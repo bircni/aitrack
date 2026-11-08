@@ -99,9 +99,8 @@ pub fn render_table(columns: &[Column<'_>], rows: &[Vec<String>], options: &Tabl
     let mut lines = vec![h_line("┌", "┬", "┐"), render_row(&headers, &header), h_line("├", "┼", "┤")];
     lines.extend(rows.iter().map(|row| render_row(row, &body)));
     if let Some(footer) = options.footer {
-        let total = |text: &str, _: usize| match options.footer_style {
-            Some(paint) => paint(text),
-            None => options.style.total.paint(text, options.color),
+        let total = |text: &str, _: usize| {
+            options.footer_style.map_or_else(|| options.style.total.paint(text, options.color), |paint| paint(text))
         };
         lines.push(h_line("├", "┼", "┤"));
         lines.push(render_row(footer, &total));

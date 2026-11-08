@@ -80,10 +80,12 @@ pub fn canonicalize_claude_model_id(model: &str) -> String {
     let base = strip_claude_tier_suffix(&lowered);
     let tier = &lowered[base.len()..];
     let id = hyphenate_first_dotted_version(&canonical_model_id(base));
-    let folded = version_first(&id).map_or(id.clone(), |(major, minor, family)| match minor {
-        Some(minor) => format!("claude-{family}-{major}-{minor}"),
-        None => format!("claude-{family}-{major}"),
-    });
+    let folded = version_first(&id).map_or_else(
+        || id.clone(),
+        |(major, minor, family)| {
+            minor.map_or_else(|| format!("claude-{family}-{major}"), |minor| format!("claude-{family}-{major}-{minor}"))
+        },
+    );
     format!("{folded}{tier}")
 }
 

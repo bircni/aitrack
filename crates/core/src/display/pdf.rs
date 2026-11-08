@@ -196,7 +196,7 @@ fn allows_break(before: Class, spaced: bool, after: Class) -> bool {
     match before {
         Class::Hyphen | Class::Slash => !matches!(after, Class::Digit | Class::Hyphen | Class::SoftHyphen),
         Class::SoftHyphen => !matches!(after, Class::Hyphen | Class::SoftHyphen),
-        _ => false,
+        Class::Space | Class::Digit | Class::Open | Class::Close | Class::Quote | Class::Glue | Class::Other => false,
     }
 }
 

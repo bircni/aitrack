@@ -157,7 +157,9 @@ pub fn request_json(
     })?;
     match body {
         Value::Object(map) => Ok(map),
-        _ => Err(QuotaError::new(QuotaErrorKind::InvalidResponse, format!("{label} returned an unexpected response"))),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) | Value::Array(_) => {
+            Err(QuotaError::new(QuotaErrorKind::InvalidResponse, format!("{label} returned an unexpected response")))
+        }
     }
 }
 
@@ -185,7 +187,7 @@ pub fn number_value(value: Option<&Value>) -> Option<f64> {
     match value? {
         Value::String(text) if !trim(text).is_empty() => parse_number(text),
         Value::Number(n) => n.as_f64(),
-        _ => None,
+        Value::Null | Value::Bool(_) | Value::String(_) | Value::Array(_) | Value::Object(_) => None,
     }
     .filter(|n| n.is_finite())
 }

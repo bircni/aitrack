@@ -59,7 +59,9 @@ pub fn run(core: &Core, args: &InstallArgs) -> Outcome {
     let path = target.install(&file)?;
     let next = match target {
         InstallTarget::AppImage(_) => "Run it to start opentrack; Settings can launch it at login. It updates itself.",
-        _ => "It updates itself from now on. If it was running, quit and reopen it.",
+        InstallTarget::MacBundle(_) | InstallTarget::WindowsInstaller => {
+            "It updates itself from now on. If it was running, quit and reopen it."
+        }
     };
     report_installed(core, args.json, &release.version, path.as_deref(), next);
     Ok(ExitCode::SUCCESS)

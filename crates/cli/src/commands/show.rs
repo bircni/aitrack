@@ -100,9 +100,11 @@ pub fn run(core: &Core, args: &ShowArgs) -> Outcome {
     } else {
         json!({ "mode": "png", "path": null })
     };
-    let empty_message = || match args.year {
-        None => usage_empty_message(not_configured(core), providers.unwrap_or_default()),
-        Some(year) => usage_empty_window_message(Some(&year.to_string())),
+    let empty_message = || {
+        args.year.map_or_else(
+            || usage_empty_message(not_configured(core), providers.unwrap_or_default()),
+            |year| usage_empty_window_message(Some(&year.to_string())),
+        )
     };
     let Some(loaded) = loaded else {
         print_empty_result(core, "show", args.json, &empty_message(), empty_payload);
@@ -134,7 +136,8 @@ pub fn run(core: &Core, args: &ShowArgs) -> Outcome {
         core.output.info(&render_tui(data, &tui_options));
         return Ok(ExitCode::SUCCESS);
     }
-    let output = aitrack_core::readers::paths::absolute(args.output.as_deref().unwrap_or("aitrack.png".as_ref()));
+    let output =
+        aitrack_core::readers::paths::absolute(args.output.as_deref().unwrap_or_else(|| "aitrack.png".as_ref()));
     let png = render_to_png(data, &RenderOptions { dark: args.dark, all: args.all, year });
     std::fs::write(&output, png)?;
     if args.json {

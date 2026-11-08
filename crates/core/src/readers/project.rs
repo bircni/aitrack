@@ -93,10 +93,10 @@ pub fn repository_of(cwd: &str) -> &str {
 
 /// The project for a working directory; work without a remote keeps its cwd for `--dir` matching.
 pub fn attribute_cwd(resolver: &dyn ProjectResolver, cwd: Option<&str>) -> Attribution {
-    match cwd.and_then(|cwd| resolver.resolve(cwd)) {
-        Some(project) => Attribution { project, cwd: None },
-        None => Attribution { project: NO_REMOTE_PROJECT.to_owned(), cwd: cwd.map(str::to_owned) },
-    }
+    cwd.and_then(|cwd| resolver.resolve(cwd)).map_or_else(
+        || Attribution { project: NO_REMOTE_PROJECT.to_owned(), cwd: cwd.map(str::to_owned) },
+        |project| Attribution { project, cwd: None },
+    )
 }
 
 /// `realpath` without Windows' `\\?\` prefix, so the result matches the working directories logs record.
@@ -121,10 +121,8 @@ pub fn resolve_project_selector(path: &std::path::Path) -> Result<crate::data::p
         return Err(format!("Not a directory: {}", path.display()));
     }
     let real = real_path(&dir).map_err(|e| e.to_string())?;
-    Ok(match GitProjectResolver::default().resolve(&real.to_string_lossy()) {
-        Some(project) => ProjectSelector::Project(project),
-        None => ProjectSelector::Dir(real),
-    })
+    let project = GitProjectResolver::default().resolve(&real.to_string_lossy());
+    Ok(project.map_or(ProjectSelector::Dir(real), ProjectSelector::Project))
 }
 
 #[cfg(test)]

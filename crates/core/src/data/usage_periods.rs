@@ -195,7 +195,16 @@ impl UsagePeriod {
                 _ => Err("Period \"last\" expects a positive integer day count.".to_owned()),
             },
             _ if args.is_empty() => Ok(PeriodArgs::default()),
-            _ => Err(format!("Period \"{}\" does not accept extra arguments.", self.key())),
+            Self::Today
+            | Self::Yesterday
+            | Self::ThisWeek
+            | Self::LastWeek
+            | Self::Week
+            | Self::ThisMonth
+            | Self::LastMonth
+            | Self::Month
+            | Self::Year
+            | Self::All => Err(format!("Period \"{}\" does not accept extra arguments.", self.key())),
         }
     }
 
@@ -291,7 +300,7 @@ impl UsagePeriod {
                 span(start, end, format!("previous year to date ({start} → {end})"))
             }
             Self::All => Err("All-time usage does not have a comparable previous period.".to_owned()),
-            _ => {
+            Self::Today | Self::Yesterday | Self::Date | Self::Range | Self::Week | Self::Month | Self::Last => {
                 let days = current.start.inclusive_days_to(current.end);
                 let end = current.start.shift(-1);
                 let start = end.shift(-(days - 1));

@@ -36,7 +36,7 @@ pub fn token_buckets(counts: &TokenCounts) -> TokenBuckets {
     let inferred =
         i128::from(counts.input_tokens) - i128::from(cache_read) - i128::from(cache_write) - i128::from(one_hour);
     TokenBuckets {
-        raw: counts.raw_input_tokens.map_or(inferred.max(0) as f64, |raw| raw as f64),
+        raw: counts.raw_input_tokens.map_or_else(|| inferred.max(0) as f64, |raw| raw as f64),
         output: counts.output_tokens as f64,
         cache_read: cache_read as f64,
         cache_write: cache_write as f64,

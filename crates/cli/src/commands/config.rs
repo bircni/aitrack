@@ -79,7 +79,7 @@ fn plain(value: &Value) -> String {
     match value {
         Value::String(text) => text.clone(),
         Value::Number(n) => n.as_f64().map_or_else(|| n.to_string(), number_to_string),
-        other => other.to_string(),
+        other @ (Value::Null | Value::Bool(_) | Value::Array(_) | Value::Object(_)) => other.to_string(),
     }
 }
 

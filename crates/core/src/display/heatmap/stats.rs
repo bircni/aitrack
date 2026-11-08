@@ -188,13 +188,13 @@ fn weekday_of(day: Day) -> i64 {
 #[must_use]
 #[expect(clippy::expect_used, reason = "a Day year is always within 0000-9999")]
 pub fn build_date_grid(year: Option<i16>, today: Day) -> Vec<Week> {
-    let (first, last) = match year {
-        None => (today.shift(-weekday_of(today) - HEATMAP_WEEKS * 7), today),
-        Some(year) => {
+    let (first, last) = year.map_or_else(
+        || (today.shift(-weekday_of(today) - HEATMAP_WEEKS * 7), today),
+        |year| {
             let first = Day::new(year, 1, 1).expect("a grid year within 0000-9999");
             (first, if year == today.year() { today } else { Day::new(year, 12, 31).expect("valid") })
-        }
-    };
+        },
+    );
     let lead = weekday_of(first);
     let end = lead + first.inclusive_days_to(last);
     let weeks = (end + 6) / 7;

@@ -4,8 +4,9 @@ use aitrack_core::quota::{QuotaError, QuotaSnapshot};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-fn is_false(value: &bool) -> bool {
-    !value
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde's skip_serializing_if passes a reference")]
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

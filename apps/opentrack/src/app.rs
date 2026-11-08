@@ -186,10 +186,10 @@ impl App {
         let window_scale = ctx.input(|i| i.viewport().native_pixels_per_point).unwrap_or(1.0);
         let kept = in_place.then(|| ctx.input(|i| i.viewport().outer_rect)).flatten();
         let tray = self.panel.tray;
-        let point = match kept {
-            Some(r) => Some(((r.center().x * window_scale) as i32, (r.center().y * window_scale) as i32)),
-            None => tray.map(|t| (t.x + t.width / 2, t.y + t.height / 2)),
-        };
+        let point = kept.map_or_else(
+            || tray.map(|t| (t.x + t.width / 2, t.y + t.height / 2)),
+            |r| Some(((r.center().x * window_scale) as i32, (r.center().y * window_scale) as i32)),
+        );
         let (work, scale) = Self::work_area(ctx, point);
         let position_scale = platform::position_scale(scale, window_scale);
         let kept_at =

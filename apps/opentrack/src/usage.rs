@@ -216,12 +216,14 @@ fn load_summary(core: &Core, options: &UsageLoadOptions, pulled: impl FnOnce()) 
             }
             live
         });
-        let local = match &options.local_machine {
-            Some(machine) => Ok(machine.clone()),
-            None => read_local_provider_maps(core, None, Some(&options.providers))
-                .map(|maps| build_machine_data(&machine_id, &maps, core.clock.zone_name(), core.clock.now(), true))
-                .map_err(|error| error.to_string()),
-        };
+        let local = options.local_machine.as_ref().map_or_else(
+            || {
+                read_local_provider_maps(core, None, Some(&options.providers))
+                    .map(|maps| build_machine_data(&machine_id, &maps, core.clock.zone_name(), core.clock.now(), true))
+                    .map_err(|error| error.to_string())
+            },
+            |machine| Ok(machine.clone()),
+        );
         pulled();
         let live = live.join().unwrap_or_default();
         let local = local?;

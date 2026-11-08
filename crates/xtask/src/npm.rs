@@ -20,7 +20,9 @@ pub fn targets() -> Result<Vec<(String, String)>> {
     map.into_iter()
         .map(|(target, name)| match name {
             Value::String(name) => Ok((target, name)),
-            _ => Err(format!("targets.json: {target} does not name a package")),
+            Value::Null | Value::Bool(_) | Value::Number(_) | Value::Array(_) | Value::Object(_) => {
+                Err(format!("targets.json: {target} does not name a package"))
+            }
         })
         .collect()
 }

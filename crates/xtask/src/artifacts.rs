@@ -39,7 +39,7 @@ impl Installer {
     pub fn file_name(self, version: &str) -> String {
         match self {
             Self::AppArchive => format!("opentrack{}", self.suffix()),
-            _ => format!("opentrack_{version}{}", self.suffix()),
+            Self::Dmg | Self::Nsis | Self::AppImage | Self::Deb => format!("opentrack_{version}{}", self.suffix()),
         }
     }
 }

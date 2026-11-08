@@ -14,7 +14,7 @@ pub fn decode_jwt_payload(token: &str) -> Option<Map<String, Value>> {
     let bytes = STANDARD.decode(padded).ok()?;
     match serde_json::from_str::<Value>(&String::from_utf8_lossy(&bytes)).ok()? {
         Value::Object(map) => Some(map),
-        _ => None,
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) | Value::Array(_) => None,
     }
 }
 

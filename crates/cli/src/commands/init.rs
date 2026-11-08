@@ -89,7 +89,7 @@ pub fn run(core: &Core, args: &InitArgs) -> Outcome {
     let loaded = read_config(&core.paths.config);
     let existing = match &loaded {
         ConfigLoad::Ok(config) => Some(config.clone()),
-        _ => None,
+        ConfigLoad::Missing | ConfigLoad::Invalid { .. } => None,
     };
     let path = &core.paths.config;
 

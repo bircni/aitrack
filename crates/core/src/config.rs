@@ -180,12 +180,10 @@ fn validate_config(parsed: &Value) -> Option<Config> {
 }
 
 fn validate_budget(fields: &Map<String, Value>) -> Option<Budget> {
-    match fields.get("monthlyUSD") {
-        None => Some(Budget::default()),
-        Some(value) => {
-            value.as_f64().filter(|usd| usd.is_finite() && *usd > 0.0).map(|usd| Budget { monthly_usd: Some(usd) })
-        }
-    }
+    fields.get("monthlyUSD").map_or_else(
+        || Some(Budget::default()),
+        |value| value.as_f64().filter(|usd| usd.is_finite() && *usd > 0.0).map(|usd| Budget { monthly_usd: Some(usd) }),
+    )
 }
 
 /// `Number.isInteger(value) && value > 0`, which also accepts `5.0`.

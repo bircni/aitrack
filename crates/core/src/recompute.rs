@@ -42,7 +42,7 @@ fn tokens_json(days: &MachineDays) -> String {
                 map.values_mut().for_each(strip);
             }
             Value::Array(items) => items.iter_mut().for_each(strip),
-            _ => {}
+            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
         }
     }
     let mut value = serde_json::to_value(days).expect("days serialize");

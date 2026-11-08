@@ -59,10 +59,8 @@ pub fn merge_provider_day(
     for (cwd, counts) in day.by_cwd.iter().flatten() {
         add_counts_by_key(rec.by_cwd.get_or_insert_default(), cwd, &flag_unpriced(counts));
     }
-    let day_cost = match day.totals.cost_usd {
-        None => has_model_cost.then_some(summed),
-        Some(total) => Some(total + backfilled),
-    };
+    let day_cost =
+        day.totals.cost_usd.map_or_else(|| has_model_cost.then_some(summed), |total| Some(total + backfilled));
     if let Some(cost) = day_cost {
         rec.counts.cost_usd = Some(rec.counts.cost_usd.unwrap_or(0.0) + cost);
     }
