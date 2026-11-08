@@ -106,7 +106,10 @@ pub fn invalid_config_message(path: &Path, reason: &str) -> String {
 /// # Panics
 ///
 /// Never in practice: a config always serializes.
-#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
+#[expect(
+    clippy::expect_used,
+    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
+)]
 pub fn save_config(path: &Path, config: &Config) -> Result<(), ConfigError> {
     let mut config = config.clone();
     if let Some(id) = &config.machine_id {

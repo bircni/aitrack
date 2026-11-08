@@ -137,7 +137,10 @@ impl ModelPricing {
 }
 
 /// SHA-256 of the effective rates as canonical JSON: every object's keys sorted.
-#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
+#[expect(
+    clippy::expect_used,
+    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
+)]
 fn fingerprint(supplement: &Supplement, primary: &Catalog, secondary: &Catalog) -> String {
     fn canonical(value: Value) -> Value {
         match value {

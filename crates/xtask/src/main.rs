@@ -53,7 +53,10 @@ fn cmd(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<String> {
 }
 
 /// JSON as the repo's files keep it: two-space indents, a final newline.
-#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
+#[expect(
+    clippy::expect_used,
+    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
+)]
 fn pretty(value: &Value) -> String {
     format!("{}\n", to_string_pretty(value).expect("JSON values serialize"))
 }

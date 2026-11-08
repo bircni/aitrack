@@ -44,12 +44,11 @@ pub struct TrayChoice<'a> {
 }
 
 /// The chosen window, falling back to the most used one when the provider has no such window.
-#[expect(clippy::expect_used, reason = "callers pass at least one window")]
-fn pick_window<'a>(windows: &[&'a QuotaWindow], choice: &str) -> &'a QuotaWindow {
+fn pick_window<'a>(windows: &[&'a QuotaWindow], choice: &str) -> Option<&'a QuotaWindow> {
     let preferred = if choice == "highest" { None } else { windows.iter().find(|w| w.id == choice) };
-    preferred.copied().unwrap_or_else(|| {
-        windows.iter().copied().reduce(|a, b| if b.used_percent > a.used_percent { b } else { a }).expect("non-empty")
-    })
+    preferred
+        .copied()
+        .or_else(|| windows.iter().copied().reduce(|a, b| if b.used_percent > a.used_percent { b } else { a }))
 }
 
 fn percent(value: f64) -> String {
@@ -71,10 +70,7 @@ pub fn summarize_tray(clock: &Clock, providers: &[ProviderState], now: f64, choi
         let followed = follow == "auto" || follow == provider.key;
         let windows: Vec<&QuotaWindow> =
             provider.quota.iter().flat_map(|q| &q.windows).filter(|w| !has_reset(clock, w, now)).collect();
-        if windows.is_empty() {
-            continue;
-        }
-        let shown = pick_window(&windows, choice.window);
+        let Some(shown) = pick_window(&windows, choice.window) else { continue };
         lines.push(format!("{}: {}% {}", provider.label, percent(shown.used_percent), shown.label.to_lowercase()));
         if !followed {
             continue;

@@ -165,12 +165,11 @@ fn fetch_json(http: &dyn HttpClient, url: &str) -> Result<Map<String, Value>> {
 }
 
 /// The two catalogs, compact, as the pack publishes them.
-#[expect(clippy::expect_used, reason = "the catalog fetch thread does not panic")]
 pub fn fetch_catalogs(http: &dyn HttpClient, now: Timestamp) -> Result<(Value, Value)> {
     let (litellm, models_dev) = std::thread::scope(|s| {
         let litellm = s.spawn(|| fetch_json(http, LITELLM_URL));
         let models_dev = fetch_json(http, MODELS_DEV_URL);
-        (litellm.join().expect("the fetch does not panic"), models_dev)
+        (litellm.join().unwrap_or_else(|_| Err("fetching the LiteLLM catalog panicked".into())), models_dev)
     });
     let retrieved_at = iso_millis(now);
     Ok((compact_litellm(&litellm?, &retrieved_at)?, compact_models_dev(&models_dev?, &retrieved_at)?))

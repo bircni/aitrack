@@ -33,7 +33,10 @@ pub struct RecomputeResult {
 }
 
 /// Without costs: per-entry and summed costs differ in the last bits, which is not a change.
-#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
+#[expect(
+    clippy::expect_used,
+    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
+)]
 fn tokens_json(days: &MachineDays) -> String {
     fn strip(value: &mut Value) {
         match value {

@@ -90,7 +90,7 @@ fn token_count(value: &Value) -> Option<u64> {
     })
 }
 
-#[expect(clippy::expect_used, reason = "the caller checked these fields first")]
+#[expect(clippy::expect_used, reason = "the loop above returns an error when a required count is missing")]
 fn check_token_counts(value: &Value, path: &str) -> Result<TokenCounts, String> {
     let fields = value.as_object().ok_or_else(|| format!("{path} must be an object"))?;
     let mut counts = [None; 6];

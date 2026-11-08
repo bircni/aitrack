@@ -107,7 +107,7 @@ impl DataRun<'_> {
 /// # Panics
 ///
 /// If the background pull panicked.
-#[expect(clippy::expect_used, reason = "the spawned pull is joined exactly once")]
+#[expect(clippy::expect_used, reason = "the OnceLock runs the join once, so the reader's handle is still there")]
 pub fn run_data_pipeline<T>(
     core: &Core,
     do_pull: bool,
@@ -235,7 +235,10 @@ pub fn sync_data(core: &Core, options: SyncOptions) -> Result<SyncResult> {
     Ok(result)
 }
 
-#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
+#[expect(
+    clippy::expect_used,
+    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
+)]
 fn push_local_usage(
     core: &Core,
     guard: &RepoGuard<'_>,
