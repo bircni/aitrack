@@ -253,13 +253,9 @@ struct SmokeTest {
 }
 
 /// The settings and state a packaged build starts with, for the installer smoke test.
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
 pub fn smoke_test_line(background: &Background) -> String {
     let answer = SmokeTest { settings: background.service.settings(), state: background.service.state() };
-    aitrack_core::js::to_string(&answer).expect("serializes")
+    aitrack_core::js::stringify(&answer)
 }
 
 #[cfg(test)]

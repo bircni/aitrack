@@ -94,34 +94,44 @@ struct EncodedMessage {
     counts: TokenCounts,
 }
 
-#[expect(clippy::expect_used, reason = "a cache holds far fewer than 2^31 strings and our own types serialize")]
-fn encode_messages(messages: &[CachedMessage], keys: &[String]) -> Box<RawValue> {
+/// `None` when the messages cannot be encoded; the file is then left uncached and parsed again next run.
+fn encode_messages(messages: &[CachedMessage], keys: &[String]) -> Option<Box<RawValue>> {
     let mut strings: Vec<String> = Vec::new();
     let mut indexes: HashMap<String, u32> = HashMap::new();
-    let mut intern = |value: &str| -> u32 {
-        *indexes.entry(value.to_owned()).or_insert_with(|| {
-            strings.push(value.to_owned());
-            u32::try_from(strings.len() - 1).expect("fewer than 2^32 strings")
-        })
+    let mut intern = |value: &str| -> Option<u32> {
+        if let Some(&index) = indexes.get(value) {
+            return Some(index);
+        }
+        let index = u32::try_from(strings.len()).ok()?;
+        strings.push(value.to_owned());
+        indexes.insert(value.to_owned(), index);
+        Some(index)
     };
-    let key_indexes: HashMap<&str, i64> =
-        keys.iter().enumerate().map(|(i, k)| (k.as_str(), i64::try_from(i).expect("small"))).collect();
+    let key_indexes: HashMap<&str, i64> = (0..).zip(keys).map(|(i, k)| (k.as_str(), i)).collect();
     let rows = messages
         .iter()
-        .map(|m| EncodedMessage {
-            key: m
-                .key
-                .as_deref()
-                .map(|key| key_indexes.get(key).copied().unwrap_or_else(|| -i64::from(intern(key)) - 1)),
-            date: intern(&m.date.to_string()),
-            model: intern(&m.model),
-            project: intern(&m.attribution.project),
-            cwd: m.attribution.cwd.as_deref().map(&mut intern),
-            counts: m.counts.clone(),
+        .map(|m| {
+            let key = match m.key.as_deref() {
+                Some(key) => Some(match key_indexes.get(key) {
+                    Some(&index) => index,
+                    None => -i64::from(intern(key)?) - 1,
+                }),
+                None => None,
+            };
+            Some(EncodedMessage {
+                key,
+                date: intern(&m.date.to_string())?,
+                model: intern(&m.model)?,
+                project: intern(&m.attribution.project)?,
+                cwd: match m.attribution.cwd.as_deref() {
+                    Some(cwd) => Some(intern(cwd)?),
+                    None => None,
+                },
+                counts: m.counts.clone(),
+            })
         })
-        .collect();
-    let json = serde_json::to_string(&EncodedMessages { strings, rows }).expect("messages serialize");
-    RawValue::from_string(json).expect("valid JSON")
+        .collect::<Option<Vec<_>>>()?;
+    serde_json::value::to_raw_value(&EncodedMessages { strings, rows }).ok()
 }
 
 /// `None` when the blob is corrupt, so the file's days count as a whole.
@@ -218,7 +228,10 @@ impl ParseCache {
             return;
         }
         let messages = match &parse.messages {
-            Some(Messages::Decoded(messages)) => Some(encode_messages(messages, &parse.keys)),
+            Some(Messages::Decoded(messages)) => {
+                let Some(raw) = encode_messages(messages, &parse.keys) else { return };
+                Some(raw)
+            }
             Some(Messages::Encoded(raw)) => Some(raw.clone()),
             None => None,
         };

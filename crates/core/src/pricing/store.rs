@@ -20,8 +20,8 @@ use crate::http::{HttpClient, Request};
 use crate::js::locale_compare;
 use crate::time::{Clock, iso_millis};
 
-const REFRESH_INTERVAL: Duration = Duration::from_hours(24);
-const FAILURE_RETRY: Duration = Duration::from_mins(30);
+const REFRESH_INTERVAL: jiff::SignedDuration = jiff::SignedDuration::from_hours(24);
+const FAILURE_RETRY: jiff::SignedDuration = jiff::SignedDuration::from_mins(30);
 const FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 const SOURCES: [&str; 4] = ["manifest", "supplement", "litellm", "modelsDev"];
 
@@ -97,16 +97,15 @@ fn instant(text: Option<&str>) -> Option<Timestamp> {
     Clock::system().parse_timestamp(text?)
 }
 
-#[expect(clippy::expect_used, reason = "the retry and refresh intervals are small constants")]
 fn is_stale(state: Option<&SourceState>, now: Timestamp) -> bool {
     let since = |at: Option<Timestamp>| at.map(|at| now.duration_since(at));
     if let Some(failed) = since(instant(state.and_then(|s| s.failed_at.as_deref())))
-        && failed < jiff::SignedDuration::try_from(FAILURE_RETRY).expect("small")
+        && failed < FAILURE_RETRY
     {
         return false;
     }
     since(instant(state.and_then(|s| s.fetched_at.as_deref())))
-        .is_none_or(|age| age >= jiff::SignedDuration::try_from(REFRESH_INTERVAL).expect("small"))
+        .is_none_or(|age| age >= REFRESH_INTERVAL)
 }
 
 fn merge_overrides<P: Clone>(local: &Overrides<P>, remote: &Overrides<P>) -> Overrides<P> {
@@ -366,8 +365,8 @@ impl PricingStore {
         let pack: IndexMap<String, String> = files.iter().map(|f| (f.file.clone(), f.body.clone())).collect();
         // A single rename commits a whole generation, even with concurrent writers.
         if cached.is_none() || files.iter().any(|f| f.changed) {
-            write_file_atomic(&self.dir.join("pack.json"), serde_json::to_string(&pack).expect("strings"), None)
-                .map_err(|e| e.to_string())?;
+            let json = serde_json::to_string(&pack).map_err(|e| e.to_string())?;
+            write_file_atomic(&self.dir.join("pack.json"), json, None).map_err(|e| e.to_string())?;
         }
         let next_state = CacheState {
             sources: files
@@ -380,8 +379,8 @@ impl PricingStore {
                 })
                 .collect(),
         };
-        write_file_atomic(&self.dir.join("state.json"), serde_json::to_string(&next_state).expect("state"), None)
-            .map_err(|e| e.to_string())?;
+        let json = serde_json::to_string(&next_state).map_err(|e| e.to_string())?;
+        write_file_atomic(&self.dir.join("state.json"), json, None).map_err(|e| e.to_string())?;
         let updated = next.updated_at() != self.current().updated_at() || files[..3].iter().any(|f| f.changed);
         *self.pack.locked() =
             PackState { sources: next_state, files: Some(pack), unverified: manifest.hashes.is_none() };

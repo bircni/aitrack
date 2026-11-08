@@ -65,16 +65,8 @@ pub fn read_data_file(core: &Core, path: &Path, options: ValidationOptions) -> O
 /// # Errors
 ///
 /// When encrypting fails for lack of randomness.
-///
-/// # Panics
-///
-/// Never in practice: a machine file always serializes.
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
 pub fn serialize_machine_file(machine: &MachineFile, passphrase: Option<&str>) -> Result<String, MachineFileError> {
-    let json = js::to_string_pretty(machine).expect("a machine file serializes");
+    let json = js::stringify_pretty(machine);
     Ok(match passphrase {
         Some(passphrase) => encrypt_text(&json, passphrase)?,
         None => json,
@@ -86,14 +78,6 @@ pub fn serialize_machine_file(machine: &MachineFile, passphrase: Option<&str>) -
 /// # Errors
 ///
 /// When the file fails validation or cannot be written.
-///
-/// # Panics
-///
-/// Never in practice: a machine file always serializes.
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail and parse back"
-)]
 pub fn write_machine_file(
     core: &Core,
     path: &Path,
@@ -101,8 +85,9 @@ pub fn write_machine_file(
     encrypt: bool,
     options: ValidationOptions,
 ) -> Result<(), MachineFileError> {
-    let json = js::to_string_pretty(machine).expect("a machine file serializes");
-    let parsed: serde_json::Value = serde_json::from_str(&json).expect("it was just written");
+    let json = js::stringify_pretty(machine);
+    // Unparseable output fails validation below and is never written.
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap_or(serde_json::Value::Null);
     let check = check_machine_file(&parsed, &path.to_string_lossy(), options);
     if check.machine.is_none() {
         let reason = check.diagnostics.first().map_or_else(

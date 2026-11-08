@@ -172,12 +172,8 @@ pub fn read_json_file(path: &Path) -> Value {
 }
 
 /// `JSON.stringify(value, null, 2)` and a newline, as 4.x wrote it.
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
 pub fn settings_json(settings: &Settings) -> String {
-    format!("{}\n", js::to_string_pretty(settings).expect("settings serialize"))
+    format!("{}\n", js::stringify_pretty(settings))
 }
 
 pub fn write_settings(path: &Path, settings: &Settings) -> std::io::Result<()> {

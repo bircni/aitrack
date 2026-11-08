@@ -33,11 +33,7 @@ pub struct RecomputeResult {
 }
 
 /// Without costs: per-entry and summed costs differ in the last bits, which is not a change.
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
-fn tokens_json(days: &MachineDays) -> String {
+fn tokens_json(days: &MachineDays) -> Option<String> {
     fn strip(value: &mut Value) {
         match value {
             Value::Object(map) => {
@@ -48,9 +44,9 @@ fn tokens_json(days: &MachineDays) -> String {
             Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
         }
     }
-    let mut value = serde_json::to_value(days).expect("days serialize");
+    let mut value = serde_json::to_value(days).ok()?;
     strip(&mut value);
-    value.to_string()
+    Some(value.to_string())
 }
 
 fn name(path: &Path) -> String {

@@ -23,11 +23,30 @@ pub fn to_string_pretty<T: Serialize + ?Sized>(value: &T) -> serde_json::Result<
     write(value, JsFormatter(PrettyFormatter::with_indent(b"  ")))
 }
 
-#[expect(clippy::expect_used, reason = "serde_json only writes UTF-8")]
+/// [`to_string`] for this workspace's own data types.
+#[must_use]
+pub fn stringify<T: Serialize + ?Sized>(value: &T) -> String {
+    infallible(to_string(value))
+}
+
+/// [`to_string_pretty`] for this workspace's own data types.
+#[must_use]
+pub fn stringify_pretty<T: Serialize + ?Sized>(value: &T) -> String {
+    infallible(to_string_pretty(value))
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "the workspace's types key maps by strings or dates and have no fallible custom serializer, and the output is an in-memory buffer"
+)]
+fn infallible(json: serde_json::Result<String>) -> String {
+    json.expect("the workspace's own types serialize")
+}
+
 fn write<T: Serialize + ?Sized, F: Formatter>(value: &T, formatter: F) -> serde_json::Result<String> {
     let mut out = Vec::with_capacity(256);
     value.serialize(&mut serde_json::Serializer::with_formatter(&mut out, formatter))?;
-    Ok(String::from_utf8(out).expect("serde_json writes UTF-8"))
+    String::from_utf8(out).map_err(serde::ser::Error::custom)
 }
 
 /// Keeps the wrapped layout and writes doubles as JavaScript does: `45000`, not `45000.0`; `0.0000045`, not `4.5e-6`.

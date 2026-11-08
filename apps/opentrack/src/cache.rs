@@ -32,10 +32,6 @@ pub struct CachedState {
 }
 
 /// The file's contents: the format first, then the state.
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
 pub fn cache_json(cache: &CachedState) -> String {
     #[derive(Serialize)]
     struct File<'a> {
@@ -43,7 +39,7 @@ pub fn cache_json(cache: &CachedState) -> String {
         #[serde(flatten)]
         cache: &'a CachedState,
     }
-    aitrack_core::js::to_string(&File { format: CACHE_FORMAT, cache }).expect("cache serializes")
+    aitrack_core::js::stringify(&File { format: CACHE_FORMAT, cache })
 }
 
 fn finite(value: Option<&Value>) -> bool {

@@ -103,11 +103,6 @@ impl DataRun<'_> {
 /// # Errors
 ///
 /// When the logs, the data repo or `step` fail.
-///
-/// # Panics
-///
-/// If the background pull panicked.
-#[expect(clippy::expect_used, reason = "the OnceLock runs the join once, so the reader's handle is still there")]
 pub fn run_data_pipeline<T>(
     core: &Core,
     do_pull: bool,
@@ -134,8 +129,8 @@ pub fn run_data_pipeline<T>(
         let done: OnceLock<Result<LocalMaps>> = OnceLock::new();
         let local = || {
             done.get_or_init(|| {
-                let handle = pending.locked().take().expect("joined once");
-                handle.join().unwrap_or_else(|_| Err(Error::new("reading the local logs failed")))
+                let failed = || Err(Error::new("reading the local logs failed"));
+                pending.locked().take().map_or_else(failed, |handle| handle.join().unwrap_or_else(|_| failed()))
             })
             .clone()
         };
@@ -235,10 +230,6 @@ pub fn sync_data(core: &Core, options: SyncOptions) -> Result<SyncResult> {
     Ok(result)
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
 fn push_local_usage(
     core: &Core,
     guard: &RepoGuard<'_>,
@@ -312,8 +303,7 @@ fn push_local_usage(
     let normalized_existing = existing.as_ref().map(canonical_days);
     // Usage only: lastUpdated and the schema header alone are not worth a commit.
     let encryption_change = raw.is_some() && encrypted_now != encrypt;
-    let unchanged = js::to_string(&normalized_existing).expect("days serialize")
-        == js::to_string(&outgoing).expect("days serialize");
+    let unchanged = js::stringify(&normalized_existing) == js::stringify(&outgoing);
     if !encryption_change && unchanged {
         let pushed = if options.dry_run {
             false

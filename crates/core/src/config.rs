@@ -102,14 +102,6 @@ pub fn invalid_config_message(path: &Path, reason: &str) -> String {
 /// # Errors
 ///
 /// When the config cannot be written.
-///
-/// # Panics
-///
-/// Never in practice: a config always serializes.
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
 pub fn save_config(path: &Path, config: &Config) -> Result<(), ConfigError> {
     let mut config = config.clone();
     if let Some(id) = &config.machine_id {
@@ -123,7 +115,7 @@ pub fn save_config(path: &Path, config: &Config) -> Result<(), ConfigError> {
         Err(error) if is_missing_path(&error) => (path.to_owned(), None),
         Err(source) => return Err(ConfigError::Write { path: path.to_owned(), source }),
     };
-    let json = js::to_string_pretty(&config).expect("a config always serializes");
+    let json = js::stringify_pretty(&config);
     write_file_atomic(&target, &json, mode).map_err(|source| ConfigError::Write { path: target, source })
 }
 

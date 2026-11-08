@@ -18,7 +18,7 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
 use aitrack_core::hex;
-use aitrack_core::js::to_string_pretty;
+use aitrack_core::js::stringify_pretty;
 
 use crate::pricing::{
     CURSOR_PROVIDERS, Catalogs, Finding, Result, Tables, apply_catalog_rates, compare_table, fetch_catalogs, summary,
@@ -53,12 +53,8 @@ fn cmd(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<String> {
 }
 
 /// JSON as the repo's files keep it: two-space indents, a final newline.
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
 fn pretty(value: &Value) -> String {
-    format!("{}\n", to_string_pretty(value).expect("JSON values serialize"))
+    format!("{}\n", stringify_pretty(value))
 }
 
 fn sha256(text: &str) -> String {

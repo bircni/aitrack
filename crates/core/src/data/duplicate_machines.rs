@@ -21,15 +21,11 @@ pub struct DuplicateMachineDays {
 ///
 /// Never in practice: a day always serializes.
 #[must_use]
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
 pub fn find_duplicate_machine_days(machines: &[MachineFile]) -> DuplicateMachineDays {
     let mut by_day: IndexMap<Day, IndexMap<String, Vec<&str>>> = IndexMap::new();
     for machine in machines {
         for (date, providers) in &machine.days {
-            let payload = js::to_string(providers).expect("a day serializes");
+            let payload = js::stringify(providers);
             by_day.entry(*date).or_default().entry(payload).or_default().push(&machine.hostname);
         }
     }

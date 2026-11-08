@@ -91,7 +91,7 @@ pub fn encrypt_text(plaintext: &str, passphrase: &str) -> Result<String, NoRando
         tag: STANDARD.encode(tag),
         data: STANDARD.encode(data),
     };
-    Ok(js::to_string_pretty(&envelope).expect("an envelope serializes"))
+    Ok(js::stringify_pretty(&envelope))
 }
 
 fn decode(value: Option<&Value>, bytes: Option<usize>) -> Result<Vec<u8>, DecryptError> {

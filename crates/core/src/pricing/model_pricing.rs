@@ -137,10 +137,6 @@ impl ModelPricing {
 }
 
 /// SHA-256 of the effective rates as canonical JSON: every object's keys sorted.
-#[expect(
-    clippy::expect_used,
-    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-)]
 fn fingerprint(supplement: &Supplement, primary: &Catalog, secondary: &Catalog) -> String {
     fn canonical(value: Value) -> Value {
         match value {
@@ -157,6 +153,6 @@ fn fingerprint(supplement: &Supplement, primary: &Catalog, secondary: &Catalog) 
     rates.updated_at.clear();
     rates.comment = None;
     let value = serde_json::json!([rates, primary.entries, secondary.entries]);
-    let digest = Sha256::digest(serde_json::to_string(&canonical(value)).expect("serializes").as_bytes());
+    let digest = Sha256::digest(canonical(value).to_string().as_bytes());
     crate::hex(&digest)
 }
