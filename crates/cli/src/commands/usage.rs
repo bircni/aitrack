@@ -31,6 +31,7 @@ pub struct UsageArgs {
     pub window: Window,
 }
 
+#[expect(clippy::struct_excessive_bools, reason = "each bool is an independent command-line flag")]
 #[derive(Args, Clone)]
 pub struct UsageOptions {
     #[arg(long, value_name = "list", help = PROVIDERS_HELP, value_parser = parse_providers)]

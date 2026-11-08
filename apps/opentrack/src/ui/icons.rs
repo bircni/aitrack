@@ -68,18 +68,19 @@ fn cubic(from: (f32, f32), c1: (f32, f32), c2: (f32, f32), to: (f32, f32), out: 
     }
 }
 
-/// SVG's endpoint arc, flattened.
-#[expect(clippy::too_many_arguments, reason = "each argument is a distinct part of the arc")]
-fn arc(
-    from: (f32, f32),
+/// One `A rx ry rotation large-arc sweep x y` segment of an SVG path.
+struct Arc {
     rx: f32,
     ry: f32,
     rotation: f32,
     large: bool,
     sweep: bool,
     to: (f32, f32),
-    out: &mut Vec<(f32, f32)>,
-) {
+}
+
+/// SVG's endpoint arc, flattened.
+fn arc(from: (f32, f32), segment: &Arc, out: &mut Vec<(f32, f32)>) {
+    let Arc { rx, ry, rotation, large, sweep, to } = *segment;
     let (mut rx, mut ry) = (rx.abs(), ry.abs());
     if rx == 0.0 || ry == 0.0 {
         out.push(to);
@@ -189,7 +190,9 @@ fn parse(d: &str) -> Polylines {
                 for a in arc_numbers(args).chunks(7) {
                     let b = base(at);
                     let to = (b.0 + a[5], b.1 + a[6]);
-                    arc(at, a[0], a[1], a[2], a[3] != 0.0, a[4] != 0.0, to, &mut current);
+                    let segment =
+                        Arc { rx: a[0], ry: a[1], rotation: a[2], large: a[3] != 0.0, sweep: a[4] != 0.0, to };
+                    arc(at, &segment, &mut current);
                     at = to;
                 }
             }

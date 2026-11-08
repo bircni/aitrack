@@ -13,7 +13,10 @@ pub struct ProviderSetting {
     pub enabled: bool,
 }
 
-#[expect(clippy::struct_excessive_bools, reason = "many boolean settings are necessary for the app")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors settings.json, whose independent on/off keys stay as 4.x wrote them"
+)]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {

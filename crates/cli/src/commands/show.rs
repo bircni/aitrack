@@ -19,6 +19,7 @@ use super::report::{load, not_configured, print_empty_result};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
 
+#[expect(clippy::struct_excessive_bools, reason = "each bool is an independent command-line flag")]
 #[derive(Args)]
 pub struct ShowArgs {
     /// output file path (default: aitrack.png)

@@ -110,7 +110,10 @@ impl Canvas {
     }
 
     /// `fillText` on the alphabetic baseline `y`.
-    #[expect(clippy::too_many_arguments, reason = "each argument is a distinct part of the layout")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "its ten callers each pass a different mix of size, weight, colour and alignment"
+    )]
     fn text(&mut self, text: &str, anchor: f32, baseline: f32, size: f32, bold: bool, fill: &str, align: Align) {
         let width = self.measure(text, size, bold);
         let mut caret = match align {

@@ -23,6 +23,7 @@ pub fn round_corners(handle: &impl HasWindowHandle) {
     let Some(hwnd) = hwnd(handle) else { return };
     let preference = DWMWCP_ROUND;
     // SAFETY: the pointer and size describe a live `DWM_WINDOW_CORNER_PREFERENCE` for the whole call.
+    #[expect(clippy::cast_possible_truncation, reason = "Win32 struct sizes are a few dozen bytes")]
     let _ = unsafe {
         DwmSetWindowAttribute(
             hwnd,
@@ -52,6 +53,7 @@ pub fn work_area(point: Option<(i32, i32)>) -> Option<(Rect, f32)> {
     // SAFETY: plain value calls; `info` lives across the call that fills it.
     unsafe {
         let monitor = MonitorFromPoint(POINT { x, y }, MONITOR_DEFAULTTONEAREST);
+        #[expect(clippy::cast_possible_truncation, reason = "Win32 struct sizes are a few dozen bytes")]
         let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         if !GetMonitorInfoW(monitor, &raw mut info).as_bool() {
             return None;

@@ -119,10 +119,8 @@ fn switch_line(
     rule(ui, &palette);
 }
 
-#[expect(clippy::too_many_lines, reason = "This function is long due to the UI layout code.")]
 pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
     let palette = frame.palette;
-    let settings = model.settings;
     ui.horizontal(|ui| {
         ui.add_space(8.0);
         ui.set_min_height(48.0);
@@ -132,6 +130,16 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'
         ui.label(strong("Settings", 15.0, palette.ink));
     });
 
+    providers(ui, model, frame);
+    display(ui, model, frame);
+    general(ui, view, model, frame);
+    about(ui, model, frame);
+    quit(ui, frame);
+}
+
+fn providers(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
+    let palette = frame.palette;
+    let settings = model.settings;
     group(ui, &palette, "Providers", |ui| {
         let count = settings.providers.len();
         for (index, provider) in settings.providers.iter().enumerate() {
@@ -193,7 +201,11 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'
         ui.label(text("A provider turned off is not read or contacted.", 11.0, palette.ink2));
         ui.add_space(6.0);
     });
+}
 
+fn display(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
+    let palette = frame.palette;
+    let settings = model.settings;
     group(ui, &palette, "Display", |ui| {
         select_line(
             ui,
@@ -262,7 +274,11 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'
             |s, v| s.tray_colored = v,
         );
     });
+}
 
+fn general(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
+    let palette = frame.palette;
+    let settings = model.settings;
     group(ui, &palette, "General", |ui| {
         switch_line(
             ui,
@@ -326,7 +342,10 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'
             ui.add_space(8.0);
         });
     });
+}
 
+fn about(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
+    let palette = frame.palette;
     group(ui, &palette, "About", |ui| {
         line(ui, &palette, "Version", None, None, 80.0, |ui| {
             ui.label(text(env!("CARGO_PKG_VERSION"), 13.0, palette.ink2));
@@ -355,7 +374,10 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'
             }
         });
     });
+}
 
+fn quit(ui: &mut Ui, frame: &mut Frame<'_>) {
+    let palette = frame.palette;
     EguiFrame::new().outer_margin(Margin { left: 12, right: 12, top: 0, bottom: 16 }).show(ui, |ui| {
         let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 34.0), Sense::click());
         let fill = if response.hovered() { Palette::mix(palette.crit, 0.12, palette.card) } else { palette.card };

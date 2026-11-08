@@ -14,7 +14,7 @@ use super::icons::{paint_glyph, square, Glyph};
 use super::theme::Palette;
 use super::widgets::{card, divider, empty, segmented, spread, stacked_bar, strong, text};
 use super::{Frame, Model, View};
-use crate::state::{AppState, DailyUsage, ModelUsage, ProviderUsages};
+use crate::state::{AppState, DailyUsage, MachineUsage, ModelUsage, ProviderUsages};
 
 pub fn history(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) {
     let palette = frame.palette;
@@ -232,7 +232,6 @@ fn provider_spend_row(ui: &mut Ui, frame: &Frame<'_>, key: &str, label: &str, sp
     });
 }
 
-#[expect(clippy::too_many_lines, reason = "This function is long due to the UI layout code.")]
 pub fn machines(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) {
     let palette = frame.palette;
     let state = model.state;
@@ -246,96 +245,14 @@ pub fn machines(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'
         let open = view.open_row.as_deref() == Some(row.id.as_str());
         card(ui, &palette, |ui| {
             ui.spacing_mut().item_spacing.y = 10.0;
-            let head = ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 9.0;
-                let current = machine.is_some_and(|m| m.current);
-                let (rect, _) = ui.allocate_exact_size(Vec2::splat(32.0), Sense::hover());
-                let (fill, ink) = if current {
-                    (Palette::mix(palette.focus, 0.12, palette.card), palette.focus)
-                } else {
-                    (palette.raised, palette.ink2)
-                };
-                ui.painter().rect_filled(rect, CornerRadius::same(10), fill);
-                let glyph = if machine.is_some() { Glyph::Laptop } else { Glyph::Cloud };
-                paint_glyph(ui.painter(), square(rect.center(), 17.0), glyph, ink, 0.0);
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 2.0;
-                    ui.set_max_width(ui.available_width() - 90.0);
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 6.0;
-                        ui.add(egui::Label::new(strong(&row.name, 13.0, palette.ink)).truncate())
-                            .on_hover_text(&row.name);
-                        if current {
-                            EguiFrame::new()
-                                .fill(Palette::mix(palette.focus, 0.12, palette.card))
-                                .corner_radius(CornerRadius::same(5))
-                                .inner_margin(Margin::symmetric(5, 0))
-                                .show(ui, |ui| {
-                                    ui.label(strong(
-                                        "This machine",
-                                        10.0,
-                                        Palette::mix(palette.focus, 0.8, palette.ink),
-                                    ))
-                                });
-                        }
-                    });
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 5.0;
-                        match machine {
-                            Some(machine) => {
-                                let (status, stale) = sync_status(model.clock, machine, model.now);
-                                let (dot, _) = ui.allocate_exact_size(Vec2::splat(6.0), Sense::hover());
-                                ui.painter().circle_filled(
-                                    dot.center(),
-                                    3.0,
-                                    if stale { palette.warn } else { palette.ok },
-                                );
-                                let clock = zone_clock(model.clock, &machine.timezone, model.now);
-                                let meta =
-                                    clock.map_or_else(|| status.clone(), |clock| format!("{status} · {clock} there"));
-                                ui.add(egui::Label::new(text(meta, 11.0, palette.ink2)).truncate()).on_hover_text(
-                                    if machine.timezone.is_empty() { status } else { machine.timezone.clone() },
-                                );
-                            }
-                            None => {
-                                ui.label(text("Account-wide, not tied to a machine", 11.0, palette.ink2));
-                            }
-                        }
-                    });
-                });
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    chevron(ui, &palette, &row.id, open);
-                    ui.label(strong(spend_label(&row.spend), 12.0, palette.ink));
-                });
-            });
+            let head = ui.horizontal(|ui| machine_head(ui, model, &palette, row, machine, open));
             let open = expander(ui, view, &row.id, head.response.rect);
             share_bar(ui, &palette, &basis, &row.spend, row.parts.iter().map(|(key, spend)| (key.as_str(), *spend)));
             if !row.daily.is_empty() {
                 strip(ui, &palette, &row.daily, peak);
             }
             if open {
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 8.0;
-                    divider(ui, &palette);
-                    if row.parts.is_empty() {
-                        ui.label(text(format!("No usage · {}", view.period.label()), 12.0, palette.ink2));
-                    }
-                    for (key, spend) in &row.parts {
-                        let label =
-                            state.providers.iter().find(|p| &p.key == key).map_or(key.as_str(), |p| p.label.as_str());
-                        provider_spend_row(ui, frame, key, label, spend);
-                    }
-                    if !row.models.is_empty() {
-                        ui.label(text(format!("Top models · {}", view.period.label()), 12.0, palette.ink2));
-                        for model in &row.models {
-                            spread(
-                                ui,
-                                text(&model.model, 11.5, palette.ink2),
-                                text(spend_reading(&Spend::from(model)), 11.5, palette.ink),
-                            );
-                        }
-                    }
-                });
+                ui.vertical(|ui| machine_details(ui, view.period, state, frame, row));
             }
         });
     }
@@ -450,5 +367,89 @@ pub fn projects(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'
     }
     if model.state.providers.iter().any(|p| p.key == "cursor") {
         empty(ui, &palette, "Cursor is not attributed to projects and is not counted here.");
+    }
+}
+
+/// The machine's icon, name, "This machine" badge and sync status, with its spend on the right.
+fn machine_head(
+    ui: &mut Ui,
+    model: &Model<'_>,
+    palette: &Palette,
+    row: &Row,
+    machine: Option<&MachineUsage>,
+    open: bool,
+) {
+    ui.spacing_mut().item_spacing.x = 9.0;
+    let current = machine.is_some_and(|m| m.current);
+    let (rect, _) = ui.allocate_exact_size(Vec2::splat(32.0), Sense::hover());
+    let (fill, ink) = if current {
+        (Palette::mix(palette.focus, 0.12, palette.card), palette.focus)
+    } else {
+        (palette.raised, palette.ink2)
+    };
+    ui.painter().rect_filled(rect, CornerRadius::same(10), fill);
+    let glyph = if machine.is_some() { Glyph::Laptop } else { Glyph::Cloud };
+    paint_glyph(ui.painter(), square(rect.center(), 17.0), glyph, ink, 0.0);
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        ui.set_max_width(ui.available_width() - 90.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            ui.add(egui::Label::new(strong(&row.name, 13.0, palette.ink)).truncate()).on_hover_text(&row.name);
+            if current {
+                EguiFrame::new()
+                    .fill(Palette::mix(palette.focus, 0.12, palette.card))
+                    .corner_radius(CornerRadius::same(5))
+                    .inner_margin(Margin::symmetric(5, 0))
+                    .show(ui, |ui| {
+                        ui.label(strong("This machine", 10.0, Palette::mix(palette.focus, 0.8, palette.ink)))
+                    });
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 5.0;
+            match machine {
+                Some(machine) => {
+                    let (status, stale) = sync_status(model.clock, machine, model.now);
+                    let (dot, _) = ui.allocate_exact_size(Vec2::splat(6.0), Sense::hover());
+                    ui.painter().circle_filled(dot.center(), 3.0, if stale { palette.warn } else { palette.ok });
+                    let clock = zone_clock(model.clock, &machine.timezone, model.now);
+                    let meta = clock.map_or_else(|| status.clone(), |clock| format!("{status} · {clock} there"));
+                    ui.add(egui::Label::new(text(meta, 11.0, palette.ink2)).truncate())
+                        .on_hover_text(if machine.timezone.is_empty() { status } else { machine.timezone.clone() });
+                }
+                None => {
+                    ui.label(text("Account-wide, not tied to a machine", 11.0, palette.ink2));
+                }
+            }
+        });
+    });
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        chevron(ui, palette, &row.id, open);
+        ui.label(strong(spend_label(&row.spend), 12.0, palette.ink));
+    });
+}
+
+/// The open card: each provider's spend and the machine's top models.
+fn machine_details(ui: &mut Ui, period: Period, state: &AppState, frame: &Frame<'_>, row: &Row) {
+    let palette = frame.palette;
+    ui.spacing_mut().item_spacing.y = 8.0;
+    divider(ui, &palette);
+    if row.parts.is_empty() {
+        ui.label(text(format!("No usage · {}", period.label()), 12.0, palette.ink2));
+    }
+    for (key, spend) in &row.parts {
+        let label = state.providers.iter().find(|p| &p.key == key).map_or(key.as_str(), |p| p.label.as_str());
+        provider_spend_row(ui, frame, key, label, spend);
+    }
+    if !row.models.is_empty() {
+        ui.label(text(format!("Top models · {}", period.label()), 12.0, palette.ink2));
+        for model in &row.models {
+            spread(
+                ui,
+                text(&model.model, 11.5, palette.ink2),
+                text(spend_reading(&Spend::from(model)), 11.5, palette.ink),
+            );
+        }
     }
 }
