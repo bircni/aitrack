@@ -92,6 +92,8 @@ pub fn position_scale(target_scale: f32, window_scale: f32) -> f32 {
 pub mod linux {
     use std::sync::Mutex;
 
+    use gtk::gdk::prelude::MonitorExt;
+
     use crate::position::Rect;
 
     /// Read on GTK's thread, which owns GDK; the window's thread may not call it.
