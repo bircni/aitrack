@@ -358,7 +358,7 @@ impl PricingStore {
         let pack: IndexMap<String, String> = files.iter().map(|f| (f.file.clone(), f.body.clone())).collect();
         // A single rename commits a whole generation, even with concurrent writers.
         if cached.is_none() || files.iter().any(|f| f.changed) {
-            write_file_atomic(&self.dir.join("pack.json"), &serde_json::to_string(&pack).expect("strings"), None)
+            write_file_atomic(&self.dir.join("pack.json"), serde_json::to_string(&pack).expect("strings"), None)
                 .map_err(|e| e.to_string())?;
         }
         let next_state = CacheState {
@@ -372,7 +372,7 @@ impl PricingStore {
                 })
                 .collect(),
         };
-        write_file_atomic(&self.dir.join("state.json"), &serde_json::to_string(&next_state).expect("state"), None)
+        write_file_atomic(&self.dir.join("state.json"), serde_json::to_string(&next_state).expect("state"), None)
             .map_err(|e| e.to_string())?;
         let updated = next.updated_at() != self.current().updated_at() || files[..3].iter().any(|f| f.changed);
         *self.pack.lock().expect("not poisoned") =

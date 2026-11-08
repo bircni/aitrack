@@ -18,6 +18,7 @@ pub mod providers;
 pub mod quota;
 pub mod readers;
 pub mod recompute;
+pub mod semver;
 pub mod store;
 pub mod sync;
 pub mod time;
@@ -36,7 +37,8 @@ use crate::store::validate::Diagnostic;
 use crate::time::Clock;
 
 /// Lower-case hex, as `digest('hex')` writes it.
-pub(crate) fn hex(bytes: &[u8]) -> String {
+#[must_use]
+pub fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
     bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut out, b| {
         let _ = write!(out, "{b:02x}");

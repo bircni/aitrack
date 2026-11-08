@@ -14,11 +14,16 @@ pub fn percentile(values: &[u64], p: f64) -> u64 {
 }
 
 pub fn token_intensity_level(tokens: u64, max: u64) -> u8 {
-    if tokens == 0 || max == 0 {
+    #[allow(clippy::cast_precision_loss)]
+    intensity_level(tokens as f64, max as f64)
+}
+
+/// A heatmap cell's level, 0 (nothing) to 4, from its share of the busiest cell.
+pub fn intensity_level(value: f64, max: f64) -> u8 {
+    if value <= 0.0 || max <= 0.0 {
         return 0;
     }
-    #[allow(clippy::cast_precision_loss)]
-    let ratio = (tokens as f64 / max as f64).min(1.0);
+    let ratio = (value / max).min(1.0);
     let [low, mid, high] = INTENSITY_THRESHOLDS;
     if ratio < low {
         1

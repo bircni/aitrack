@@ -66,7 +66,8 @@ fn with_point(sign: &str, digits: &[u8], decimals: usize) -> String {
     if decimals == 0 { format!("{sign}{int}") } else { format!("{sign}{int}.{frac}") }
 }
 
-fn group_thousands(int: &str) -> String {
+/// `1234567` as `1,234,567`.
+pub fn group_thousands(int: &str) -> String {
     let mut out = String::with_capacity(int.len() + int.len() / 3);
     for (i, c) in int.chars().enumerate() {
         if i > 0 && (int.len() - i).is_multiple_of(3) {

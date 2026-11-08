@@ -2,7 +2,7 @@ use std::io;
 use std::path::Path;
 
 /// Write then rename, so a concurrent reader never sees a half-written file. `mode` applies on Unix only.
-pub fn write_file_atomic(path: &Path, contents: &str, mode: Option<u32>) -> io::Result<()> {
+pub fn write_file_atomic(path: &Path, contents: impl AsRef<[u8]>, mode: Option<u32>) -> io::Result<()> {
     let mut temporary = path.as_os_str().to_owned();
     temporary.push(format!(".{}.tmp", std::process::id()));
     let temporary = Path::new(&temporary);
@@ -18,7 +18,7 @@ pub fn write_file_atomic(path: &Path, contents: &str, mode: Option<u32>) -> io::
         }
         #[cfg(not(unix))]
         let _ = mode;
-        io::Write::write_all(&mut options.open(temporary)?, contents.as_bytes())?;
+        io::Write::write_all(&mut options.open(temporary)?, contents.as_ref())?;
         std::fs::rename(temporary, path)
     })();
     if result.is_err() {
