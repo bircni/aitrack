@@ -43,7 +43,7 @@ fn plan(core: &Core, dir: &std::path::Path, previous: &str, next: &str) -> Resul
     } else {
         None
     };
-    let contents = serialize_machine_file(&MachineFile { hostname: next.to_owned(), ..machine }, passphrase);
+    let contents = serialize_machine_file(&MachineFile { hostname: next.to_owned(), ..machine }, passphrase)?;
     let in_repo = dir == core.paths.data;
     let name = |id: &str| machine_data_filename(id).map_err(Error::new);
     let repository_paths =

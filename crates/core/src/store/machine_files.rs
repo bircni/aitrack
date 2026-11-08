@@ -23,6 +23,8 @@ pub enum MachineFileError {
     Name(&'static str),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Encryption(#[from] super::encryption::NoRandomness),
 }
 
 /// # Errors
@@ -60,17 +62,23 @@ pub fn read_data_file(core: &Core, path: &Path, options: ValidationOptions) -> O
 
 /// The bytes every writer produces, so round trips stay stable.
 ///
+/// # Errors
+///
+/// When encrypting fails for lack of randomness.
+///
 /// # Panics
 ///
 /// Never in practice: a machine file always serializes.
-#[must_use]
-#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
-pub fn serialize_machine_file(machine: &MachineFile, passphrase: Option<&str>) -> String {
+#[expect(
+    clippy::expect_used,
+    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
+)]
+pub fn serialize_machine_file(machine: &MachineFile, passphrase: Option<&str>) -> Result<String, MachineFileError> {
     let json = js::to_string_pretty(machine).expect("a machine file serializes");
-    match passphrase {
-        Some(passphrase) => encrypt_text(&json, passphrase),
+    Ok(match passphrase {
+        Some(passphrase) => encrypt_text(&json, passphrase)?,
         None => json,
-    }
+    })
 }
 
 /// Atomic, and refused when the result would not validate; replaces a symlink rather than writing through it.
@@ -82,7 +90,10 @@ pub fn serialize_machine_file(machine: &MachineFile, passphrase: Option<&str>) -
 /// # Panics
 ///
 /// Never in practice: a machine file always serializes.
-#[expect(clippy::expect_used, reason = "our own types always serialize to JSON and parse back")]
+#[expect(
+    clippy::expect_used,
+    reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail and parse back"
+)]
 pub fn write_machine_file(
     core: &Core,
     path: &Path,
@@ -106,7 +117,7 @@ pub fn write_machine_file(
         return Err(MachineFileError::Invalid { name, reason });
     }
     let contents = if encrypt {
-        encrypt_text(&json, encryption_passphrase(&core.env).ok_or(MachineFileError::MissingPassphrase)?)
+        encrypt_text(&json, encryption_passphrase(&core.env).ok_or(MachineFileError::MissingPassphrase)?)?
     } else {
         json
     };

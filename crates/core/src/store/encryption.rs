@@ -58,18 +58,26 @@ fn derive_key(passphrase: &str, salt: &[u8]) -> [u8; 32] {
     key
 }
 
+/// The OS gave no random bytes for a salt and IV, so nothing could be encrypted.
+#[derive(Debug, thiserror::Error)]
+#[error("Could not encrypt the machine file: the system has no random source ({0}).")]
+pub struct NoRandomness(getrandom::Error);
+
 /// The pretty-printed envelope for `plaintext`, with a fresh salt and IV.
+///
+/// # Errors
+///
+/// When the OS random source fails.
 ///
 /// # Panics
 ///
-/// If the OS random source fails.
-#[must_use]
-#[expect(clippy::expect_used, reason = "the OS random source and AES-GCM do not fail for these sizes")]
-pub fn encrypt_text(plaintext: &str, passphrase: &str) -> String {
+/// Never in practice: see the expectation below.
+#[expect(clippy::expect_used, reason = "AES-GCM only fails above 64 GiB per message and the envelope keys are strings")]
+pub fn encrypt_text(plaintext: &str, passphrase: &str) -> Result<String, NoRandomness> {
     let mut salt = [0u8; SALT_BYTES];
     let mut iv = [0u8; IV_BYTES];
-    getrandom::fill(&mut salt).expect("the OS provides randomness");
-    getrandom::fill(&mut iv).expect("the OS provides randomness");
+    getrandom::fill(&mut salt).map_err(NoRandomness)?;
+    getrandom::fill(&mut iv).map_err(NoRandomness)?;
     let cipher = Aes256Gcm::new(&derive_key(passphrase, &salt).into());
     let mut data = plaintext.as_bytes().to_vec();
     let tag = cipher
@@ -83,7 +91,7 @@ pub fn encrypt_text(plaintext: &str, passphrase: &str) -> String {
         tag: STANDARD.encode(tag),
         data: STANDARD.encode(data),
     };
-    js::to_string_pretty(&envelope).expect("an envelope serializes")
+    Ok(js::to_string_pretty(&envelope).expect("an envelope serializes"))
 }
 
 fn decode(value: Option<&Value>, bytes: Option<usize>) -> Result<Vec<u8>, DecryptError> {
@@ -123,7 +131,7 @@ mod tests {
 
     #[test]
     fn round_trips_through_the_4x_envelope_shape() {
-        let envelope = encrypt_text("{\n  \"hello\": \"wörld\"\n}", "pass phrase ");
+        let envelope = encrypt_text("{\n  \"hello\": \"wörld\"\n}", "pass phrase ").unwrap();
         let value: Value = serde_json::from_str(&envelope).unwrap();
         let keys: Vec<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
         assert_eq!(keys, ["schemaVersion", "encrypted", "salt", "iv", "tag", "data"]);

@@ -22,5 +22,5 @@ pub fn merge_conflicted_machine_file(core: &Core, path: &str, remote_raw: &str, 
     if encrypt && passphrase.is_none() {
         return None;
     }
-    Some(serialize_machine_file(&merged, if encrypt { passphrase } else { None }))
+    serialize_machine_file(&merged, if encrypt { passphrase } else { None }).ok()
 }
