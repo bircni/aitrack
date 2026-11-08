@@ -319,7 +319,7 @@ fn draws_the_heatmap_cells_where_4x_does() {
     let expected = expected();
     let data = provider_data(&expected["data"]);
     for case in expected["png"].as_array().unwrap() {
-        let png = render_to_png_at(&data, &options(&case["options"]), today());
+        let png = render_to_png_at(&data, &options(&case["options"]), today()).unwrap();
         if let Ok(dir) = std::env::var("AITRACK_GOLDEN_DIFF_DIR") {
             std::fs::write(Path::new(&dir).join(format!("heatmap-{}.png", case["options"])), &png).unwrap();
         }

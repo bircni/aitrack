@@ -78,7 +78,6 @@ pub fn read_codex_days(core: &Core, pricing: &dyn Pricing, resolver: &dyn Projec
     read_days(core, Kind::Codex, &codex_roots(core), pricing, resolver)
 }
 
-#[expect(clippy::expect_used, reason = "one scan exists per missed file")]
 fn read_days(
     core: &Core,
     kind: Kind,
@@ -115,14 +114,10 @@ fn read_days(
             scanned.into_iter().map(|scan| scan.map(|scan| finish_codex_scan(&scan, pricing, resolver))).collect()
         }
     };
-    let mut scans = missed.iter().zip(scans);
-    for slot in &mut parsed {
-        if slot.is_none() {
-            let (file, parse) = scans.next().expect("one scan per missed file");
-            let parse = parse?;
-            cache.record(file, &parse);
-            *slot = Some(parse);
-        }
+    for (slot, (file, parse)) in parsed.iter_mut().filter(|slot| slot.is_none()).zip(missed.iter().zip(scans)) {
+        let parse = parse?;
+        cache.record(file, &parse);
+        *slot = Some(parse);
     }
     cache.save();
     let parsed: Vec<CachedParse> = parsed.into_iter().flatten().collect();

@@ -10,11 +10,6 @@ const BYTES_PER_WORKER: u64 = 24 * 1024 * 1024;
 const MAX_WORKERS: usize = 4;
 
 /// Scans `files` with up to four threads, results in input order.
-///
-/// # Panics
-///
-/// Never: every file is scanned before the threads join.
-#[expect(clippy::expect_used, reason = "every index is scanned before the threads join")]
 pub fn scan_all<T: Send>(
     files: &[PathBuf],
     missed_bytes: u64,
@@ -27,7 +22,7 @@ pub fn scan_all<T: Send>(
         return files.iter().map(|file| scan(file)).collect();
     }
     let next = AtomicUsize::new(0);
-    let results: Mutex<Vec<Option<io::Result<T>>>> = Mutex::new((0..files.len()).map(|_| None).collect());
+    let results: Mutex<Vec<(usize, io::Result<T>)>> = Mutex::new(Vec::with_capacity(files.len()));
     std::thread::scope(|threads| {
         for _ in 0..workers {
             threads.spawn(|| {
@@ -35,17 +30,15 @@ pub fn scan_all<T: Send>(
                     let index = next.fetch_add(1, Ordering::Relaxed);
                     let Some(file) = files.get(index) else { break };
                     let result = scan(file);
-                    results.locked()[index] = Some(result);
+                    results.locked().push((index, result));
                 }
             });
         }
     });
-    results
-        .into_inner()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .into_iter()
-        .map(|r| r.expect("every file scanned"))
-        .collect()
+    // A worker that panics takes the scope down with it, so every index is here.
+    let mut results = results.into_inner().unwrap_or_else(std::sync::PoisonError::into_inner);
+    results.sort_unstable_by_key(|(index, _)| *index);
+    results.into_iter().map(|(_, result)| result).collect()
 }
 
 #[cfg(test)]

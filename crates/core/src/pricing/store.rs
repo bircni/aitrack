@@ -104,8 +104,7 @@ fn is_stale(state: Option<&SourceState>, now: Timestamp) -> bool {
     {
         return false;
     }
-    since(instant(state.and_then(|s| s.fetched_at.as_deref())))
-        .is_none_or(|age| age >= REFRESH_INTERVAL)
+    since(instant(state.and_then(|s| s.fetched_at.as_deref()))).is_none_or(|age| age >= REFRESH_INTERVAL)
 }
 
 fn merge_overrides<P: Clone>(local: &Overrides<P>, remote: &Overrides<P>) -> Overrides<P> {

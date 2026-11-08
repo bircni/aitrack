@@ -43,7 +43,7 @@ fn compact_rates(
     cache_read: Option<f64>,
     extra: &[(&str, Option<f64>)],
     fast: f64,
-) -> Value {
+) -> Map<String, Value> {
     let mut model = Map::new();
     model.insert("i".into(), json!(input));
     model.insert("o".into(), json!(output));
@@ -63,10 +63,9 @@ fn compact_rates(
     if cache_write.is_none() {
         model.insert("cwe".into(), json!(false));
     }
-    Value::Object(model)
+    model
 }
 
-#[expect(clippy::expect_used, reason = "the rate row was just built as an object")]
 fn litellm_rates(entry: &Map<String, Value>) -> Option<Value> {
     let per_million = |key: &str| amount(entry.get(key)).map(|x| x * 1e6);
     let (input, output) = (amount(entry.get("input_cost_per_token"))?, amount(entry.get("output_cost_per_token"))?);
@@ -87,14 +86,13 @@ fn litellm_rates(entry: &Map<String, Value>) -> Option<Value> {
         ],
         fast,
     );
-    let model = rates.as_object_mut().expect("an object");
     if cache_read.is_none() {
-        model.insert("cre".into(), json!(false));
+        rates.insert("cre".into(), json!(false));
     }
     if cache_write.is_none() {
-        model.insert("cwe".into(), json!(false));
+        rates.insert("cwe".into(), json!(false));
     }
-    Some(rates)
+    Some(Value::Object(rates))
 }
 
 fn models_dev_rates(cost: &Map<String, Value>) -> Option<Value> {
@@ -102,7 +100,14 @@ fn models_dev_rates(cost: &Map<String, Value>) -> Option<Value> {
     if input == 0.0 && output == 0.0 {
         return None;
     }
-    Some(compact_rates(input, output, amount(cost.get("cache_write")), amount(cost.get("cache_read")), &[], 1.0))
+    Some(Value::Object(compact_rates(
+        input,
+        output,
+        amount(cost.get("cache_write")),
+        amount(cost.get("cache_read")),
+        &[],
+        1.0,
+    )))
 }
 
 fn keeps_litellm_key(key: &str) -> bool {

@@ -245,20 +245,17 @@ fn draw_section(canvas: &mut Canvas, key: &str, days: &DayMap, weeks: &[Week], b
     }
 }
 
-#[must_use]
-pub fn render_to_png(data: &ProviderData, options: &RenderOptions) -> Vec<u8> {
+/// # Errors
+///
+/// When the canvas cannot be allocated or the image cannot be encoded.
+pub fn render_to_png(data: &ProviderData, options: &RenderOptions) -> std::io::Result<Vec<u8>> {
     render_to_png_at(data, options, Clock::system().today())
 }
 
-/// # Panics
+/// # Errors
 ///
-/// Never: the canvas is non-empty and the fonts are embedded.
-#[must_use]
-#[expect(
-    clippy::expect_used,
-    reason = "the canvas size is a fixed non-zero layout and the fonts are embedded; encoding into memory cannot fail"
-)]
-pub fn render_to_png_at(data: &ProviderData, options: &RenderOptions, today: Day) -> Vec<u8> {
+/// When the canvas cannot be allocated or the image cannot be encoded.
+pub fn render_to_png_at(data: &ProviderData, options: &RenderOptions, today: Day) -> std::io::Result<Vec<u8>> {
     let weeks = build_date_grid(options.year, today);
     let layout = resolve_provider_layout(data, options.all, options.year);
     #[expect(
@@ -274,9 +271,9 @@ pub fn render_to_png_at(data: &ProviderData, options: &RenderOptions, today: Day
     )]
     let (width, height) = (total_w as u32, total_h as u32);
     let mut canvas = Canvas {
-        pixmap: Pixmap::new(width, height).expect("a non-empty canvas"),
-        regular: FontRef::try_from_slice(REGULAR).expect("the embedded font parses"),
-        bold: FontRef::try_from_slice(BOLD).expect("the embedded font parses"),
+        pixmap: Pixmap::new(width, height).ok_or_else(|| std::io::Error::other("the heatmap has no area"))?,
+        regular: FontRef::try_from_slice(REGULAR).map_err(std::io::Error::other)?,
+        bold: FontRef::try_from_slice(BOLD).map_err(std::io::Error::other)?,
     };
     canvas.fill_rect(0.0, 0.0, total_w, total_h, palette(options.dark).bg);
     #[expect(
@@ -293,8 +290,8 @@ pub fn render_to_png_at(data: &ProviderData, options: &RenderOptions, today: Day
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
     // Every pixel is opaque after the background fill, so premultiplied and straight alpha agree.
-    let mut writer = encoder.write_header().expect("PNG header to memory");
-    writer.write_image_data(canvas.pixmap.data()).expect("PNG data to memory");
-    writer.finish().expect("PNG end to memory");
-    out
+    let mut writer = encoder.write_header().map_err(std::io::Error::other)?;
+    writer.write_image_data(canvas.pixmap.data()).map_err(std::io::Error::other)?;
+    writer.finish().map_err(std::io::Error::other)?;
+    Ok(out)
 }

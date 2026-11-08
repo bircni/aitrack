@@ -44,12 +44,12 @@ pub fn parse_positive_int(value: &str) -> Result<u64, String> {
 }
 
 /// Day keys are four-digit years.
-pub fn parse_year(value: &str) -> Result<u64, String> {
+pub fn parse_year(value: &str) -> Result<i16, String> {
     let year = parse_positive_int(value)?;
-    if year > 9999 {
-        return Err(format!("Expected a year up to 9999, got: {value}"));
-    }
-    Ok(year)
+    i16::try_from(year)
+        .ok()
+        .filter(|year| *year <= 9999)
+        .ok_or_else(|| format!("Expected a year up to 9999, got: {value}"))
 }
 
 pub fn parse_date(value: &str) -> Result<Day, String> {

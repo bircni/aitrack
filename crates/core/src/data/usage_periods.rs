@@ -33,79 +33,79 @@ pub const USAGE_PERIODS: [PeriodDefinition; 13] = [
     PeriodDefinition {
         name: "today",
         period: UsagePeriod::Today,
-        key: "today",
+        key: UsagePeriod::Today.key(),
         description: "Today's usage: provider / tokens / model / price",
     },
     PeriodDefinition {
         name: "yesterday",
         period: UsagePeriod::Yesterday,
-        key: "yesterday",
+        key: UsagePeriod::Yesterday.key(),
         description: "Yesterday's usage",
     },
     PeriodDefinition {
         name: "date <date>",
         period: UsagePeriod::Date,
-        key: "date",
+        key: UsagePeriod::Date.key(),
         description: "Usage for a specific date (YYYY-MM-DD)",
     },
     PeriodDefinition {
         name: "range <from> <to>",
         period: UsagePeriod::Range,
-        key: "range",
+        key: UsagePeriod::Range.key(),
         description: "Usage for a custom date range (YYYY-MM-DD YYYY-MM-DD)",
     },
     PeriodDefinition {
         name: "thisweek",
         period: UsagePeriod::ThisWeek,
-        key: "thisweek",
+        key: UsagePeriod::ThisWeek.key(),
         description: "Usage for the current calendar week (Mon–Sun)",
     },
     PeriodDefinition {
         name: "lastweek",
         period: UsagePeriod::LastWeek,
-        key: "lastweek",
+        key: UsagePeriod::LastWeek.key(),
         description: "Usage for the previous calendar week (Mon–Sun)",
     },
     PeriodDefinition {
         name: "week",
         period: UsagePeriod::Week,
-        key: "week",
+        key: UsagePeriod::Week.key(),
         description: "Rolling 7-day usage ending today",
     },
     PeriodDefinition {
         name: "thismonth",
         period: UsagePeriod::ThisMonth,
-        key: "thismonth",
+        key: UsagePeriod::ThisMonth.key(),
         description: "Usage for the current calendar month",
     },
     PeriodDefinition {
         name: "lastmonth",
         period: UsagePeriod::LastMonth,
-        key: "lastmonth",
+        key: UsagePeriod::LastMonth.key(),
         description: "Usage for the previous calendar month",
     },
     PeriodDefinition {
         name: "month",
         period: UsagePeriod::Month,
-        key: "month",
+        key: UsagePeriod::Month.key(),
         description: "Rolling 30-day usage ending today",
     },
     PeriodDefinition {
         name: "last <n>",
         period: UsagePeriod::Last,
-        key: "last",
+        key: UsagePeriod::Last.key(),
         description: "Rolling N-day usage ending today, e.g. last 14",
     },
     PeriodDefinition {
         name: "year",
         period: UsagePeriod::Year,
-        key: "year",
+        key: UsagePeriod::Year.key(),
         description: "Usage for the current calendar year",
     },
     PeriodDefinition {
         name: "all",
         period: UsagePeriod::All,
-        key: "all",
+        key: UsagePeriod::All.key(),
         description: "All-time usage across every recorded day",
     },
 ];
@@ -144,13 +144,23 @@ impl UsagePeriod {
         USAGE_PERIODS.iter().find(|d| d.key == key).map(|d| d.period)
     }
 
-    /// # Panics
-    ///
-    /// Never: every period is registered.
     #[must_use]
-    #[expect(clippy::expect_used, reason = "every period has an entry in USAGE_PERIODS")]
-    pub fn key(self) -> &'static str {
-        USAGE_PERIODS.iter().find(|d| d.period == self).expect("every period is registered").key
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Today => "today",
+            Self::Yesterday => "yesterday",
+            Self::Date => "date",
+            Self::Range => "range",
+            Self::ThisWeek => "thisweek",
+            Self::LastWeek => "lastweek",
+            Self::Week => "week",
+            Self::ThisMonth => "thismonth",
+            Self::LastMonth => "lastmonth",
+            Self::Month => "month",
+            Self::Last => "last",
+            Self::Year => "year",
+            Self::All => "all",
+        }
     }
 
     /// Windows that move with "today"; `date`, `range` and `all` do not.

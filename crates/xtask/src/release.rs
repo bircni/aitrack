@@ -31,7 +31,6 @@ pub fn set_workspace_version(cargo_toml: &str, version: &str) -> Result<String> 
 }
 
 /// npm's `semver.inc`, which `bun pm version` used before.
-#[expect(clippy::expect_used, reason = "the part was just checked to be numeric")]
 pub fn bump(current: &str, bump: &str) -> Result<String> {
     if bump == "none" {
         return Ok(current.to_owned());
@@ -58,8 +57,8 @@ pub fn bump(current: &str, bump: &str) -> Result<String> {
     Ok(match bump {
         "major" | "minor" | "patch" => format!("{a}.{b}.{c}"),
         "prerelease" if !released => {
-            match pre.iter().rposition(|p| p.parse::<u64>().is_ok()) {
-                Some(i) => pre[i] = (pre[i].parse::<u64>().expect("numeric") + 1).to_string(),
+            match pre.iter().enumerate().rev().find_map(|(i, p)| p.parse::<u64>().ok().map(|n| (i, n))) {
+                Some((i, n)) => pre[i] = (n + 1).to_string(),
                 None => pre.push("0".into()),
             }
             format!("{a}.{b}.{c}-{}", pre.join("."))

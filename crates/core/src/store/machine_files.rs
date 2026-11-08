@@ -152,11 +152,6 @@ pub fn list_pending_data_files(core: &Core) -> Vec<PathBuf> {
 /// # Errors
 ///
 /// When a pending file cannot be moved into the data repo.
-///
-/// # Panics
-///
-/// Never: listed files always have a name.
-#[expect(clippy::expect_used, reason = "listed machine files always have a file name")]
 pub fn adopt_pending_data_files(core: &Core, target: &Path) -> Result<usize, MachineFileError> {
     let pending = list_pending_data_files(core);
     if pending.is_empty() {
@@ -166,7 +161,7 @@ pub fn adopt_pending_data_files(core: &Core, target: &Path) -> Result<usize, Mac
     let mut copies = Vec::new();
     let mut skipped = Vec::new();
     for source in pending {
-        let name = source.file_name().expect("listed files have names").to_owned();
+        let Some(name) = source.file_name().map(std::ffi::OsStr::to_owned) else { continue };
         let destination = target.join(&name);
         if destination.exists() {
             skipped.push(name.to_string_lossy().into_owned());

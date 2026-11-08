@@ -38,7 +38,7 @@ pub struct ShowArgs {
     pub no_open: bool,
     /// only include days from this calendar year
     #[arg(long, value_name = "year", value_parser = parse_year)]
-    pub year: Option<u64>,
+    pub year: Option<i16>,
     #[arg(long, help = REFRESH_HELP)]
     pub refresh: bool,
     /// render a stats table in the terminal instead of a PNG
@@ -74,7 +74,6 @@ fn staged_local_machine(core: &Core, machine_id: &str) -> Result<MachineFile, Fa
     Ok(local)
 }
 
-#[expect(clippy::expect_used, reason = "parse_year only accepts years up to 9999")]
 pub fn run(core: &Core, args: &ShowArgs) -> Outcome {
     warn_stdout_path(core, args.output.as_deref());
     if args.tui && args.output.is_some() {
@@ -89,7 +88,7 @@ pub fn run(core: &Core, args: &ShowArgs) -> Outcome {
     };
     let providers = args.providers.as_deref();
     let loaded = load(core, providers, args.refresh, local)?;
-    let year = args.year.map(|y| i16::try_from(y).expect("years are at most 9999"));
+    let year = args.year;
     let empty_payload = if args.tui {
         let mut payload = json!({ "mode": "tui" });
         if let Some(year) = args.year {
@@ -139,7 +138,7 @@ pub fn run(core: &Core, args: &ShowArgs) -> Outcome {
     }
     let output =
         aitrack_core::readers::paths::absolute(args.output.as_deref().unwrap_or_else(|| "aitrack.png".as_ref()));
-    let png = render_to_png(data, &RenderOptions { dark: args.dark, all: args.all, year });
+    let png = render_to_png(data, &RenderOptions { dark: args.dark, all: args.all, year })?;
     std::fs::write(&output, png)?;
     if args.json {
         print_json_command("show", json!({ "mode": "png", "path": output.display().to_string() }));

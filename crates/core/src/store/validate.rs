@@ -90,7 +90,6 @@ fn token_count(value: &Value) -> Option<u64> {
     })
 }
 
-#[expect(clippy::expect_used, reason = "the loop above returns an error when a required count is missing")]
 fn check_token_counts(value: &Value, path: &str) -> Result<TokenCounts, String> {
     let fields = value.as_object().ok_or_else(|| format!("{path} must be an object"))?;
     let mut counts = [None; 6];
@@ -115,9 +114,12 @@ fn check_token_counts(value: &Value, path: &str) -> Result<TokenCounts, String> 
         None => None,
         Some(v) => Some(v.as_bool().ok_or_else(|| format!("{path}.hasUnpricedTokens must be a boolean"))?),
     };
+    let [Some(input_tokens), Some(output_tokens), ..] = counts else {
+        return Err(format!("{path}.inputTokens must be a number"));
+    };
     Ok(TokenCounts {
-        input_tokens: counts[0].expect("required"),
-        output_tokens: counts[1].expect("required"),
+        input_tokens,
+        output_tokens,
         raw_input_tokens: counts[2],
         cached_input_tokens: counts[3],
         cache_creation_input_tokens: counts[4],
@@ -157,7 +159,6 @@ const fn field(counts: &TokenCounts, index: usize) -> Option<u64> {
     ][index]
 }
 
-#[expect(clippy::expect_used, reason = "the caller checked these fields first")]
 fn check_provider_day(
     value: &Map<String, Value>,
     path: &str,
@@ -187,7 +188,10 @@ fn check_provider_day(
     }
     let by_project = match value.get("byProject") {
         None => None,
-        Some(v) => Some(check_counts_by_key(v.as_object().expect("checked by the caller"), path, "byProject")?),
+        Some(v) => {
+            let projects = v.as_object().ok_or_else(|| format!("{path}.byProject must be an object"))?;
+            Some(check_counts_by_key(projects, path, "byProject")?)
+        }
     };
     Ok(ProviderDay { by_model, totals, by_project, by_cwd: None })
 }

@@ -54,7 +54,7 @@ pub struct TopArgs {
     pub providers: Option<Providers>,
     /// only include days from this calendar year
     #[arg(long, value_name = "year", value_parser = parse_year)]
-    pub year: Option<u64>,
+    pub year: Option<i16>,
     /// only include days on or after this date (YYYY-MM-DD)
     #[arg(long, value_name = "date", value_parser = parse_date)]
     pub since: Option<Day>,
@@ -286,7 +286,6 @@ fn view(data: &ProviderData, args: &TopArgs, filter: &DateFilter) -> View {
     }
 }
 
-#[expect(clippy::expect_used, reason = "parse_year only accepts years up to 9999")]
 pub fn run(core: &Core, args: &TopArgs) -> Outcome {
     if let (Some(since), Some(until)) = (args.since, args.until)
         && since > until
@@ -302,11 +301,7 @@ pub fn run(core: &Core, args: &TopArgs) -> Outcome {
         return Ok(ExitCode::SUCCESS);
     };
     let data = &loaded.zoned.provider_data;
-    let filter = DateFilter {
-        start: args.since,
-        end: args.until,
-        year: args.year.map(|y| i16::try_from(y).expect("years are at most 9999")),
-    };
+    let filter = DateFilter { start: args.since, end: args.until, year: args.year };
     let view = view(data, args, &filter);
     render_top(core, args, view);
     Ok(ExitCode::SUCCESS)
