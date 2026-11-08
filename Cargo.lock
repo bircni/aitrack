@@ -30,6 +30,7 @@ name = "aitrack-core"
 version = "4.2.0"
 dependencies = [
  "gethostname",
+ "indexmap 2.14.2",
  "jiff",
  "proptest",
  "ryu",
