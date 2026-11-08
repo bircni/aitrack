@@ -90,13 +90,6 @@ describe('release tooling', () => {
       expect(problems()).toEqual([]);
     });
 
-    it('cuts a prerelease from rust and nothing else', () => {
-      git(checkout, 'switch', '--quiet', '--create', 'rust');
-      git(checkout, 'push', '--quiet', '--set-upstream', 'origin', 'rust');
-      expect(releaseProblems('v1.3.0-beta.1', 'origin', checkout)).toEqual([]);
-      expect(problems()).toEqual(['v1.2.3 is cut from main, but this is rust.']);
-    });
-
     it('rejects another branch', () => {
       git(checkout, 'switch', '--quiet', '--create', 'feature');
       expect(problems()).toEqual(['v1.2.3 is cut from main, but this is feature.']);

@@ -1,8 +1,12 @@
-import type { ProjectUsage } from 'aitrack-lib/data/types';
-import type { ProviderKey } from 'aitrack-lib/providers/descriptors';
-import type { QuotaError, QuotaProviderKey, QuotaSnapshot } from 'aitrack-lib/quota/types';
+import type {
+  ProjectUsage,
+  ProviderKey,
+  QuotaError,
+  QuotaProviderKey,
+  QuotaSnapshot,
+} from './core.js';
 
-export type { QuotaError, QuotaProviderKey, QuotaWindow } from 'aitrack-lib/quota/types';
+export type { QuotaError, QuotaProviderKey, QuotaWindow } from './core.js';
 
 export interface Spend {
   tokens: number;

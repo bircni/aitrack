@@ -108,9 +108,9 @@ pub struct Supplement {
     pub cursor: CursorSupplement,
 }
 
-const CLAUDE_TABLE: &str = include_str!("../../../../libs/aitrack-lib/src/pricing/tables/claude.json");
-const CODEX_TABLE: &str = include_str!("../../../../libs/aitrack-lib/src/pricing/tables/codex.json");
-const CURSOR_TABLE: &str = include_str!("../../../../libs/aitrack-lib/src/pricing/tables/cursor.json");
+const CLAUDE_TABLE: &str = include_str!("../../pricing-tables/claude.json");
+const CODEX_TABLE: &str = include_str!("../../pricing-tables/codex.json");
+const CURSOR_TABLE: &str = include_str!("../../pricing-tables/cursor.json");
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

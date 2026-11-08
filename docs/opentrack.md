@@ -172,5 +172,5 @@ not start them. The behaviour differs from macOS and Windows in a few places:
 ## Acknowledgements
 
 opentrack follows the design of [OpenQuota](https://github.com/deviffyy/OpenQuota) (MIT), whose
-provider research and pacing model it ports to TypeScript on top of aitrack-lib. The provider
+provider research and pacing model it ports to Rust in aitrack-core. The provider
 logos come from OpenQuota's frontend.

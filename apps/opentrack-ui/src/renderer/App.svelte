@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { errorMessage } from 'aitrack-lib/errors';
+  import { errorMessage } from '../shared/core.js';
   import { onMount, tick } from 'svelte';
 
   import type {

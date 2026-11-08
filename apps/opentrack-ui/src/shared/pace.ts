@@ -1,7 +1,5 @@
-import { inclusiveDayCount } from 'aitrack-lib/data/calendar';
-import { toLocalDateString } from 'aitrack-lib/data/dayMap';
-import type { PaceProjection } from 'aitrack-lib/quota/pacing';
-
+import { inclusiveDayCount, toLocalDateString } from './core.js';
+import type { PaceProjection } from './core.js';
 import type { QuotaWindow } from './types.js';
 
 function clock(date: Date, locale?: string): string {

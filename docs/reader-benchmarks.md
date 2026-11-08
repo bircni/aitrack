@@ -1,5 +1,10 @@
 # Reader benchmark
 
+These measurements are of the 4.x TypeScript readers. The 5.0 Rust readers keep their design (the
+needle filter, up to four scan threads, the parse cache and merged snapshot). On one machine's real
+logs (4.9 GB of Claude transcripts, caches off) a 5.0 cold read took 0.6 s and 130 MB resident
+against 4.x's 1.5 s and 510 MB.
+
 The first two tables were measured on 2026-10-31, Linux x64 (4 vCPUs), Node v26.8.2. Baseline is
 `main` before the filtered scan, worker threads and compact parse cache; Updated is the reader that
 introduced them. [Later changes](#later-changes) were measured on another machine and are not

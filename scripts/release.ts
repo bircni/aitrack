@@ -86,10 +86,7 @@ function optionalOutput(command: string, arguments_: string[]): string | undefin
   return result.status === 0 ? result.stdout.trim() || undefined : undefined;
 }
 
-/** Betas come from `rust` until it merges into main as 5.0.0. */
-export function releaseBranch(tag: string): string {
-  return tag.includes('-') ? 'rust' : 'main';
-}
+const RELEASE_BRANCH = 'main';
 
 function setWorkspaceVersion(version: string, options: RunOptions): void {
   if (options.dryRun) {
@@ -174,7 +171,7 @@ function parseArguments(argv: string[]): ParsedArguments {
 export function releaseProblems(tag: string, remote: string, cwd?: string): string[] {
   const git = (arguments_: string[]) => spawnCommand('git', arguments_, { cwd, encoding: 'utf8' });
   const problems: string[] = [];
-  const expected = releaseBranch(tag);
+  const expected = RELEASE_BRANCH;
 
   const branch = git(['branch', '--show-current']).stdout.trim();
   if (branch !== expected) {
@@ -235,7 +232,7 @@ function main(): void {
   // Atomic: a release commit without its tag would never publish.
   run(
     'git',
-    ['push', '--atomic', pushRemote, `HEAD:refs/heads/${releaseBranch(tag)}`, `refs/tags/${tag}`],
+    ['push', '--atomic', pushRemote, `HEAD:refs/heads/${RELEASE_BRANCH}`, `refs/tags/${tag}`],
     options,
   );
 

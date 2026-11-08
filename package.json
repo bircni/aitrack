@@ -1,8 +1,7 @@
 {
   "name": "aitrack-workspace",
-  "version": "4.2.1",
   "private": true,
-  "description": "Monorepo for aitrack (the CLI) and aitrack-lib (the core library).",
+  "description": "Tooling for the opentrack renderer and the release scripts; the CLI and app are Rust.",
   "homepage": "https://github.com/bircni/aitrack#readme",
   "bugs": {
     "url": "https://github.com/bircni/aitrack/issues"
@@ -15,41 +14,19 @@
   },
   "workspaces": {
     "packages": [
-      "apps/*",
-      "libs/*"
+      "apps/opentrack-ui"
     ],
     "catalog": {
       "@types/node": "^26.6.6",
-      "@typescript/native": "npm:typescript@^7.0.2",
       "@vitest/coverage-v8": "^5.1.0",
-      "chalk": "^6.0.1",
-      "tsx": "^4.23.15",
       "typescript": "npm:@typescript/typescript6@^6.0.2",
       "vitest": "^5.1.0"
     }
   },
   "type": "module",
   "scripts": {
-    "build": "nx run-many -t build",
-    "dev": "nx run aitrack:build && cd apps/aitrack && tsx src/cli.ts",
-    "lint": "nx run-many -t lint",
+    "validate": "just validate",
     "format": "oxfmt",
-    "format:check": "nx run-many -t format:check",
-    "typecheck": "nx run-many -t typecheck",
-    "test": "nx run-many -t test",
-    "test:ci": "nx run-many -t test --configuration ci",
-    "test:scripts": "nx run repo-tools:test",
-    "test:smoke": "nx run aitrack:test:smoke",
-    "check:unused": "nx run-many -t check:unused",
-    "mutation": "nx run aitrack-lib:mutation",
-    "validate": "nx run-many -t format:check,lint,typecheck,check:unused,test,build --configuration ci",
-    "validate:affected": "nx affected -t format:check,lint,typecheck,check:unused,test,build --configuration ci",
-    "graph": "nx graph",
-    "pricing:check": "nx run repo-tools:pricing:check --output-style=static",
-    "pricing:update": "nx run repo-tools:pricing:update --output-style=static",
-    "changelog": "nx run repo-tools:changelog",
-    "release": "nx run repo-tools:release --output-style=static",
-    "release:dry-run": "nx run repo-tools:release --output-style=static -- patch --dry-run",
     "commitlint": "commitlint --edit",
     "prepare": "simple-git-hooks || true"
   },
@@ -57,39 +34,18 @@
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
     "@commitlint/types": "^21.2.3",
-    "@monodon/rust": "3.0.0",
-    "@nx/js": "24.0.5",
-    "@nx/vite": "24.0.5",
-    "@nx/vitest": "24.0.5",
-    "@stryker-mutator/core": "^10.1.1",
-    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@tauri-apps/cli": "2.12.4",
     "@types/node": "catalog:",
-    "@typescript/native": "catalog:",
-    "@vitest/coverage-v8": "catalog:",
     "git-cliff": "^2.14.2",
     "knip": "^6.44.1",
-    "nx": "24.0.5",
-    "nx-oxlint": "0.1.1",
     "oxfmt": "^0.77.0",
     "oxlint": "^1.92.0",
     "oxlint-tsgolint": "^7.0.2006",
     "simple-git-hooks": "^2.14.0",
-    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "overrides": {
-    "@nx/devkit": {
-      "minimatch": "11.0.5"
-    },
-    "@stryker-mutator/core": {
-      "minimatch": "11.0.5"
-    },
-    "nx": {
-      "minimatch": "11.0.5",
-      "undici": "^7.30.1"
-    },
     "typed-rest-client": {
       "qs": "^6.17.0"
     }
@@ -102,8 +58,6 @@
   },
   "packageManager": "bun@1.4.4",
   "trustedDependencies": [
-    "esbuild",
-    "simple-git-hooks",
-    "nx"
+    "simple-git-hooks"
   ]
 }

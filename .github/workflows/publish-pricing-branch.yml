@@ -4,24 +4,22 @@ name: Publish pricing pack branch
 # Daily rebuild pulls LiteLLM + models.dev, merges Claude/Codex IO into the
 # published supplement, and commits on top of the branch history when rates changed.
 # Apps cache under ~/.config/aitrack/pricing/.
-# No pack is bundled in the npm package — only tables/*.json ship as offline baseline.
+# No pack ships with a release; only crates/core/pricing-tables/*.json are bundled as the offline baseline.
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'libs/aitrack-lib/src/pricing/**'
-      - 'scripts/build-pricing-pack.ts'
+      - 'crates/core/pricing-tables/**'
+      - 'crates/core/src/pricing/**'
+      - 'crates/xtask/**'
       - '.github/workflows/publish-pricing-branch.yml'
   schedule:
     - cron: '15 6 * * *' # daily 06:15 UTC
 
 permissions:
   contents: write
-
-env:
-  NX_NO_CLOUD: true
 
 concurrency:
   group: publish-pricing-branch
@@ -34,17 +32,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version-file: .node-version
 
-      - run: bun install --frozen-lockfile
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
 
       - name: Rebuild pricing pack from live feeds
-        run: bun run pricing:update
+        run: cargo xtask pricing-pack
 
       - name: Publish orphan pricing branch
         env:

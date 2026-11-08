@@ -1,9 +1,10 @@
-# The Rust workspace's checks; the 4.x TypeScript tree keeps `bun run validate` until the cut-over.
-
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-Command"]
 
-# Every check the Rust workflow runs
-validate: fmt-check lint test audit
+# Every check CI runs
+validate: rust js audit
+
+# Rust: format, clippy and tests
+rust: fmt-check lint test
 
 fmt-check:
     cargo fmt --all --check
@@ -13,6 +14,16 @@ lint: renderer
 
 test: renderer
     cargo nextest run --workspace
+
+# The renderer and the release scripts: format, lint, types, unused code and tests
+js:
+    bunx oxfmt --check
+    bunx oxlint --type-aware
+    bunx knip
+    bunx tsc -p scripts/tsconfig.json
+    bun run --cwd apps/opentrack-ui typecheck
+    bun run --cwd apps/opentrack-ui test
+    bunx vitest run --root scripts
 
 # opentrack embeds the built renderer; the checks only need the page to exist, so a placeholder stands in.
 [unix]
@@ -28,8 +39,15 @@ renderer:
 audit:
     cargo deny check advisories sources
 
-# 4.x and 5.0 on the same fixture home, in four time zones; until the cut-over removes 4.x
-parity:
-    bun nx run aitrack:build
-    cargo build -p aitrack-cli
-    node scripts/diff-cli.ts
+# opentrack in debug, on a fresh renderer build
+desktop-dev:
+    bun run --cwd apps/opentrack-ui build
+    cd apps/opentrack && bunx tauri dev
+
+# Rebuild the pricing pack from LiteLLM and models.dev; --write also updates the tables
+pricing-pack *args:
+    cargo xtask pricing-pack {{args}}
+
+# Compare the tables with LiteLLM and models.dev
+pricing-check:
+    cargo xtask pricing-check
