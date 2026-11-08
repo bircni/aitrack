@@ -29,7 +29,7 @@ impl PanelState {
         self.focused_since_show = false;
     }
 
-    /// Given the window's focus each frame, whether the popup should hide.
+    /// Given a change of the window's focus, whether the popup should hide.
     pub fn blurred(&mut self, visible: bool, focused: bool, now: Instant) -> bool {
         if focused {
             self.focused_since_show = true;

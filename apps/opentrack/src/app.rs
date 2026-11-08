@@ -83,7 +83,6 @@ pub struct App {
     /// Whether the popup is meant to be on screen.
     visible: bool,
     /// Shown, waiting for a frame laid out at its content; `true` places it at the tray first.
-    reveal: Option<bool>,
     /// eframe shows the window after its first frame; the app starts in the tray.
     started: bool,
     /// Content height in points, as last laid out.
@@ -142,7 +141,6 @@ impl App {
             marks: ProviderMarks::load(&ctx),
             panel: PanelState::default(),
             visible: false,
-            reveal: None,
             started: false,
             content_height: INITIAL_HEIGHT,
             tray,
@@ -198,21 +196,24 @@ impl App {
         ));
     }
 
-    /// The window appears once a frame has laid out the content, so it opens at its final size.
     fn show(&mut self, ctx: &egui::Context, screen: Option<Screen>) {
         if let Some(screen) = screen {
             self.view.screen = screen;
             self.view.scroll_to_top = true;
         }
-        self.reveal = Some(!self.panel.floating || !self.visible);
+        // eframe runs no UI frames for a hidden window, so it is placed with the last measured height and
+        // shown here; the next frame refits it if the content changed.
+        if !self.panel.floating || !self.visible {
+            self.place(ctx, false);
+        }
         self.visible = true;
         self.panel.shown();
-        ctx.request_repaint();
+        ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(ViewportCommand::Focus);
     }
 
     fn hide(&mut self, ctx: &egui::Context) {
         self.visible = false;
-        self.reveal = None;
         ctx.send_viewport_cmd(ViewportCommand::Visible(false));
     }
 
@@ -357,9 +358,17 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(ViewportCommand::Visible(false));
         }
         self.receive(ctx, frame);
-        let focused = ctx.input(|i| i.viewport().focused).unwrap_or(false);
-        if self.panel.blurred(self.visible, focused, Instant::now()) {
-            self.hide(ctx);
+        // Focus changes, not the polled flag: that one can be stale from before the window was hidden.
+        let changes: Vec<bool> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| if let egui::Event::WindowFocused(f) = e { Some(*f) } else { None })
+                .collect()
+        });
+        for focused in changes {
+            if self.panel.blurred(self.visible, focused, Instant::now()) {
+                self.hide(ctx);
+            }
         }
         if ctx.input(|i| i.viewport().close_requested()) {
             // Quitting is the tray's job; Alt+F4 or the taskbar's Close only dismiss the window.
@@ -406,13 +415,7 @@ impl eframe::App for App {
         if resized {
             self.content_height = height.ceil();
         }
-        if let Some(at_tray) = self.reveal.take() {
-            if at_tray || resized {
-                self.place(&ctx, !at_tray);
-            }
-            ctx.send_viewport_cmd(ViewportCommand::Visible(true));
-            ctx.send_viewport_cmd(ViewportCommand::Focus);
-        } else if resized && self.visible {
+        if resized {
             self.place(&ctx, self.panel.floating);
             platform::refresh_shadow(frame);
         }
