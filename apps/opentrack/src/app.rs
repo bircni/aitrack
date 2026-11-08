@@ -68,6 +68,8 @@ pub struct App {
     panel: PanelState,
     visible: bool,
     focused: bool,
+    /// eframe shows the window after its first frame; the app starts in the tray.
+    started: bool,
     /// Content height in points, as last laid out.
     content_height: f32,
     tray: Tray,
@@ -123,6 +125,7 @@ impl App {
             panel: PanelState::new(),
             visible: false,
             focused: false,
+            started: false,
             content_height: 560.0,
             tray,
             system,
@@ -195,7 +198,8 @@ impl App {
         ctx.send_viewport_cmd(ViewportCommand::Visible(true));
         ctx.send_viewport_cmd(ViewportCommand::Focus);
         self.visible = true;
-        self.focused = true;
+        // Focus arrives a frame later; only a loss after it counts as a blur.
+        self.focused = false;
     }
 
     fn hide(&mut self, ctx: &egui::Context) {
@@ -334,6 +338,10 @@ fn log_outcome(message: &str) {
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.apply_settings(ctx);
+        if !self.started {
+            self.started = true;
+            ctx.send_viewport_cmd(ViewportCommand::Visible(false));
+        }
         self.receive(ctx);
         let focused = ctx.input(|i| i.viewport().focused).unwrap_or(false);
         if self.focused && !focused && self.panel.hide_on_blur(self.visible, Instant::now()) {

@@ -52,6 +52,7 @@ fn build() -> Option<TrayIcon> {
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
         .with_tooltip("opentrack")
+        .with_autosave_name("opentrack")
         .with_icon_templated(Icon::from_rgba(rgba, 32, 32).ok()?)
         .build()
         .ok()
