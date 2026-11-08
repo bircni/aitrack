@@ -79,7 +79,7 @@ impl Clock {
             return None;
         }
         let date = Date::new(year, month, 1).ok()?.checked_add(i64::from(day - 1).days()).ok()?;
-        if parser.done() {
+        if parser.done() || matches!(parser.0, [b'Z']) {
             return date.to_zoned(TimeZone::UTC).ok().map(|zoned| zoned.timestamp());
         }
         parser.expect_any(b"T ")?;
@@ -115,7 +115,9 @@ impl Clock {
             Some(sign @ (b'+' | b'-')) => {
                 parser.expect(sign)?;
                 let hours = parser.digits(2)?;
-                parser.expect(b':')?;
+                if parser.peek() == Some(b':') {
+                    parser.expect(b':')?;
+                }
                 let minutes = parser.digits(2)?;
                 let seconds = (hours * 3600 + minutes * 60) * if sign == b'-' { -1 } else { 1 };
                 TimeZone::fixed(jiff::tz::Offset::from_seconds(seconds).ok()?)

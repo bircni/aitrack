@@ -105,7 +105,9 @@ pub fn parse_retry_after(value: Option<&str>, now_ms: i64) -> Option<u64> {
     if let Some(n) = parse_number(value).filter(|n| n.is_finite()) {
         return Some(seconds(n));
     }
-    let date = jiff::fmt::rfc2822::parse(value)
+    // V8 ignores the weekday of an HTTP date, so a wrong one must not reject it.
+    let without_weekday = value.split_once(", ").filter(|(day, _)| day.len() == 3).map_or(value, |(_, rest)| rest);
+    let date = jiff::fmt::rfc2822::parse(without_weekday)
         .map(|z| z.timestamp())
         .ok()
         .or_else(|| Clock::system().parse_timestamp(value))?;

@@ -114,6 +114,9 @@ const texts = [
   '2026-11-01T01:30:00',
   '2026-02-30',
   '2026-02-30T10:00:00Z',
+  '2026-03-08T10:00:00+0530',
+  '2026-03-08Z',
+  '2026-03-08T10:00+05:30',
   'garbage',
   '',
 ];
@@ -134,5 +137,41 @@ for (const zone of [
 writeFileSync(new URL('timestamps.json', import.meta.url), rows(timestamps));
 
 // `Number(text)` for the strings providers and CSV exports send.
-const numberTexts = ['', ' ', '12', ' 12 ', '1,000', '1e3', '1E-3', '.5', '5.', '+7', '-7', '0x1F', '0o17', '0b101', '0x', '0xG', 'Infinity', '-Infinity', 'inf', 'nan', 'NaN', '12abc', '1.2.3', '--1', '1e', 'e5', ' 3 ', '﻿4', '00012', '1_000', '0.1e-400', '1e400'];
-writeFileSync(new URL('number-parsing.json', import.meta.url), rows(numberTexts.map((text) => [text, Number.isNaN(Number(text)) ? null : String(Number(text))])));
+const numberTexts = [
+  '',
+  ' ',
+  '12',
+  ' 12 ',
+  '1,000',
+  '1e3',
+  '1E-3',
+  '.5',
+  '5.',
+  '+7',
+  '-7',
+  '0x1F',
+  '0o17',
+  '0b101',
+  '0x',
+  '0xG',
+  'Infinity',
+  '-Infinity',
+  'inf',
+  'nan',
+  'NaN',
+  '12abc',
+  '1.2.3',
+  '--1',
+  '1e',
+  'e5',
+  ' 3 ',
+  '﻿4',
+  '00012',
+  '1_000',
+  '0.1e-400',
+  '1e400',
+];
+writeFileSync(
+  new URL('number-parsing.json', import.meta.url),
+  rows(numberTexts.map((text) => [text, Number.isNaN(Number(text)) ? null : String(Number(text))])),
+);
