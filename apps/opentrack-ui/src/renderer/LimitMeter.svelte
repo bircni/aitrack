@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { clampPercent, type PaceProjection, projectPace } from 'aitrack-lib/quota/pacing';
+  import { clampPercent, type PaceProjection, projectPace } from '../shared/core.js';
 
   import { hasReset, meterTone } from '../shared/pace.js';
   import type { QuotaWindow, Settings } from '../shared/types.js';

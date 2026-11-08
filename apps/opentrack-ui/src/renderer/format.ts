@@ -1,9 +1,5 @@
-import { mondayOfWeek } from 'aitrack-lib/data/calendar';
-import { INIT_HINT } from 'aitrack-lib/data/messages';
-import { isStaleSync } from 'aitrack-lib/data/staleSync';
-import { fmt } from 'aitrack-lib/display/format';
-import { clampPercent, type PaceProjection } from 'aitrack-lib/quota/pacing';
-
+import { INIT_HINT, clampPercent, fmt, isStaleSync, mondayOfWeek } from '../shared/core.js';
+import type { PaceProjection } from '../shared/core.js';
 import { formatWhen } from '../shared/pace.js';
 import type {
   AppState,

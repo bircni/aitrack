@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { INIT_HINT } from 'aitrack-lib/data/messages';
-  import { compareByCostThenTokens } from 'aitrack-lib/data/sort';
-  import { tokenIntensityLevel } from 'aitrack-lib/display/heatmap/intensity';
+  import { INIT_HINT, compareByCostThenTokens, tokenIntensityLevel } from '../shared/core.js';
   import { slide } from 'svelte/transition';
 
   import type { DailyUsage, MachineUsage, ProviderState, ProviderUsages } from '../shared/types.js';

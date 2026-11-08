@@ -8,10 +8,7 @@
     "composite": false,
     "noEmit": true,
     "resolveJsonModule": true,
-    "verbatimModuleSyntax": true,
-    "paths": {
-      "aitrack-lib/*": ["../../libs/aitrack-lib/src/*.ts"]
-    }
+    "verbatimModuleSyntax": true
   },
   "include": [
     "src/renderer/**/*.ts",

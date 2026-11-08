@@ -1,15 +1,20 @@
-import { isolatedTestEnv } from '@aitrack/test-fixtures/test-env';
+import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
 
-import { aitrackLibAlias } from './vite.alias.js';
+// Tests must never read or write the developer's real data.
+const home = join(tmpdir(), 'opentrack-vitest-home');
+mkdirSync(home, { recursive: true });
 
 export default defineConfig({
   plugins: [svelte()],
-  resolve: { alias: aitrackLibAlias, conditions: ['browser'] },
+  resolve: { conditions: ['browser'] },
   test: {
     include: ['src/**/__tests__/**/*.test.ts'],
-    env: isolatedTestEnv(),
+    env: { HOME: home, USERPROFILE: home },
     testTimeout: 15_000,
     coverage: {
       provider: 'v8',
@@ -17,6 +22,7 @@ export default defineConfig({
       include: ['src/**/*.ts', 'src/**/*.svelte'],
       exclude: [
         'src/**/__tests__/**',
+        'src/test/**',
         // Untested webview glue.
         'src/renderer/main.ts',
         'src/shared/types.ts',

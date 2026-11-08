@@ -1,6 +1,6 @@
-import { QUOTA_PROVIDERS } from 'aitrack-lib/quota/index';
 import { describe, expect, it } from 'vitest';
 
+import { QUOTA_PROVIDERS } from '../core.js';
 import dashboards from '../provider-dashboards.json' with { type: 'json' };
 
 describe('provider dashboards', () => {

@@ -1,9 +1,9 @@
-import { EXTREME_TIME_ZONES, useTimeZone } from '@aitrack/test-fixtures';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { formatWhen, meterTone } from '../../shared/pace.js';
 import type { PeriodUsage, ProviderUsage, QuotaError, QuotaWindow } from '../../shared/types.js';
 import { EMPTY_PERIOD } from '../../shared/types.js';
+import { EXTREME_TIME_ZONES, useTimeZone } from '../../test/timezones.js';
 import {
   buildHistory,
   combinedDaily,

@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { INIT_HINT } from 'aitrack-lib/data/messages';
-  import { errorMessage } from 'aitrack-lib/errors';
+  import { INIT_HINT, errorMessage } from '../shared/core.js';
   import { onMount } from 'svelte';
 
   import type { QuotaProviderKey, SettingErrors, Settings } from '../shared/types.js';
