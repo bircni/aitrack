@@ -12,6 +12,10 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+jiff = { version = "0.2.40", default-features = false, features = ["std", "tz-system", "tz-fat", "tzdb-bundle-platform", "tzdb-zoneinfo", "tzdb-concatenated", "serde"] }
 ryu = "1.0.23"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
+
+[dev-dependencies]
+proptest = "1.12.0"

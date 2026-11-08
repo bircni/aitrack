@@ -41,3 +41,18 @@ for (const [a, b] of [['claude_code', 'codex'], ['foo-bar/x', 'foo_bar/x'], ['fo
   pairs.push([a, b, Math.sign(a.localeCompare(b))]);
 }
 writeFileSync(new URL('collation.json', import.meta.url), rows(pairs));
+
+// `new Date(text)` in each zone: epoch ms and the local calendar day, null when JS rejects the text.
+const { execFileSync } = await import('node:child_process');
+const texts = [
+  '2026-03-08T10:00:00Z', '2026-03-08T10:00:00.123+05:30', '2026-03-08T23:59:59.999-11:00', '2024-12-31T23:59:59.999Z',
+  '2026-03-08T10:00:00.123456789Z', '2026-03-08', '2026-03-08T23:30:00', '2026-03-08T23:30', '2026-03-08 23:30:00',
+  '2026-03-08T02:30:00', '2026-11-01T01:30:00', '2026-02-30', '2026-02-30T10:00:00Z', 'garbage', '',
+];
+const timestamps = [];
+for (const zone of ['Pacific/Kiritimati', 'UTC', 'Pacific/Midway', 'Europe/Berlin', 'America/New_York']) {
+  const script = `const d=(t)=>{const x=new Date(t);if(Number.isNaN(x.getTime()))return[null,null];const p=(n)=>String(n).padStart(2,'0');return[x.getTime(),\`\${x.getFullYear()}-\${p(x.getMonth()+1)}-\${p(x.getDate())}\`]};console.log(JSON.stringify(${JSON.stringify(texts)}.map(d)))`;
+  const results = JSON.parse(execFileSync(process.execPath, ['-e', script], { env: { TZ: zone } }).toString());
+  texts.forEach((text, i) => timestamps.push([text, zone, ...results[i]]));
+}
+writeFileSync(new URL('timestamps.json', import.meta.url), rows(timestamps));
