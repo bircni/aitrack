@@ -90,6 +90,7 @@ fn token_count(value: &Value) -> Option<u64> {
     })
 }
 
+#[expect(clippy::expect_used, reason = "the caller checked these fields first")]
 fn check_token_counts(value: &Value, path: &str) -> Result<TokenCounts, String> {
     let fields = value.as_object().ok_or_else(|| format!("{path} must be an object"))?;
     let mut counts = [None; 6];
@@ -156,6 +157,7 @@ const fn field(counts: &TokenCounts, index: usize) -> Option<u64> {
     ][index]
 }
 
+#[expect(clippy::expect_used, reason = "the caller checked these fields first")]
 fn check_provider_day(
     value: &Map<String, Value>,
     path: &str,

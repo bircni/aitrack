@@ -181,7 +181,12 @@ fn weekday_of(day: Day) -> i64 {
 }
 
 /// The trailing 52 weeks, or one calendar year, as Sunday-first columns.
+///
+/// # Panics
+///
+/// Never: a Day year is always within 0000-9999.
 #[must_use]
+#[expect(clippy::expect_used, reason = "a Day year is always within 0000-9999")]
 pub fn build_date_grid(year: Option<i16>, today: Day) -> Vec<Week> {
     let (first, last) = match year {
         None => (today.shift(-weekday_of(today) - HEATMAP_WEEKS * 7), today),

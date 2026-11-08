@@ -74,6 +74,9 @@ pub fn read_config(path: &Path) -> ConfigLoad {
         .map_or_else(|| ConfigLoad::Invalid { reason: "missing or malformed fields".to_owned() }, ConfigLoad::Ok)
 }
 
+/// # Errors
+///
+/// When the file cannot be read or is not a valid config.
 pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
     match read_config(path) {
         ConfigLoad::Ok(config) => Ok(config),
@@ -95,6 +98,15 @@ pub fn invalid_config_message(path: &Path, reason: &str) -> String {
 
 /// Writes through a symlinked config to its target and keeps its mode: dotfile managers link this
 /// file, and a `repoUrl` can hold a token.
+///
+/// # Errors
+///
+/// When the config cannot be written.
+///
+/// # Panics
+///
+/// Never in practice: a config always serializes.
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 pub fn save_config(path: &Path, config: &Config) -> Result<(), ConfigError> {
     let mut config = config.clone();
     if let Some(id) = &config.machine_id {
@@ -122,6 +134,9 @@ pub fn local_machine_id() -> String {
     }
 }
 
+/// # Errors
+///
+/// When the configured or derived id is not a valid machine id.
 pub fn resolve_machine_id(config: Option<&Config>) -> Result<String, &'static str> {
     let id = config.and_then(|c| c.machine_id.clone()).unwrap_or_else(local_machine_id);
     machine_id::normalize_machine_id(&id).map(str::to_owned)

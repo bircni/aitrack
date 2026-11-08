@@ -9,6 +9,7 @@ use aitrack_core::http::UreqClient;
 use aitrack_core::update::{download_verified, is_newer, latest_release, updater_target, InstallTarget, Release};
 
 use crate::app::{Bus, Msg};
+use aitrack_core::Locked;
 
 const FIRST_CHECK_DELAY: Duration = Duration::from_secs(30);
 const CHECK_INTERVAL: Duration = Duration::from_hours(6);
@@ -25,7 +26,7 @@ impl Updater {
         match newer_release() {
             Ok(newer) => {
                 let version = newer.as_ref().map(|r| r.version.clone());
-                *self.pending.lock().unwrap() = newer;
+                *self.pending.locked() = newer;
                 bus.send(Msg::UpdateFound(version));
             }
             Err(error) if asked => bus.send(Msg::UpdateCheckFailed(error)),
@@ -50,7 +51,7 @@ impl Updater {
 
     /// Downloads, verifies and installs, then restarts into it; the popup hears only of failures.
     pub fn install(&self, bus: Bus) {
-        let Some(release) = self.pending.lock().unwrap().clone() else {
+        let Some(release) = self.pending.locked().clone() else {
             bus.send(Msg::UpdateInstallFailed("No update is available".into()));
             return;
         };

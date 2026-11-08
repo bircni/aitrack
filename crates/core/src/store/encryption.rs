@@ -50,6 +50,7 @@ pub fn is_encrypted_envelope(value: &Value) -> bool {
     value.get("encrypted").and_then(Value::as_str).is_some_and(|format| !format.is_empty())
 }
 
+#[expect(clippy::expect_used, reason = "the scrypt parameters and key length are constants")]
 fn derive_key(passphrase: &str, salt: &[u8]) -> [u8; 32] {
     let params = scrypt::Params::new(15, 8, 1).expect("valid scrypt parameters");
     let mut key = [0u8; 32];
@@ -58,7 +59,12 @@ fn derive_key(passphrase: &str, salt: &[u8]) -> [u8; 32] {
 }
 
 /// The pretty-printed envelope for `plaintext`, with a fresh salt and IV.
+///
+/// # Panics
+///
+/// If the OS random source fails.
 #[must_use]
+#[expect(clippy::expect_used, reason = "the OS random source and AES-GCM do not fail for these sizes")]
 pub fn encrypt_text(plaintext: &str, passphrase: &str) -> String {
     let mut salt = [0u8; SALT_BYTES];
     let mut iv = [0u8; IV_BYTES];
@@ -89,6 +95,10 @@ fn decode(value: Option<&Value>, bytes: Option<usize>) -> Result<Vec<u8>, Decryp
 }
 
 /// The plaintext, or why it cannot be had: an unknown format, a malformed field, or a wrong passphrase or tampering.
+///
+/// # Errors
+///
+/// When the envelope is malformed or the passphrase does not open it.
 pub fn decrypt_envelope(envelope: &Value, passphrase: &str) -> Result<String, DecryptError> {
     let format = envelope.get("encrypted").and_then(Value::as_str).unwrap_or_default();
     if format != FORMAT {

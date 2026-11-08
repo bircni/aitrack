@@ -38,13 +38,22 @@ impl Day {
         self.0.year()
     }
 
+    /// # Panics
+    ///
+    /// If the result leaves the years 0000-9999.
     #[must_use]
+    #[expect(clippy::expect_used, reason = "report windows stay within years 0000-9999")]
     pub fn shift(self, days: i64) -> Self {
         Self(self.0.checked_add(days.days()).expect("day stays within years 0000-9999"))
     }
 
     /// First day of the month `offset` months from this one.
+    ///
+    /// # Panics
+    ///
+    /// If the result leaves the years 0000-9999.
     #[must_use]
+    #[expect(clippy::expect_used, reason = "month arithmetic on a valid date stays in range")]
     pub fn month_start(self, offset: i32) -> Self {
         let months = i32::from(self.0.year()) * 12 + i32::from(self.0.month()) - 1 + offset;
         let year = i16::try_from(months.div_euclid(12)).expect("year in range");
@@ -59,14 +68,24 @@ impl Day {
     }
 
     /// The same day of the month `offset` months away, clamped to that month's length.
+    ///
+    /// # Panics
+    ///
+    /// If the result leaves the years 0000-9999.
     #[must_use]
+    #[expect(clippy::expect_used, reason = "the day is clamped to the month length first")]
     pub fn same_day_months_away(self, offset: i32) -> Self {
         let start = self.month_start(offset).0;
         Self(start.with().day(self.0.day().min(start.days_in_month())).build().expect("clamped day exists"))
     }
 
     /// The same month and day in `year`, so Feb 29 becomes Feb 28 in a common year.
+    ///
+    /// # Panics
+    ///
+    /// Never: the day is clamped to the month first.
     #[must_use]
+    #[expect(clippy::expect_used, reason = "the day is clamped to the month length first")]
     pub fn same_day_in_year(self, year: i16) -> Self {
         let first = Date::new(year, self.0.month(), 1).expect("the first of a month exists");
         Self(first.with().day(self.0.day().min(first.days_in_month())).build().expect("clamped day exists"))

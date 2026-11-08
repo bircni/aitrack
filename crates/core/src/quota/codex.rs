@@ -79,7 +79,6 @@ enum Kind {
     Weekly,
 }
 
-#[expect(clippy::float_cmp, reason = "exact equality is what is meant here")]
 fn exact_kind(window: &Map<String, Value>) -> Option<Kind> {
     match number_value(window.get("limit_window_seconds")) {
         Some(s) if s == SESSION_SECONDS => Some(Kind::Session),
@@ -181,6 +180,9 @@ pub fn map_codex_usage(body: &Map<String, Value>, now: Timestamp) -> QuotaSnapsh
     }
 }
 
+/// # Errors
+///
+/// When there is no usable login or the request fails.
 pub fn fetch_codex_quota(core: &Core, now: Timestamp) -> QuotaResult {
     let credentials = match read_codex_credentials(core) {
         Some(CodexAuth::ApiKeyOnly) => {

@@ -26,6 +26,10 @@ pub struct Carry<'a, T> {
 
 /// Every object line of a JSONL file that `filter` selects, parsed by `parse`, in file order.
 /// A missing file has no lines.
+///
+/// # Errors
+///
+/// When the file cannot be read.
 pub fn for_each_object<T>(
     path: &Path,
     filter: &Filter<'_, T>,

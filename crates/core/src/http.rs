@@ -54,6 +54,9 @@ impl Response {
 pub struct HttpError(pub String);
 
 pub trait HttpClient: Send + Sync {
+    /// # Errors
+    ///
+    /// When the request cannot be sent or no response arrives in time.
     fn send(&self, request: &Request) -> Result<Response, HttpError>;
 }
 

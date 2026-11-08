@@ -44,6 +44,7 @@ pub struct TrayChoice<'a> {
 }
 
 /// The chosen window, falling back to the most used one when the provider has no such window.
+#[expect(clippy::expect_used, reason = "callers pass at least one window")]
 fn pick_window<'a>(windows: &[&'a QuotaWindow], choice: &str) -> &'a QuotaWindow {
     let preferred = if choice == "highest" { None } else { windows.iter().find(|w| w.id == choice) };
     preferred.copied().unwrap_or_else(|| {

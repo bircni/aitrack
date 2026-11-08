@@ -66,6 +66,7 @@ fn compact_rates(
     Value::Object(model)
 }
 
+#[expect(clippy::expect_used, reason = "the rate row was just built as an object")]
 fn litellm_rates(entry: &Map<String, Value>) -> Option<Value> {
     let per_million = |key: &str| amount(entry.get(key)).map(|x| x * 1e6);
     let (input, output) = (amount(entry.get("input_cost_per_token"))?, amount(entry.get("output_cost_per_token"))?);
@@ -164,6 +165,7 @@ fn fetch_json(http: &dyn HttpClient, url: &str) -> Result<Map<String, Value>> {
 }
 
 /// The two catalogs, compact, as the pack publishes them.
+#[expect(clippy::expect_used, reason = "the catalog fetch thread does not panic")]
 pub fn fetch_catalogs(http: &dyn HttpClient, now: Timestamp) -> Result<(Value, Value)> {
     let (litellm, models_dev) = std::thread::scope(|s| {
         let litellm = s.spawn(|| fetch_json(http, LITELLM_URL));
@@ -263,7 +265,7 @@ pub fn apply_catalog_rates(supplement: &mut Value, catalogs: &Catalogs) -> Chang
                 continue;
             }
             let ratio = if input == 0.0 { 1.0 } else { rates.input / input };
-            let row = row.as_object_mut().expect("a rate row");
+            let Some(row) = row.as_object_mut() else { continue };
             let create = if rates.cache_write_explicit { rates.cache_write } else { create * ratio };
             let read = if rates.cache_read_explicit { rates.cache_read } else { read * ratio };
             row.insert("cacheCreatePerMillion".into(), json!(create));
@@ -281,7 +283,7 @@ pub fn apply_catalog_rates(supplement: &mut Value, catalogs: &Catalogs) -> Chang
             {
                 continue;
             }
-            let row = row.as_object_mut().expect("a rate row");
+            let Some(row) = row.as_object_mut() else { continue };
             row.insert("inputPerMillion".into(), json!(rates.input));
             row.insert("outputPerMillion".into(), json!(rates.output));
             changes.codex.push(id.clone());

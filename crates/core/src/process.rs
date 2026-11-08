@@ -23,6 +23,10 @@ pub enum RunError {
 /// Runs a command to completion with its output captured, or kills it (and on Windows its children,
 /// such as git's credential helpers) after `timeout`. The pipes are drained while it runs, so a
 /// large output cannot fill them and stall it.
+///
+/// # Errors
+///
+/// When the command cannot start, times out or exits unsuccessfully.
 pub fn run(
     program: &str,
     args: &[&str],
@@ -69,6 +73,10 @@ pub fn run(
 }
 
 /// Runs a command with the terminal attached, for prompts such as `git clone`'s credentials.
+///
+/// # Errors
+///
+/// When the command cannot start.
 pub fn run_interactive(program: &str, args: &[&str]) -> Result<ExitStatus, RunError> {
     Command::new(program).args(args).status().map_err(RunError::Spawn)
 }

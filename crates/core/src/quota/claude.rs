@@ -173,6 +173,9 @@ pub fn map_claude_usage(
     }
 }
 
+/// # Errors
+///
+/// When there is no usable login or the request fails.
 pub fn fetch_claude_quota(core: &Core, now: Timestamp) -> QuotaResult {
     let credentials = read_claude_credentials(core).ok_or_else(|| {
         QuotaError::new(QuotaErrorKind::NoCredentials, "No Claude Code login found. Run `claude` and sign in.")

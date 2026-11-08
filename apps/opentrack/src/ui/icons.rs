@@ -67,11 +67,7 @@ fn cubic(from: (f32, f32), c1: (f32, f32), c2: (f32, f32), to: (f32, f32), out: 
 }
 
 /// SVG's endpoint arc, flattened.
-#[expect(
-    clippy::many_single_char_names,
-    clippy::too_many_arguments,
-    reason = "geometry reads clearer with x, y, w, h; each argument is a distinct part of the layout"
-)]
+#[expect(clippy::too_many_arguments, reason = "each argument is a distinct part of the arc")]
 fn arc(
     from: (f32, f32),
     rx: f32,
@@ -300,8 +296,7 @@ const MARK_SIZE: usize = 64;
 #[expect(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "a bounded, rounded number converted between float and integer"
+    reason = "a 64-pixel grid converted between float and integer"
 )]
 fn rasterize(lines: &Polylines, view: f32, size: usize) -> Vec<u8> {
     const SAMPLES: usize = 4;

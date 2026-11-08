@@ -55,6 +55,10 @@ fn snapshot(path: &Path, target: &Path) -> Result<(), String> {
 }
 
 /// The login Cursor saved in `state.vscdb`, read from a snapshot when Cursor holds the database locked.
+///
+/// # Errors
+///
+/// With the message to show when the database cannot be read.
 pub fn read_cursor_auth_state(path: &Path) -> Result<CursorAuthState, String> {
     match read_from(path) {
         Ok(state) => Ok(state),

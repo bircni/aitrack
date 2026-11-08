@@ -174,8 +174,7 @@ impl Canvas {
 
 #[expect(
     clippy::cast_precision_loss,
-    clippy::too_many_lines,
-    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used; one layout reads better in one place than split across helpers"
+    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
 )]
 fn draw_section(canvas: &mut Canvas, key: &str, days: &DayMap, weeks: &[Week], base_y: f32, dark: bool, today: Day) {
     let c: Palette = palette(dark);
@@ -248,7 +247,14 @@ pub fn render_to_png(data: &ProviderData, options: &RenderOptions) -> Vec<u8> {
     render_to_png_at(data, options, Clock::system().today())
 }
 
+/// # Panics
+///
+/// Never: the canvas is non-empty and the fonts are embedded.
 #[must_use]
+#[expect(
+    clippy::expect_used,
+    reason = "the canvas size is a fixed non-zero layout and the fonts are embedded; encoding into memory cannot fail"
+)]
 pub fn render_to_png_at(data: &ProviderData, options: &RenderOptions, today: Day) -> Vec<u8> {
     let weeks = build_date_grid(options.year, today);
     let layout = resolve_provider_layout(data, options.all, options.year);

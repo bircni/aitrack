@@ -1,5 +1,10 @@
 /// `String(x)` / `JSON.stringify(x)` for a finite double: shortest round-trip digits, laid out per ECMAScript.
+///
+/// # Panics
+///
+/// Never: a double has at most 17 significant digits.
 #[must_use]
+#[expect(clippy::expect_used, reason = "a double has at most 17 significant digits")]
 pub fn number_to_string(x: f64) -> String {
     debug_assert!(x.is_finite(), "JSON has no representation for {x}");
     if x == 0.0 {
@@ -40,6 +45,7 @@ pub fn number_to_string(x: f64) -> String {
 }
 
 /// The significant digits of `x` and the position of the decimal point relative to them.
+#[expect(clippy::expect_used, reason = "ryu writes a short mantissa and an integer exponent")]
 pub fn shortest_digits(x: f64) -> (String, i32) {
     let mut buffer = ryu::Buffer::new();
     let text = buffer.format_finite(x);

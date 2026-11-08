@@ -1,3 +1,4 @@
+use crate::Locked;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -9,6 +10,11 @@ const BYTES_PER_WORKER: u64 = 24 * 1024 * 1024;
 const MAX_WORKERS: usize = 4;
 
 /// Scans `files` with up to four threads, results in input order.
+///
+/// # Panics
+///
+/// Never: every file is scanned before the threads join.
+#[expect(clippy::expect_used, reason = "every index is scanned before the threads join")]
 pub fn scan_all<T: Send>(
     files: &[PathBuf],
     missed_bytes: u64,
@@ -29,12 +35,17 @@ pub fn scan_all<T: Send>(
                     let index = next.fetch_add(1, Ordering::Relaxed);
                     let Some(file) = files.get(index) else { break };
                     let result = scan(file);
-                    results.lock().expect("not poisoned")[index] = Some(result);
+                    results.locked()[index] = Some(result);
                 }
             });
         }
     });
-    results.into_inner().expect("not poisoned").into_iter().map(|r| r.expect("every file scanned")).collect()
+    results
+        .into_inner()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .into_iter()
+        .map(|r| r.expect("every file scanned"))
+        .collect()
 }
 
 #[cfg(test)]

@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 use super::catalog::{Catalog, ModelRates, find_catalog_rates};
 use super::rates::{CACHE_READ_RATE_MULTIPLIER, FullRates};
 use super::supplement::{ClaudePricing, CodexPricing, Overrides, Supplement, compile_pattern};
+use crate::Locked;
 
 /// First-party rates and overrides, with catalog gap filling for Claude and Codex.
 pub struct ModelPricing {
@@ -104,12 +105,12 @@ impl ModelPricing {
 
     fn catalog_rates(&self, id: &str, provider: &'static str) -> Option<ModelRates> {
         let key = (provider, id.to_owned());
-        if let Some(known) = self.catalog_lookups.lock().expect("not poisoned").get(&key) {
+        if let Some(known) = self.catalog_lookups.locked().get(&key) {
             return *known;
         }
         let found = find_catalog_rates(&self.primary, id, &[provider])
             .or_else(|| find_catalog_rates(&self.secondary, id, &[provider]));
-        self.catalog_lookups.lock().expect("not poisoned").insert(key, found);
+        self.catalog_lookups.locked().insert(key, found);
         found
     }
 
@@ -136,6 +137,7 @@ impl ModelPricing {
 }
 
 /// SHA-256 of the effective rates as canonical JSON: every object's keys sorted.
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 fn fingerprint(supplement: &Supplement, primary: &Catalog, secondary: &Catalog) -> String {
     fn canonical(value: Value) -> Value {
         match value {

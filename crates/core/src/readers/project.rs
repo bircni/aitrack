@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use crate::Locked;
 use crate::data::day_map::Attribution;
 use crate::data::project::{NO_REMOTE_PROJECT, normalize_remote_url};
 use crate::process::run;
@@ -27,11 +28,11 @@ pub struct GitProjectResolver {
 impl ProjectResolver for GitProjectResolver {
     fn resolve(&self, cwd: &str) -> Option<String> {
         let repository = repository_of(cwd).to_owned();
-        if let Some(known) = self.known.lock().expect("not poisoned").get(&repository) {
+        if let Some(known) = self.known.locked().get(&repository) {
             return known.clone();
         }
         let project = origin_url(&repository).and_then(|url| normalize_remote_url(&url));
-        self.known.lock().expect("not poisoned").insert(repository, project.clone());
+        self.known.locked().insert(repository, project.clone());
         project
     }
 
@@ -39,7 +40,7 @@ impl ProjectResolver for GitProjectResolver {
     fn prefetch(&self, cwds: &[&str]) {
         let mut pending: Vec<&str> = Vec::new();
         {
-            let known = self.known.lock().expect("not poisoned");
+            let known = self.known.locked();
             for repository in cwds.iter().map(|cwd| repository_of(cwd)) {
                 if !known.contains_key(repository) && !pending.contains(&repository) {
                     pending.push(repository);
@@ -109,6 +110,10 @@ fn real_path(path: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
 }
 
 /// The project of a directory, or the directory itself when it has no remote.
+///
+/// # Errors
+///
+/// With the message to show when the path is not a directory.
 pub fn resolve_project_selector(path: &std::path::Path) -> Result<crate::data::project_usage::ProjectSelector, String> {
     use crate::data::project_usage::ProjectSelector;
     let dir = super::paths::absolute(path);

@@ -111,7 +111,12 @@ pub const USAGE_PERIODS: [PeriodDefinition; 13] = [
 ];
 
 /// Bounds every day key falls within.
+///
+/// # Panics
+///
+/// Never: both dates are constants within range.
 #[must_use]
+#[expect(clippy::expect_used, reason = "constant dates within 0000-9999")]
 pub fn all_time() -> (Day, Day) {
     (Day::new(0, 1, 1).expect("valid"), Day::new(9999, 12, 31).expect("valid"))
 }
@@ -139,7 +144,11 @@ impl UsagePeriod {
         USAGE_PERIODS.iter().find(|d| d.key == key).map(|d| d.period)
     }
 
+    /// # Panics
+    ///
+    /// Never: every period is registered.
     #[must_use]
+    #[expect(clippy::expect_used, reason = "every period has an entry in USAGE_PERIODS")]
     pub fn key(self) -> &'static str {
         USAGE_PERIODS.iter().find(|d| d.period == self).expect("every period is registered").key
     }
@@ -151,6 +160,10 @@ impl UsagePeriod {
     }
 
     /// The extra CLI arguments of `date`, `range` and `last`; the others accept none.
+    ///
+    /// # Errors
+    ///
+    /// With the message to show when the arguments do not fit the period.
     pub fn parse_args(self, args: &[String]) -> Result<PeriodArgs, String> {
         let day = |value: &str| Day::parse(value).ok_or_else(|| invalid_date_message(value));
         match self {
@@ -187,6 +200,15 @@ impl UsagePeriod {
     }
 
     /// The window `today` puts this period in; `now_label` is what `today`'s label shows.
+    ///
+    /// # Errors
+    ///
+    /// With the message to show when the arguments describe no valid window.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: years stay within 0000-9999.
+    #[expect(clippy::expect_used, reason = "a Day year is always within 0000-9999")]
     pub fn window(self, today: Day, now_label: &str, args: PeriodArgs) -> Result<UsageWindow, String> {
         let span = |start: Day, end: Day, label: String| Ok(UsageWindow { start, end, label });
         match self {
@@ -237,6 +259,15 @@ impl UsagePeriod {
     }
 
     /// The comparable window just before `current`.
+    ///
+    /// # Errors
+    ///
+    /// With the message to show when the window has no previous one.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: years stay within 0000-9999.
+    #[expect(clippy::expect_used, reason = "a Day year is always within 0000-9999")]
     pub fn previous(self, today: Day, current: &UsageWindow) -> Result<UsageWindow, String> {
         let span = |start: Day, end: Day, label: String| Ok(UsageWindow { start, end, label });
         match self {

@@ -30,10 +30,17 @@ pub fn machine_id_validation_error(value: &str) -> Option<&'static str> {
 }
 
 /// The trimmed id, or the reason it cannot name a machine file.
+///
+/// # Errors
+///
+/// With the message to show when the id is empty or unsafe as a file name.
 pub fn normalize_machine_id(value: &str) -> Result<&str, &'static str> {
     machine_id_validation_error(value).map_or_else(|| Ok(js::trim(value)), Err)
 }
 
+/// # Errors
+///
+/// With the message to show when the id is empty or unsafe as a file name.
 pub fn machine_data_filename(machine_id: &str) -> Result<String, &'static str> {
     normalize_machine_id(machine_id).map(|id| format!("{id}.json"))
 }

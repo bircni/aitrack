@@ -73,6 +73,7 @@ fn staged_local_machine(core: &Core, machine_id: &str) -> Result<MachineFile, Fa
     Ok(local)
 }
 
+#[expect(clippy::expect_used, reason = "parse_year only accepts years up to 9999")]
 pub fn run(core: &Core, args: &ShowArgs) -> Outcome {
     warn_stdout_path(core, args.output.as_deref());
     if args.tui && args.output.is_some() {

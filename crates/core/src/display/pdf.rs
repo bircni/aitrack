@@ -377,6 +377,7 @@ impl Layout {
         }
     }
 
+    #[expect(clippy::expect_used, reason = "a hyphen is only placed after at least one character")]
     fn on_word(&mut self, wrap: &mut Wrap, word: &[u16], w: f64, required: bool, last: Option<bool>) -> bool {
         if last.is_none_or(|r| r) {
             wrap.space_left = wrap.line_width;

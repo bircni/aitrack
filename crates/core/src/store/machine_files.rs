@@ -25,6 +25,9 @@ pub enum MachineFileError {
     Io(#[from] std::io::Error),
 }
 
+/// # Errors
+///
+/// When the machine id is not a valid file name.
 pub fn machine_file_path(dir: &Path, machine_id: &str) -> Result<PathBuf, MachineFileError> {
     Ok(dir.join(machine_data_filename(machine_id).map_err(MachineFileError::Name)?))
 }
@@ -56,7 +59,12 @@ pub fn read_data_file(core: &Core, path: &Path, options: ValidationOptions) -> O
 }
 
 /// The bytes every writer produces, so round trips stay stable.
+///
+/// # Panics
+///
+/// Never in practice: a machine file always serializes.
 #[must_use]
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 pub fn serialize_machine_file(machine: &MachineFile, passphrase: Option<&str>) -> String {
     let json = js::to_string_pretty(machine).expect("a machine file serializes");
     match passphrase {
@@ -66,6 +74,15 @@ pub fn serialize_machine_file(machine: &MachineFile, passphrase: Option<&str>) -
 }
 
 /// Atomic, and refused when the result would not validate; replaces a symlink rather than writing through it.
+///
+/// # Errors
+///
+/// When the file fails validation or cannot be written.
+///
+/// # Panics
+///
+/// Never in practice: a machine file always serializes.
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON and parse back")]
 pub fn write_machine_file(
     core: &Core,
     path: &Path,
@@ -97,6 +114,10 @@ pub fn write_machine_file(
 }
 
 /// Staging serves a report that must still render, so a bad file only warns.
+///
+/// # Errors
+///
+/// When the file fails validation or cannot be written.
 pub fn write_pending_machine_file(core: &Core, machine: &MachineFile) -> Result<(), MachineFileError> {
     let path = machine_file_path(&core.paths.pending_data, &machine.hostname)?;
     match write_machine_file(core, &path, machine, is_encryption_enabled(core), ValidationOptions::default()) {
@@ -130,6 +151,15 @@ pub fn list_pending_data_files(core: &Core) -> Vec<PathBuf> {
 }
 
 /// Moves staged files into the repo, keeping any the repo already has a synced copy of.
+///
+/// # Errors
+///
+/// When a pending file cannot be moved into the data repo.
+///
+/// # Panics
+///
+/// Never: listed files always have a name.
+#[expect(clippy::expect_used, reason = "listed machine files always have a file name")]
 pub fn adopt_pending_data_files(core: &Core, target: &Path) -> Result<usize, MachineFileError> {
     let pending = list_pending_data_files(core);
     if pending.is_empty() {
@@ -173,6 +203,9 @@ pub fn adopt_pending_data_files(core: &Core, target: &Path) -> Result<usize, Mac
     Ok(copies.len())
 }
 
+/// # Errors
+///
+/// When the file cannot be removed.
 pub fn remove_pending_machine_file(core: &Core, machine_id: &str) -> Result<(), MachineFileError> {
     let path = machine_file_path(&core.paths.pending_data, machine_id)?;
     if path.exists() {

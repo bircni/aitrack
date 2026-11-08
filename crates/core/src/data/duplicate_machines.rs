@@ -16,7 +16,12 @@ pub struct DuplicateMachineDays {
 }
 
 /// One machine synced under two ids leaves identical days; distinct machines never match exactly.
+///
+/// # Panics
+///
+/// Never in practice: a day always serializes.
 #[must_use]
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 pub fn find_duplicate_machine_days(machines: &[MachineFile]) -> DuplicateMachineDays {
     let mut by_day: IndexMap<Day, IndexMap<String, Vec<&str>>> = IndexMap::new();
     for machine in machines {

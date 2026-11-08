@@ -12,6 +12,7 @@ use crate::app::{Bus, Msg};
 use crate::background::latest_worker;
 
 /// Same JSON the 4.x renderer shipped.
+#[expect(clippy::expect_used, reason = "the bundled dashboard list is fixed at build time and tested")]
 static DASHBOARDS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../provider-dashboards.json")).expect("provider-dashboards.json")
 });

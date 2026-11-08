@@ -51,6 +51,10 @@ pub const WINDOWS_TARGET: &str = "windows-x86_64";
 pub const LINUX_TARGET: &str = "linux-x86_64";
 
 /// The manifest's platform key for this machine; only those the release workflow builds.
+///
+/// # Errors
+///
+/// With the message to show on a platform without updates.
 pub fn updater_target() -> Result<&'static str, String> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => Ok(MAC_TARGET),
@@ -100,6 +104,10 @@ impl InstallTarget {
 
     /// The copy running as `exe`, or why it cannot replace itself. `app_image` is `$APPIMAGE`, set
     /// only when Linux runs an `AppImage`; a `.deb` install is left to the package manager.
+    ///
+    /// # Errors
+    ///
+    /// With the message to show when this install cannot update itself.
     pub fn running(exe: &Path, app_image: Option<PathBuf>) -> Result<Self, String> {
         if cfg!(windows) {
             Ok(Self::WindowsInstaller)
@@ -123,6 +131,10 @@ impl InstallTarget {
 
     /// Puts a verified build in place and waits for it; the installed path, which Windows' installer
     /// does not report.
+    ///
+    /// # Errors
+    ///
+    /// With the message to show when the files cannot be installed.
     pub fn install(&self, file: &[u8]) -> Result<Option<PathBuf>, String> {
         match self {
             Self::MacBundle(path) => install_mac_app(file, path).map(Some),
@@ -133,6 +145,10 @@ impl InstallTarget {
 
     /// Replaces the running copy: the command that starts the new one, or `None` when Windows'
     /// installer closes this process and restarts it itself.
+    ///
+    /// # Errors
+    ///
+    /// With the message to show when the installer cannot be staged.
     pub fn replace_running(&self, file: &[u8]) -> Result<Option<Command>, String> {
         match self {
             Self::MacBundle(path) => {
@@ -155,6 +171,9 @@ fn app_bundle(exe: &Path) -> Option<PathBuf> {
     exe.ancestors().find(|p| p.extension().is_some_and(|e| e == "app")).map(Path::to_path_buf)
 }
 
+/// # Errors
+///
+/// With the message to show when the manifest is malformed or has no build for `target`.
 pub fn parse_manifest(body: &[u8], target: &str) -> Result<Release, String> {
     let mut manifest: Manifest =
         serde_json::from_slice(body).map_err(|e| format!("The latest opentrack release has a bad manifest: {e}"))?;
@@ -169,6 +188,9 @@ pub fn parse_manifest(body: &[u8], target: &str) -> Result<Release, String> {
     })
 }
 
+/// # Errors
+///
+/// With the message to show when the manifest cannot be fetched or read.
 pub fn latest_release(http: &dyn HttpClient, target: &str) -> Result<Release, String> {
     let response = http.send(&Request::get(MANIFEST_URL, MANIFEST_TIMEOUT)).map_err(|e| e.to_string())?;
     if !response.is_ok() {
@@ -178,6 +200,10 @@ pub fn latest_release(http: &dyn HttpClient, target: &str) -> Result<Release, St
 }
 
 /// The release, downloaded and checked against [`PUBLIC_KEY`].
+///
+/// # Errors
+///
+/// With the message to show when the download fails or its signature does not verify.
 pub fn download_verified(http: &dyn HttpClient, release: &Release) -> Result<Vec<u8>, String> {
     let response = http.send(&Request::get(&release.url, DOWNLOAD_TIMEOUT)).map_err(|e| e.to_string())?;
     if !response.is_ok() {

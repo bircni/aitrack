@@ -2,6 +2,10 @@ use std::io;
 use std::path::Path;
 
 /// Write then rename, so a concurrent reader never sees a half-written file. `mode` applies on Unix only.
+///
+/// # Errors
+///
+/// When the temporary file cannot be written or renamed into place.
 pub fn write_file_atomic(path: &Path, contents: impl AsRef<[u8]>, mode: Option<u32>) -> io::Result<()> {
     let mut temporary = path.as_os_str().to_owned();
     temporary.push(format!(".{}.tmp", std::process::id()));

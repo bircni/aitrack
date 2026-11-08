@@ -427,6 +427,10 @@ fn compare_reports(current: &UsageReport, previous: &UsageReport) -> UsageCompar
 }
 
 /// One window's report from data already loaded, so several windows share one read.
+///
+/// # Errors
+///
+/// When the usage cannot be loaded.
 pub fn build_usage_report(
     context: &ReportContext<'_>,
     loaded: &ZonedUsageData,
@@ -437,6 +441,10 @@ pub fn build_usage_report(
 }
 
 /// Per-project usage for the same windows, and so the same numbers, as the reports.
+///
+/// # Errors
+///
+/// When the usage cannot be loaded.
 pub fn build_project_breakdown(
     context: &ReportContext<'_>,
     loaded: &ZonedUsageData,
@@ -446,6 +454,9 @@ pub fn build_project_breakdown(
     Ok(aggregate_projects(&data, &filter_of(&window)))
 }
 
+/// # Errors
+///
+/// When the usage cannot be loaded.
 pub fn build_usage_comparison(
     context: &ReportContext<'_>,
     loaded: &ZonedUsageData,

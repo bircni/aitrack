@@ -16,6 +16,7 @@ pub fn locale_compare(a: &str, b: &str) -> Ordering {
     primary(&a).cmp(&primary(&b)).then_with(|| tertiary(&a).cmp(&tertiary(&b)))
 }
 
+#[expect(clippy::expect_used, reason = "ORDER is a short constant string")]
 fn weights(s: &str) -> Vec<(u32, u8)> {
     s.chars()
         .filter_map(|c| {
@@ -35,6 +36,7 @@ fn weights(s: &str) -> Vec<(u32, u8)> {
         .collect()
 }
 
+#[expect(clippy::expect_used, reason = "ORDER is a short constant string that lists the letters")]
 fn letter_start() -> u32 {
     u32::try_from(ORDER.find('a').expect("ORDER lists letters")).expect("ORDER is short")
 }

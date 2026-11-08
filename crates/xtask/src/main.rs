@@ -24,6 +24,7 @@ use crate::pricing::{
     CURSOR_PROVIDERS, Catalogs, Finding, Result, Tables, apply_catalog_rates, compare_table, fetch_catalogs, summary,
 };
 
+#[expect(clippy::expect_used, reason = "xtask sits two levels below the workspace root")]
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(2).expect("crates/xtask sits two levels down").to_owned()
 }
@@ -52,6 +53,7 @@ fn cmd(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<String> {
 }
 
 /// JSON as the repo's files keep it: two-space indents, a final newline.
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 fn pretty(value: &Value) -> String {
     format!("{}\n", to_string_pretty(value).expect("JSON values serialize"))
 }

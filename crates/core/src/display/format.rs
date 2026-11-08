@@ -4,7 +4,12 @@ use crate::js::number::shortest_digits;
 use crate::js::number_to_string;
 
 /// `x.toFixed(digits)`: rounded from the exact binary value, an exact tie going away from zero.
+///
+/// # Panics
+///
+/// Never: a fixed-point number with digits always has a decimal point.
 #[must_use]
+#[expect(clippy::expect_used, reason = "to_fixed with digits > 0 always writes a decimal point")]
 pub fn to_fixed(x: f64, digits: usize) -> String {
     if !x.is_finite() || x.abs() >= 1e21 {
         return number_to_string(x);
@@ -21,7 +26,12 @@ pub fn to_fixed(x: f64, digits: usize) -> String {
 
 /// `x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })`: ICU rounds
 /// the shortest decimal rather than the binary value, half away from zero, and groups thousands.
+///
+/// # Panics
+///
+/// Never: two-decimal output always has a decimal point.
 #[must_use]
+#[expect(clippy::expect_used, reason = "two-decimal formatting always writes a decimal point")]
 pub fn en_us_2dp(x: f64) -> String {
     if x == 0.0 {
         return "0.00".to_owned();
@@ -57,6 +67,7 @@ fn increment(digits: &mut Vec<u8>) {
     digits.insert(0, b'1');
 }
 
+#[expect(clippy::expect_used, reason = "the buffer only ever holds ASCII digits and commas")]
 fn with_point(sign: &str, digits: &[u8], decimals: usize) -> String {
     let text = std::str::from_utf8(digits).expect("ASCII digits");
     let padded = if text.len() <= decimals {

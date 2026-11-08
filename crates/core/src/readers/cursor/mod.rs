@@ -14,6 +14,7 @@ use self::auth_state::read_cursor_auth_state;
 use self::jwt::{cursor_account_id, jwt_subject};
 use self::location::cursor_state_database_path;
 use crate::Core;
+use crate::Locked;
 use crate::data::types::DayMap;
 use crate::fs::write_file_atomic;
 use crate::http::Request;
@@ -186,6 +187,10 @@ fn fetch_attempts(token: &str, prefer: Option<&str>) -> Vec<(String, Vec<(String
 }
 
 /// Retries authentication failures with the next shape; any other failure stops with a typed error.
+///
+/// # Errors
+///
+/// When there is no usable login or the export cannot be fetched.
 pub fn fetch_cursor_usage_csv(core: &Core, token: &str, prefer: Option<&str>) -> Result<(String, String), FetchError> {
     let base = web_base_url(core).map_err(FetchError::Other)?;
     let url = format!("{base}/api/dashboard/export-usage-events-csv?strategy=tokens");
@@ -247,7 +252,7 @@ pub fn read_cursor_data(core: &Core, max_age_seconds: Option<f64>) -> DayMap {
     let rules = format!("{}\0{}", rates.fingerprint(), core.clock.zone_name());
     let from_cache = |entry: Option<&CacheEntry>| -> DayMap {
         let Some(entry) = entry else { return DayMap::new() };
-        let mut cursor = core.cursor.lock().expect("not poisoned");
+        let mut cursor = core.cursor.locked();
         if let Some((csv, known_rules, days)) = &cursor.last_aggregate
             && *csv == entry.csv
             && *known_rules == rules
@@ -261,7 +266,7 @@ pub fn read_cursor_data(core: &Core, max_age_seconds: Option<f64>) -> DayMap {
     let retry_key = format!("{}:{account}", database.display());
     let forced = max_age_seconds.is_none_or(|age| age <= 0.0);
     let now_ms = core.clock.now().as_millisecond();
-    let retry = core.cursor.lock().expect("not poisoned").retry.clone();
+    let retry = core.cursor.locked().retry.clone();
     // A forced refresh skips the local backoff floor but still honours a server Retry-After.
     if let Some(retry) = retry.filter(|r| r.key == retry_key)
         && now_ms < if forced { retry.server_until_ms } else { retry.until_ms }
@@ -284,7 +289,7 @@ pub fn read_cursor_data(core: &Core, max_age_seconds: Option<f64>) -> DayMap {
     let (text, shape) =
         match fetch_cursor_usage_csv(core, &token, cached.as_ref().and_then(|c| c.working_auth_shape.as_deref())) {
             Ok(fetched) => {
-                core.cursor.lock().expect("not poisoned").retry = None;
+                core.cursor.locked().retry = None;
                 fetched
             }
             Err(error) => {
@@ -293,7 +298,7 @@ pub fn read_cursor_data(core: &Core, max_age_seconds: Option<f64>) -> DayMap {
                     FetchError::Other(_) => 0,
                 };
                 let server_until_ms = now_ms + i64::try_from(server_seconds).unwrap_or(i64::MAX / 2_000) * 1000;
-                core.cursor.lock().expect("not poisoned").retry =
+                core.cursor.locked().retry =
                     Some(Retry { key: retry_key, until_ms: (now_ms + 60_000).max(server_until_ms), server_until_ms });
                 core.output.warn(&match &cached {
                     Some(entry) => format!(

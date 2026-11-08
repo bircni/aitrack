@@ -31,6 +31,7 @@ pub fn set_workspace_version(cargo_toml: &str, version: &str) -> Result<String> 
 }
 
 /// npm's `semver.inc`, which `bun pm version` used before.
+#[expect(clippy::expect_used, reason = "the part was just checked to be numeric")]
 pub fn bump(current: &str, bump: &str) -> Result<String> {
     if bump == "none" {
         return Ok(current.to_owned());

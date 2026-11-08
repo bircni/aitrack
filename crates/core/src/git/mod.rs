@@ -105,6 +105,10 @@ impl Git {
     }
 
     /// `git <args>` in the repo; stdout trimmed. A timed call fails at a credential prompt instead of waiting.
+    ///
+    /// # Errors
+    ///
+    /// When the command cannot start, times out or exits unsuccessfully.
     pub fn run(&self, args: &[&str]) -> Result<String, GitError> {
         let mut env = self.env.clone();
         if self.timeout.is_some() {
@@ -174,6 +178,10 @@ impl Git {
     }
 
     /// Whether this machine's file is modified, renamed or untracked.
+    ///
+    /// # Errors
+    ///
+    /// When git fails.
     pub fn has_machine_data_changes(&self, machine_id: &str) -> Result<bool, GitError> {
         let name = machine_data_filename(machine_id).map_err(|e| GitError::Other(e.to_owned()))?;
         let status = self.untimed().run(&["status", "--porcelain", "--", &format!(":(literal)data/{name}")])?;
@@ -239,6 +247,10 @@ fn resolve_rebase_stops(core: &Core, git: &Git, first_stop: GitError) -> Result<
 }
 
 /// Replays local commits on the remote. On failure the branch is as it was, never mid-rebase.
+///
+/// # Errors
+///
+/// When git fails or the rebase conflicts.
 pub fn rebase_onto_remote(core: &Core, guard: &RepoGuard<'_>, git: &Git, remote: &[&str]) -> Result<(), GitError> {
     let _ = guard;
     let mut args = vec!["pull", "--rebase", "--quiet"];
@@ -256,6 +268,9 @@ pub fn rebase_onto_remote(core: &Core, guard: &RepoGuard<'_>, git: &Git, remote:
     })
 }
 
+/// # Errors
+///
+/// When the push still fails after retrying.
 pub fn push_with_retry(core: &Core, guard: &RepoGuard<'_>, git: &Git) -> Result<(), GitError> {
     let upstream = git.has_upstream();
     let branch = if upstream { None } else { Some(git.untimed().run(&["branch", "--show-current"])?) };
@@ -277,6 +292,10 @@ pub fn push_with_retry(core: &Core, guard: &RepoGuard<'_>, git: &Git) -> Result<
 }
 
 /// Commits what is staged under `data/` and pushes it; `false` when nothing was staged.
+///
+/// # Errors
+///
+/// When git fails.
 pub fn commit_staged_data(core: &Core, guard: &RepoGuard<'_>, git: &Git, message: &str) -> Result<bool, GitError> {
     if git.untimed().run(&["diff", "--cached", "--name-only", "--", "data/"])?.is_empty() {
         return Ok(false);
@@ -287,6 +306,10 @@ pub fn commit_staged_data(core: &Core, guard: &RepoGuard<'_>, git: &Git, message
 }
 
 /// Pushes commits already made locally; `false` when there are none.
+///
+/// # Errors
+///
+/// When git fails.
 pub fn push_pending_commits(core: &Core, guard: &RepoGuard<'_>, git: &Git) -> Result<bool, GitError> {
     if !git.has_unpushed_commits() {
         return Ok(false);
@@ -295,6 +318,9 @@ pub fn push_pending_commits(core: &Core, guard: &RepoGuard<'_>, git: &Git) -> Re
     Ok(true)
 }
 
+/// # Errors
+///
+/// When the fetch or rebase fails.
 pub fn pull(core: &Core, guard: &RepoGuard<'_>, git: &Git) -> Result<(), GitError> {
     git.abort_rebase_if_in_progress(); // A dead process's rebase would fail everything below, on every run.
     let Err(error) = git.run(&["pull", "--ff-only", "--quiet"]) else { return Ok(()) };
@@ -322,6 +348,10 @@ fn error_clone(error: &GitError) -> GitError {
 }
 
 /// Stages exactly `paths` (or all of `data/`), so a dirty or leftover file beside them stays out.
+///
+/// # Errors
+///
+/// When git fails.
 pub fn commit_data_changes(
     core: &Core,
     guard: &RepoGuard<'_>,
@@ -338,6 +368,10 @@ pub fn commit_data_changes(
 }
 
 /// Stages and pushes this machine's file as a sync commit.
+///
+/// # Errors
+///
+/// When git fails.
 pub fn commit_and_push(core: &Core, guard: &RepoGuard<'_>, git: &Git, hostname: &str) -> Result<bool, GitError> {
     let machine_id = normalize_machine_id(hostname).map_err(|e| GitError::Other(e.to_owned()))?;
     let name = machine_data_filename(machine_id).map_err(|e| GitError::Other(e.to_owned()))?;
@@ -351,6 +385,10 @@ pub fn is_cloned(core: &Core) -> bool {
 }
 
 /// `git clone` with the terminal attached, so credentials can be asked for.
+///
+/// # Errors
+///
+/// When the clone fails.
 pub fn clone_repo(url: &str, target: &Path) -> Result<(), GitError> {
     let status = run_interactive("git", &["clone", "--", url, &target.to_string_lossy()])
         .map_err(|e| GitError::Other(e.to_string()))?;
@@ -364,6 +402,9 @@ pub fn clone_repo(url: &str, target: &Path) -> Result<(), GitError> {
     }
 }
 
+/// # Errors
+///
+/// When the clone cannot be removed.
 pub fn remove_local_clone(core: &Core) -> std::io::Result<()> {
     if core.paths.repo.exists() {
         std::fs::remove_dir_all(&core.paths.repo)?;
@@ -372,6 +413,10 @@ pub fn remove_local_clone(core: &Core) -> std::io::Result<()> {
 }
 
 /// Swaps in a clone of `url` only once it succeeded: the old clone may hold the only copy of unpushed commits.
+///
+/// # Errors
+///
+/// When the old clone cannot be removed or the new one cannot be cloned.
 pub fn replace_local_clone(core: &Core, url: &str) -> Result<(), GitError> {
     let mut incoming = core.paths.repo.clone().into_os_string();
     incoming.push(".incoming");

@@ -46,6 +46,18 @@ pub fn hex(bytes: &[u8]) -> String {
     })
 }
 
+/// Locking that survives a panic elsewhere: every update behind these locks is a single assignment or
+/// insert, so the data stays consistent and a poisoned lock is still usable.
+pub trait Locked<T: ?Sized> {
+    fn locked(&self) -> std::sync::MutexGuard<'_, T>;
+}
+
+impl<T: ?Sized> Locked<T> for Mutex<T> {
+    fn locked(&self) -> std::sync::MutexGuard<'_, T> {
+        self.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
 /// Keys the parse caches, so one written by another version is discarded.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -102,7 +114,7 @@ impl Core {
     pub fn report_diagnostics(&self, diagnostics: &[Diagnostic]) {
         for diagnostic in diagnostics {
             if !matches!(diagnostic, Diagnostic::FileSkipped { .. })
-                && !self.warned_files.lock().expect("not poisoned").insert(diagnostic.file().to_owned())
+                && !self.warned_files.locked().insert(diagnostic.file().to_owned())
             {
                 continue;
             }

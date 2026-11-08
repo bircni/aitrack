@@ -23,6 +23,7 @@ use crate::settings::{load_settings, read_json_file, write_settings, Settings};
 use crate::state::AppState;
 use crate::tray_icon::{render_tray_icon, summarize_tray, TrayAppearance, TrayChoice, TraySummary};
 use crate::usage::{load_usage_summary, UsageLoadOptions, UsageLoadResult, GIT_TIMEOUT};
+use aitrack_core::Locked;
 
 const TICK: Duration = Duration::from_secs(60);
 const TRAY_ICON_SIZE: u32 = 32;
@@ -93,7 +94,7 @@ impl LiveDeps {
     }
 
     fn update_tray(&self, state: &AppState) {
-        let settings = self.settings.lock().unwrap().clone();
+        let settings = self.settings.locked().clone();
         let choice = TrayChoice {
             provider: &settings.tray_provider,
             window: &settings.tray_window,
@@ -103,7 +104,7 @@ impl LiveDeps {
         // A repeated state can still mean a new tray setting or a passed reset.
         let key = Some((summary.clone(), settings.tray_style.clone(), settings.tray_colored));
         {
-            let mut last = self.last_tray.lock().unwrap();
+            let mut last = self.last_tray.locked();
             if *last == key {
                 return;
             }
@@ -213,7 +214,7 @@ impl Background {
     fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<Settings, String> {
         let settings = settings.normalized();
         write_settings(&self.settings_path, &settings).map_err(|error| error.to_string())?;
-        settings.clone_into(&mut self.deps().settings.lock().unwrap());
+        settings.clone_into(&mut self.deps().settings.locked());
         self.service.set_settings(settings.clone());
         self.refresh_in_background(false);
         Ok(settings)
@@ -252,6 +253,7 @@ struct SmokeTest {
 }
 
 /// The settings and state a packaged build starts with, for the installer smoke test.
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 pub fn smoke_test_line(background: &Background) -> String {
     let answer = SmokeTest { settings: background.service.settings(), state: background.service.state() };
     aitrack_core::js::to_string(&answer).expect("serializes")

@@ -12,6 +12,10 @@ pub fn split_configured_paths(value: Option<&str>) -> Vec<String> {
 }
 
 /// Every `.jsonl` file under `dir`, depth first, in the order Node lists entries. Symlinks are not followed.
+///
+/// # Errors
+///
+/// When a directory cannot be listed.
 pub fn list_jsonl_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
     let mut entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries.collect::<io::Result<Vec<_>>>()?,
@@ -46,6 +50,10 @@ pub fn entry_order(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> std::cmp::Orderi
 /// Every `.jsonl` file under `roots`, de-duplicated by real location: overlapping roots would double tokens.
 ///
 /// The listed path is kept, since macOS resolves `/var` to `/private/var` and cache keys would change.
+///
+/// # Errors
+///
+/// When a directory cannot be listed.
 pub fn list_unique_source_files(roots: &[PathBuf]) -> io::Result<Vec<PathBuf>> {
     let mut seen = HashSet::new();
     let mut files = Vec::new();

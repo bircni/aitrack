@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 use super::catalog::{Catalog, parse_compact_catalog};
 use super::model_pricing::ModelPricing;
 use super::supplement::{Override, Overrides, Supplement, bundled_supplement, parse_supplement};
+use crate::Locked;
 use crate::env::Env;
 use crate::fs::write_file_atomic;
 use crate::http::{HttpClient, Request};
@@ -96,6 +97,7 @@ fn instant(text: Option<&str>) -> Option<Timestamp> {
     Clock::system().parse_timestamp(text?)
 }
 
+#[expect(clippy::expect_used, reason = "the retry and refresh intervals are small constants")]
 fn is_stale(state: Option<&SourceState>, now: Timestamp) -> bool {
     let since = |at: Option<Timestamp>| at.map(|at| now.duration_since(at));
     if let Some(failed) = since(instant(state.and_then(|s| s.failed_at.as_deref())))
@@ -243,7 +245,7 @@ impl PricingStore {
     }
 
     pub fn current(&self) -> Arc<ModelPricing> {
-        self.snapshot.read().expect("not poisoned").clone()
+        self.snapshot.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
     }
 
     fn result(&self, updated: bool, reason: impl Into<String>, failed: bool) -> RefreshResult {
@@ -252,7 +254,7 @@ impl PricingStore {
             reason: reason.into(),
             updated_at: self.current().updated_at().to_owned(),
             failed,
-            unverified: self.pack.lock().expect("not poisoned").unverified,
+            unverified: self.pack.locked().unverified,
         }
     }
 
@@ -262,7 +264,7 @@ impl PricingStore {
             return self.result(false, "disabled by AITRACK_NO_PRICING_REFRESH=1", false);
         }
         let due = {
-            let pack = self.pack.lock().expect("not poisoned");
+            let pack = self.pack.locked();
             SOURCES.iter().any(|key| is_stale(pack.sources.sources.get(*key), now))
         };
         if !force && !due {
@@ -276,7 +278,7 @@ impl PricingStore {
                 false,
             ),
             Err(error) => {
-                let mut pack = self.pack.lock().expect("not poisoned");
+                let mut pack = self.pack.locked();
                 for key in SOURCES {
                     pack.sources.sources.entry(key.to_owned()).or_default().failed_at = Some(now_iso.clone());
                 }
@@ -289,13 +291,14 @@ impl PricingStore {
         }
     }
 
+    #[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
     fn refresh(&self, http: &dyn HttpClient, env: &Env, now_iso: &str) -> Result<bool, String> {
         let base = env.var("AITRACK_PRICING_URL").map_or_else(
             || "https://raw.githubusercontent.com/bircni/aitrack/pricing".to_owned(),
             |url| url.trim_end_matches('/').to_owned(),
         );
         let (etags, cached) = {
-            let pack = self.pack.lock().expect("not poisoned");
+            let pack = self.pack.locked();
             let etags: IndexMap<String, Option<String>> = SOURCES
                 .iter()
                 .map(|k| ((*k).to_owned(), pack.sources.sources.get(*k).and_then(|s| s.etag.clone())))
@@ -377,9 +380,9 @@ impl PricingStore {
         write_file_atomic(&self.dir.join("state.json"), serde_json::to_string(&next_state).expect("state"), None)
             .map_err(|e| e.to_string())?;
         let updated = next.updated_at() != self.current().updated_at() || files[..3].iter().any(|f| f.changed);
-        *self.pack.lock().expect("not poisoned") =
+        *self.pack.locked() =
             PackState { sources: next_state, files: Some(pack), unverified: manifest.hashes.is_none() };
-        *self.snapshot.write().expect("not poisoned") = Arc::new(next);
+        *self.snapshot.write().unwrap_or_else(std::sync::PoisonError::into_inner) = Arc::new(next);
         Ok(updated)
     }
 }

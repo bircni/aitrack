@@ -33,6 +33,7 @@ pub struct RecomputeResult {
 }
 
 /// Without costs: per-entry and summed costs differ in the last bits, which is not a change.
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 fn tokens_json(days: &MachineDays) -> String {
     fn strip(value: &mut Value) {
         match value {
@@ -150,6 +151,10 @@ fn report_legacy_skipped(core: &Core, skipped: usize, state: &str) {
 }
 
 /// Re-reads this machine's logs, reprices every synced machine file, and pushes what changed.
+///
+/// # Errors
+///
+/// When the data repo cannot be read, written or pushed.
 pub fn recompute_costs(core: &Core, options: RecomputeOptions) -> Result<RecomputeResult> {
     run_data_pipeline(core, true, None, |guard, git, run| {
         let files = list_data_files(core);

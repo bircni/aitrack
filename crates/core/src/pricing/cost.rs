@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use super::model_pricing::ModelPricing;
 use super::rates::{CACHE_READ_RATE_MULTIPLIER, FullRates, TokenBuckets, cost_from_rates, scale_rates, token_buckets};
 use super::supplement::{ClaudePricing, CodexPricing};
+use crate::Locked;
 use crate::data::model_id::{
     CLAUDE_FAMILIES, canonical_model_id, canonicalize_claude_model_id, strip_claude_tier_suffix,
 };
@@ -18,12 +19,12 @@ pub struct FallbackCollector(Mutex<BTreeSet<String>>);
 
 impl FallbackCollector {
     pub fn record(&self, model: &str) {
-        self.0.lock().expect("not poisoned").insert(model.to_owned());
+        self.0.locked().insert(model.to_owned());
     }
 
     /// The recorded ids in `localeCompare` order, clearing them.
     pub fn drain(&self) -> Vec<String> {
-        let mut ids: Vec<String> = std::mem::take(&mut *self.0.lock().expect("not poisoned")).into_iter().collect();
+        let mut ids: Vec<String> = std::mem::take(&mut *self.0.locked()).into_iter().collect();
         ids.sort_by(|a, b| locale_compare(a, b));
         ids
     }

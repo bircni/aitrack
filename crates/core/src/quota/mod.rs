@@ -104,8 +104,7 @@ pub fn parse_retry_after(value: Option<&str>, now_ms: i64) -> Option<u64> {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        clippy::cast_precision_loss,
-        reason = "a bounded, rounded number converted between float and integer"
+        reason = "the seconds are rounded up and clamped to zero or above first"
     )]
     let seconds = |s: f64| s.max(0.0).ceil() as u64;
     if let Some(n) = parse_number(value).filter(|n| n.is_finite()) {
@@ -126,6 +125,10 @@ pub fn parse_retry_after(value: Option<&str>, now_ms: i64) -> Option<u64> {
 
 /// A GET or POST resolving to a JSON object, or a typed failure. 401/403 mean the saved token is no longer
 /// accepted; aitrack does not refresh tokens, so the fix is to reopen the provider's own tool.
+///
+/// # Errors
+///
+/// When the request fails, the login is rejected or the body is not a JSON object.
 pub fn request_json(
     http: &dyn HttpClient,
     label: &str,
@@ -158,6 +161,9 @@ pub fn request_json(
     }
 }
 
+/// # Errors
+///
+/// When the expiry has passed.
 pub fn assert_not_expired(expires_at_ms: Option<f64>, now_ms: i64, message: &str) -> Result<(), QuotaError> {
     #[expect(
         clippy::cast_precision_loss,
@@ -235,6 +241,10 @@ pub const fn clamp_percent(value: f64) -> f64 {
 }
 
 /// Never fails as a whole, so one signed-out provider does not take the others down.
+///
+/// # Errors
+///
+/// When the provider has no quota or its fetch fails.
 pub fn fetch_quota(core: &Core, provider: &str) -> QuotaResult {
     let now = core.clock.now();
     match provider {

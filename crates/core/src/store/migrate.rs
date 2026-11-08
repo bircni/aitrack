@@ -66,6 +66,10 @@ fn rollback(plan: &Plan) -> std::io::Result<()> {
 }
 
 /// Renames this machine's synced and staged files; rolls back on a part-way failure.
+///
+/// # Errors
+///
+/// When the data files cannot be renamed or committed.
 pub fn migrate_machine_data_files(core: &Core, previous_id: &str, next_id: &str) -> Result<()> {
     let previous = normalize_machine_id(previous_id).map_err(Error::new)?;
     let next = normalize_machine_id(next_id).map_err(Error::new)?;

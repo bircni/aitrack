@@ -23,10 +23,17 @@ impl Clock {
     }
 
     /// The real time, with days counted in `zone`.
+    ///
+    /// # Errors
+    ///
+    /// When the zone is not in the time zone database.
     pub fn in_zone(zone: &str) -> Result<Self, jiff::Error> {
         Ok(Self { now: None, zone: TimeZone::get(zone)? })
     }
 
+    /// # Errors
+    ///
+    /// When the zone is not in the time zone database.
     pub fn fixed(now: Timestamp, zone: &str) -> Result<Self, jiff::Error> {
         Ok(Self { now: Some(now), zone: TimeZone::get(zone)? })
     }

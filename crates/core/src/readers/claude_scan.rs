@@ -132,6 +132,10 @@ const fn is_richer_usage(next: &TokenCounts, current: &TokenCounts) -> bool {
 }
 
 /// Keyed messages first, in first-seen order, then unkeyed ones.
+///
+/// # Errors
+///
+/// When the file cannot be read.
 pub fn scan_claude_file(path: &Path, clock: &Clock, chunk_bytes: usize) -> io::Result<Vec<ScannedClaudeMessage>> {
     let holds = |line: &Line| log_cwd(line.cwd.as_ref()).is_some();
     // Only lines with usage are counted; any other line can still move the session's cwd.

@@ -29,7 +29,6 @@ fn as_json<T: serde::Serialize>(value: &T) -> Value {
 }
 
 #[test]
-#[expect(clippy::too_many_lines, reason = "one layout reads better in one place than split across helpers")]
 fn matches_4x_in_every_recorded_zone() {
     let all = expected();
     for (zone, d) in all.as_object().unwrap() {

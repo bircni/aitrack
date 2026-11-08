@@ -139,7 +139,12 @@ struct CursorTable {
 }
 
 /// The supplement built from the bundled tables; its `updatedAt` is the newest table's.
+///
+/// # Panics
+///
+/// Never: the bundled tables are fixed and tested.
 #[must_use]
+#[expect(clippy::expect_used, reason = "the bundled tables are fixed at build time and tested")]
 pub fn bundled_supplement() -> Supplement {
     let claude: ClaudeTable = serde_json::from_str(CLAUDE_TABLE).expect("bundled Claude table parses");
     let codex: CodexTable = serde_json::from_str(CODEX_TABLE).expect("bundled Codex table parses");
@@ -227,6 +232,10 @@ pub fn parse_supplement(value: &Value) -> Option<Supplement> {
 }
 
 /// JS `new RegExp(p, 'u')`, or `'iu'` after a `(?i)` prefix.
+///
+/// # Errors
+///
+/// When the pattern is not a valid regular expression.
 pub fn compile_pattern(pattern: &str) -> Result<regex_lite::Regex, regex_lite::Error> {
     match pattern.strip_prefix("(?i)") {
         Some(rest) => regex_lite::RegexBuilder::new(rest).case_insensitive(true).build(),

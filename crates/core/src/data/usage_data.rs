@@ -283,6 +283,10 @@ pub fn provider_data_for_windows(
 }
 
 /// This machine's file from its logs, with the working directories `--dir` needs.
+///
+/// # Errors
+///
+/// When the local logs or machine id cannot be read.
 pub fn build_local_machine_file(
     core: &Core,
     machine_id: &str,
@@ -293,6 +297,10 @@ pub fn build_local_machine_file(
 }
 
 /// Machines as reports show them: others as synced, this one overlaid with its local logs.
+///
+/// # Errors
+///
+/// When the data repo cannot be read.
 pub fn load_reported_machines(core: &Core) -> crate::error::Result<Vec<MachineFile>> {
     let config = core.try_load_config();
     let machine_id = resolve_machine_id(config.as_ref()).map_err(crate::error::Error::new)?;
@@ -304,6 +312,10 @@ pub fn load_reported_machines(core: &Core) -> crate::error::Result<Vec<MachineFi
 
 /// Every machine's days for reports; the live providers are fetched while the logs are read.
 /// `local`, when given, is this machine's file already read from its logs.
+///
+/// # Errors
+///
+/// When the local logs or the data repo cannot be read.
 pub fn load_usage(
     core: &Core,
     providers: Option<&[String]>,

@@ -6,15 +6,24 @@ use serde_json::ser::{CompactFormatter, Formatter, PrettyFormatter};
 use super::number::number_to_string;
 
 /// `JSON.stringify(value)`.
+///
+/// # Errors
+///
+/// When the value cannot be serialized.
 pub fn to_string<T: Serialize + ?Sized>(value: &T) -> serde_json::Result<String> {
     write(value, JsFormatter(CompactFormatter))
 }
 
 /// `JSON.stringify(value, null, 2)`, with no trailing newline.
+///
+/// # Errors
+///
+/// When the value cannot be serialized.
 pub fn to_string_pretty<T: Serialize + ?Sized>(value: &T) -> serde_json::Result<String> {
     write(value, JsFormatter(PrettyFormatter::with_indent(b"  ")))
 }
 
+#[expect(clippy::expect_used, reason = "serde_json only writes UTF-8")]
 fn write<T: Serialize + ?Sized, F: Formatter>(value: &T, formatter: F) -> serde_json::Result<String> {
     let mut out = Vec::with_capacity(256);
     value.serialize(&mut serde_json::Serializer::with_formatter(&mut out, formatter))?;

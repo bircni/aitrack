@@ -94,6 +94,7 @@ struct EncodedMessage {
     counts: TokenCounts,
 }
 
+#[expect(clippy::expect_used, reason = "a cache holds far fewer than 2^31 strings and our own types serialize")]
 fn encode_messages(messages: &[CachedMessage], keys: &[String]) -> Box<RawValue> {
     let mut strings: Vec<String> = Vec::new();
     let mut indexes: HashMap<String, u32> = HashMap::new();

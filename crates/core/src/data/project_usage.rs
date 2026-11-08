@@ -141,7 +141,7 @@ fn remainder(day: &DayEntry, attributed: &TokenCounts) -> Option<TokenCounts> {
         return None;
     }
     Some(TokenCounts {
-        input_tokens: u64::try_from(tokens).expect("positive"),
+        input_tokens: u64::try_from(tokens).ok()?,
         cost_usd: day.counts.cost_usd.map(|cost| 0f64.max(cost - attributed.cost_usd.unwrap_or(0.0))),
         has_unpriced_tokens: (day.counts.has_unpriced_tokens == Some(true)
             && attributed.has_unpriced_tokens != Some(true))

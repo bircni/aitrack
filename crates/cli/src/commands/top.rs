@@ -286,6 +286,7 @@ fn view(data: &ProviderData, args: &TopArgs, filter: &DateFilter) -> View {
     }
 }
 
+#[expect(clippy::expect_used, reason = "parse_year only accepts years up to 9999")]
 pub fn run(core: &Core, args: &TopArgs) -> Outcome {
     if let (Some(since), Some(until)) = (args.since, args.until)
         && since > until

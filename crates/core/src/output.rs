@@ -1,3 +1,4 @@
+use crate::Locked;
 use std::sync::Mutex;
 
 /// Where progress, warnings and failures go; the CLI prints them, the desktop app logs them.
@@ -52,11 +53,11 @@ pub enum Level {
 impl VecOutput {
     #[must_use]
     pub fn messages(&self) -> Vec<(Level, String)> {
-        self.0.lock().expect("not poisoned").clone()
+        self.0.locked().clone()
     }
 
     fn push(&self, level: Level, message: &str) {
-        self.0.lock().expect("not poisoned").push((level, message.to_owned()));
+        self.0.locked().push((level, message.to_owned()));
     }
 }
 

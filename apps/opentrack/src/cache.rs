@@ -32,6 +32,7 @@ pub struct CachedState {
 }
 
 /// The file's contents: the format first, then the state.
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 pub fn cache_json(cache: &CachedState) -> String {
     #[derive(Serialize)]
     struct File<'a> {

@@ -7,6 +7,7 @@ use std::time::Duration;
 use indexmap::IndexMap;
 
 use crate::Core;
+use crate::Locked;
 use crate::config::{Config, load_config, resolve_machine_id};
 use crate::data::local_data::{build_machine_data, canonical_days, outgoing_days, ratcheted_provider_days};
 use crate::data::messages::REPO_NOT_CLONED_MESSAGE;
@@ -29,6 +30,10 @@ use crate::store::validate::{Failure, ValidationOptions, check_raw_machine_file}
 pub type LocalMaps = IndexMap<String, DayMap>;
 
 /// Reads every synced provider's logs, priced with the current rates.
+///
+/// # Errors
+///
+/// When the local logs cannot be read.
 pub fn read_local_provider_maps(
     core: &Core,
     fallbacks: Option<&FallbackCollector>,
@@ -83,6 +88,10 @@ pub struct DataRun<'a> {
 
 impl DataRun<'_> {
     /// The local logs, waiting for the read started before the lock.
+    ///
+    /// # Errors
+    ///
+    /// When the local logs cannot be read.
     pub fn local_maps(&self) -> Result<LocalMaps> {
         (self.local)()
     }
@@ -90,6 +99,15 @@ impl DataRun<'_> {
 
 /// Loads the config, checks the clone, then runs `step` under the repo lock (after a pull when asked)
 /// while the pricing refresh and the log read run beside it.
+///
+/// # Errors
+///
+/// When the logs, the data repo or `step` fail.
+///
+/// # Panics
+///
+/// If the background pull panicked.
+#[expect(clippy::expect_used, reason = "the spawned pull is joined exactly once")]
 pub fn run_data_pipeline<T>(
     core: &Core,
     do_pull: bool,
@@ -116,7 +134,7 @@ pub fn run_data_pipeline<T>(
         let done: OnceLock<Result<LocalMaps>> = OnceLock::new();
         let local = || {
             done.get_or_init(|| {
-                let handle = pending.lock().expect("not poisoned").take().expect("joined once");
+                let handle = pending.locked().take().expect("joined once");
                 handle.join().unwrap_or_else(|_| Err(Error::new("reading the local logs failed")))
             })
             .clone()
@@ -204,6 +222,9 @@ fn push_machine_data(core: &Core, guard: &RepoGuard<'_>, git: &Git, host: &str) 
     Ok(push_pending_commits(core, guard, git)?)
 }
 
+/// # Errors
+///
+/// When the data repo cannot be pulled, written or pushed.
 pub fn sync_data(core: &Core, options: SyncOptions) -> Result<SyncResult> {
     let result = run_data_pipeline(core, !options.dry_run, options.timeout, |guard, git, run| {
         push_local_usage(core, guard, git, &options, &run)
@@ -214,6 +235,7 @@ pub fn sync_data(core: &Core, options: SyncOptions) -> Result<SyncResult> {
     Ok(result)
 }
 
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 fn push_local_usage(
     core: &Core,
     guard: &RepoGuard<'_>,

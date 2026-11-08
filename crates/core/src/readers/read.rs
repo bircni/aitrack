@@ -64,14 +64,21 @@ impl Kind {
     }
 }
 
+/// # Errors
+///
+/// When the logs cannot be read.
 pub fn read_claude_days(core: &Core, pricing: &dyn Pricing, resolver: &dyn ProjectResolver) -> io::Result<DayMap> {
     read_days(core, Kind::Claude, &claude_roots(core), pricing, resolver)
 }
 
+/// # Errors
+///
+/// When the logs cannot be read.
 pub fn read_codex_days(core: &Core, pricing: &dyn Pricing, resolver: &dyn ProjectResolver) -> io::Result<DayMap> {
     read_days(core, Kind::Codex, &codex_roots(core), pricing, resolver)
 }
 
+#[expect(clippy::expect_used, reason = "one scan exists per missed file")]
 fn read_days(
     core: &Core,
     kind: Kind,

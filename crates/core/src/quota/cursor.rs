@@ -39,6 +39,10 @@ fn on_demand_spent_cents(spend: &Map<String, Value>, limit: f64, remaining: f64)
 }
 
 /// `GetCurrentPeriodUsage` with `GetPlanInfo`'s plan name; amounts arrive in cents.
+///
+/// # Errors
+///
+/// When the response has no usage-based plan or limit.
 pub fn map_cursor_usage(usage: &Map<String, Value>, plan_name: Option<&str>, now: Timestamp) -> QuotaResult {
     let plan_usage = record(usage.get("planUsage"));
     let Some(plan_usage) = plan_usage.filter(|_| usage.get("enabled").and_then(Value::as_bool) != Some(false)) else {
@@ -137,6 +141,9 @@ fn connect_post(core: &Core, method: &str, token: &str, now_ms: i64) -> Result<M
     request_json(core.http.as_ref(), "Cursor", request, now_ms)
 }
 
+/// # Errors
+///
+/// When there is no usable login or the request fails.
 pub fn fetch_cursor_quota(core: &Core, now: Timestamp) -> QuotaResult {
     let token = cursor_state_database_path(&core.env)
         .and_then(|db| read_cursor_auth_state(&db).ok())

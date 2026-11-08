@@ -110,6 +110,9 @@ fn usage_since(info: &serde_json::Map<String, Value>, previous: Usage) -> Option
     Some((usage, total))
 }
 
+/// # Errors
+///
+/// When the file cannot be read.
 pub fn scan_codex_file(path: &Path, clock: &Clock, chunk_bytes: usize) -> io::Result<CodexScan> {
     let holds = |line: &Line| log_day(clock, line.timestamp.as_ref()).is_some();
     // Every line moves the current day; only these types are read for more.

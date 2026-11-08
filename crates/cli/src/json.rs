@@ -1,6 +1,7 @@
 use serde_json::{Map, Value};
 
 /// `{ "command": <command>, ...payload }`, pretty, on stdout: with `--json` it is the only thing there.
+#[expect(clippy::expect_used, reason = "our own types always serialize to JSON")]
 pub fn print_json_command(command: &str, payload: Value) {
     let mut object = Map::new();
     object.insert("command".into(), Value::from(command));
