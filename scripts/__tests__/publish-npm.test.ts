@@ -28,6 +28,11 @@ echo "$*" >> "$FAKE_LOG"
 case "$2" in */"$FAKE_FAIL"-*) exit 1 ;; esac
 `;
 
+const PLATFORMS = ['darwin-arm64', 'linux-x64', 'linux-arm64', 'win32-x64'].map(
+  (t) => `aitrack-cli-${t}`,
+);
+const PACKS = [...PLATFORMS, 'aitrack'];
+
 describe('publish-npm', () => {
   let root: string;
 
@@ -38,6 +43,11 @@ describe('publish-npm', () => {
     for (const name of readdirSync(SCRIPTS)) {
       if (name.endsWith('.ts')) copyFileSync(join(SCRIPTS, name), join(root, 'scripts', name));
     }
+    mkdirSync(join(root, 'npm/aitrack'), { recursive: true });
+    copyFileSync(
+      join(SCRIPTS, '../npm/aitrack/targets.json'),
+      join(root, 'npm/aitrack/targets.json'),
+    );
     mkdirSync(join(root, 'packs'));
     mkdirSync(join(root, 'bin'));
     writeFileSync(join(root, 'bin/npm'), FAKE_NPM);
@@ -50,9 +60,7 @@ describe('publish-npm', () => {
 
   function publish(version: string, { published = '', fail = '', tarballs = true } = {}) {
     if (tarballs) {
-      for (const name of ['aitrack-lib', 'aitrack']) {
-        writeFileSync(join(root, 'packs', `${name}-${version}.tgz`), '');
-      }
+      for (const name of PACKS) writeFileSync(join(root, 'packs', `${name}-${version}.tgz`), '');
     }
     const log = join(root, 'npm.log');
     writeFileSync(log, '');
@@ -70,40 +78,40 @@ describe('publish-npm', () => {
     return { result, calls: readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) };
   }
 
-  it('publishes the library first, as file paths, under the default dist-tag', () => {
+  it('publishes the platform packages before the launcher that pins them, as file paths', () => {
     const { result, calls } = publish('1.2.3');
     expect(result.status).toBe(0);
-    expect(calls).toEqual([
-      'publish ./packs/aitrack-lib-1.2.3.tgz --provenance',
-      'publish ./packs/aitrack-1.2.3.tgz --provenance',
-    ]);
+    expect(calls).toEqual(PACKS.map((name) => `publish ./packs/${name}-1.2.3.tgz --provenance`));
   });
 
   it('publishes a prerelease under the next dist-tag', () => {
     const { calls } = publish('1.2.3-0');
-    expect(calls).toEqual([
-      'publish ./packs/aitrack-lib-1.2.3-0.tgz --provenance --tag next',
-      'publish ./packs/aitrack-1.2.3-0.tgz --provenance --tag next',
-    ]);
+    expect(calls.at(-1)).toBe('publish ./packs/aitrack-1.2.3-0.tgz --provenance --tag next');
+    expect(calls).toHaveLength(PACKS.length);
   });
 
   it('finishes a partial release on a re-run by skipping what the registry has', () => {
-    const { result, calls } = publish('1.2.3', { published: 'aitrack-lib@1.2.3' });
+    const published = ['darwin-arm64', 'linux-x64'].map((t) => `@aitrack/cli-${t}@1.2.3`).join(' ');
+    const { result, calls } = publish('1.2.3', { published });
     expect(result.status).toBe(0);
-    expect(calls).toEqual(['publish ./packs/aitrack-1.2.3.tgz --provenance']);
+    expect(calls).toEqual(
+      PACKS.slice(2).map((name) => `publish ./packs/${name}-1.2.3.tgz --provenance`),
+    );
   });
 
   it('stops at the first failed publish', () => {
-    const { result, calls } = publish('1.2.3', { fail: 'aitrack-lib' });
+    const { result, calls } = publish('1.2.3', { fail: PLATFORMS[1] });
     expect(result.status).toBe(1);
-    expect(calls).toEqual(['publish ./packs/aitrack-lib-1.2.3.tgz --provenance']);
+    expect(calls).toEqual(
+      PACKS.slice(0, 2).map((name) => `publish ./packs/${name}-1.2.3.tgz --provenance`),
+    );
   });
 
   it('publishes nothing unless every tarball is present', () => {
-    writeFileSync(join(root, 'packs/aitrack-lib-1.2.3.tgz'), '');
+    writeFileSync(join(root, `packs/${PLATFORMS[0]}-1.2.3.tgz`), '');
     const { result, calls } = publish('1.2.3', { tarballs: false });
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('Missing tarball: ./packs/aitrack-1.2.3.tgz');
+    expect(result.stderr).toContain(`Missing tarball: ./packs/${PLATFORMS[1]}-1.2.3.tgz`);
     expect(calls).toEqual([]);
   });
 });

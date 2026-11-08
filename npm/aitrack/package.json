@@ -1,0 +1,49 @@
+{
+  "name": "aitrack",
+  "version": "0.0.0",
+  "description": "Track and visualize your Claude Code, Codex & Cursor usage and cost — heatmaps, stats, and multi-machine sync over a git repo you own.",
+  "keywords": [
+    "ai",
+    "ai-usage",
+    "claude",
+    "claude-code",
+    "cli",
+    "codex",
+    "cost-tracking",
+    "cursor",
+    "developer-tools",
+    "git-sync",
+    "heatmap",
+    "openai",
+    "token-usage",
+    "tui",
+    "usage"
+  ],
+  "homepage": "https://github.com/bircni/aitrack#readme",
+  "bugs": {
+    "url": "https://github.com/bircni/aitrack/issues"
+  },
+  "license": "MIT",
+  "author": "Nicolas <bircni@icloud.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bircni/aitrack.git",
+    "directory": "npm/aitrack"
+  },
+  "bin": {
+    "aitrack": "bin/aitrack.js"
+  },
+  "files": [
+    "bin/aitrack.js",
+    "targets.json",
+    "README.md"
+  ],
+  "type": "commonjs",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

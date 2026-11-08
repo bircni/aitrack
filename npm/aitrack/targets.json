@@ -1,0 +1,6 @@
+{
+  "darwin-arm64": "@aitrack/cli-darwin-arm64",
+  "linux-x64": "@aitrack/cli-linux-x64",
+  "linux-arm64": "@aitrack/cli-linux-arm64",
+  "win32-x64": "@aitrack/cli-win32-x64"
+}

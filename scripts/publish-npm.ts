@@ -2,9 +2,8 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
+import { publishOrder, tarballName } from './npm-packages.ts';
 import { runMain } from './runMain.ts';
-
-const LIBRARY_FIRST = ['aitrack-lib', 'aitrack']; // The CLI pins the library's exact version.
 
 function isPublished(name: string, version: string): boolean {
   const view = spawnSync('npm', ['view', `${name}@${version}`, 'version'], { encoding: 'utf8' });
@@ -18,9 +17,9 @@ function main(): void {
   }
   const version = tag.replace(/^v/u, '');
   // The leading ./ stops npm reading the path as a GitHub shorthand.
-  const tarballs = LIBRARY_FIRST.map((name) => ({
+  const tarballs = publishOrder().map((name) => ({
     name,
-    path: `./${directory}/${name}-${version}.tgz`,
+    path: `./${directory}/${tarballName(name, version)}`,
   }));
   for (const { path } of tarballs) {
     if (!existsSync(path)) throw new Error(`Missing tarball: ${path}`);
