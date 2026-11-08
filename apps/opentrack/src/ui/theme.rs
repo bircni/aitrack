@@ -1,6 +1,6 @@
 //! The renderer's design tokens: quiet surfaces, provider accents, warnings in the strongest colour.
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use eframe::egui::{self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Visuals};
 use eframe::epaint::text::VariationCoords;
@@ -167,14 +167,11 @@ impl Palette {
     }
 }
 
-pub const BOLD: &str = "semibold";
-
-fn bold_family() -> FontFamily {
-    FontFamily::Name(BOLD.into())
-}
+/// Built once: a named family holds an `Arc<str>`, and text asks for it every frame.
+static BOLD: LazyLock<FontFamily> = LazyLock::new(|| FontFamily::Name("semibold".into()));
 
 pub fn bold() -> FontFamily {
-    bold_family()
+    BOLD.clone()
 }
 
 /// The system UI font at two weights, ahead of egui's own as a fallback.
@@ -212,7 +209,7 @@ pub fn install_fonts(ctx: &egui::Context) {
     regular.extend(fallback.iter().cloned());
     semibold.extend(fallback);
     fonts.families.insert(FontFamily::Proportional, regular);
-    fonts.families.insert(bold_family(), semibold);
+    fonts.families.insert(bold(), semibold);
     ctx.set_fonts(fonts);
 }
 

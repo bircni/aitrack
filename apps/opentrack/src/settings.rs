@@ -143,7 +143,7 @@ pub fn settings_json(settings: &Settings) -> String {
 }
 
 pub fn write_settings(path: &Path, settings: &Settings) -> std::io::Result<()> {
-    aitrack_core::fs::write_file_atomic(path, &settings_json(settings), None)
+    aitrack_core::fs::write_file_atomic(path, settings_json(settings), None)
 }
 
 pub fn load_settings(path: &Path) -> Settings {

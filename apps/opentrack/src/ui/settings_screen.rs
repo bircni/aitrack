@@ -2,6 +2,7 @@
 
 use eframe::egui::{self, Align, ComboBox, CornerRadius, Frame as EguiFrame, Layout, Margin, Sense, Stroke, Ui, Vec2};
 
+use super::dashboard::mark;
 use super::format::INIT_HINT;
 use super::icons::Glyph;
 use super::theme::Palette;
@@ -139,9 +140,7 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
             ui.horizontal(|ui| {
                 ui.set_min_height(36.0);
                 ui.spacing_mut().item_spacing.x = 8.0;
-                let (rect, _) = ui.allocate_exact_size(Vec2::splat(14.0), Sense::hover());
-                let color = if provider.key == "claude_code" { palette.claude } else { palette.ink };
-                frame.assets.marks.paint(ui.painter(), rect, &provider.key, color);
+                mark(ui, frame, &provider.key, 14.0);
                 ui.label(text(&provider.label, 13.0, palette.ink));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
@@ -293,7 +292,7 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
                 s.pull_synced_data = v;
             },
         );
-        let login_error = model.setting_errors.get("launchAtLogin").map(String::as_str);
+        let login_error = model.setting_errors.launch_at_login.as_deref();
         switch_line(
             ui,
             frame,
@@ -304,7 +303,7 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
                 s.launch_at_login = v;
             },
         );
-        let shortcut_error = model.setting_errors.get("globalShortcut").map(String::as_str);
+        let shortcut_error = model.setting_errors.global_shortcut.as_deref();
         ui.vertical(|ui| {
             ui.add_space(6.0);
             ui.label(text("Open/close shortcut", 13.0, palette.ink));
@@ -329,44 +328,30 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
 
     group(ui, &palette, "About", |ui| {
         line(ui, &palette, "Version", None, None, 80.0, |ui| {
-            ui.label(text(model.version, 13.0, palette.ink2));
+            ui.label(text(env!("CARGO_PKG_VERSION"), 13.0, palette.ink2));
         });
         rule(ui, &palette);
         let update = model.update;
         let status = match (&update.available, &update.check) {
-            (Some(version), _) if update.installing => format!("Installing {version}…"),
-            (Some(version), _) => update
-                .error
-                .as_ref()
-                .map_or_else(|| format!("{version} is available"), |e| format!("Could not install {version}: {e}")),
+            (Some(version), _) => update.offer(version),
             (None, UpdateCheck::Checking) => "Checking…".into(),
             (None, UpdateCheck::Failed(error)) => format!("Could not check: {error}"),
             (None, UpdateCheck::Current) => "Up to date".into(),
             (None, UpdateCheck::Idle) => "Checked every 6 hours".into(),
         };
         let failed = update.error.is_some() || matches!(update.check, UpdateCheck::Failed(_));
-        ui.horizontal(|ui| {
-            ui.set_min_height(36.0);
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 1.0;
-                ui.add_space(4.0);
-                ui.label(text("Updates", 13.0, palette.ink));
-                ui.label(text(status, 11.0, if failed { palette.crit_text } else { palette.ink2 }));
-                ui.add_space(4.0);
-            });
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if update.available.is_some() && !update.installing {
-                    let label = if update.error.is_some() { "Retry" } else { "Install and restart" };
-                    if link(ui, &palette, label, true).clicked() {
-                        frame.act(Action::InstallUpdate);
-                    }
-                } else if update.available.is_none() {
-                    let checking = update.check == UpdateCheck::Checking;
-                    if link(ui, &palette, "Check now", !checking).clicked() {
-                        frame.act(Action::CheckUpdate);
-                    }
+        let (hint, error) = if failed { (None, Some(status.as_str())) } else { (Some(status.as_str()), None) };
+        line(ui, &palette, "Updates", hint, error, 130.0, |ui| {
+            if update.available.is_some() && !update.installing {
+                if link(ui, &palette, update.install_label(), true).clicked() {
+                    frame.act(Action::InstallUpdate);
                 }
-            });
+            } else if update.available.is_none() {
+                let checking = update.check == UpdateCheck::Checking;
+                if link(ui, &palette, "Check now", !checking).clicked() {
+                    frame.act(Action::CheckUpdate);
+                }
+            }
         });
     });
 

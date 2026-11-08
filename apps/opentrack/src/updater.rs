@@ -6,15 +6,14 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use aitrack_core::http::UreqClient;
-use aitrack_core::update::{
-    download_verified, install_app_image, install_mac_app, is_newer, latest_release, run_windows_installer,
-    updater_target, Release,
-};
+use aitrack_core::update::{download_verified, install, is_newer, latest_release, updater_target, Release};
 
 use crate::app::{Bus, Msg};
 
 const FIRST_CHECK_DELAY: Duration = Duration::from_secs(30);
 const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+/// Tells the next process it was started by an update, so it waits for this one to let go of the lock.
+pub const RELAUNCH_ARG: &str = "--relaunch";
 
 #[derive(Clone, Default)]
 pub struct Updater {
@@ -22,34 +21,27 @@ pub struct Updater {
 }
 
 impl Updater {
-    /// The newer version on offer, if any; sends it to the popup as well.
-    pub fn check(&self, bus: &Bus) {
-        let result = if cfg!(debug_assertions) {
-            Err("Development builds do not update".to_owned())
-        } else {
-            updater_target().and_then(|target| latest_release(&UreqClient::default(), target))
-        };
-        match result {
-            Ok(release) => {
-                let newer = is_newer(&release.version, env!("CARGO_PKG_VERSION")).then_some(release);
+    /// Sends the newer version on offer, if any. Only a check the user asked for reports a failure;
+    /// a background one that finds the network down just tries again later.
+    pub fn check(&self, bus: &Bus, asked: bool) {
+        match newer_release() {
+            Ok(newer) => {
                 let version = newer.as_ref().map(|r| r.version.clone());
                 *self.pending.lock().unwrap() = newer;
                 bus.send(Msg::UpdateFound(version));
             }
-            Err(error) => bus.send(Msg::UpdateCheckFailed(error)),
+            Err(error) if asked => bus.send(Msg::UpdateCheckFailed(error)),
+            Err(error) => eprintln!("opentrack: update check: {error}"),
         }
     }
 
-    /// Shortly after launch and then every few hours; offline just means the next check tries again.
+    /// Shortly after launch and then every few hours.
     pub fn watch(&self, bus: Bus) {
-        if cfg!(debug_assertions) {
-            return;
-        }
         let updater = self.clone();
         std::thread::spawn(move || {
             std::thread::sleep(FIRST_CHECK_DELAY);
             loop {
-                updater.check(&bus);
+                updater.check(&bus, false);
                 std::thread::sleep(CHECK_INTERVAL);
             }
         });
@@ -62,33 +54,51 @@ impl Updater {
             return;
         };
         std::thread::spawn(move || {
-            if let Err(error) = install(&release) {
+            if let Err(error) = install_and_relaunch(&release) {
                 bus.send(Msg::UpdateInstallFailed(error));
             }
         });
     }
 }
 
-fn install(release: &Release) -> Result<(), String> {
-    let file = download_verified(&UreqClient::default(), release)?;
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+/// A newer release this copy can install itself, or why none is on offer.
+fn newer_release() -> Result<Option<Release>, String> {
+    if cfg!(debug_assertions) {
+        return Err("Development builds do not update".into());
+    }
+    destination()?;
+    let release = latest_release(&UreqClient::default(), updater_target()?)?;
+    Ok(is_newer(&release.version, env!("CARGO_PKG_VERSION")).then_some(release))
+}
+
+/// What an update replaces: the running bundle on macOS, the running AppImage on Linux; Windows'
+/// installer finds its own way. A `.deb` install is left to the package manager.
+fn destination() -> Result<Option<PathBuf>, String> {
     if cfg!(windows) {
-        // The installer closes this process and starts the new one, as Tauri's passive mode did.
-        run_windows_installer(&file, &["/P", "/R"], false)?;
-        std::process::exit(0);
+        return Ok(None);
     }
     if cfg!(target_os = "macos") {
-        let bundle = app_bundle(&exe).ok_or("opentrack is not running from an app bundle")?;
-        let dir = bundle.parent().ok_or("opentrack.app has no folder")?;
-        let installed = install_mac_app(&file, dir)?;
-        std::process::Command::new("open").arg("-n").arg(&installed).spawn().map_err(|e| e.to_string())?;
-        std::process::exit(0);
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        return app_bundle(&exe).map(Some).ok_or_else(|| "opentrack is not running from an app bundle".into());
     }
-    let app_image = std::env::var_os("APPIMAGE")
-        .map(PathBuf::from)
-        .ok_or("Only the AppImage updates itself; update the .deb with your package manager.")?;
-    let installed = install_app_image(&file, &app_image)?;
-    std::process::Command::new(&installed).spawn().map_err(|e| e.to_string())?;
+    std::env::var_os("APPIMAGE")
+        .map(|path| Some(PathBuf::from(path)))
+        .ok_or_else(|| "Only the AppImage updates itself; update the .deb with your package manager.".into())
+}
+
+fn install_and_relaunch(release: &Release) -> Result<(), String> {
+    let destination = destination()?;
+    let file = download_verified(&UreqClient::default(), release)?;
+    if let Some(installed) = install(&file, destination.as_deref(), true)? {
+        let mut command = if cfg!(target_os = "macos") {
+            let mut open = std::process::Command::new("open");
+            open.arg("-n").arg(&installed).arg("--args");
+            open
+        } else {
+            std::process::Command::new(&installed)
+        };
+        command.arg(RELAUNCH_ARG).spawn().map_err(|e| e.to_string())?;
+    }
     std::process::exit(0);
 }
 
@@ -103,8 +113,8 @@ mod tests {
 
     #[test]
     fn finds_the_bundle_the_binary_runs_from() {
-        let exe = Path::new("/Applications/opentrack.app/Contents/MacOS/opentrack");
-        assert_eq!(app_bundle(exe), Some(PathBuf::from("/Applications/opentrack.app")));
+        let exe = Path::new("/Applications/opentrack 2.app/Contents/MacOS/opentrack");
+        assert_eq!(app_bundle(exe), Some(PathBuf::from("/Applications/opentrack 2.app")));
         assert_eq!(app_bundle(Path::new("/usr/bin/opentrack")), None);
     }
 }

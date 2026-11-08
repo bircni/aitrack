@@ -7,28 +7,35 @@ use std::time::{Duration, Instant};
 
 use aitrack_core::time::Clock;
 use eframe::egui::{self, Pos2, Vec2, ViewportCommand};
-use indexmap::IndexMap;
+use raw_window_handle::HasWindowHandle;
 
 use crate::background::{Background, Event, TrayImage};
+use crate::instance::{Listener, Request};
 use crate::panel::{PanelState, ToggleAction};
-use crate::position::{corner_tray, grown_bounds, popup_bounds, Rect};
+use crate::platform;
+use crate::position::{window_bounds, Rect};
 use crate::settings::Settings;
 use crate::state::AppState;
-use crate::system::{notify, open_dashboard, System};
+use crate::system::{notify, open_dashboard, set_launch_at_login, SettingErrors, System};
 use crate::tray::Tray;
 use crate::ui::format::refresh_outcome;
 use crate::ui::icons::ProviderMarks;
 use crate::ui::theme::{install_fonts, Palette};
-use crate::ui::{draw, Action, Assets, Model, Screen, UpdateCheck, UpdateStatus, View, WIDTH};
+use crate::ui::{draw, Action, Model, Screen, UpdateCheck, UpdateStatus, View, INITIAL_HEIGHT, WIDTH};
 use crate::updater::Updater;
+
+/// How long the footer shows the outcome of a sync the user started.
+const SYNC_NOTE_FOR: Duration = Duration::from_secs(6);
 
 pub enum Msg {
     Toggle(Option<Rect>),
     Show(Screen),
     Refresh,
     Quit,
-    State(Box<AppState>),
+    State(Arc<AppState>),
     Settings(Box<Settings>),
+    SaveFailed(String),
+    LaunchAtLogin(Option<String>),
     Alert { title: String, body: String },
     Tray(TrayImage),
     UpdateFound(Option<String>),
@@ -60,39 +67,40 @@ pub struct App {
     background: Arc<Background>,
     rx: Receiver<Msg>,
     bus: Bus,
+    saves: Sender<Settings>,
     clock: Clock,
-    state: AppState,
+    state: Arc<AppState>,
     settings: Settings,
     view: View,
-    assets: Assets,
+    marks: ProviderMarks,
     panel: PanelState,
+    /// Whether the popup should be on screen; `shown` is what the window was last told.
     visible: bool,
-    focused: bool,
-    /// eframe shows the window after its first frame; the app starts in the tray.
-    started: bool,
+    shown: Option<bool>,
     /// Content height in points, as last laid out.
     content_height: f32,
     tray: Tray,
     system: System,
-    setting_errors: IndexMap<String, String>,
+    setting_errors: SettingErrors,
     settings_error: Option<String>,
+    /// What the theme and OS hooks were last set from.
     applied: Option<Settings>,
     update: UpdateStatus,
     updater: Updater,
+    /// What the user started, so its outcome is reported when it ends.
     user_run: Option<Run>,
-    was_busy: Option<Run>,
-    sync_note: Option<(String, Instant)>,
+    sync_note_until: Option<Instant>,
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, background: Arc<Background>, listener: std::net::TcpListener) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, background: Arc<Background>, listener: Listener) -> Self {
         let ctx = cc.egui_ctx.clone();
         install_fonts(&ctx);
         let (tx, rx) = channel();
         let bus = Bus { tx, ctx: ctx.clone() };
         let show_bus = bus.clone();
         crate::instance::listen(listener, move |request| {
-            let screen = if request == "settings" { Screen::Settings } else { Screen::Dashboard };
+            let screen = if request == Request::Settings { Screen::Settings } else { Screen::Dashboard };
             show_bus.send(Msg::Show(screen));
         });
         let tray = Tray::new(&bus);
@@ -101,114 +109,114 @@ impl App {
         updater.watch(bus.clone());
         let events = bus.clone();
         background.start(move |event| {
-            let msg = match event {
-                Event::State(state) => Msg::State(Box::new(state.clone())),
+            events.send(match event {
+                Event::State(state) => Msg::State(state),
                 Event::Settings(settings) => Msg::Settings(Box::new(settings.clone())),
                 Event::Alert { title, body } => Msg::Alert { title: title.into(), body: body.into() },
                 Event::Tray(image) => Msg::Tray(image),
-            };
-            events.send(msg);
+            });
         });
-        #[cfg(target_os = "macos")]
-        crate::macos::round_corners(cc);
-        #[cfg(windows)]
-        crate::windows::round_corners(cc);
-        Self {
-            state: background.service.state(),
+        let failed = bus.clone();
+        let saves = background.saver(move |error| failed.send(Msg::SaveFailed(error)));
+        platform::round_corners(cc);
+        let mut app = Self {
+            state: Arc::new(background.service.state()),
             settings: background.service.settings(),
             background,
             rx,
             bus,
+            saves,
             clock: Clock::system(),
             view: View::default(),
-            assets: Assets { marks: ProviderMarks::load(&ctx) },
-            panel: PanelState::new(),
+            marks: ProviderMarks::load(&ctx),
+            panel: PanelState::default(),
             visible: false,
-            focused: false,
-            started: false,
-            content_height: 560.0,
+            shown: None,
+            content_height: INITIAL_HEIGHT,
             tray,
             system,
-            setting_errors: IndexMap::new(),
+            setting_errors: SettingErrors::default(),
             settings_error: None,
             applied: None,
             update: UpdateStatus::default(),
             updater,
             user_run: None,
-            was_busy: None,
-            sync_note: None,
-        }
-    }
-
-    #[allow(clippy::cast_precision_loss)]
-    fn now() -> f64 {
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
+            sync_note_until: None,
+        };
+        app.apply_settings(&ctx, cc);
+        app
     }
 
     fn work_area(ctx: &egui::Context, point: Option<(i32, i32)>) -> (Rect, f32) {
-        #[cfg(target_os = "macos")]
-        if let Some(area) = crate::macos::work_area(point) {
-            return area;
-        }
-        #[cfg(windows)]
-        if let Some(area) = crate::windows::work_area(point) {
-            return area;
-        }
-        let _ = point;
-        let (size, scale) = ctx.input(|i| {
-            let viewport = i.viewport();
-            (
-                viewport.monitor_size.unwrap_or(Vec2::new(1920.0, 1080.0)),
-                viewport.native_pixels_per_point.unwrap_or(1.0),
-            )
-        });
-        #[allow(clippy::cast_possible_truncation)]
-        let rect = Rect { x: 0, y: 0, width: (size.x * scale) as i32, height: (size.y * scale) as i32 };
-        (rect, scale)
+        platform::work_area(point).unwrap_or_else(|| {
+            let (size, scale) = ctx.input(|i| {
+                let viewport = i.viewport();
+                (
+                    viewport.monitor_size.unwrap_or(Vec2::new(1920.0, 1080.0)),
+                    viewport.native_pixels_per_point.unwrap_or(1.0),
+                )
+            });
+            #[allow(clippy::cast_possible_truncation)]
+            let rect = Rect { x: 0, y: 0, width: (size.x * scale) as i32, height: (size.y * scale) as i32 };
+            (rect, scale)
+        })
     }
 
     /// Size and position for the content height: at the tray for a popup, grown in place when kept open.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    fn place(&self, ctx: &egui::Context, initial: bool) {
+    fn place(&self, ctx: &egui::Context, in_place: bool) {
         let tray = self.panel.tray;
         let (work, scale) = Self::work_area(ctx, tray.map(|t| (t.x + t.width / 2, t.y + t.height / 2)));
+        let window_scale = ctx.input(|i| i.viewport().native_pixels_per_point).unwrap_or(scale);
+        let position_scale = platform::position_scale(scale, window_scale);
+        let kept_at = in_place
+            .then(|| ctx.input(|i| i.viewport().outer_rect))
+            .flatten()
+            .map(|r| ((r.left() * position_scale).round() as i32, (r.top() * position_scale).round() as i32));
         let width = (WIDTH * scale).round() as i32;
         let height = (self.content_height * scale).round() as i32;
-        let bounds = if self.panel.floating && !initial {
-            let top = ctx.input(|i| i.viewport().outer_rect).map_or(work.y, |r| (r.top() * scale) as i32);
-            let left = ctx.input(|i| i.viewport().outer_rect).map_or(work.x, |r| (r.left() * scale) as i32);
-            let (y, height) = grown_bounds(top, height, work);
-            Rect { x: left, y, width, height }
-        } else {
-            let tray = tray.unwrap_or_else(|| corner_tray(work, !cfg!(windows)));
-            popup_bounds(tray, work, width, height)
-        };
+        let bounds = window_bounds(tray, kept_at, work, width, height, platform::TRAY_ON_TOP);
         ctx.send_viewport_cmd(ViewportCommand::InnerSize(Vec2::new(bounds.width as f32, bounds.height as f32) / scale));
-        ctx.send_viewport_cmd(ViewportCommand::OuterPosition(Pos2::new(bounds.x as f32, bounds.y as f32) / scale));
+        ctx.send_viewport_cmd(ViewportCommand::OuterPosition(
+            Pos2::new(bounds.x as f32, bounds.y as f32) / position_scale,
+        ));
     }
 
     fn show(&mut self, ctx: &egui::Context, screen: Option<Screen>) {
         if !self.panel.floating || !self.visible {
-            self.place(ctx, true);
+            self.place(ctx, false);
         }
         if let Some(screen) = screen {
             self.view.screen = screen;
             self.view.scroll_to_top = true;
         }
-        ctx.send_viewport_cmd(ViewportCommand::Visible(true));
-        ctx.send_viewport_cmd(ViewportCommand::Focus);
+        if self.shown == Some(true) {
+            ctx.send_viewport_cmd(ViewportCommand::Focus);
+        }
         self.visible = true;
-        // Focus arrives a frame later; only a loss after it counts as a blur.
-        self.focused = false;
+        self.panel.shown();
     }
 
     fn hide(&mut self, ctx: &egui::Context) {
-        ctx.send_viewport_cmd(ViewportCommand::Visible(false));
         self.visible = false;
+        ctx.request_repaint();
     }
 
-    fn apply_settings(&mut self, ctx: &egui::Context) {
-        if self.applied.as_ref() == Some(&self.settings) {
+    /// Tells the window what `visible` says, once per change. eframe also shows the window after its
+    /// first frame, which the first call here undoes.
+    fn sync_window(&mut self, ctx: &egui::Context) {
+        if self.shown != Some(self.visible) {
+            self.shown = Some(self.visible);
+            ctx.send_viewport_cmd(ViewportCommand::Visible(self.visible));
+            if self.visible {
+                ctx.send_viewport_cmd(ViewportCommand::Focus);
+            }
+        }
+    }
+
+    fn apply_settings(&mut self, ctx: &egui::Context, window: &impl HasWindowHandle) {
+        let old = self.applied.replace(self.settings.clone());
+        if old.as_ref() == Some(&self.settings) {
             return;
         }
         let theme = match self.settings.theme.as_str() {
@@ -219,40 +227,34 @@ impl App {
         ctx.set_theme(theme);
         ctx.set_visuals_of(egui::Theme::Light, Palette::for_dark(false).visuals());
         ctx.set_visuals_of(egui::Theme::Dark, Palette::for_dark(true).visuals());
-        self.panel.floating = self.settings.keep_open;
-        let outside = self.applied.as_ref().is_none_or(|old| {
-            old.launch_at_login != self.settings.launch_at_login || old.global_shortcut != self.settings.global_shortcut
-        });
-        if outside {
-            self.setting_errors = self.system.apply(&self.settings);
+        let settings = &self.settings;
+        if old.as_ref().is_none_or(|old| old.keep_open != settings.keep_open) {
+            self.panel.floating = settings.keep_open;
+            platform::show_in_taskbar(window, settings.keep_open);
         }
-        self.applied = Some(self.settings.clone());
+        if old.as_ref().is_none_or(|old| old.launch_at_login != settings.launch_at_login) {
+            set_launch_at_login(settings.launch_at_login, self.bus.clone());
+        }
+        if old.as_ref().is_none_or(|old| old.global_shortcut != settings.global_shortcut) {
+            self.setting_errors.global_shortcut = self.system.set_shortcut(&settings.global_shortcut);
+        }
     }
 
-    fn on_state(&mut self, state: AppState) {
-        let busy = if state.syncing {
-            Some(Run::Sync)
-        } else if state.refreshing {
-            Some(Run::Refresh)
-        } else {
-            None
-        };
-        if busy.is_none() && self.was_busy.is_some() {
-            if self.user_run == Some(Run::Sync) {
-                if let Some(result) = state.sync_result.as_ref().filter(|r| r.ok) {
-                    self.sync_note = Some((result.message.clone(), Instant::now()));
+    fn on_state(&mut self, state: Arc<AppState>) {
+        let was_busy = self.state.syncing || self.state.refreshing;
+        if was_busy && !(state.syncing || state.refreshing) {
+            match self.user_run.take() {
+                Some(Run::Sync) if state.sync_result.as_ref().is_some_and(|r| r.ok) => {
+                    self.sync_note_until = Some(Instant::now() + SYNC_NOTE_FOR);
                 }
+                Some(Run::Refresh) => log_outcome(&refresh_outcome(&state)),
+                _ => {}
             }
-            if self.user_run == Some(Run::Refresh) {
-                log_outcome(&refresh_outcome(&state));
-            }
-            self.user_run = None;
         }
-        self.was_busy = busy;
         self.state = state;
     }
 
-    fn receive(&mut self, ctx: &egui::Context) {
+    fn receive(&mut self, ctx: &egui::Context, window: &impl HasWindowHandle) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 Msg::Toggle(tray) => match self.panel.toggle(self.visible, tray, Instant::now()) {
@@ -263,12 +265,14 @@ impl App {
                 Msg::Show(screen) => self.show(ctx, Some(screen)),
                 Msg::Refresh => self.background.refresh_in_background(true),
                 Msg::Quit => std::process::exit(0),
-                Msg::State(state) => self.on_state(*state),
+                Msg::State(state) => self.on_state(state),
                 Msg::Settings(settings) => {
                     self.settings = *settings;
-                    self.apply_settings(ctx);
+                    self.apply_settings(ctx, window);
                 }
-                Msg::Alert { title, body } => notify(&title, &body),
+                Msg::SaveFailed(error) => self.settings_error = Some(error),
+                Msg::LaunchAtLogin(error) => self.setting_errors.launch_at_login = error,
+                Msg::Alert { title, body } => notify(title, body),
                 Msg::Tray(image) => self.tray.set(image),
                 Msg::UpdateFound(version) => {
                     self.update.check = if version.is_some() { UpdateCheck::Idle } else { UpdateCheck::Current };
@@ -286,7 +290,7 @@ impl App {
         }
     }
 
-    fn act(&mut self, ctx: &egui::Context, action: Action) {
+    fn act(&mut self, ctx: &egui::Context, window: &impl HasWindowHandle, action: Action) {
         match action {
             Action::Refresh => {
                 self.user_run = Some(Run::Refresh);
@@ -297,17 +301,10 @@ impl App {
                 self.background.sync_in_background();
             }
             Action::Save(settings) => {
-                let input = serde_json::to_value(&settings).unwrap_or_default();
-                // Applied now so a second change made before the save lands builds on this one.
+                let _ = self.saves.send(settings.clone());
                 self.settings = settings;
-                match self.background.save_settings(&input) {
-                    Ok(saved) => {
-                        self.settings = saved;
-                        self.settings_error = None;
-                    }
-                    Err(error) => self.settings_error = Some(error),
-                }
-                self.apply_settings(ctx);
+                self.settings_error = None;
+                self.apply_settings(ctx, window);
             }
             Action::OpenDashboard(provider) => {
                 if let Err(error) = open_dashboard(&provider) {
@@ -319,7 +316,7 @@ impl App {
             Action::CheckUpdate => {
                 self.update.check = UpdateCheck::Checking;
                 let (updater, bus) = (self.updater.clone(), self.bus.clone());
-                std::thread::spawn(move || updater.check(&bus));
+                std::thread::spawn(move || updater.check(&bus, true));
             }
             Action::InstallUpdate => {
                 self.update.installing = true;
@@ -336,59 +333,65 @@ fn log_outcome(message: &str) {
 }
 
 impl eframe::App for App {
-    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.apply_settings(ctx);
-        if !self.started {
-            self.started = true;
-            ctx.send_viewport_cmd(ViewportCommand::Visible(false));
-        }
-        self.receive(ctx);
+    fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.receive(ctx, frame);
         let focused = ctx.input(|i| i.viewport().focused).unwrap_or(false);
-        if self.focused && !focused && self.panel.hide_on_blur(self.visible, Instant::now()) {
+        if self.panel.blurred(self.visible, focused, Instant::now()) {
             self.hide(ctx);
         }
-        self.focused = focused;
         if ctx.input(|i| i.viewport().close_requested()) {
             // Quitting is the tray's job; Alt+F4 or the taskbar's Close only dismiss the window.
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             self.hide(ctx);
         }
-        if self.sync_note.as_ref().is_some_and(|(_, at)| at.elapsed() > Duration::from_secs(6)) {
-            self.sync_note = None;
+        if let Some(until) = self.sync_note_until {
+            match until.checked_duration_since(Instant::now()) {
+                Some(left) => ctx.request_repaint_after(left),
+                None => self.sync_note_until = None,
+            }
         }
-        // The footer's age and reset countdowns move on their own.
-        ctx.request_repaint_after(Duration::from_secs(15));
+        self.sync_window(ctx);
+        if self.visible {
+            // The footer's age and reset countdowns move on their own.
+            ctx.request_repaint_after(Duration::from_secs(15));
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        if !self.visible {
+            return;
+        }
         let ctx = ui.ctx().clone();
         let palette = Palette::for_dark(ctx.theme() == egui::Theme::Dark);
-        let now = Self::now();
-        let model = Model {
-            state: &self.state,
-            settings: &self.settings,
-            clock: &self.clock,
-            now,
-            update: &self.update,
-            setting_errors: &self.setting_errors,
-            settings_error: self.settings_error.as_deref(),
-            version: env!("CARGO_PKG_VERSION"),
-            sync_note: self.sync_note.as_ref().map(|(note, _)| note.as_str()),
+        #[allow(clippy::cast_precision_loss)]
+        let now = self.clock.now().as_millisecond() as f64;
+        let (actions, height) = {
+            let model = Model {
+                state: &self.state,
+                settings: &self.settings,
+                clock: &self.clock,
+                now,
+                update: &self.update,
+                setting_errors: &self.setting_errors,
+                settings_error: self.settings_error.as_deref(),
+                sync_note: self
+                    .sync_note_until
+                    .and(self.state.sync_result.as_ref())
+                    .map(|result| result.message.as_str()),
+            };
+            draw(ui, &mut self.view, &model, &self.marks, palette)
         };
-        let (actions, height) = draw(ui, &mut self.view, &model, &self.assets, palette);
         for action in actions {
-            self.act(&ctx, action);
+            self.act(&ctx, frame, action);
         }
         if (height - self.content_height).abs() > 0.5 {
             self.content_height = height.ceil();
             if self.visible {
-                self.place(&ctx, false);
-                #[cfg(target_os = "macos")]
-                crate::macos::refresh_shadow(frame);
+                self.place(&ctx, self.panel.floating);
+                platform::refresh_shadow(frame);
             }
         }
-        #[cfg(not(target_os = "macos"))]
-        let _ = frame;
+        self.sync_window(&ctx);
     }
 
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {

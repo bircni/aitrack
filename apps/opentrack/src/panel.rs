@@ -7,10 +7,13 @@ use crate::position::Rect;
 /// A tray click that lands right after a blur-hide is the same click; ignore it.
 const BLUR_CLICK_GRACE: Duration = Duration::from_millis(250);
 
+#[derive(Default)]
 pub struct PanelState {
     /// Kept open: stays on blur and keeps the place the user dragged it to.
     pub floating: bool,
     hidden_by_blur_at: Option<Instant>,
+    /// Focus arrives a frame or more after showing; only losing it after that is a blur.
+    focused_since_show: bool,
     pub tray: Option<Rect>,
 }
 
@@ -22,13 +25,19 @@ pub enum ToggleAction {
 }
 
 impl PanelState {
-    pub fn new() -> Self {
-        Self { floating: false, hidden_by_blur_at: None, tray: None }
+    pub fn shown(&mut self) {
+        self.focused_since_show = false;
     }
 
-    pub fn hide_on_blur(&mut self, visible: bool, now: Instant) -> bool {
-        let hide = visible && !self.floating;
+    /// Given the window's focus each frame, whether the popup should hide.
+    pub fn blurred(&mut self, visible: bool, focused: bool, now: Instant) -> bool {
+        if focused {
+            self.focused_since_show = true;
+            return false;
+        }
+        let hide = visible && self.focused_since_show && !self.floating;
         if hide {
+            self.focused_since_show = false;
             self.hidden_by_blur_at = Some(now);
         }
         hide
@@ -52,27 +61,27 @@ impl PanelState {
 mod tests {
     use super::*;
 
-    fn state(floating: bool) -> PanelState {
-        PanelState { floating, ..PanelState::new() }
-    }
-
     #[test]
-    fn blur_hides_only_a_visible_popup() {
+    fn hides_only_after_focus_came_and_went() {
         let now = Instant::now();
-        let mut popup = state(false);
-        assert!(!popup.hide_on_blur(false, now));
-        assert_eq!(popup.hidden_by_blur_at, None);
-        assert!(popup.hide_on_blur(true, now));
-        assert_eq!(popup.hidden_by_blur_at, Some(now));
-        assert!(!state(true).hide_on_blur(true, now));
+        let mut popup = PanelState::default();
+        popup.shown();
+        assert!(!popup.blurred(true, false, now), "not focused yet right after showing");
+        assert!(!popup.blurred(true, true, now));
+        assert!(popup.blurred(true, false, now));
+        assert!(!popup.blurred(true, false, now), "one blur, one hide");
+        let mut kept = PanelState { floating: true, ..PanelState::default() };
+        assert!(!kept.blurred(true, true, now));
+        assert!(!kept.blurred(true, false, now));
     }
 
     #[test]
     fn a_tray_click_right_after_a_blur_hide_does_not_reopen() {
         let now = Instant::now();
         let tray = Rect { x: 1, y: 2, width: 3, height: 4 };
-        let mut popup = state(false);
-        popup.hide_on_blur(true, now);
+        let mut popup = PanelState::default();
+        popup.blurred(true, true, now);
+        popup.blurred(true, false, now);
         assert_eq!(popup.toggle(false, Some(tray), now + BLUR_CLICK_GRACE / 2), ToggleAction::Ignore);
         assert_eq!(popup.tray, Some(tray));
         assert_eq!(popup.toggle(false, None, now + BLUR_CLICK_GRACE), ToggleAction::Show);

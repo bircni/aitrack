@@ -2,7 +2,10 @@
 
 use std::collections::BTreeMap;
 
-use aitrack_core::display::format::{fmt, fmt_usd_cost};
+use aitrack_core::day::Day;
+use aitrack_core::display::format::{fmt, fmt_usd_cost, group_thousands};
+pub use aitrack_core::display::heatmap::intensity::intensity_level;
+use aitrack_core::display::heatmap::stats::MONTHS;
 use aitrack_core::quota::pacing::{js_round, PaceProjection, PaceSeverity};
 use aitrack_core::quota::{QuotaError, QuotaErrorKind, QuotaFormat, QuotaWindow};
 use aitrack_core::time::Clock;
@@ -51,26 +54,12 @@ pub fn format_tokens(value: f64) -> String {
     fmt(value)
 }
 
-const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 /// "May 11" for a `YYYY-MM-DD` calendar day.
 pub fn format_day(date: &str) -> String {
     date.parse::<Date>().map_or_else(
         |_| String::new(),
         |day| format!("{} {}", MONTHS[usize::try_from(day.month() - 1).unwrap_or(0)], day.day()),
     )
-}
-
-fn group(int: u64) -> String {
-    let digits = int.to_string();
-    let mut out = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
 }
 
 /// `Intl.NumberFormat('en-US')`: grouped, up to three decimals.
@@ -80,7 +69,7 @@ pub fn format_number(value: f64) -> String {
     let (int, frac) = ((scaled / 1000.0).trunc() as u64, (scaled % 1000.0) as u64);
     let sign = if value < 0.0 && scaled > 0.0 { "-" } else { "" };
     let frac = if frac == 0 { String::new() } else { format!(".{frac:03}").trim_end_matches('0').to_owned() };
-    format!("{sign}{}{frac}", group(int))
+    format!("{sign}{}{frac}", group_thousands(&int.to_string()))
 }
 
 /// `fraction` is 0–1.
@@ -109,16 +98,18 @@ impl Period {
     }
 }
 
-pub fn period_spend(usage: Option<&ProviderUsage>, period: Period) -> PeriodUsage {
-    usage.map_or_else(PeriodUsage::default, |usage| {
-        match period {
-            Period::Today => &usage.today,
-            Period::Week => &usage.last7_days,
-            Period::Month => &usage.last30_days,
-            Period::All => &usage.all_time,
-        }
-        .clone()
+pub fn period_spend(usage: Option<&ProviderUsage>, period: Period) -> Option<&PeriodUsage> {
+    usage.map(|usage| match period {
+        Period::Today => &usage.today,
+        Period::Week => &usage.last7_days,
+        Period::Month => &usage.last30_days,
+        Period::All => &usage.all_time,
     })
+}
+
+/// The period's spend, nothing when the provider has no usage.
+pub fn period_value(usage: Option<&ProviderUsage>, period: Period) -> Spend {
+    period_spend(usage, period).map_or_else(Spend::default, Spend::from)
 }
 
 pub fn period_projects(projects: Option<&ProjectUsages>, period: Period) -> &[ProjectUsageEntry] {
@@ -203,7 +194,7 @@ pub fn spend_reading(spend: &Spend) -> String {
 
 pub fn total_spend<'a>(usages: impl IntoIterator<Item = Option<&'a ProviderUsage>>, period: Period) -> Spend {
     usages.into_iter().fold(Spend::default(), |total, usage| {
-        let spend = Spend::from(&period_spend(usage, period));
+        let spend = period_value(usage, period);
         Spend {
             cost_usd: total.cost_usd + spend.cost_usd,
             tokens: total.tokens + spend.tokens,
@@ -307,13 +298,7 @@ pub struct History {
 
 /// Monday of the week `date` falls in.
 pub fn monday_of_week(date: &str) -> String {
-    date.parse::<Date>().map_or_else(
-        |_| date.to_owned(),
-        |day| {
-            let back = i64::from(day.weekday().to_monday_zero_offset());
-            day.checked_sub(jiff::Span::new().days(back)).unwrap_or(day).to_string()
-        },
-    )
+    Day::parse(date).map_or_else(|| date.to_owned(), |day| day.monday_of_week().to_string())
 }
 
 /// Stacked cost per day (or week) over the last `range` days, split by provider.
@@ -549,11 +534,6 @@ pub fn sparkline(values: &[f64], width: f64, height: f64, pad: f64) -> Option<Ve
     )
 }
 
-pub fn is_stale_sync(clock: &Clock, last_updated: &str, now: f64) -> bool {
-    let at = parse_ms(clock, last_updated);
-    !at.is_nan() && now - at > STALE_SYNC_MS
-}
-
 /// How current a machine's numbers are: this one reads its logs live, others are as of their last sync.
 pub fn sync_status(clock: &Clock, machine: &MachineUsage, now: f64) -> (String, bool) {
     let at = parse_ms(clock, &machine.last_updated);
@@ -564,7 +544,7 @@ pub fn sync_status(clock: &Clock, machine: &MachineUsage, now: f64) -> (String, 
     if machine.current {
         return (format!("Live · synced {ago}"), false);
     }
-    let stale = is_stale_sync(clock, &machine.last_updated, now);
+    let stale = now - at > STALE_SYNC_MS;
     (format!("Synced {ago}{}", if stale { " · stale" } else { "" }), stale)
 }
 
@@ -579,20 +559,6 @@ pub fn zone_clock(clock: &Clock, timezone: &str, now: f64) -> Option<String> {
     let hour = local.hour();
     let twelve = if hour % 12 == 0 { 12 } else { hour % 12 };
     Some(format!("{twelve:02}:{:02}\u{202f}{}", local.minute(), if hour < 12 { "AM" } else { "PM" }))
-}
-
-/// A heatmap cell's level, 0–4.
-pub fn intensity_level(value: f64, max: f64) -> u8 {
-    if value <= 0.0 || max <= 0.0 {
-        return 0;
-    }
-    let ratio = (value / max).min(1.0);
-    match ratio {
-        r if r < 0.1 => 1,
-        r if r < 0.35 => 2,
-        r if r < 0.65 => 3,
-        _ => 4,
-    }
 }
 
 pub fn by_cost_then_tokens(a: &Spend, b: &Spend) -> std::cmp::Ordering {
@@ -689,10 +655,10 @@ mod tests {
     #[test]
     fn reads_each_period_and_totals_spend() {
         let claude = usage(&[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 3.0], 3.0);
-        assert!((period_spend(Some(&claude), Period::Today).cost_usd - 3.0).abs() < f64::EPSILON);
-        assert!((period_spend(Some(&claude), Period::Month).cost_usd - 13.0).abs() < f64::EPSILON);
-        assert!((period_spend(Some(&claude), Period::All).cost_usd - 23.0).abs() < f64::EPSILON);
-        assert_eq!(period_spend(None, Period::Week), PeriodUsage::default());
+        assert!((period_value(Some(&claude), Period::Today).cost_usd - 3.0).abs() < f64::EPSILON);
+        assert!((period_value(Some(&claude), Period::Month).cost_usd - 13.0).abs() < f64::EPSILON);
+        assert!((period_value(Some(&claude), Period::All).cost_usd - 23.0).abs() < f64::EPSILON);
+        assert!(period_spend(None, Period::Week).is_none());
         assert_eq!(spend_label(&Spend::default()), "$0.00");
         assert_eq!(spend_label(&Spend { tokens: 500.0, ..Spend::default() }), "—");
         let zero = usage(&[0.0], 0.0);

@@ -1,6 +1,6 @@
 //! Keeps limits and usage fresh on a schedule, backs off on failures and raises alerts.
 
-use std::sync::{Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use aitrack_core::data::types::MachineFile;
 use aitrack_core::providers::{provider_label, PROVIDERS};
@@ -36,7 +36,7 @@ pub trait Deps: Send + Sync {
     fn load_usage(&self, options: UsageLoadOptions) -> UsageLoadResult;
     /// Epoch ms.
     fn now(&self) -> f64;
-    fn on_state(&self, state: &AppState);
+    fn on_state(&self, state: Arc<AppState>);
     fn on_alert(&self, alert: &Alert);
     fn persist(&self, cache: &CachedState);
     /// The one-line outcome and the machine file it built.
@@ -407,8 +407,7 @@ impl<D: Deps> QuotaService<D> {
 
     fn emit(&self) {
         let _order = self.emitting.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let state = self.state();
-        self.deps.on_state(&state);
+        self.deps.on_state(Arc::new(self.state()));
     }
 }
 
@@ -513,8 +512,8 @@ mod tests {
         fn now(&self) -> f64 {
             *self.now.lock().unwrap()
         }
-        fn on_state(&self, state: &AppState) {
-            self.states.lock().unwrap().push(state.clone());
+        fn on_state(&self, state: Arc<AppState>) {
+            self.states.lock().unwrap().push((*state).clone());
         }
         fn on_alert(&self, alert: &Alert) {
             self.alerts.lock().unwrap().push(alert.clone());

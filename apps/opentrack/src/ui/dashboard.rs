@@ -7,15 +7,16 @@ use eframe::egui::{
     StrokeKind, Ui, Vec2, WidgetInfo,
 };
 
+use std::borrow::Cow;
+
 use super::format::{
     combined_daily, empty_usage_guidance, fill_percent, format_cost, format_limit_value, format_number, format_reset,
-    format_tokens, format_updated, is_priced, pace_label, period_spend, problem_line, sparkline, spend_label,
-    spend_reading, split_amount, total_spend, usage_availability, usage_note, Availability, Period, ProblemAction,
-    Spend,
+    format_tokens, format_updated, is_priced, pace_label, period_spend, period_value, problem_line, sparkline,
+    spend_label, spend_reading, split_amount, total_spend, usage_availability, usage_note, Availability, Period,
+    ProblemAction, Spend,
 };
-use super::icons::{paint_glyph, Glyph};
-use super::widgets::{banner, card, empty, link, paint_focus, segmented, spread, strong, text};
-use super::{views, Action, Frame, Model, Tab, View};
+use super::widgets::{banner, card, divider, empty, link, paint_focus, segmented, spin_angle, spread, strong, text};
+use super::{retry_banner, views, Action, Frame, Model, Tab, View};
 use crate::pace::{has_reset, meter_tone, Tone};
 use crate::settings::Settings;
 use crate::state::{AppState, ProviderState};
@@ -27,15 +28,15 @@ const NO_PACE: PaceProjection = PaceProjection {
     run_out_at: None,
 };
 
-pub fn tabs(state: &AppState) -> Vec<(Tab, String)> {
+pub fn tabs(state: &AppState) -> Vec<(Tab, Cow<'static, str>)> {
     let mut tabs = vec![
-        (Tab::Providers, "Providers".to_owned()),
-        (Tab::History, "History".to_owned()),
-        (Tab::Projects, "Projects".to_owned()),
+        (Tab::Providers, "Providers".into()),
+        (Tab::History, "History".into()),
+        (Tab::Projects, "Projects".into()),
     ];
     let machines = state.machines.as_ref().map_or(0, Vec::len);
     if machines > 0 {
-        tabs.push((Tab::Machines, format!("Machines {machines}")));
+        tabs.push((Tab::Machines, format!("Machines {machines}").into()));
     }
     tabs
 }
@@ -54,34 +55,19 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
         });
     }
     if let Some(error) = &state.pull_error {
-        banner(ui, &palette, |ui| {
-            ui.label(text(error, 12.0, palette.ink2));
-            if link(ui, &palette, "Retry", true).clicked() {
-                frame.act(Action::Refresh);
-            }
-        });
-    }
-    if let (Some(_), Some(at)) = (&state.usage_error, &state.usage_updated_at) {
-        banner(ui, &palette, |ui| {
-            let age = format_updated(model.clock, Some(at), model.now);
-            ui.label(text(format!("Cached usage: {age}"), 12.0, palette.ink2));
-        });
+        retry_banner(ui, frame, error, || Action::Refresh);
     }
     if let Some(error) = &state.usage_error {
-        banner(ui, &palette, |ui| {
-            ui.label(text(error, 12.0, palette.ink2));
-            if link(ui, &palette, "Retry", true).clicked() {
-                frame.act(Action::Refresh);
-            }
-        });
+        if let Some(at) = &state.usage_updated_at {
+            banner(ui, &palette, |ui| {
+                let age = format_updated(model.clock, Some(at), model.now);
+                ui.label(text(format!("Cached usage: {age}"), 12.0, palette.ink2));
+            });
+        }
+        retry_banner(ui, frame, error, || Action::Refresh);
     }
     if let Some(result) = state.sync_result.as_ref().filter(|r| !r.ok) {
-        banner(ui, &palette, |ui| {
-            ui.label(text(format!("Sync failed: {}", result.message), 12.0, palette.ink2));
-            if link(ui, &palette, "Retry", true).clicked() {
-                frame.act(Action::Sync);
-            }
-        });
+        retry_banner(ui, frame, format!("Sync failed: {}", result.message), || Action::Sync);
     }
     if availability == Availability::Off {
         empty(ui, &palette, &format!("{}. Choose some in Settings.", usage_note(Availability::Off)));
@@ -131,10 +117,13 @@ fn tab_bar(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame) {
                         );
                     }
                     let color = if selected { palette.ink } else { palette.ink2 };
-                    let galley =
-                        ui.painter().layout_no_wrap(label.clone(), FontId::new(12.0, super::theme::bold()), color);
+                    let galley = ui.painter().layout_no_wrap(
+                        label.clone().into_owned(),
+                        FontId::new(12.0, super::theme::bold()),
+                        color,
+                    );
                     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, color);
-                    response.widget_info(|| WidgetInfo::selected(Role::Button, true, selected, label));
+                    response.widget_info(|| WidgetInfo::selected(Role::Button, true, selected, label.as_ref()));
                     paint_focus(ui, &palette, &response, rect, 7);
                     if response.clicked() {
                         view.tab = *tab;
@@ -195,7 +184,10 @@ fn summary(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame, availabil
                 });
             });
             if view.period != Period::All {
-                ui.with_layout(Layout::right_to_left(Align::Max), |ui| spark(ui, model, frame));
+                let spark = view.spark.get(model.state, (), || Spark::new(model.state));
+                if let Some(spark) = spark.as_ref() {
+                    ui.with_layout(Layout::right_to_left(Align::Max), |ui| spark.show(ui, frame));
+                }
             }
         });
         if !providers.is_empty() {
@@ -204,65 +196,103 @@ fn summary(ui: &mut Ui, view: &mut View, model: &Model, frame: &Frame, availabil
     });
 }
 
-fn spark(ui: &mut Ui, model: &Model, frame: &Frame) {
+/// The summary's 30-day cost curve, worked out once per state.
+pub struct Spark {
+    points: Vec<(f64, f64)>,
+    peak: f64,
+}
+
+impl Spark {
+    fn new(state: &AppState) -> Option<Self> {
+        let daily = combined_daily(state.providers.iter().map(|p| p.usage.as_ref()), 30);
+        let values: Vec<f64> = daily.iter().map(|d| d.cost_usd).collect();
+        let points = sparkline(&values, 112.0, 36.0, 3.0)?;
+        Some(Self { points, peak: values.iter().copied().fold(0.0, f64::max) })
+    }
+
+    fn show(&self, ui: &mut Ui, frame: &Frame) {
+        let palette = frame.palette;
+        let points = &self.points;
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 2.0;
+            let (rect, response) = ui.allocate_exact_size(Vec2::new(112.0, 36.0), Sense::hover());
+            #[allow(clippy::cast_possible_truncation)]
+            let at = |(x, y): (f64, f64)| Pos2::new(rect.left() + x as f32, rect.top() + y as f32);
+            let line: Vec<Pos2> = points.iter().copied().map(at).collect();
+            let baseline = rect.top() + 33.0;
+            for pair in line.windows(2) {
+                let quad = vec![pair[0], pair[1], Pos2::new(pair[1].x, baseline), Pos2::new(pair[0].x, baseline)];
+                ui.painter().add(Shape::convex_polygon(quad, palette.curve_fill, Stroke::NONE));
+            }
+            ui.painter().add(Shape::line(line.clone(), Stroke::new(1.4, palette.curve)));
+            if let Some(end) = line.last() {
+                ui.painter().circle(*end, 2.6, palette.surface, Stroke::new(1.4, palette.curve));
+            }
+            response.widget_info(|| {
+                let label = format!("Estimated cost per day, last 30 days, peak {}", format_cost(self.peak));
+                WidgetInfo::labeled(Role::Image, true, label)
+            });
+            ui.with_layout(Layout::right_to_left(Align::Min), |ui| ui.label(text("30 days", 10.5, palette.ink3)));
+        });
+    }
+}
+
+/// The width each of `count` chips gets in a row with 6 pt gaps.
+pub fn chip_width(ui: &Ui, count: usize) -> f32 {
+    let count = count.max(1);
+    #[allow(clippy::cast_precision_loss)]
+    let width = (ui.available_width() - 6.0 * (count - 1) as f32) / count as f32;
+    width
+}
+
+/// A small card naming a provider over a figure; `swatch` adds its chart colour.
+pub fn chip(
+    ui: &mut Ui,
+    frame: &Frame,
+    width: f32,
+    (key, label): (&str, &str),
+    figure: String,
+    swatch: bool,
+) -> egui::Response {
     let palette = frame.palette;
-    let daily = combined_daily(model.state.providers.iter().map(|p| p.usage.as_ref()), 30);
-    let values: Vec<f64> = daily.iter().map(|d| d.cost_usd).collect();
-    let Some(points) = sparkline(&values, 112.0, 36.0, 3.0) else { return };
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = 2.0;
-        let (rect, response) = ui.allocate_exact_size(Vec2::new(112.0, 36.0), Sense::hover());
-        #[allow(clippy::cast_possible_truncation)]
-        let at = |(x, y): (f64, f64)| Pos2::new(rect.left() + x as f32, rect.top() + y as f32);
-        let line: Vec<Pos2> = points.iter().copied().map(at).collect();
-        let baseline = rect.top() + 33.0;
-        for pair in line.windows(2) {
-            let quad = vec![pair[0], pair[1], Pos2::new(pair[1].x, baseline), Pos2::new(pair[0].x, baseline)];
-            ui.painter().add(Shape::convex_polygon(quad, palette.curve_fill, Stroke::NONE));
-        }
-        ui.painter().add(Shape::line(line.clone(), Stroke::new(1.4, palette.curve)));
-        if let Some(end) = line.last() {
-            ui.painter().circle(*end, 2.6, palette.surface, Stroke::new(1.4, palette.curve));
-        }
-        let peak = values.iter().copied().fold(0.0, f64::max);
-        let label = format!("Estimated cost per day, last 30 days, peak {}", format_cost(peak));
-        response.widget_info(|| WidgetInfo::labeled(Role::Image, true, &label));
-        ui.with_layout(Layout::right_to_left(Align::Min), |ui| ui.label(text("30 days", 10.5, palette.ink3)));
-    });
+    EguiFrame::new()
+        .fill(palette.card)
+        .stroke(Stroke::new(1.0, palette.edge))
+        .corner_radius(CornerRadius::same(9))
+        .inner_margin(Margin::symmetric(9, 8))
+        .show(ui, |ui| {
+            ui.set_width(width - 20.0);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 5.0;
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 5.0;
+                    if swatch {
+                        let (rect, _) = ui.allocate_exact_size(Vec2::splat(7.0), Sense::hover());
+                        ui.painter().rect_filled(rect, CornerRadius::same(2), palette.provider(key));
+                    }
+                    mark(ui, frame, key, 12.0);
+                    ui.add(egui::Label::new(text(label, 10.0, palette.ink2)).truncate());
+                });
+                ui.add(egui::Label::new(strong(figure, 12.0, palette.ink)).wrap());
+            });
+        })
+        .response
 }
 
 fn provider_chips(ui: &mut Ui, period: Period, providers: &[ProviderState], frame: &Frame) {
-    let palette = frame.palette;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        #[allow(clippy::cast_precision_loss)]
-        let width = (ui.available_width() - 6.0 * (providers.len() - 1) as f32) / providers.len() as f32;
+        let width = chip_width(ui, providers.len());
         for provider in providers {
-            let value = Spend::from(&period_spend(provider.usage.as_ref(), period));
-            EguiFrame::new()
-                .fill(palette.card)
-                .stroke(Stroke::new(1.0, palette.edge))
-                .corner_radius(CornerRadius::same(9))
-                .inner_margin(Margin::symmetric(9, 8))
-                .show(ui, |ui| {
-                    ui.set_width(width - 20.0);
-                    ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 5.0;
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 5.0;
-                            mark(ui, frame, &provider.key, 12.0);
-                            ui.add(egui::Label::new(text(&provider.label, 10.0, palette.ink2)).truncate());
-                        });
-                        let cost = if provider.usage.is_some() { spend_label(&value) } else { "—".into() };
-                        ui.add(egui::Label::new(strong(cost, 12.0, palette.ink)).wrap());
-                    });
-                })
-                .response
-                .on_hover_text(if provider.usage.is_some() {
+            let value = period_value(provider.usage.as_ref(), period);
+            let cost = if provider.usage.is_some() { spend_label(&value) } else { "—".into() };
+            chip(ui, frame, width, (&provider.key, &provider.label), cost, false).on_hover_text(
+                if provider.usage.is_some() {
                     format!("{}: {} tokens", provider.label, format_tokens(value.tokens))
                 } else {
                     format!("{}: usage unavailable", provider.label)
-                });
+                },
+            );
         }
     });
 }
@@ -270,7 +300,7 @@ fn provider_chips(ui: &mut Ui, period: Period, providers: &[ProviderState], fram
 pub fn mark(ui: &mut Ui, frame: &Frame, key: &str, size: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
     let color = if key == "claude_code" { frame.palette.claude } else { frame.palette.ink };
-    frame.assets.marks.paint(ui.painter(), rect, key, color);
+    frame.marks.paint(ui.painter(), rect, key, color);
 }
 
 fn heading(ui: &mut Ui, frame: &Frame, provider: &ProviderState) {
@@ -285,7 +315,7 @@ fn heading(ui: &mut Ui, frame: &Frame, provider: &ProviderState) {
 fn provider_section(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame, provider: &ProviderState) {
     let palette = frame.palette;
     let spend = period_spend(provider.usage.as_ref(), view.period);
-    let open = view.open_providers.contains(&provider.key) && provider.usage.is_some();
+    let open = view.open_providers.contains(&provider.key) && spend.is_some();
     card(ui, &palette, |ui| {
         ui.spacing_mut().item_spacing.y = 16.0;
         let head = ui.horizontal(|ui| {
@@ -296,24 +326,15 @@ fn provider_section(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Fra
                 busy_dot(ui, &palette);
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if provider.usage.is_some() {
-                    let openness = ui.ctx().animate_bool_with_time(ui.scope_id().with(&provider.key), open, 0.16);
-                    let (rect, _) = ui.allocate_exact_size(Vec2::splat(13.0), Sense::hover());
-                    paint_glyph(ui.painter(), rect, Glyph::ChevronDown, palette.ink2, openness * std::f32::consts::PI);
+                if spend.is_some() {
+                    views::chevron(ui, &palette, &provider.key, open);
                 }
-                let cost = if provider.usage.is_some() { spend_label(&Spend::from(&spend)) } else { "—".into() };
+                let cost = spend.map_or_else(|| "—".into(), |spend| spend_label(&Spend::from(spend)));
                 ui.label(text(cost, 12.0, palette.ink2));
             });
         });
         let response = ui.interact(head.response.rect, ui.scope_id().with(("head", &provider.key)), Sense::click());
-        if provider.usage.is_some() {
-            if response.hovered() {
-                ui.painter().rect_filled(
-                    head.response.rect.expand2(Vec2::new(6.0, 4.0)),
-                    CornerRadius::same(6),
-                    palette.raised.gamma_multiply(0.0),
-                );
-            }
+        if spend.is_some() {
             response.widget_info(|| WidgetInfo::selected(Role::Button, true, open, &provider.label));
             if response.clicked() {
                 if open {
@@ -368,10 +389,8 @@ fn provider_section(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Fra
         if provider.quota.is_none() && provider.quota_error.is_none() {
             ui.label(text("Checking limits…", 12.0, palette.ink2));
         }
-        if open {
-            if let Some(usage) = &provider.usage {
-                details(ui, &palette, view.period, usage, &spend);
-            }
+        if let (true, Some(usage), Some(spend)) = (open, &provider.usage, spend) {
+            details(ui, &palette, view.period, usage, spend);
         }
     });
 }
@@ -385,8 +404,7 @@ fn details(
 ) {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 8.0;
-        ui.painter().hline(ui.max_rect().x_range(), ui.cursor().top(), Stroke::new(1.0, palette.rule));
-        ui.add_space(12.0);
+        divider(ui, palette);
         for (label, period_usage) in [
             (Period::Today.label(), &usage.today),
             ("Yesterday", &usage.yesterday),
@@ -417,10 +435,10 @@ fn details(
 
 fn busy_dot(ui: &mut Ui, palette: &super::theme::Palette) {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
-    let start = ui.input(|i| i.time) as f32 * std::f32::consts::TAU / 0.9;
-    let points: Vec<Pos2> = (0..=18)
+    let start = spin_angle(ui);
+    let points: Vec<Pos2> = (0..=18u8)
         .map(|i| {
-            let theta = start + f32::from(u8::try_from(i).unwrap_or(0)) / 24.0 * std::f32::consts::TAU;
+            let theta = start + f32::from(i) / 24.0 * std::f32::consts::TAU;
             rect.center() + Vec2::angled(theta) * 4.25
         })
         .collect();
@@ -475,9 +493,14 @@ pub fn limit_meter(ui: &mut Ui, model: &Model, frame: &mut Frame, provider: &str
         } else {
             label.as_deref().map(str::to_lowercase)
         };
-        let meter_text = [Some(value.clone()), state].into_iter().flatten().collect::<Vec<_>>().join(", ");
-        let meter_label = format!("{} {}: {meter_text}", window.label, settings.display);
-        response.widget_info(|| WidgetInfo::labeled(Role::ProgressIndicator, true, &meter_label));
+        response.widget_info(|| {
+            let reading = [Some(value.as_str()), state.as_deref()].into_iter().flatten().collect::<Vec<_>>().join(", ");
+            WidgetInfo::labeled(
+                Role::ProgressIndicator,
+                true,
+                format!("{} {}: {reading}", window.label, settings.display),
+            )
+        });
         if reset.is_some() || label.is_some() {
             ui.horizontal(|ui| {
                 if let Some(reset) = &reset {

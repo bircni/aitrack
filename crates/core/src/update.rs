@@ -1,16 +1,20 @@
 //! opentrack's releases: the manifest its updater and `aitrack install-opentrack` read, the minisign check,
 //! and putting a verified build in place.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use minisign_verify::{PublicKey, Signature};
-use serde_json::Value;
+use serde::Deserialize;
 
+use crate::fs::write_file_atomic;
 use crate::http::{HttpClient, Request};
+use crate::process;
+use crate::semver::Version;
 
 /// Prereleases never become "latest", so only stable builds are offered.
 pub const MANIFEST_URL: &str = "https://github.com/bircni/aitrack/releases/latest/download/latest.json";
@@ -29,6 +33,18 @@ pub struct Release {
     pub signature: String,
 }
 
+#[derive(Deserialize)]
+struct Manifest {
+    version: String,
+    platforms: HashMap<String, Asset>,
+}
+
+#[derive(Deserialize)]
+struct Asset {
+    url: String,
+    signature: String,
+}
+
 /// The manifest's platform key for this machine; only those the release workflow builds.
 pub fn updater_target() -> Result<&'static str, String> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
@@ -41,17 +57,24 @@ pub fn updater_target() -> Result<&'static str, String> {
     }
 }
 
+/// What a fresh install is called: the app bundle on macOS, the `AppImage` on Linux.
+#[must_use]
+pub fn install_name() -> &'static str {
+    if cfg!(target_os = "macos") { APP_NAME } else { APPIMAGE_NAME }
+}
+
 pub fn parse_manifest(body: &[u8], target: &str) -> Result<Release, String> {
-    let manifest: Value = serde_json::from_slice(body).unwrap_or_default();
-    let asset = &manifest["platforms"][target];
-    match (manifest["version"].as_str(), asset["url"].as_str(), asset["signature"].as_str()) {
-        (Some(version), Some(url), Some(signature)) => Ok(Release {
-            version: version.trim_start_matches('v').to_owned(),
-            url: url.to_owned(),
-            signature: signature.to_owned(),
-        }),
-        _ => Err(format!("The latest opentrack release has no {target} build.")),
-    }
+    let mut manifest: Manifest =
+        serde_json::from_slice(body).map_err(|e| format!("The latest opentrack release has a bad manifest: {e}"))?;
+    let asset = manifest
+        .platforms
+        .remove(target)
+        .ok_or_else(|| format!("The latest opentrack release has no {target} build."))?;
+    Ok(Release {
+        version: manifest.version.trim_start_matches('v').to_owned(),
+        url: asset.url,
+        signature: asset.signature,
+    })
 }
 
 pub fn latest_release(http: &dyn HttpClient, target: &str) -> Result<Release, String> {
@@ -82,43 +105,21 @@ pub fn verify_minisign(data: &[u8], signature: &str, public_key: &str) -> bool {
     key.verify(data, &signature, false).is_ok() // Tauri always signs the prehashed ("ED") form.
 }
 
-fn version_parts(version: &str) -> Option<([u64; 3], Option<&str>)> {
-    let version = version.trim_start_matches('v');
-    let (core, pre) = version.split_once('-').map_or((version, None), |(c, p)| (c, Some(p)));
-    let mut numbers = core.split('.').map(|part| part.parse::<u64>().ok());
-    let parts = [numbers.next()??, numbers.next()??, numbers.next()??];
-    numbers.next().is_none().then_some((parts, pre))
-}
-
-/// Semver precedence, enough for release tags: a prerelease sorts before its release.
+/// Whether `candidate` is a later release than `current`, by semver precedence.
 pub fn is_newer(candidate: &str, current: &str) -> bool {
-    let (Some((a, a_pre)), Some((b, b_pre))) = (version_parts(candidate), version_parts(current)) else {
-        return false;
-    };
-    match a.cmp(&b) {
-        std::cmp::Ordering::Equal => match (a_pre, b_pre) {
-            (None, Some(_)) => true,
-            (Some(a), Some(b)) => a > b,
-            _ => false,
-        },
-        order => order.is_gt(),
-    }
+    let parse = |text: &str| Version::parse(text.trim_start_matches('v'));
+    matches!((parse(candidate), parse(current)), (Some(a), Some(b)) if a > b)
 }
 
-fn exec(program: &Path, args: &[&str], inherit: bool) -> Result<(), String> {
-    let mut command = Command::new(program);
-    command.args(args);
-    if !inherit {
-        command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    }
-    let output = command.output().map_err(|e| format!("{}: {e}", program.display()))?;
-    if output.status.success() {
+fn exec(program: &str, args: &[&str]) -> Result<(), String> {
+    let finished = process::run(program, args, &[], None, None).map_err(|e| format!("{program}: {e}"))?;
+    if finished.status.success() {
         return Ok(());
     }
-    let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    let code = output.status.code().map_or_else(|| "null".to_owned(), |c| c.to_string());
+    let detail = String::from_utf8_lossy(&finished.stderr).trim().to_owned();
+    let code = finished.status.code().map_or_else(|| "null".to_owned(), |c| c.to_string());
     let suffix = if detail.is_empty() { String::new() } else { format!(": {detail}") };
-    Err(format!("{} exited with code {code}{suffix}", program.display()))
+    Err(format!("{program} exited with code {code}{suffix}"))
 }
 
 /// Removes the folder on drop, whatever happened inside it.
@@ -135,58 +136,64 @@ fn staging_dir(parent: &Path, prefix: &str) -> Result<Staging, String> {
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX));
     let path = parent.join(format!("{prefix}{}-{suffix:x}", std::process::id()));
-    std::fs::create_dir(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    std::fs::create_dir_all(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(Staging(path))
 }
 
+/// Puts a verified build in place. `destination` is the app bundle or `AppImage` to replace; Windows
+/// ignores it because its installer picks the folder. `replace_running` leaves the Windows installer
+/// to close and restart this process; elsewhere the caller relaunches the path this returns.
+pub fn install(file: &[u8], destination: Option<&Path>, replace_running: bool) -> Result<Option<PathBuf>, String> {
+    if cfg!(windows) {
+        return run_windows_installer(file, replace_running).map(|()| None);
+    }
+    let destination = destination.ok_or("No folder to install opentrack into")?;
+    if cfg!(target_os = "macos") { install_mac_app(file, destination) } else { install_app_image(file, destination) }
+        .map(Some)
+}
+
 /// Unpacks next to the destination so swapping in the new app is a same-volume rename.
-pub fn install_mac_app(archive: &[u8], dir: &Path) -> Result<PathBuf, String> {
+fn install_mac_app(archive: &[u8], destination: &Path) -> Result<PathBuf, String> {
+    let dir = destination.parent().ok_or("The app bundle has no folder")?;
     let staging = staging_dir(dir, ".opentrack-install-")?;
     let archive_path = staging.0.join("opentrack.app.tar.gz");
     std::fs::write(&archive_path, archive).map_err(|e| e.to_string())?;
-    exec(Path::new("tar"), &["-xzf", &archive_path.to_string_lossy(), "-C", &staging.0.to_string_lossy()], false)?;
-    let destination = dir.join(APP_NAME);
+    exec("tar", &["-xzf", &archive_path.to_string_lossy(), "-C", &staging.0.to_string_lossy()])?;
     let previous = staging.0.join("previous.app");
     if destination.exists() {
-        std::fs::rename(&destination, &previous).map_err(|e| e.to_string())?;
+        std::fs::rename(destination, &previous).map_err(|e| e.to_string())?;
     }
-    if let Err(error) = std::fs::rename(staging.0.join(APP_NAME), &destination) {
+    if let Err(error) = std::fs::rename(staging.0.join(APP_NAME), destination) {
         if previous.exists() {
-            std::fs::rename(&previous, &destination).map_err(|e| e.to_string())?;
+            std::fs::rename(&previous, destination).map_err(|e| e.to_string())?;
         }
         return Err(error.to_string());
     }
-    Ok(destination)
-}
-
-/// Renamed over the old file, so a running copy keeps its own until it restarts.
-pub fn install_app_image(app_image: &[u8], destination: &Path) -> Result<PathBuf, String> {
-    let name = destination.file_name().map_or_else(|| APPIMAGE_NAME.into(), |n| n.to_string_lossy().into_owned());
-    let staging = destination.with_file_name(format!(".{name}.download"));
-    let result = (|| -> std::io::Result<()> {
-        std::fs::write(&staging, app_image)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755))?;
-        }
-        std::fs::rename(&staging, destination)
-    })();
-    let _ = std::fs::remove_file(&staging);
-    result.map_err(|e| e.to_string())?;
     Ok(destination.to_owned())
 }
 
-/// Runs the NSIS installer; `wait` holds until it exits, otherwise it is left to replace this process.
-pub fn run_windows_installer(installer: &[u8], args: &[&str], wait: bool) -> Result<(), String> {
-    let dir = std::env::temp_dir().join(format!("opentrack-update-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join("opentrack-setup.exe");
-    std::fs::write(&path, installer).map_err(|e| e.to_string())?;
-    if wait {
-        return exec(&path, args, true);
+/// Renamed over the old file, so a running copy keeps its own until it restarts.
+fn install_app_image(app_image: &[u8], destination: &Path) -> Result<PathBuf, String> {
+    write_file_atomic(destination, app_image, Some(0o755)).map_err(|e| format!("{}: {e}", destination.display()))?;
+    Ok(destination.to_owned())
+}
+
+/// A waiting install cleans up after itself; one that replaces this process keeps its folder, as the
+/// installer still runs from it once this process is gone.
+fn run_windows_installer(installer: &[u8], replace_running: bool) -> Result<(), String> {
+    let write = |dir: &Path| -> Result<PathBuf, String> {
+        let path = dir.join("opentrack-setup.exe");
+        std::fs::write(&path, installer).map_err(|e| e.to_string())?;
+        Ok(path)
+    };
+    if replace_running {
+        let dir = std::env::temp_dir().join(format!("opentrack-update-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        // Passive mode closes this process and starts the new one, as Tauri's updater did.
+        return Command::new(write(&dir)?).args(["/P", "/R"]).spawn().map(drop).map_err(|e| e.to_string());
     }
-    Command::new(&path).args(args).spawn().map(drop).map_err(|e| e.to_string())
+    let staging = staging_dir(&std::env::temp_dir(), "opentrack-update-")?;
+    exec(&write(&staging.0)?.to_string_lossy(), &[])
 }
 
 #[cfg(test)]
@@ -211,7 +218,8 @@ mod tests {
         let body = br#"{"version":"5.0.0","pub_date":"x","platforms":{"darwin-aarch64":{"signature":"s","url":"u"}}}"#;
         let release = parse_manifest(body, "darwin-aarch64").unwrap();
         assert_eq!(release, Release { version: "5.0.0".into(), url: "u".into(), signature: "s".into() });
-        assert!(parse_manifest(body, "windows-x86_64").is_err());
+        assert!(parse_manifest(body, "windows-x86_64").unwrap_err().contains("no windows-x86_64 build"));
+        assert!(parse_manifest(b"<html>", "darwin-aarch64").unwrap_err().contains("bad manifest"));
     }
 
     #[test]
@@ -220,9 +228,27 @@ mod tests {
         assert!(is_newer("4.10.0", "4.9.9"));
         assert!(is_newer("5.0.0", "5.0.0-beta.2"));
         assert!(is_newer("5.0.0-beta.2", "5.0.0-beta.1"));
+        assert!(is_newer("5.0.0-beta.10", "5.0.0-beta.9"));
         assert!(!is_newer("5.0.0", "5.0.0"));
         assert!(!is_newer("5.0.0-beta.1", "5.0.0"));
         assert!(!is_newer("4.2.1", "5.0.0"));
         assert!(!is_newer("garbage", "5.0.0"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replaces_the_bundle_it_was_given_whatever_its_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("src");
+        std::fs::create_dir_all(source.join(APP_NAME)).unwrap();
+        std::fs::write(source.join(APP_NAME).join("new"), "").unwrap();
+        let archive = dir.path().join("a.tar.gz");
+        exec("tar", &["-czf", &archive.to_string_lossy(), "-C", &source.to_string_lossy(), APP_NAME]).unwrap();
+        let running = dir.path().join("opentrack 2.app");
+        std::fs::create_dir(&running).unwrap();
+        let installed = install_mac_app(&std::fs::read(&archive).unwrap(), &running).unwrap();
+        assert_eq!(installed, running);
+        assert!(running.join("new").exists());
+        assert!(!dir.path().join(APP_NAME).exists());
     }
 }

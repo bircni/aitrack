@@ -2,10 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use aitrack_core::Core;
-use aitrack_core::update::{
-    APPIMAGE_NAME, download_verified, install_app_image, install_mac_app, latest_release, run_windows_installer,
-    updater_target,
-};
+use aitrack_core::update::{download_verified, install, install_name, latest_release, updater_target};
 use clap::Args;
 use serde_json::json;
 
@@ -57,18 +54,15 @@ pub fn run(core: &Core, args: &InstallArgs) -> Outcome {
     let release = latest_release(core.http.as_ref(), target)?;
     core.output.info(&format!("Downloading opentrack {}...", release.version));
     let file = download_verified(core.http.as_ref(), &release)?;
-    let restart = "It updates itself from now on. If it was running, quit and reopen it.";
     if windows {
         core.output.info("Running the opentrack installer...");
-        run_windows_installer(&file, &[], true)?;
-        report_installed(core, args.json, &release.version, None, restart);
-    } else if cfg!(target_os = "linux") {
-        let path = install_app_image(&file, &dir.join(APPIMAGE_NAME))?;
-        let next = "Run it to start opentrack; Settings can launch it at login. It updates itself.";
-        report_installed(core, args.json, &release.version, Some(&path), next);
-    } else {
-        let path = install_mac_app(&file, &dir)?;
-        report_installed(core, args.json, &release.version, Some(&path), restart);
     }
+    let path = install(&file, Some(&dir.join(install_name())), false)?;
+    let next = if cfg!(target_os = "linux") {
+        "Run it to start opentrack; Settings can launch it at login. It updates itself."
+    } else {
+        "It updates itself from now on. If it was running, quit and reopen it."
+    };
+    report_installed(core, args.json, &release.version, path.as_deref(), next);
     Ok(ExitCode::SUCCESS)
 }

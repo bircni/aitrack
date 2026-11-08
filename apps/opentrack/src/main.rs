@@ -11,6 +11,7 @@ mod instance;
 mod macos;
 mod pace;
 mod panel;
+mod platform;
 mod position;
 mod service;
 mod settings;
@@ -28,62 +29,55 @@ use std::path::PathBuf;
 
 use eframe::egui;
 
-use crate::background::{smoke_test_lines, Background};
-use crate::instance::{claim, data_dir, Instance};
+use crate::background::{smoke_test_line, Background};
+use crate::instance::{claim, data_dir, Request};
 
-/// `--smoke-test --data-dir <dir>`: the installer checks that a packaged build starts and reads its
-/// settings, without touching provider credentials, usage logs or the sync repo.
-fn smoke_test() -> bool {
-    let args: Vec<String> = std::env::args().collect();
-    if !args.iter().any(|arg| arg == "--smoke-test") {
-        return false;
+/// What the command line asks for.
+struct Args {
+    /// Keeps a development run, or the installer's smoke test, away from the installed app's data.
+    data_dir: Option<PathBuf>,
+    /// The installer checks that a packaged build starts and reads its settings, without touching
+    /// provider credentials, usage logs or the sync repo.
+    smoke_test: bool,
+    request: Request,
+    relaunch: bool,
+}
+
+impl Args {
+    fn parse() -> Self {
+        let args: Vec<String> = std::env::args().collect();
+        let has = |flag: &str| args.iter().any(|arg| arg == flag);
+        Self {
+            data_dir: args.iter().position(|arg| arg == "--data-dir").and_then(|i| args.get(i + 1)).map(PathBuf::from),
+            smoke_test: has("--smoke-test"),
+            request: if has("--settings") { Request::Settings } else { Request::Show },
+            relaunch: has(updater::RELAUNCH_ARG),
+        }
     }
-    let data_dir = args
-        .iter()
-        .position(|arg| arg == "--data-dir")
-        .and_then(|index| args.get(index + 1))
-        .map_or_else(|| std::env::current_dir().unwrap_or_default(), PathBuf::from);
-    for line in smoke_test_lines(&Background::open(&data_dir)) {
-        println!("{line}");
-    }
-    true
 }
 
 fn main() -> eframe::Result {
-    if smoke_test() {
+    let args = Args::parse();
+    if args.smoke_test {
+        let dir = args.data_dir.unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        println!("{}", smoke_test_line(&Background::open(&dir)));
         return Ok(());
     }
-    // `--data-dir` keeps a development run away from the installed app's settings and cache.
-    let args: Vec<String> = std::env::args().collect();
-    let dir = args
-        .iter()
-        .position(|arg| arg == "--data-dir")
-        .and_then(|index| args.get(index + 1))
-        .map_or_else(data_dir, PathBuf::from);
-    let request = if args.iter().any(|arg| arg == "--settings") { "settings" } else { "show" };
-    let listener = match claim(&dir, request) {
-        Ok(Instance::First { _lock: lock, listener }) => {
-            std::mem::forget(lock); // Held until the process exits.
-            listener
-        }
-        Ok(Instance::Second) => return Ok(()),
+    let dir = args.data_dir.unwrap_or_else(data_dir);
+    let listener = match claim(&dir, args.request, args.relaunch) {
+        Ok(Some(listener)) => listener,
+        Ok(None) => return Ok(()),
         Err(error) => {
             eprintln!("opentrack: {}: {error}", dir.display());
             return Ok(());
         }
     };
-
-    // Wayland compositors ignore window positions and block global shortcuts; XWayland honours both.
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("OPENTRACK_WAYLAND").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_some() {
-        std::env::remove_var("WAYLAND_DISPLAY");
-    }
-
+    platform::prepare();
     let background = Background::open(&dir);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("opentrack")
-            .with_inner_size([ui::WIDTH, 560.0])
+            .with_inner_size([ui::WIDTH, ui::INITIAL_HEIGHT])
             .with_resizable(false)
             .with_decorations(false)
             .with_transparent(cfg!(target_os = "macos"))
@@ -91,14 +85,7 @@ fn main() -> eframe::Result {
             .with_taskbar(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop)
             .with_active(false),
-        event_loop_builder: Some(Box::new(|builder| {
-            #[cfg(target_os = "macos")]
-            {
-                use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
-                builder.with_activation_policy(ActivationPolicy::Accessory);
-            }
-            let _ = builder;
-        })),
+        event_loop_builder: Some(Box::new(platform::configure_event_loop)),
         ..Default::default()
     };
     eframe::run_native("opentrack", options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, background, listener)))))

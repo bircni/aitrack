@@ -9,19 +9,23 @@ mod views;
 mod widgets;
 
 use std::collections::HashSet;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use aitrack_core::time::Clock;
 use eframe::egui::{self, Align, Color32, CornerRadius, Layout, Mesh, Rect, ScrollArea, Sense, Stroke, Ui, Vec2};
-use indexmap::IndexMap;
 
-use self::format::{freshness_line, Bucket, Period};
+use self::format::{freshness_line, Bucket, History, Period};
 use self::icons::{Glyph, ProviderMarks};
 use self::theme::Palette;
-use self::widgets::{banner, icon_button, link, text, IconButton};
+use self::widgets::{banner, icon_button, link, spin_angle, text, IconButton};
 use crate::settings::Settings;
 use crate::state::AppState;
+use crate::system::SettingErrors;
 
 pub const WIDTH: f32 = 320.0;
+/// The height before the first layout measures the content.
+pub const INITIAL_HEIGHT: f32 = 560.0;
 const FOOTER_HEIGHT: f32 = 48.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,18 +73,60 @@ pub struct UpdateStatus {
     pub check: UpdateCheck,
 }
 
+impl UpdateStatus {
+    /// How the banner and Settings describe the offered update, `name` being what they call it.
+    fn offer(&self, name: &str) -> String {
+        if self.installing {
+            return format!("Installing {name}…");
+        }
+        self.error.as_ref().map_or_else(|| format!("{name} is available"), |e| format!("Could not install {name}: {e}"))
+    }
+
+    fn install_label(&self) -> &'static str {
+        if self.error.is_some() {
+            "Retry"
+        } else {
+            "Install and restart"
+        }
+    }
+}
+
 /// What the popup shows; read-only to the drawing code.
 pub struct Model<'a> {
-    pub state: &'a AppState,
+    pub state: &'a Arc<AppState>,
     pub settings: &'a Settings,
     pub clock: &'a Clock,
     pub now: f64,
     pub update: &'a UpdateStatus,
-    pub setting_errors: &'a IndexMap<String, String>,
+    pub setting_errors: &'a SettingErrors,
     pub settings_error: Option<&'a str>,
-    pub version: &'a str,
     /// The footer's note after a sync the user started.
     pub sync_note: Option<&'a str>,
+}
+
+/// A value built from one state, kept until the state or the rest of its key changes; the state is
+/// held so its address cannot be reused by a newer one.
+pub struct Memo<K, V> {
+    slot: Option<(Arc<AppState>, K, Rc<V>)>,
+}
+
+impl<K, V> Default for Memo<K, V> {
+    fn default() -> Self {
+        Self { slot: None }
+    }
+}
+
+impl<K: PartialEq, V> Memo<K, V> {
+    pub fn get(&mut self, state: &Arc<AppState>, key: K, build: impl FnOnce() -> V) -> Rc<V> {
+        if let Some((held, held_key, value)) = &self.slot {
+            if Arc::ptr_eq(held, state) && *held_key == key {
+                return Rc::clone(value);
+            }
+        }
+        let value = Rc::new(build());
+        self.slot = Some((Arc::clone(state), key, Rc::clone(&value)));
+        value
+    }
 }
 
 /// What the popup remembers between frames: the screen, tabs, choices and open sections.
@@ -94,6 +140,9 @@ pub struct View {
     pub open_row: Option<String>,
     pub shortcut: Option<String>,
     pub scroll_to_top: bool,
+    history: Memo<(usize, Bucket), History>,
+    machine_rows: Memo<Period, Vec<views::Row>>,
+    spark: Memo<(), Option<dashboard::Spark>>,
 }
 
 impl Default for View {
@@ -108,17 +157,16 @@ impl Default for View {
             open_row: None,
             shortcut: None,
             scroll_to_top: false,
+            history: Memo::default(),
+            machine_rows: Memo::default(),
+            spark: Memo::default(),
         }
     }
 }
 
-pub struct Assets {
-    pub marks: ProviderMarks,
-}
-
 pub struct Frame<'a> {
     pub palette: Palette,
-    pub assets: &'a Assets,
+    pub marks: &'a ProviderMarks,
     pub actions: Vec<Action>,
 }
 
@@ -138,8 +186,14 @@ impl Frame<'_> {
 }
 
 /// Draws the whole popup; returns the actions and the height that shows everything without scrolling.
-pub fn draw(ui: &mut Ui, view: &mut View, model: &Model, assets: &Assets, palette: Palette) -> (Vec<Action>, f32) {
-    let mut frame = Frame { palette, assets, actions: Vec::new() };
+pub fn draw(
+    ui: &mut Ui,
+    view: &mut View,
+    model: &Model,
+    marks: &ProviderMarks,
+    palette: Palette,
+) -> (Vec<Action>, f32) {
+    let mut frame = Frame { palette, marks, actions: Vec::new() };
     handle_keys(ui, view, model, &mut frame);
     let full = ui.max_rect();
     ui.painter().rect_filled(full, CornerRadius::ZERO, palette.surface);
@@ -209,31 +263,28 @@ fn handle_keys(ui: &Ui, view: &mut View, model: &Model, frame: &mut Frame) {
     }
 }
 
+/// A note with a link that asks for `action` again.
+fn retry_banner(ui: &mut Ui, frame: &mut Frame, message: impl Into<String>, action: impl FnOnce() -> Action) {
+    let palette = frame.palette;
+    banner(ui, &palette, |ui| {
+        ui.label(text(message, 12.0, palette.ink2));
+        if link(ui, &palette, "Retry", true).clicked() {
+            frame.act(action());
+        }
+    });
+}
+
 fn body(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame) {
     let palette = frame.palette;
     if let Some(error) = model.settings_error {
-        let settings = model.settings.clone();
-        banner(ui, &palette, |ui| {
-            ui.label(text(format!("Could not save settings: {error}"), 12.0, palette.ink2));
-            if link(ui, &palette, "Retry", true).clicked() {
-                frame.act(Action::Save(settings));
-            }
-        });
+        retry_banner(ui, frame, format!("Could not save settings: {error}"), || Action::Save(model.settings.clone()));
     }
     if view.screen == Screen::Dashboard {
         if let Some(version) = &model.update.available {
+            let update = model.update;
             banner(ui, &palette, |ui| {
-                if model.update.installing {
-                    ui.label(text(format!("Installing opentrack {version}…"), 12.0, palette.ink2));
-                    return;
-                }
-                let message = model.update.error.as_ref().map_or_else(
-                    || format!("opentrack {version} is available."),
-                    |error| format!("Could not install opentrack {version}: {error}"),
-                );
-                ui.label(text(message, 12.0, palette.ink2));
-                let label = if model.update.error.is_some() { "Retry" } else { "Install and restart" };
-                if link(ui, &palette, label, true).clicked() {
+                ui.label(text(update.offer(&format!("opentrack {version}")), 12.0, palette.ink2));
+                if !update.installing && link(ui, &palette, update.install_label(), true).clicked() {
                     frame.act(Action::InstallUpdate);
                 }
             });
@@ -262,10 +313,8 @@ fn footer_bar(ui: &mut Ui, view: &mut View, model: &Model, frame: &mut Frame, re
         model.sync_note.map_or_else(|| freshness_line(model.clock, state, model.now), str::to_owned)
     };
     let busy = state.syncing || state.refreshing;
-    let spin = if state.refreshing { ui.input(|i| i.time) as f32 * std::f32::consts::TAU / 0.9 } else { 0.0 };
-    let mut inner = ui.new_child(
-        egui::UiBuilder::new().max_rect(rect.shrink2(Vec2::new(0.0, 0.0))).layout(Layout::left_to_right(Align::Center)),
-    );
+    let spin = if state.refreshing { spin_angle(ui) } else { 0.0 };
+    let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(Layout::left_to_right(Align::Center)));
     inner.add_space(16.0);
     inner.spacing_mut().item_spacing.x = 4.0;
     inner.label(text(status, 11.5, palette.ink3));

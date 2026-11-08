@@ -3,6 +3,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -28,7 +29,7 @@ const TRAY_ICON_SIZE: u32 = 32;
 
 /// What the shell shows: the state, the settings, a notification, or a new tray picture.
 pub enum Event<'a> {
-    State(&'a AppState),
+    State(Arc<AppState>),
     Settings(&'a Settings),
     Alert { title: &'a str, body: &'a str },
     Tray(TrayImage),
@@ -133,9 +134,9 @@ impl Deps for LiveDeps {
         SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
     }
 
-    fn on_state(&self, state: &AppState) {
+    fn on_state(&self, state: Arc<AppState>) {
+        self.update_tray(&state);
         self.send(Event::State(state));
-        self.update_tray(state);
     }
 
     fn on_alert(&self, alert: &Alert) {
@@ -143,7 +144,7 @@ impl Deps for LiveDeps {
     }
 
     fn persist(&self, cache: &CachedState) {
-        if let Err(error) = aitrack_core::fs::write_file_atomic(&self.cache_path, &cache_json(cache), None) {
+        if let Err(error) = aitrack_core::fs::write_file_atomic(&self.cache_path, cache_json(cache), None) {
             self.core.output.error(&format!("opentrack: could not write the cache: {error}"));
             // The next cycle tries again.
         }
@@ -158,8 +159,6 @@ impl Deps for LiveDeps {
 pub struct Background {
     pub service: QuotaService<LiveDeps>,
     settings_path: PathBuf,
-    /// Saves land in the order they were made, on disk and in the service.
-    saving: Mutex<()>,
 }
 
 impl Background {
@@ -178,11 +177,7 @@ impl Background {
             settings: Mutex::new(settings.clone()),
             last_tray: Mutex::new(None),
         };
-        Arc::new(Self {
-            service: QuotaService::new(deps, clock, settings, Some(cached)),
-            settings_path,
-            saving: Mutex::new(()),
-        })
+        Arc::new(Self { service: QuotaService::new(deps, clock, settings, Some(cached)), settings_path })
     }
 
     fn deps(&self) -> &LiveDeps {
@@ -201,17 +196,31 @@ impl Background {
         });
     }
 
-    pub fn save_settings(self: &Arc<Self>, input: &serde_json::Value) -> Result<Settings, String> {
-        let settings = normalize_settings(input);
-        {
-            let _order = self.saving.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            write_settings(&self.settings_path, &settings).map_err(|error| error.to_string())?;
-            settings.clone_into(&mut self.deps().settings.lock().unwrap());
-            self.service.set_settings(settings.clone());
-        }
-        self.deps().send(Event::Settings(&settings));
+    /// Saves on one thread in the order they were made, so an older save never lands last; of a burst
+    /// of changes only the newest is written. Failures go to `on_error`.
+    pub fn saver(self: &Arc<Self>, on_error: impl Fn(String) + Send + 'static) -> Sender<Settings> {
+        let (tx, rx) = channel::<Settings>();
+        let background = Arc::clone(self);
+        std::thread::spawn(move || {
+            while let Ok(mut settings) = rx.recv() {
+                while let Ok(newer) = rx.try_recv() {
+                    settings = newer;
+                }
+                if let Err(error) = background.save_settings(settings) {
+                    on_error(error);
+                }
+            }
+        });
+        tx
+    }
+
+    fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<(), String> {
+        let settings = normalize_settings(&serde_json::to_value(settings).expect("settings serialize"));
+        write_settings(&self.settings_path, &settings).map_err(|error| error.to_string())?;
+        settings.clone_into(&mut self.deps().settings.lock().unwrap());
+        self.service.set_settings(settings);
         self.refresh_in_background(false);
-        Ok(settings)
+        Ok(())
     }
 
     /// Progress reaches the shell as state events, so a caller need not wait for a cold parse.
@@ -227,18 +236,15 @@ impl Background {
 }
 
 #[derive(Serialize)]
-struct Reply<T> {
-    id: u64,
-    result: T,
+struct SmokeTest {
+    settings: Settings,
+    state: AppState,
 }
 
-/// The two lines 4.x's sidecar answered `getSettings` and `getState` with, for the installer smoke test.
-pub fn smoke_test_lines(background: &Background) -> [String; 2] {
-    let line = |value: serde_json::Result<String>| value.expect("serializes");
-    [
-        line(aitrack_core::js::to_string(&Reply { id: 1, result: background.service.settings() })),
-        line(aitrack_core::js::to_string(&Reply { id: 2, result: background.service.state() })),
-    ]
+/// The settings and state a packaged build starts with, for the installer smoke test.
+pub fn smoke_test_line(background: &Background) -> String {
+    let answer = SmokeTest { settings: background.service.settings(), state: background.service.state() };
+    aitrack_core::js::to_string(&answer).expect("serializes")
 }
 
 #[cfg(test)]
@@ -249,13 +255,10 @@ mod tests {
     fn answers_the_smoke_test_from_the_data_dir_alone() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("settings.json"), r#"{"theme":"dark","providers":[{"key":"codex"}]}"#).unwrap();
-        let [settings, state] = smoke_test_lines(&Background::open(dir.path()));
-        assert!(settings.starts_with(r#"{"id":1,"result":{"theme":"dark","display":"used""#), "{settings}");
-        assert!(settings.contains(r#""providers":[{"key":"codex","label":"Codex","enabled":true},"#), "{settings}");
-        assert!(
-            state.starts_with(r#"{"id":2,"result":{"providers":[{"key":"codex","label":"Codex","refreshing":false}"#),
-            "{state}"
-        );
-        assert!(state.ends_with(r#""refreshing":false,"syncing":false}}"#), "{state}");
+        let line = smoke_test_line(&Background::open(dir.path()));
+        assert!(line.starts_with(r#"{"settings":{"theme":"dark","display":"used""#), "{line}");
+        assert!(line.contains(r#""providers":[{"key":"codex","label":"Codex","enabled":true},"#), "{line}");
+        assert!(line.contains(r#""state":{"providers":[{"key":"codex","label":"Codex","refreshing":false}"#), "{line}");
+        assert!(line.ends_with(r#""refreshing":false,"syncing":false}}"#), "{line}");
     }
 }

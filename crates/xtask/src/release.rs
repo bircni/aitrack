@@ -3,6 +3,8 @@
 use std::path::Path;
 use std::process::Command;
 
+use aitrack_core::semver::Version;
+
 use crate::{Result, root};
 
 const BUMPS: [&str; 8] = ["none", "patch", "minor", "major", "prepatch", "preminor", "premajor", "prerelease"];
@@ -28,31 +30,18 @@ pub fn set_workspace_version(cargo_toml: &str, version: &str) -> Result<String> 
     Ok(format!("{}{version}{}", &cargo_toml[..range.start], &cargo_toml[range.end..]))
 }
 
-struct Semver {
-    core: [u64; 3],
-    pre: Vec<String>,
-}
-
-fn parse(version: &str) -> Option<Semver> {
-    let (core, pre) = version.split_once('-').map_or((version, None), |(c, p)| (c, Some(p)));
-    let parts: Vec<u64> = core.split('.').map(|p| p.parse().ok()).collect::<Option<_>>()?;
-    let core: [u64; 3] = parts.try_into().ok()?;
-    let pre = pre.map(|p| p.split('.').map(str::to_owned).collect()).unwrap_or_default();
-    Some(Semver { core, pre })
-}
-
 /// npm's `semver.inc`, which `bun pm version` used before.
 pub fn bump(current: &str, bump: &str) -> Result<String> {
     if bump == "none" {
         return Ok(current.to_owned());
     }
     if !BUMPS.contains(&bump) {
-        return parse(bump)
+        return Version::parse(bump)
             .map(|_| bump.to_owned())
             .ok_or_else(|| format!("Invalid bump type: {bump}. Use one of: {}, or a version", BUMPS.join(", ")));
     }
-    let Semver { core: [major, minor, patch], mut pre } =
-        parse(current).ok_or_else(|| format!("Unexpected version: {current}"))?;
+    let Version { core: [major, minor, patch], mut pre } =
+        Version::parse(current).ok_or_else(|| format!("Unexpected version: {current}"))?;
     let released = pre.is_empty();
     let core = match bump {
         "major" if !released && minor == 0 && patch == 0 => [major, 0, 0],

@@ -190,7 +190,7 @@ pub fn spread(ui: &mut Ui, left: RichText, right: RichText) {
 }
 
 /// A stacked bar of `(fraction, colour)` parts on a track.
-pub fn stacked_bar(ui: &mut Ui, palette: &Palette, parts: &[(f32, Color32)], height: f32, width: f32) -> Rect {
+pub fn stacked_bar(ui: &mut Ui, palette: &Palette, parts: &[(f32, Color32)], height: f32, width: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
     let radius = CornerRadius::same(u8::try_from((height / 2.0).round() as i32).unwrap_or(3));
     ui.painter().rect_filled(rect, radius, palette.track);
@@ -205,5 +205,17 @@ pub fn stacked_bar(ui: &mut Ui, palette: &Palette, parts: &[(f32, Color32)], hei
         );
         x += w;
     }
-    rect
+}
+
+/// A rule across the section, with the room below it a new block starts after.
+pub fn divider(ui: &mut Ui, palette: &Palette) {
+    ui.painter().hline(ui.max_rect().x_range(), ui.cursor().top(), Stroke::new(1.0, palette.rule));
+    ui.add_space(12.0);
+}
+
+/// One turn every 0.9 s, for the refresh spinners.
+pub fn spin_angle(ui: &Ui) -> f32 {
+    #[allow(clippy::cast_possible_truncation)]
+    let time = ui.input(|i| i.time) as f32;
+    time * std::f32::consts::TAU / 0.9
 }

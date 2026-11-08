@@ -1,5 +1,6 @@
 //! How a window reads at a glance: whether it has reset, its colour, and when something happens.
 
+use aitrack_core::display::heatmap::stats::MONTHS;
 use aitrack_core::quota::pacing::{js_round, PaceProjection, PaceSeverity};
 use aitrack_core::quota::QuotaWindow;
 use aitrack_core::time::Clock;
@@ -48,7 +49,6 @@ pub fn meter_tone(window: &QuotaWindow, pace: &PaceProjection) -> Tone {
 }
 
 const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /// "7:20 PM" today, "Sun 9:00 PM" within a week, "Oct 16" beyond, as Node's en-US formats them.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]

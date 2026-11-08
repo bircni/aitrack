@@ -11,12 +11,17 @@ use crate::ui::Screen;
 
 fn listen(bus: &Bus) {
     let menu_bus = bus.clone();
-    MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id.0.as_str() {
-        "open" => menu_bus.send(Msg::Show(Screen::Dashboard)),
-        "settings" => menu_bus.send(Msg::Show(Screen::Settings)),
-        "refresh" => menu_bus.send(Msg::Refresh),
-        "quit" => menu_bus.send(Msg::Quit),
-        _ => {}
+    MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
+        // Linux has no tray click, so the menu opens the popup; the monitors may have changed since.
+        #[cfg(target_os = "linux")]
+        crate::platform::linux::read_work_area();
+        match event.id.0.as_str() {
+            "open" => menu_bus.send(Msg::Show(Screen::Dashboard)),
+            "settings" => menu_bus.send(Msg::Show(Screen::Settings)),
+            "refresh" => menu_bus.send(Msg::Refresh),
+            "quit" => menu_bus.send(Msg::Quit),
+            _ => {}
+        }
     }));
     let click_bus = bus.clone();
     TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
@@ -108,6 +113,7 @@ impl Tray {
                 return;
             }
             TRAY.with(|tray| *tray.borrow_mut() = build());
+            crate::platform::linux::read_work_area();
             gtk::main();
         });
         Self

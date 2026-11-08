@@ -6,10 +6,8 @@ use std::sync::LazyLock;
 
 use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
-use indexmap::IndexMap;
 
 use crate::app::{Bus, Msg};
-use crate::settings::Settings;
 
 /// Same JSON the 4.x renderer shipped.
 static DASHBOARDS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
@@ -21,8 +19,18 @@ pub fn open_dashboard(provider: &str) -> Result<(), String> {
     open::that_detached(url).map_err(|error| error.to_string())
 }
 
-pub fn notify(title: &str, body: &str) {
-    let _ = notify_rust::Notification::new().summary(title).body(body).show();
+/// Off the UI thread: macOS delivers notifications through a blocking call.
+pub fn notify(title: String, body: String) {
+    std::thread::spawn(move || {
+        let _ = notify_rust::Notification::new().summary(&title).body(&body).show();
+    });
+}
+
+/// Why a setting the OS applies did not take; the settings keep what was typed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SettingErrors {
+    pub launch_at_login: Option<String>,
+    pub global_shortcut: Option<String>,
 }
 
 pub struct System {
@@ -44,34 +52,36 @@ impl System {
         Self { hotkeys: GlobalHotKeyManager::new().ok(), registered: None }
     }
 
-    /// Why a setting did not take, keyed like the settings; the settings keep what was typed.
-    pub fn apply(&mut self, settings: &Settings) -> IndexMap<String, String> {
-        let mut errors = IndexMap::new();
-        // A dev build registering itself to start at login would outlive the checkout.
-        if !cfg!(debug_assertions) {
-            if let Err(error) = autostart(settings.launch_at_login) {
-                errors.insert("launchAtLogin".to_owned(), error);
-            }
+    /// Registers the open/close shortcut, here on the main thread as macOS requires; why it did not take.
+    pub fn set_shortcut(&mut self, accelerator: &str) -> Option<String> {
+        let manager = self.hotkeys.as_ref()?;
+        if let Some(previous) = self.registered.take() {
+            let _ = manager.unregister(previous);
         }
-        if let Some(manager) = &self.hotkeys {
-            if let Some(previous) = self.registered.take() {
-                let _ = manager.unregister(previous);
-            }
-            let accelerator = settings.global_shortcut.trim();
-            if !accelerator.is_empty() {
-                match HotKey::from_str(accelerator)
-                    .map_err(|e| e.to_string())
-                    .and_then(|hotkey| manager.register(hotkey).map(|()| hotkey).map_err(|e| e.to_string()))
-                {
-                    Ok(hotkey) => self.registered = Some(hotkey),
-                    Err(error) => {
-                        errors.insert("globalShortcut".to_owned(), error);
-                    }
-                }
-            }
+        let accelerator = accelerator.trim();
+        if accelerator.is_empty() {
+            return None;
         }
-        errors
+        let registered = HotKey::from_str(accelerator)
+            .map_err(|e| e.to_string())
+            .and_then(|hotkey| manager.register(hotkey).map(|()| hotkey).map_err(|e| e.to_string()));
+        match registered {
+            Ok(hotkey) => {
+                self.registered = Some(hotkey);
+                None
+            }
+            Err(error) => Some(error),
+        }
     }
+}
+
+/// Off the UI thread, since it writes a LaunchAgent or registry key; the outcome comes back on the bus.
+pub fn set_launch_at_login(enabled: bool, bus: Bus) {
+    // A dev build registering itself to start at login would outlive the checkout.
+    if cfg!(debug_assertions) {
+        return;
+    }
+    std::thread::spawn(move || bus.send(Msg::LaunchAtLogin(autostart(enabled).err())));
 }
 
 fn autostart(enabled: bool) -> Result<(), String> {
