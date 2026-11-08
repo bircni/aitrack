@@ -374,7 +374,7 @@ for (let file = 0; file < 3; file++) {
 }
 copy('codex-session.jsonl', 'codex/fixture/codex-session.jsonl');
 
-// What 4.x makes of the corpus, per zone. Costs are left out until the pricing port.
+// What 4.x makes of the corpus, per zone, priced with the bundled tables.
 const dump = `
 import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -383,7 +383,7 @@ const { scanCodexFile } = await import(${JSON.stringify(join(repoRoot, 'libs/ait
 const { readClaudeData } = await import(${JSON.stringify(join(repoRoot, 'libs/aitrack-lib/src/readers/claude.ts'))});
 const { readCodexData } = await import(${JSON.stringify(join(repoRoot, 'libs/aitrack-lib/src/readers/codex.ts'))});
 const { listUniqueSourceFiles } = await import(${JSON.stringify(join(repoRoot, 'libs/aitrack-lib/src/readers/paths.ts'))});
-const FIELDS = ['inputTokens', 'outputTokens', 'rawInputTokens', 'cachedInputTokens', 'cacheCreationInputTokens', 'cacheCreation1hInputTokens'];
+const FIELDS = ['inputTokens', 'outputTokens', 'rawInputTokens', 'cachedInputTokens', 'cacheCreationInputTokens', 'cacheCreation1hInputTokens', 'costUSD', 'hasUnpricedTokens'];
 const counts = (c) => Object.fromEntries(FIELDS.filter((f) => c[f] !== undefined).map((f) => [f, c[f]]));
 const record = (r) => r === undefined ? null : Object.entries(r).map(([k, v]) => [k, counts(v)]);
 const days = (map) => [...map].map(([date, day]) => [date, { counts: counts(day), byModel: record(day.byModel), byProject: record(day.byProject), byCwd: record(day.byCwd) }]);

@@ -64,6 +64,14 @@ mod tests {
         for (bits, expected) in rows {
             let x = f64::from_bits(u64::from_str_radix(&bits, 16).unwrap());
             assert_eq!(number_to_string(x), expected, "bits {bits}");
+            // Machine files are read back too, and the default parser can land a bit off.
+            if x != 0.0 {
+                assert_eq!(
+                    serde_json::from_str::<f64>(&expected).unwrap().to_bits(),
+                    x.to_bits(),
+                    "parsing {expected}"
+                );
+            }
         }
     }
 }

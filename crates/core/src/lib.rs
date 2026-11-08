@@ -5,9 +5,11 @@ pub mod data;
 pub mod day;
 pub mod env;
 pub mod fs;
+pub mod http;
 pub mod js;
 pub mod machine_id;
 pub mod output;
+pub mod pricing;
 pub mod process;
 pub mod readers;
 pub mod time;
@@ -18,6 +20,15 @@ use crate::config::{Config, ConfigLoad};
 use crate::env::{Env, Paths};
 use crate::output::Output;
 use crate::time::Clock;
+
+/// Lower-case hex, as `digest('hex')` writes it.
+pub(crate) fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut out, b| {
+        let _ = write!(out, "{b:02x}");
+        out
+    })
+}
 
 /// Keys the parse caches, so one written by another version is discarded.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

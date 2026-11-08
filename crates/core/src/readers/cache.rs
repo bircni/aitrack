@@ -17,6 +17,7 @@ use crate::data::day_map::Attribution;
 use crate::data::types::{DayEntry, DayMap, TokenCounts};
 use crate::day::Day;
 use crate::fs::write_file_atomic;
+use crate::hex;
 
 /// Bump when the cached shape or baked-in cost changes; old caches are rebuilt, not migrated.
 const CACHE_FORMAT: u32 = 8;
@@ -348,12 +349,4 @@ impl MergedSnapshot {
             prune_siblings(path, &self.name);
         }
     }
-}
-
-fn hex(bytes: &[u8]) -> String {
-    use std::fmt::Write;
-    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut out, b| {
-        let _ = write!(out, "{b:02x}");
-        out
-    })
 }

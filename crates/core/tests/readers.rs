@@ -3,13 +3,15 @@
 use std::path::{Path, PathBuf};
 
 use aitrack_core::data::types::{CountsByKey, DayMap, TokenCounts};
+use aitrack_core::pricing::ReaderPricing;
+use aitrack_core::pricing::store::PricingStore;
 use aitrack_core::readers::claude_scan::scan_claude_file;
 use aitrack_core::readers::codex_scan::scan_codex_file;
 use aitrack_core::readers::jsonl::CHUNK_BYTES;
 use aitrack_core::readers::paths::list_unique_source_files;
 use aitrack_core::readers::project::ProjectResolver;
 use aitrack_core::readers::provider::{
-    CachedParse, NoPricing, finish_claude_scan, finish_codex_scan, merge_claude_parsed, merge_codex_parsed,
+    CachedParse, finish_claude_scan, finish_codex_scan, merge_claude_parsed, merge_codex_parsed,
 };
 use aitrack_core::time::Clock;
 use serde_json::{Value, json};
@@ -45,6 +47,12 @@ fn counts(c: &TokenCounts) -> Value {
             out.insert(key.into(), json!(value));
         }
     }
+    if let Some(cost) = c.cost_usd {
+        out.insert("costUSD".into(), json!(cost));
+    }
+    if let Some(unpriced) = c.has_unpriced_tokens {
+        out.insert("hasUnpricedTokens".into(), json!(unpriced));
+    }
     Value::Object(out)
 }
 
@@ -74,6 +82,8 @@ fn check_zone(zone: &str, chunk: usize) {
     )
     .unwrap();
     let clock = Clock::in_zone(zone).unwrap();
+    let bundled = PricingStore::bundled();
+    let pricing = ReaderPricing { pricing: &bundled, fallbacks: None };
     let claude_files = list_unique_source_files(&[corpus().join("claude")]).unwrap();
     let codex_files = list_unique_source_files(&[corpus().join("codex")]).unwrap();
     assert_eq!(json!(claude_files.iter().map(|f| relative(f)).collect::<Vec<_>>()), expected["claudeFiles"], "{zone}");
@@ -87,7 +97,7 @@ fn check_zone(zone: &str, chunk: usize) {
             .map(|m| json!({"key": m.key, "date": m.date.to_string(), "model": m.model, "counts": counts(&m.counts), "cwd": m.cwd}))
             .collect();
         assert_eq!(json!([relative(file), got]), *want, "{zone} chunk {chunk}");
-        claude_parsed.push(finish_claude_scan(scanned, &NoPricing, &NoRemotes));
+        claude_parsed.push(finish_claude_scan(scanned, &pricing, &NoRemotes));
     }
     let mut codex_parsed: Vec<CachedParse> = Vec::new();
     for (file, want) in codex_files.iter().zip(expected["codexScans"].as_array().unwrap()) {
@@ -99,7 +109,7 @@ fn check_zone(zone: &str, chunk: usize) {
             .collect();
         let got = json!({"sessions": sessions, "repositoryUrl": scan.repository_url, "cwd": scan.cwd});
         assert_eq!(json!([relative(file), got]), *want, "{zone} chunk {chunk}");
-        codex_parsed.push(finish_codex_scan(&scan, &NoPricing, &NoRemotes));
+        codex_parsed.push(finish_codex_scan(&scan, &pricing, &NoRemotes));
     }
     assert_eq!(days(&merge_claude_parsed(&claude_parsed)), expected["claudeDays"], "{zone} Claude days");
     assert_eq!(days(&merge_codex_parsed(&codex_parsed)), expected["codexDays"], "{zone} Codex days");
@@ -123,7 +133,6 @@ mod pipeline {
     use aitrack_core::Core;
     use aitrack_core::env::Env;
     use aitrack_core::output::VecOutput;
-    use aitrack_core::readers::provider::NoPricing;
     use aitrack_core::readers::read::{read_claude_days, read_codex_days};
 
     use super::*;
@@ -159,10 +168,12 @@ mod pipeline {
         let home = tempfile::tempdir().unwrap();
         let logs = tempfile::tempdir().unwrap();
         copy_dir(&corpus(), logs.path());
+        let bundled = PricingStore::bundled();
+        let pricing = ReaderPricing { pricing: &bundled, fallbacks: None };
         let read = |core: &Core| {
             (
-                days(&read_claude_days(core, &NoPricing, &NoRemotes).unwrap()),
-                days(&read_codex_days(core, &NoPricing, &NoRemotes).unwrap()),
+                days(&read_claude_days(core, &pricing, &NoRemotes).unwrap()),
+                days(&read_codex_days(core, &pricing, &NoRemotes).unwrap()),
             )
         };
         let want = (expected["claudeDays"].clone(), expected["codexDays"].clone());
