@@ -118,11 +118,9 @@ fn pricing_cache_check(core: &Core) -> Check {
     )
 }
 
-/// The aitrack repo is what carries the script.
+/// The aitrack repo is what carries the check.
 fn is_aitrack_checkout(directory: &Path) -> bool {
-    let Ok(raw) = std::fs::read_to_string(directory.join("package.json")) else { return false };
-    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&raw) else { return false };
-    parsed["name"] == "aitrack-workspace" && parsed["scripts"].get("pricing:check").is_some()
+    directory.join("crates/xtask/Cargo.toml").is_file()
 }
 
 /// Exit status and output, stderr first.
@@ -148,7 +146,7 @@ fn run_command(program: &str, args: &[&str], cwd: Option<&Path>) -> (bool, Strin
 fn pricing_drift_check() -> Check {
     let label = "Pricing drift";
     let cwd = std::env::current_dir().unwrap_or_default();
-    // The script exists only in a source checkout; elsewhere bun would fail confusingly.
+    // The check exists only in a source checkout; elsewhere cargo would fail confusingly.
     if !is_aitrack_checkout(&cwd) {
         return check(
             Status::Warn,
@@ -156,15 +154,15 @@ fn pricing_drift_check() -> Check {
             "not an aitrack source checkout; run doctor --pricing-check from the aitrack repo root",
         );
     }
-    match run_command("bun", &["run", "pricing:check"], Some(&cwd)) {
-        (true, _) => check(Status::Ok, label, "bun run pricing:check passed"),
+    match run_command("cargo", &["xtask", "pricing-check"], Some(&cwd)) {
+        (true, _) => check(Status::Ok, label, "cargo xtask pricing-check passed"),
         (false, output) if !output.is_empty() => {
-            check(Status::Warn, label, format!("bun run pricing:check failed: {output}"))
+            check(Status::Warn, label, format!("cargo xtask pricing-check failed: {output}"))
         }
         _ => check(
             Status::Warn,
             label,
-            "bun run pricing:check did not pass; run from the aitrack repo root and inspect its output",
+            "cargo xtask pricing-check did not pass; run from the aitrack repo root and inspect its output",
         ),
     }
 }

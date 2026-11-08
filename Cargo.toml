@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/opentrack", "crates/cli", "crates/core"]
+members = ["apps/opentrack", "crates/cli", "crates/core", "crates/xtask"]
 
 [workspace.package]
 version = "4.2.0"
