@@ -22,21 +22,24 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          sparse-checkout: |
-            .node-version
-            Cargo.toml
-            scripts/*.ts
-          sparse-checkout-cone-mode: false
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+
+      # Built once, so the later jobs, the npm one above all, compile nothing.
+      - name: Build xtask
+        run: cargo build --locked -p xtask
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          node-version-file: .node-version
+          name: xtask
+          path: target/debug/xtask
+          if-no-files-found: error
 
       - id: version
         shell: bash
         run: |
-          version=$(node -e "import('./scripts/workspace-version.ts').then((m) => console.log(m.getWorkspaceVersion()))")
+          version=$(target/debug/xtask version)
           if [[ "$GITHUB_REF_TYPE" == tag && "v$version" != "$GITHUB_REF_NAME" ]]; then
             echo "::error::$GITHUB_REF_NAME does not match version $version in Cargo.toml"
             exit 1
@@ -182,7 +185,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Check the bundle
-        run: node scripts/smoke-opentrack-bundle.ts
+        run: cargo xtask smoke-bundle
 
       # One flat folder, so the release job finds every file at the top of the artifact.
       - name: Collect installer files
@@ -208,15 +211,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           sparse-checkout: |
-            .node-version
             README.md
             npm
-            scripts/*.ts
           sparse-checkout-cone-mode: false
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      - name: Download xtask
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          node-version-file: .node-version
+          name: xtask
+          path: bin
+
+      - run: chmod +x bin/xtask
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -224,7 +229,7 @@ jobs:
           path: binaries
           merge-multiple: true
 
-      - run: node scripts/npm-pack.ts "${{ needs.version.outputs.version }}" binaries packs
+      - run: bin/xtask npm-pack "${{ needs.version.outputs.version }}" binaries packs
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -245,19 +250,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-          sparse-checkout: |
-            .node-version
-            CHANGELOG.md
-            scripts/*.ts
-          sparse-checkout-cone-mode: false
+          sparse-checkout: CHANGELOG.md
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      - name: Download xtask
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          node-version-file: .node-version
+          name: xtask
+          path: bin
+
+      - run: chmod +x bin/xtask
 
       - name: Extract GitHub release notes
         run: |
-          node scripts/release-notes.ts "$GITHUB_REF_NAME" CHANGELOG.md > release-notes.md
+          bin/xtask release-notes "$GITHUB_REF_NAME" CHANGELOG.md > release-notes.md
           printf '\nOpentrack installers: Windows builds are unsigned; macOS builds are ad hoc signed and not notarized. Windows SmartScreen and macOS Gatekeeper may block the first launch. Linux AppImage and .deb packages are built on Ubuntu 24.04 for x86_64.\n\nThe aitrack-* files are the CLI for each platform; npm installs the right one for you.\n' >> release-notes.md
 
       - name: Download installers
@@ -278,7 +283,7 @@ jobs:
       - name: Write the checksums and the updater manifest
         run: |
           (cd cli && sha256sum aitrack-* > checksums.txt)
-          node scripts/updater-manifest.ts "$GITHUB_REF_NAME" installers > installers/latest.json
+          bin/xtask updater-manifest "$GITHUB_REF_NAME" installers > installers/latest.json
 
       - name: Create or update the draft
         shell: bash
@@ -320,17 +325,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-          sparse-checkout: |
-            .node-version
-            npm/aitrack/targets.json
-            scripts/*.ts
-          sparse-checkout-cone-mode: false
+          sparse-checkout: npm/aitrack/targets.json
 
+      # Only for the npm CLI, which provenance needs.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version-file: .node-version
+          node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+
+      - name: Download xtask
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xtask
+          path: bin
+
+      - run: chmod +x bin/xtask
 
       - name: Download tarballs
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -339,7 +349,7 @@ jobs:
           path: packs
 
       - name: Publish
-        run: node scripts/publish-npm.ts "$GITHUB_REF_NAME" packs
+        run: bin/xtask publish-npm "$GITHUB_REF_NAME" packs
 
   release:
     name: Publish GitHub release
@@ -371,16 +381,13 @@ jobs:
     if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Download xtask
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          sparse-checkout: |
-            .node-version
-            scripts/*.ts
-          sparse-checkout-cone-mode: false
+          name: xtask
+          path: bin
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version-file: .node-version
+      - run: chmod +x bin/xtask
 
       - name: Download the macOS disk image
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -398,7 +405,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p tap/Casks
-          node scripts/homebrew-cask.ts "$GITHUB_REF_NAME" installers/*.dmg > tap/Casks/opentrack.rb
+          bin/xtask homebrew-cask "$GITHUB_REF_NAME" installers/*.dmg > tap/Casks/opentrack.rb
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -1,6 +1,10 @@
-//! `cargo xtask pricing-pack [--write] [--offline]` and `cargo xtask pricing-check`.
+//! Maintainer tasks: pricing pack, release, packaging and publishing.
 
+mod manifests;
+mod npm;
 mod pricing;
+mod release;
+mod smoke;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -29,12 +33,21 @@ fn pack_dir() -> PathBuf {
     root().join("artifacts/pricing-pack")
 }
 
-fn sha256(text: &str) -> String {
+fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
-    Sha256::digest(text.as_bytes()).iter().fold(String::new(), |mut hex, b| {
+    bytes.iter().fold(String::new(), |mut hex, b| {
         let _ = write!(hex, "{b:02x}");
         hex
     })
+}
+
+fn sha256(text: &str) -> String {
+    hex(&Sha256::digest(text.as_bytes()))
+}
+
+fn sha256_file(path: &Path) -> Result<String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(hex(&Sha256::digest(bytes)))
 }
 
 fn write(path: &Path, text: &str) -> Result<()> {
@@ -187,16 +200,76 @@ fn pricing_check() -> Result<bool> {
     Ok(drift == 0)
 }
 
+const USAGE: &str = "Usage: cargo xtask <command>
+  pricing-pack [--write] [--offline]   rebuild the pricing pack (and tables with --write)
+  pricing-check                        compare the tables with LiteLLM and models.dev
+  version                              print the workspace version
+  release [bump|version] [--dry-run]   bump, changelog, commit, tag and push from main
+  release-notes <tag> [changelog]      print one changelog section
+  updater-manifest <tag> <dir> [repo]  print latest.json for the signed installers in <dir>
+  homebrew-cask <tag> <dmg>            print Casks/opentrack.rb
+  winget-manifest <tag> <setup-exe> [out]
+  npm-pack <version> <binaries-dir> <out-dir>
+  publish-npm <tag> <tarball-dir>
+  smoke-bundle                         start the app inside each built installer";
+
+fn print(text: &str) -> bool {
+    print!("{text}");
+    true
+}
+
+fn dispatch(args: &[String]) -> Option<Result<bool>> {
+    let has = |flag: &str| args.iter().any(|a| a == flag);
+    let arg = |i: usize| args.get(i).map(String::as_str);
+    let version = || {
+        let toml = std::fs::read_to_string(root().join("Cargo.toml")).map_err(|e| e.to_string())?;
+        release::workspace_version(&toml)
+    };
+    Some(match (arg(0)?, arg(1), arg(2), arg(3)) {
+        ("pricing-pack", ..) => pricing_pack(has("--write"), has("--offline")).map(|()| true),
+        ("pricing-check", ..) => pricing_check(),
+        ("version", ..) => version().map(|v| print(&format!("{v}\n"))),
+        ("release", ..) => release::release(&args[1..]).map(|()| true),
+        ("release-notes", Some(tag), changelog, _) => {
+            let path = changelog.unwrap_or("CHANGELOG.md");
+            std::fs::read_to_string(path)
+                .map_err(|e| format!("{path}: {e}"))
+                .and_then(|log| release::release_notes(&log, tag))
+                .map(|notes| print(&notes))
+        }
+        ("updater-manifest", Some(tag), Some(dir), repo) => {
+            let repo = repo.map(str::to_owned).or_else(|| std::env::var("GITHUB_REPOSITORY").ok())?;
+            manifests::updater_manifest(tag, Path::new(dir), &repo, &iso_millis(Timestamp::now()))
+                .map(|manifest| print(&pricing::pretty(&manifest)))
+        }
+        ("homebrew-cask", Some(tag), Some(dmg), _) => sha256_file(Path::new(dmg))
+            .map(|sha| print(&manifests::homebrew_cask(manifests::version_from_tag(tag), &sha))),
+        ("winget-manifest", Some(tag), Some(installer), out) => {
+            manifests::write_winget(tag, Path::new(installer), Path::new(out.unwrap_or(".")))
+                .map(|dir| print(&format!("{}\n", dir.display())))
+        }
+        ("npm-pack", Some(version), Some(binaries), Some(out)) => {
+            npm::pack(version, Path::new(binaries), Path::new(out)).map(|packs| {
+                for pack in packs {
+                    println!("{}", pack.display());
+                }
+                true
+            })
+        }
+        ("publish-npm", Some(tag), Some(dir), _) => {
+            let cwd = std::env::current_dir().map_err(|e| e.to_string());
+            cwd.and_then(|cwd| npm::publish(tag, dir, Path::new("npm"), &cwd)).map(|()| true)
+        }
+        ("smoke-bundle", ..) => version().and_then(|v| smoke::smoke_bundle(&v)).map(|()| true),
+        _ => return None,
+    })
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let has = |flag: &str| args.iter().any(|a| a == flag);
-    let result = match args.first().map(String::as_str) {
-        Some("pricing-pack") => pricing_pack(has("--write"), has("--offline")).map(|()| true),
-        Some("pricing-check") => pricing_check(),
-        _ => {
-            eprintln!("Usage: cargo xtask pricing-pack [--write] [--offline] | pricing-check");
-            return ExitCode::from(2);
-        }
+    let Some(result) = dispatch(&args) else {
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
     };
     match result {
         Ok(true) => ExitCode::SUCCESS,

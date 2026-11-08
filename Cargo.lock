@@ -6175,9 +6175,12 @@ name = "xtask"
 version = "4.2.0"
 dependencies = [
  "aitrack-core",
+ "flate2",
  "jiff",
  "serde_json",
  "sha2 0.11.1",
+ "tar",
+ "tempfile",
 ]
 
 [[package]]

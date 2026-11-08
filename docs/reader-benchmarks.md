@@ -31,7 +31,8 @@ Node itself starts in about 30 ms on this machine.
 
 ## Synthetic reader
 
-Reproduce with `bun x tsx scripts/benchmark-readers.ts`. Set `AITRACK_BENCH_ROOT` to another
+These were run with 4.x's `scripts/benchmark-readers.ts`, which 5.0 removed with the rest of the
+TypeScript tree; git history keeps it. Set `AITRACK_BENCH_ROOT` to another
 source checkout to compare implementations; that checkout must have its dependencies
 available. The benchmark makes no network requests and removes its temporary home after
 completion. It imports the TypeScript sources, so it measures the in-thread scan.

@@ -3,8 +3,8 @@
 ## Development setup
 
 Install rustup (the toolchain and components are pinned in `rust-toolchain.toml`), [just](https://just.systems),
-`cargo-nextest`, `cargo-deny`, git, and, for the desktop renderer and the release scripts, Node.js (the
-version in `.node-version`) and Bun (the version in `package.json`). The CLI itself needs no Node.
+`cargo-nextest`, `cargo-deny` and git. Releasing also needs [git-cliff](https://git-cliff.org/). Nothing
+needs Node except the npm launcher in `npm/aitrack`, which has no dependencies.
 
 On macOS, install Xcode Command Line Tools. On Windows, install the Visual Studio C++ build tools and
 WebView2. On Ubuntu, install the desktop app's system libraries:
@@ -17,7 +17,7 @@ sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librs
 ```sh
 git clone https://github.com/bircni/aitrack.git
 cd aitrack
-bun install
+git config core.hooksPath .githooks    # checks commit messages
 cargo run -p aitrack-cli -- init
 cargo run -p aitrack-cli -- sync
 cargo run -p aitrack-cli -- show
@@ -25,7 +25,7 @@ cargo run -p aitrack-cli -- show
 
 ## Project layout
 
-A Cargo workspace plus one Bun workspace package for the desktop renderer.
+A Cargo workspace.
 
 ```
 crates/
@@ -42,13 +42,12 @@ crates/
     pricing-tables/   claude.json, codex.json, cursor.json: editable first-party rates
     tests/fixtures/   Golden outputs recorded from 4.x (see its README)
   cli/                The `aitrack` binary (clap)
-  xtask/              `cargo xtask`: pricing pack build and check
+  xtask/              `cargo xtask`: pricing pack, release, packaging and publishing
 apps/
   opentrack/          Tauri 2 app: window, tray, polling, alerts, settings, on aitrack-core
   opentrack-ui/       Svelte renderer in the system webview
 npm/aitrack/          The npm launcher; one platform package per target is generated at release
-scripts/              Release, release notes, npm pack and publish, updater manifest, Homebrew cask,
-                      winget manifests, bundle smoke check
+.githooks/            commit-msg: the Conventional Commits check
 ```
 
 Usage is keyed by the **local** calendar day, so tests pin the zone through the `Clock` they pass
@@ -59,26 +58,23 @@ tests use the bundled tz database because hosts disagree on pre-1901 offsets.
 ## Checks
 
 ```sh
-just validate    # everything CI runs: Rust (fmt, clippy, nextest), JS (oxfmt, oxlint, knip,
-                 # tsc, svelte-check, vitest) and cargo deny
-just rust        # only the Rust checks
-just js          # only the renderer and scripts
+just validate    # everything CI runs: fmt, clippy, nextest and cargo deny
+just rust        # without cargo deny
 ```
 
 Clippy runs pedantic with `-D warnings`. The opentrack crate embeds the built renderer; the Rust
 checks write a placeholder page when it has not been built.
 
-CI (`.github/workflows/ci.yml`) runs on `main`, `rust` and pull requests: format and Clippy on
-Ubuntu, tests on Ubuntu, macOS and Windows, cargo deny, and the renderer and scripts with
-`bun audit`. Pull requests also get GitHub's dependency review. Dependabot proposes Bun, Cargo and
-Actions updates.
+CI (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests: format and Clippy on
+Ubuntu, tests on Ubuntu, macOS and Windows, and cargo deny. Pull requests also get GitHub's
+dependency review. Dependabot proposes Cargo and Actions updates.
 
 ## Desktop development
 
 ```sh
 just desktop-dev                                      # build the renderer, run the app in debug
 cd apps/opentrack && bunx tauri build                 # installers under target/release/bundle/
-node scripts/smoke-opentrack-bundle.ts                # start the bundled app in smoke-test mode
+cargo xtask smoke-bundle                              # start the bundled app in smoke-test mode
 ```
 
 Package on the platform you target. The smoke check starts the bundled app with temporary app data
@@ -102,7 +98,8 @@ cargo xtask pricing-check           # compare the tables with the catalogs
 
 Commits **must** follow [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat:`,
 `fix:`, `docs:`, `chore:`, `ci:`, `build:`). The changelog and version bumps are generated from
-commit messages, so non-conforming commits will be invisible in release notes.
+commit messages, so non-conforming commits will be invisible in release notes. The
+`.githooks/commit-msg` hook checks them once `core.hooksPath` points at `.githooks`.
 
 ## Releasing
 
@@ -128,10 +125,10 @@ secret.
 ### Cut a release locally
 
 ```sh
-node scripts/release.ts                 # patch bump
-node scripts/release.ts minor
-node scripts/release.ts 5.1.0-beta.1    # an exact version
-node scripts/release.ts patch --dry-run
+cargo xtask release                 # patch bump
+cargo xtask release minor
+cargo xtask release 5.1.0-beta.1    # an exact version
+cargo xtask release patch --dry-run
 ```
 
 It checks that you are on `main` with a clean tree in sync with the remote and that the tag is free,
@@ -151,13 +148,14 @@ builds and checks every file without releasing:
 - **Desktop.** The renderer is built once; Windows, macOS and Ubuntu 24.04 jobs package the NSIS
   installer, the Apple Silicon DMG, the AppImage and `.deb`, plus the updater's signed
   `.app.tar.gz` and signatures, and smoke-check each bundle.
-- **npm tarballs.** `scripts/npm-pack.ts` wraps each binary in its `@aitrack/cli-<target>` package
+- **npm tarballs.** `cargo xtask npm-pack` wraps each binary in its `@aitrack/cli-<target>` package
   and packs the `aitrack` launcher that pins them as exact optional dependencies.
 - **Draft release.** The tag's `CHANGELOG.md` section, the installers, `latest.json`, the
   `aitrack-<target>` binaries and their `checksums.txt` go into a draft. It runs before npm, which
   cannot be undone, so its failures surface first.
-- **npm.** `scripts/publish-npm.ts` publishes the platform packages, then the launcher, with
-  provenance, skipping versions already on the registry. This job alone holds the npm credential.
+- **npm.** `cargo xtask publish-npm` publishes the platform packages, then the launcher, with
+  provenance, skipping versions already on the registry. This job alone holds the npm credential;
+  it compiles nothing and runs the `xtask` binary built once at the start of the workflow.
 - **Publish the release.** The draft goes public only now, so opentrack and
   `aitrack install-opentrack`, which read `latest.json` from the latest release, never find it half
   uploaded.
@@ -165,7 +163,7 @@ builds and checks every file without releasing:
 
 A tag with a `-` is a prerelease: npm publishes it under `next`, the GitHub release never becomes
 latest, and the Homebrew job is skipped. After a failure, re-run the failed jobs; the draft job
-replaces assets with the same names and the npm script skips what already published.
+replaces assets with the same names and `publish-npm` skips what already published.
 
 Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
 
@@ -173,12 +171,12 @@ Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
 
 opentrack's winget package (`bircni.opentrack`) is not in `microsoft/winget-pkgs` yet, and
 release automation can only update an existing package, so the first version is submitted
-by hand. `scripts/winget-manifest.ts` writes that version's manifests into a `winget-pkgs`
+by hand. `cargo xtask winget-manifest` writes that version's manifests into a `winget-pkgs`
 checkout:
 
 ```sh
 gh release download vX.Y.Z -p '*-setup.exe'
-node scripts/winget-manifest.ts vX.Y.Z opentrack_X.Y.Z_x64-setup.exe ../winget-pkgs
+cargo xtask winget-manifest vX.Y.Z opentrack_X.Y.Z_x64-setup.exe ../winget-pkgs
 ```
 
 On Windows, `winget validate --manifest manifests/b/bircni/opentrack/X.Y.Z` checks them, and
