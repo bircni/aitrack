@@ -1,6 +1,7 @@
 //! `cargo xtask pricing-pack [--write] [--offline]` and `cargo xtask pricing-check`.
 
 mod pricing;
+mod updater_artifacts;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -193,8 +194,13 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("pricing-pack") => pricing_pack(has("--write"), has("--offline")).map(|()| true),
         Some("pricing-check") => pricing_check(),
+        Some("updater-artifacts") if args.len() == 3 => {
+            updater_artifacts::run(Path::new(&args[1]), Path::new(&args[2])).map(|()| true)
+        }
         _ => {
-            eprintln!("Usage: cargo xtask pricing-pack [--write] [--offline] | pricing-check");
+            eprintln!(
+                "Usage: cargo xtask pricing-pack [--write] [--offline] | pricing-check | updater-artifacts <packager-out> <bundle-dir>"
+            );
             return ExitCode::from(2);
         }
     };
