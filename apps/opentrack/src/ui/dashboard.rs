@@ -9,7 +9,7 @@ use eframe::egui::{
 
 use super::format::{
     combined_daily, empty_usage_guidance, fill_percent, format_cost, format_limit_value, format_number, format_reset,
-    format_tokens, format_updated, is_priced, pace_label, period_spend_opt, period_value, problem_line, sparkline,
+    format_tokens, format_updated, is_priced, pace_label, period_usage, period_value, problem_line, sparkline,
     spend_label, spend_reading, split_amount, total_spend, usage_availability, usage_note, Availability, Period,
     ProblemAction, Spend,
 };
@@ -326,7 +326,7 @@ fn heading(ui: &mut Ui, frame: &Frame<'_>, provider: &ProviderState) {
 
 fn provider_section(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>, provider: &ProviderState) {
     let palette = frame.palette;
-    let spend = period_spend_opt(provider.usage.as_ref(), view.period);
+    let spend = provider.usage.as_ref().map(|usage| period_usage(usage, view.period));
     let open = view.open_providers.contains(&provider.key) && spend.is_some();
     card(ui, &palette, |ui| {
         ui.spacing_mut().item_spacing.y = 16.0;
