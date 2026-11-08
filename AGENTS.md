@@ -8,5 +8,5 @@
 - Fix the cause rather than disabling a linter or weakening a test
 - Write the fewest, fastest tests covering the behaviour, extending an existing one where possible
 - Cover local-calendar-day edge cases by passing a `Clock` (`Clock::fixed`, `Clock::with_zone`) in Pacific/Kiritimati, UTC and Pacific/Midway, not by changing `TZ`
-- Scope checks with `just rust` or `cargo test -p <crate>` when possible
-- Run `just validate` again before committing
+- Scope checks with `cargo lint` or `cargo nextest run -p <crate>` when possible
+- Run `cargo xtask validate` again before committing

@@ -2,8 +2,8 @@
 
 ## Development setup
 
-Install rustup (the toolchain and components are pinned in `rust-toolchain.toml`), [just](https://just.systems),
-`cargo-nextest`, `cargo-deny` and git. Releasing also needs [git-cliff](https://git-cliff.org/). Nothing
+Install rustup (the toolchain and components are pinned in `rust-toolchain.toml`), `cargo-nextest`,
+`cargo-deny` and git. Releasing also needs [git-cliff](https://git-cliff.org/). Nothing
 needs Node except the npm launcher in `npm/aitrack`, which has no dependencies.
 
 On macOS, install Xcode Command Line Tools. On Windows, install the Visual Studio C++ build tools. On
@@ -57,8 +57,9 @@ tests use the bundled tz database because hosts disagree on pre-1901 offsets.
 ## Checks
 
 ```sh
-just validate    # everything CI runs: fmt, clippy, nextest and cargo deny
-just rust        # without cargo deny
+cargo xtask validate        # everything CI runs: fmt, clippy, nextest and cargo deny
+cargo lint                  # clippy alone, as CI runs it (an alias in .cargo/config.toml)
+cargo nextest run -p <crate>
 ```
 
 Clippy runs pedantic with `-D warnings`.
@@ -72,9 +73,9 @@ dependency review. Dependabot proposes Cargo and Actions updates.
 ## Desktop development
 
 ```sh
-just desktop-dev          # the app in debug, with its own data dir under target/
-just package app,dmg      # installers under target/release/bundle/ (appimage,deb or nsis elsewhere)
-cargo xtask smoke-bundle  # start the bundled app in smoke-test mode
+cargo dev                        # the app in debug, with its own data dir under target/
+cargo xtask package app,dmg      # installers under target/release/bundle/ (appimage,deb or nsis elsewhere)
+cargo xtask smoke-bundle         # start the bundled app in smoke-test mode
 ```
 
 Package on the platform you target. The smoke check starts the bundled app with temporary app data

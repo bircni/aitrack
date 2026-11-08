@@ -215,6 +215,8 @@ fn pricing_check() -> Result<bool> {
 }
 
 const USAGE: &str = "Usage: cargo xtask <command>
+  validate                             every check CI runs: fmt, clippy, nextest and cargo deny
+  package <formats>                    this OS's installers under target/release/bundle, signed as released
   pricing-pack [--write] [--offline]   rebuild the pricing pack (and tables with --write)
   pricing-check                        compare the tables with LiteLLM and models.dev
   version                              print the workspace version
@@ -227,6 +229,27 @@ const USAGE: &str = "Usage: cargo xtask <command>
   publish-npm <tag> <tarball-dir>
   updater-artifacts <packager-out> <bundle-dir>
   smoke-bundle                         start the app inside each built installer";
+
+/// Runs a step with the terminal attached, so its output and colours show as it goes.
+fn step(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<()> {
+    let mut command = std::process::Command::new(program);
+    command.args(args).current_dir(cwd.unwrap_or(&root()));
+    let status = command.status().map_err(|e| format!("{program}: {e}"))?;
+    if status.success() { Ok(()) } else { Err(format!("{program} {} failed", args.join(" "))) }
+}
+
+fn validate() -> Result<()> {
+    step("cargo", &["fmt", "--all", "--check"], None)?;
+    step("cargo", &["lint"], None)?;
+    step("cargo", &["nextest", "run", "--workspace"], None)?;
+    step("cargo", &["deny", "check", "advisories", "sources"], None)
+}
+
+fn package(formats: &str) -> Result<()> {
+    step("cargo", &["packager", "--release", "--formats", formats], Some(&root().join("apps/opentrack")))?;
+    let target = root().join("target/release");
+    updater_artifacts::run(&target.join("packager"), &target.join("bundle"))
+}
 
 fn print(text: &str) -> bool {
     print!("{text}");
@@ -241,6 +264,8 @@ fn dispatch(args: &[String]) -> Option<Result<bool>> {
         release::workspace_version(&toml)
     };
     Some(match (arg(0)?, arg(1), arg(2), arg(3)) {
+        ("validate", ..) => validate().map(|()| true),
+        ("package", Some(formats), None, _) => package(formats).map(|()| true),
         ("pricing-pack", ..) => pricing_pack(has("--write"), has("--offline")).map(|()| true),
         ("pricing-check", ..) => pricing_check(),
         ("version", ..) => version().map(|v| print(&format!("{v}\n"))),

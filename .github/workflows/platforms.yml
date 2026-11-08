@@ -32,6 +32,8 @@ jobs:
 
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2
         with:
-          tool: cargo-nextest,just
+          tool: cargo-nextest
 
-      - run: just lint test
+      - run: cargo lint
+
+      - run: cargo nextest run --workspace

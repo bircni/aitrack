@@ -1,2 +1,5 @@
 [alias]
 xtask = "run --quiet --package xtask --"
+lint = "clippy --workspace --all-targets -- -D warnings"
+# opentrack in debug; a separate data dir keeps it apart from an installed copy
+dev = "run --package opentrack -- --data-dir target/opentrack-dev"
