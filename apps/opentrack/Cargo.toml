@@ -6,6 +6,9 @@ license = "MIT"
 edition = "2021"
 publish = false
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "opentrack"
 path = "src/main.rs"
