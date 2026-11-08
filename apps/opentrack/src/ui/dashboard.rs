@@ -223,7 +223,7 @@ impl Spark {
             let (rect, response) = ui.allocate_exact_size(Vec2::new(112.0, 36.0), Sense::hover());
             #[expect(
                 clippy::cast_possible_truncation,
-                reason = "the value is rounded and bounded to the target range first"
+                reason = "sparkline points lie inside the chart's small pixel box"
             )]
             let at = |(x, y): (f64, f64)| Pos2::new(rect.left() + x as f32, rect.top() + y as f32);
             let line: Vec<Pos2> = points.iter().copied().map(at).collect();
@@ -490,10 +490,7 @@ pub fn limit_meter(
             });
         });
         let fill = fill_percent(window, left);
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "the value is rounded and bounded to the target range first"
-        )]
+        #[expect(clippy::cast_possible_truncation, reason = "a percentage of at most 100, drawn in f32")]
         let target = (fill / 100.0) as f32;
         let id = ui.scope_id().with((provider, &window.id));
         let shown = ui.ctx().animate_value_with_time(id, target, 0.22);
@@ -504,10 +501,7 @@ pub fn limit_meter(
         ui.painter().rect_filled(fill_rect, CornerRadius::same(3), color);
         if let (Some(_), Some(even)) = (&label, pace.even_pace_percent) {
             let at = if left { 100.0 - even } else { even }.clamp(0.0, 100.0);
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "the value is rounded and bounded to the target range first"
-            )]
+            #[expect(clippy::cast_possible_truncation, reason = "a percentage of at most 100, drawn in f32")]
             let x = rect.left() + rect.width() * (at / 100.0) as f32;
             ui.painter().vline(x, (rect.top() - 2.0)..=(rect.bottom() + 2.0), Stroke::new(1.5, palette.ink2));
         }

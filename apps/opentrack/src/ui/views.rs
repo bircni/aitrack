@@ -53,10 +53,7 @@ pub fn history(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_
             let x = rect.left() + index as f32 * slot + gap / 2.0;
             let mut top = rect.bottom();
             for part in bar.parts.iter().filter(|p| p.cost_usd > 0.0) {
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    reason = "the value is rounded and bounded to the target range first"
-                )]
+                #[expect(clippy::cast_possible_truncation, reason = "a share of at most 1, drawn in f32")]
                 let height = (part.cost_usd / history.peak_usd) as f32 * rect.height();
                 let layer = Rect::from_min_max(Pos2::new(x, top - height), Pos2::new(x + (slot - gap).max(0.5), top));
                 ui.painter().rect_filled(layer, CornerRadius::ZERO, palette.provider(&part.key));
@@ -206,7 +203,7 @@ fn share_bar<'a>(
     if basis.total <= 0.0 || basis.measure(spend) <= 0.0 {
         return;
     }
-    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
+    #[expect(clippy::cast_possible_truncation, reason = "a share of at most 1, drawn in f32")]
     let parts: Vec<(&str, f32)> = parts.map(|(key, part)| (key, (basis.measure(&part) / basis.total) as f32)).collect();
     let what = if basis.by_cost { "cost" } else { "tokens" };
     let share = basis.measure(spend) / basis.total;

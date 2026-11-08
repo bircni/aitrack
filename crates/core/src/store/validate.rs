@@ -84,7 +84,7 @@ fn token_count(value: &Value) -> Option<u64> {
         #[expect(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
-            reason = "the value is rounded and bounded to the target range first"
+            reason = "checked just above: a whole number in 0..=2^53"
         )]
         (x == 0.0 || (x > 0.0 && x.fract() == 0.0 && x <= 2f64.powi(53))).then(|| x.abs() as u64)
     })

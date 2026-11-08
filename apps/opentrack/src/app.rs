@@ -166,10 +166,7 @@ impl App {
                     viewport.native_pixels_per_point.unwrap_or(1.0),
                 )
             });
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "the value is rounded and bounded to the target range first"
-            )]
+            #[expect(clippy::cast_possible_truncation, reason = "monitor sizes in pixels, far inside i32")]
             let rect = Rect { x: 0, y: 0, width: (size.x * scale) as i32, height: (size.y * scale) as i32 };
             (rect, scale)
         })
@@ -180,7 +177,7 @@ impl App {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_precision_loss,
-        reason = "a bounded, rounded number converted between float and integer"
+        reason = "window and screen coordinates in pixels: far inside i32 and exact in f32"
     )]
     fn place(&self, ctx: &egui::Context, in_place: bool) {
         let window_scale = ctx.input(|i| i.viewport().native_pixels_per_point).unwrap_or(1.0);

@@ -41,7 +41,7 @@ pub fn refresh_shadow(handle: &impl HasWindowHandle) {
 }
 
 /// The visible frame (no menu bar or Dock) of the screen holding `point`, in top-left physical pixels.
-#[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
+#[expect(clippy::cast_possible_truncation, reason = "screen coordinates in pixels, far inside i32")]
 pub fn work_area(point: Option<(i32, i32)>) -> Option<(Rect, f32)> {
     let mtm = MainThreadMarker::new()?;
     let screens = NSScreen::screens(mtm);

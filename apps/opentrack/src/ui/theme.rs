@@ -130,7 +130,7 @@ impl Palette {
             #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss,
-                reason = "the value is rounded and bounded to the target range first"
+                reason = "clamped to 0..=255 just before"
             )]
             let byte = value.round().clamp(0.0, 255.0) as u8;
             byte

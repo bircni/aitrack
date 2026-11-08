@@ -63,7 +63,7 @@ pub fn format_day(date: &str) -> String {
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "the value is rounded and bounded to the target range first"
+    reason = "a rounded, non-negative amount; displayed numbers stay far below 2^64"
 )]
 pub fn format_number(value: f64) -> String {
     let scaled = js_round(value.abs() * 1000.0);
@@ -385,7 +385,7 @@ pub fn split_amount(value: f64) -> (String, String) {
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "the value is rounded and bounded to the target range first"
+    reason = "at least one minute; displayed durations stay far below 2^64"
 )]
 pub fn format_duration(ms: f64) -> String {
     let minutes = (ms / 60_000.0).ceil().max(1.0) as u64;

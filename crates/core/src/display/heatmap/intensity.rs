@@ -11,7 +11,7 @@ pub fn percentile(values: &[u64], p: f64) -> u64 {
     #[expect(
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
-        reason = "a bounded, rounded number converted between float and integer"
+        reason = "a fraction of a slice length fits i64, and the next line clamps it into the slice"
     )]
     let rank = (p * sorted.len() as f64).ceil() as i64 - 1;
     let index = usize::try_from(rank.max(0)).unwrap_or(0).min(sorted.len() - 1);

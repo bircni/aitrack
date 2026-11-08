@@ -116,7 +116,7 @@ impl<D: Deps> QuotaService<D> {
             #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss,
-                reason = "the value is rounded and bounded to the target range first"
+                reason = "a deadline already past gives 0 as `as` saturates; waits are minutes long"
             )]
             let retry_after_seconds = ((until - now) / 1000.0).ceil() as u64;
             let error = QuotaError {

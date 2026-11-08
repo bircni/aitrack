@@ -195,7 +195,7 @@ fn positive_integer(value: &Value) -> Option<u64> {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "the value is rounded and bounded to the target range first"
+        reason = "checked just above: a positive whole number below 2^64"
     )]
     (x > 0.0 && x.fract() == 0.0 && x < 2f64.powi(64)).then_some(x as u64)
 }

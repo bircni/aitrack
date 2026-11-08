@@ -137,7 +137,7 @@ impl Canvas {
             #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_possible_wrap,
-                reason = "the value is rounded and bounded to the target range first"
+                reason = "glyph bounds and offsets are small pixel values inside the canvas"
             )]
             outlined.draw(|gx, gy, coverage| {
                 let px = bounds.min.x as i32 + gx as i32;
@@ -267,7 +267,7 @@ pub fn render_to_png_at(data: &ProviderData, options: &RenderOptions, today: Day
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "the value is rounded and bounded to the target range first"
+        reason = "the canvas is a positive layout total of a few hundred pixels"
     )]
     let (width, height) = (total_w as u32, total_h as u32);
     let mut canvas = Canvas {

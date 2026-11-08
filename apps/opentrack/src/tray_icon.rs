@@ -183,7 +183,7 @@ impl Default for TrayAppearance {
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     clippy::cast_precision_loss,
-    reason = "a bounded, rounded number converted between float and integer"
+    reason = "icon sizes, bar counts and pixel indices are small non-negative values; percentages stay within 0..=100"
 )]
 pub fn render_tray_icon(size: u32, used_percent: f64, tone: Tone, appearance: &TrayAppearance) -> Vec<u8> {
     let mut pixels = vec![0u8; (size * size * 4) as usize];

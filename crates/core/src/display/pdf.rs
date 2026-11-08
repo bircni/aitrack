@@ -87,7 +87,7 @@ enum Mark {
 
 /// The largest float32 at or below `n`, as pdfkit stores widths and limits.
 fn pdf_number(n: f64) -> f64 {
-    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
+    #[expect(clippy::cast_possible_truncation, reason = "pdfkit keeps coordinates as f32; rounding to it is the point")]
     let rounded = n as f32;
     if f64::from(rounded) <= n { f64::from(rounded) } else { f64::from(rounded.next_down()) }
 }
@@ -327,7 +327,7 @@ impl Layout {
                             clippy::cast_precision_loss,
                             clippy::cast_possible_truncation,
                             clippy::cast_sign_loss,
-                            reason = "a bounded, rounded number converted between float and integer"
+                            reason = "clamped to zero or more here and capped by the word length on the next line"
                         )]
                         let fit = (wrap.space_left / (w / len as f64)).ceil().max(0.0) as usize;
                         l = fit.min(len);
@@ -454,11 +454,7 @@ impl Layout {
                         wrap.line_width - self.width_of(&trimmed)
                     }
                 };
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "the value is rounded and bounded to the target range first"
-            )]
-            let bytes = units.iter().map(|&u| win_ansi(u) as u8).collect();
+            let bytes = units.iter().map(|&u| u8::try_from(win_ansi(u)).unwrap_or(b'?')).collect();
             self.marks.push(Mark::Text { x, y: self.y, face: self.face, size: self.size, bytes });
         }
         self.y += self.line_height();

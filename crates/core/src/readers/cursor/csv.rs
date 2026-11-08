@@ -37,7 +37,7 @@ fn parse_csv_line(line: &str) -> Vec<String> {
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "the value is rounded and bounded to the target range first"
+    reason = "checked just above: positive and at most 2^40 once rounded"
 )]
 fn parse_cursor_number(value: Option<&str>) -> Option<u64> {
     let numeric = parse_number(&value.unwrap_or_default().replace(',', ""))?;
