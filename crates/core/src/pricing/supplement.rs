@@ -139,25 +139,13 @@ struct CursorTable {
 }
 
 /// The supplement built from the bundled tables; its `updatedAt` is the newest table's.
-///
-/// # Panics
-///
-/// Never: the bundled tables are fixed and tested.
 #[must_use]
-#[expect(clippy::expect_used, reason = "the bundled tables are fixed at build time and tested")]
 pub fn bundled_supplement() -> Supplement {
-    let claude: ClaudeTable = serde_json::from_str(CLAUDE_TABLE).expect("bundled Claude table parses");
-    let codex: CodexTable = serde_json::from_str(CODEX_TABLE).expect("bundled Codex table parses");
-    let cursor: CursorTable = serde_json::from_str(CURSOR_TABLE).expect("bundled Cursor table parses");
-    let stamp = |updated: &str| {
-        let text = if updated.contains('T') { updated.to_owned() } else { format!("{updated}T00:00:00Z") };
-        Clock::system().parse_timestamp(&text).expect("bundled tables carry dates")
-    };
-    let updated = [&claude.updated_at, &codex.updated_at, &cursor.updated_at]
-        .into_iter()
-        .map(|u| stamp(u))
-        .max()
-        .expect("three tables");
+    let claude: ClaudeTable = bundled(CLAUDE_TABLE);
+    let codex: CodexTable = bundled(CODEX_TABLE);
+    let cursor: CursorTable = bundled(CURSOR_TABLE);
+    let updated =
+        bundled_date(&claude.updated_at).max(bundled_date(&codex.updated_at)).max(bundled_date(&cursor.updated_at));
     Supplement {
         updated_at: iso_millis(updated),
         comment: Some("First-party pricing from tables/*.json. Catalogs supply additional models.".to_owned()),
@@ -165,6 +153,17 @@ pub fn bundled_supplement() -> Supplement {
         codex: codex.rates,
         cursor: cursor.rates,
     }
+}
+
+#[expect(clippy::expect_used, reason = "the tables are compiled in and a test parses each")]
+fn bundled<T: serde::de::DeserializeOwned>(table: &str) -> T {
+    serde_json::from_str(table).expect("a bundled pricing table parses")
+}
+
+#[expect(clippy::expect_used, reason = "the tables are compiled in and a test reads each date")]
+fn bundled_date(updated: &str) -> jiff::Timestamp {
+    let text = if updated.contains('T') { updated.to_owned() } else { format!("{updated}T00:00:00Z") };
+    Clock::system().parse_timestamp(&text).expect("a bundled pricing table carries its date")
 }
 
 fn amount(value: Option<&Value>) -> bool {
@@ -241,4 +240,14 @@ pub fn compile_pattern(pattern: &str) -> Result<regex_lite::Regex, regex_lite::E
         || regex_lite::Regex::new(pattern),
         |rest| regex_lite::RegexBuilder::new(rest).case_insensitive(true).build(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bundled_supplement;
+
+    #[test]
+    fn every_bundled_table_parses_and_dates_the_supplement() {
+        assert_eq!(bundled_supplement().updated_at, "2026-09-29T00:00:00.000Z");
+    }
 }

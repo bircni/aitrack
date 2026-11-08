@@ -289,10 +289,6 @@ impl PricingStore {
         }
     }
 
-    #[expect(
-        clippy::expect_used,
-        reason = "map keys are strings or dates and the output is an in-memory buffer, so serializing cannot fail"
-    )]
     fn refresh(&self, http: &dyn HttpClient, env: &Env, now_iso: &str) -> Result<bool, String> {
         let base = env.var("AITRACK_PRICING_URL").map_or_else(
             || "https://raw.githubusercontent.com/bircni/aitrack/pricing".to_owned(),

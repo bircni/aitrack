@@ -47,7 +47,8 @@ pub fn shortest_digits(x: f64) -> (String, i32) {
     let (int, frac) = mantissa.split_once('.').unwrap_or((mantissa, ""));
     let all = format!("{int}{frac}");
     let trimmed = all.trim_start_matches('0');
-    let point = count(int) + exponent_value(exponent) - (count(&all) - count(trimmed));
+    let leading_zeros = count(&all) - count(trimmed);
+    let point = count(int) + exponent_value(exponent) - leading_zeros;
     (trimmed.trim_end_matches('0').to_owned(), point)
 }
 

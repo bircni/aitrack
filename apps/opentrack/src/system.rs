@@ -108,3 +108,15 @@ fn autostart(enabled: bool) -> Result<(), String> {
     };
     result.map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DASHBOARDS;
+
+    #[test]
+    fn every_provider_has_a_dashboard() {
+        for provider in ["claude_code", "codex", "cursor"] {
+            assert!(DASHBOARDS.contains_key(provider), "{provider}");
+        }
+    }
+}
