@@ -29,11 +29,14 @@ dependencies = [
 name = "aitrack-core"
 version = "4.2.0"
 dependencies = [
+ "gethostname",
  "jiff",
  "proptest",
  "ryu",
  "serde",
  "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
