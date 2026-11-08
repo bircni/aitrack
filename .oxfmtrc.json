@@ -6,7 +6,6 @@
   "sortImports": true,
   "sortPackageJson": true,
   "ignorePatterns": [
-    "coverage",
     "dist",
     "apps/opentrack",
     "crates",

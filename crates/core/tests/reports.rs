@@ -1,5 +1,5 @@
-//! The loader, reports, comparisons, project breakdowns and rankings against 4.x, recorded by
-//! `fixtures/usage/generate.ts` over a data repo of machines in several zones.
+//! The loader, reports, comparisons, project breakdowns and rankings against 4.x
+//! over a data repo of machines in several zones, recorded before 4.x was removed.
 
 use jiff::tz::TimeZoneDatabase;
 use std::path::{Path, PathBuf};

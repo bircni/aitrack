@@ -1,4 +1,4 @@
-//! Quota mappers, pacing, value parsing, JWTs and Cursor's CSV against 4.x, from `fixtures/quota/generate.ts`.
+//! Quota mappers, pacing, value parsing, JWTs and Cursor's CSV against 4.x, recorded before 4.x was removed.
 
 use jiff::tz::TimeZoneDatabase;
 use std::path::Path;

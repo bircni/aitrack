@@ -1,4 +1,4 @@
-//! The readers against what 4.x made of the same corpus, recorded by `fixtures/readers/generate.ts`.
+//! The readers against what 4.x made of the same corpus, recorded before 4.x was removed.
 
 use jiff::tz::TimeZoneDatabase;
 use std::path::{Path, PathBuf};

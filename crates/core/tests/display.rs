@@ -1,5 +1,5 @@
-//! Terminal tables, CSV, heatmap figures, model names and the receipt PDF against 4.x, recorded by
-//! `fixtures/display/generate.ts`; the PNG is checked for its size and cell colours.
+//! Terminal tables, CSV, heatmap figures, model names and the receipt PDF against 4.x, recorded before
+//! 4.x was removed; the PNG is checked for its size and cell colours.
 
 use std::collections::HashSet;
 use std::path::Path;

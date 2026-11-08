@@ -1,4 +1,4 @@
-//! The tray pixels, settings and cache.json normalization against 4.x's sidecar, from `tests/fixtures/generate.ts`.
+//! The tray pixels, settings and cache.json normalization against 4.x's sidecar, recorded before 4.x was removed.
 
 use aitrack_core::time::Clock;
 use serde::Deserialize;

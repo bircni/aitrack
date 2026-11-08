@@ -3,7 +3,6 @@ node_modules/
 dist/
 aitrack*.png
 aitrack*.pdf
-coverage/
 .DS_Store
 .nx/
 .vite/

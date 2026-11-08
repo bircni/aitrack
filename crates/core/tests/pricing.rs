@@ -1,4 +1,4 @@
-//! Costs against 4.x's, bit for bit, recorded by `fixtures/pricing/generate.ts`.
+//! Costs against 4.x's, bit for bit, recorded before 4.x was removed.
 
 use std::path::Path;
 

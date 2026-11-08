@@ -1,5 +1,5 @@
 //! Machine files against 4.x: validation, the writer, merges, compaction and repricing,
-//! recorded by `fixtures/store/generate.ts`.
+//! recorded before 4.x was removed.
 
 use std::path::Path;
 

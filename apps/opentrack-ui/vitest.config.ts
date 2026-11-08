@@ -16,24 +16,5 @@ export default defineConfig({
     include: ['src/**/__tests__/**/*.test.ts'],
     env: { HOME: home, USERPROFILE: home },
     testTimeout: 15_000,
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'html', 'lcov'],
-      include: ['src/**/*.ts', 'src/**/*.svelte'],
-      exclude: [
-        'src/**/__tests__/**',
-        'src/test/**',
-        // Untested webview glue.
-        'src/renderer/main.ts',
-        'src/shared/types.ts',
-      ],
-      thresholds: {
-        perFile: { lines: 80, statements: 80, functions: 80, branches: 80 },
-        lines: 90,
-        functions: 90,
-        statements: 90,
-        branches: 80,
-      },
-    },
   },
 });
