@@ -34,7 +34,7 @@ pub fn list_jsonl_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
 }
 
 /// libuv sorts with `strcmp` on Unix; NTFS returns names case-insensitively ordered.
-fn entry_order(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> std::cmp::Ordering {
+pub fn entry_order(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> std::cmp::Ordering {
     if cfg!(windows) {
         a.to_string_lossy().to_uppercase().cmp(&b.to_string_lossy().to_uppercase())
     } else {

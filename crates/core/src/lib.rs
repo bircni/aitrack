@@ -12,13 +12,17 @@ pub mod output;
 pub mod pricing;
 pub mod process;
 pub mod readers;
+pub mod store;
 pub mod time;
 
+use std::collections::HashSet;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::config::{Config, ConfigLoad};
 use crate::env::{Env, Paths};
 use crate::output::Output;
+use crate::store::validate::Diagnostic;
 use crate::time::Clock;
 
 /// Lower-case hex, as `digest('hex')` writes it.
@@ -43,12 +47,33 @@ pub struct Core {
     pub clock: Clock,
     pub output: Box<dyn Output>,
     warned_invalid_config: AtomicBool,
+    /// Other machines' files cannot self-heal, so their dropped days are reported once per file.
+    warned_files: Mutex<HashSet<String>>,
 }
 
 impl Core {
     #[must_use]
     pub fn new(env: Env, clock: Clock, output: Box<dyn Output>) -> Self {
-        Self { paths: env.paths(), env, clock, output, warned_invalid_config: AtomicBool::new(false) }
+        Self {
+            paths: env.paths(),
+            env,
+            clock,
+            output,
+            warned_invalid_config: AtomicBool::new(false),
+            warned_files: Mutex::default(),
+        }
+    }
+
+    /// Warns about what reading a machine file found: every skipped file, other findings once per file.
+    pub fn report_diagnostics(&self, diagnostics: &[Diagnostic]) {
+        for diagnostic in diagnostics {
+            if !matches!(diagnostic, Diagnostic::FileSkipped { .. })
+                && !self.warned_files.lock().expect("not poisoned").insert(diagnostic.file().to_owned())
+            {
+                continue;
+            }
+            self.output.warn(&diagnostic.to_string());
+        }
     }
 
     /// The config, or `None` when there is none; a report still renders without it, but it

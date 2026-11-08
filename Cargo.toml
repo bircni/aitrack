@@ -34,3 +34,16 @@ strip = true
 # Line tables keep backtraces readable while cutting what CI compiles and caches.
 [profile.dev]
 debug = "line-tables-only"
+
+# Key derivation is slow by design; unoptimised it costs seconds per encryption test.
+[profile.dev.package.scrypt]
+opt-level = 3
+
+[profile.dev.package.salsa20]
+opt-level = 3
+
+[profile.dev.package.pbkdf2]
+opt-level = 3
+
+[profile.dev.package.sha2]
+opt-level = 3
