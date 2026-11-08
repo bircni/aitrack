@@ -18,7 +18,8 @@ jiff = { version = "0.2.40", default-features = false, features = ["std", "tz-sy
 memchr = "2.8.3"
 ryu = "1.0.23"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = { version = "1.0.154", features = ["preserve_order"] }
+serde_json = { version = "1.0.154", features = ["preserve_order", "raw_value"] }
+sha2 = "0.11.1"
 thiserror = "2.0.21"
 
 [dev-dependencies]

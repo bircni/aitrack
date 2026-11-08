@@ -1,7 +1,10 @@
+pub mod cache;
 pub mod claude_scan;
 pub mod codex_scan;
 pub mod jsonl;
 pub mod log_values;
 pub mod paths;
+pub mod pool;
 pub mod project;
 pub mod provider;
+pub mod read;

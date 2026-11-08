@@ -34,14 +34,16 @@ pub struct TokenCounts {
 /// Counts keyed by model, `owner/repo` or working directory, in the order they were first seen.
 pub type CountsByKey = IndexMap<String, TokenCounts>;
 
-/// One provider's usage on one day, in memory.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// One provider's usage on one day, in memory and in the parse cache.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct DayEntry {
     pub counts: TokenCounts,
     pub by_model: CountsByKey,
     /// Usage per `owner/repo`; `None` when no message could be attributed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub by_project: Option<CountsByKey>,
     /// Working directories of usage with no git remote; stays on this machine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub by_cwd: Option<CountsByKey>,
 }
 

@@ -12,6 +12,8 @@ use crate::day::Day;
 
 /// Cost estimates for the readers; the pricing tables implement it.
 pub trait Pricing: Sync {
+    /// Changes whenever any cost would; caches with costs baked in are keyed by it.
+    fn fingerprint(&self) -> String;
     fn claude_cost(&self, model: &str, counts: &TokenCounts, date: Day) -> Option<f64>;
     fn codex_cost(&self, model: &str, input: u64, output: u64, cached: u64, date: Day) -> Option<f64>;
 }
@@ -20,6 +22,10 @@ pub trait Pricing: Sync {
 pub struct NoPricing;
 
 impl Pricing for NoPricing {
+    fn fingerprint(&self) -> String {
+        "none".to_owned()
+    }
+
     fn claude_cost(&self, _: &str, _: &TokenCounts, _: Day) -> Option<f64> {
         None
     }
@@ -40,12 +46,29 @@ pub struct CachedMessage {
 }
 
 /// One source file's contribution, computed from its own bytes alone so it can be cached.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct CachedParse {
     pub days: DayMap,
     /// Claude message keys in file order; Codex has no cross-file dedup.
     pub keys: Vec<String>,
-    pub messages: Vec<CachedMessage>,
+    /// Claude only. From the cache they stay encoded until a merge needs them.
+    pub messages: Option<Messages>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Messages {
+    Decoded(Vec<CachedMessage>),
+    Encoded(Box<serde_json::value::RawValue>),
+}
+
+impl CachedParse {
+    /// The messages, or `None` when there are none or a cached blob is corrupt: the days then count whole.
+    pub fn messages(&self) -> Option<std::borrow::Cow<'_, [CachedMessage]>> {
+        match self.messages.as_ref()? {
+            Messages::Decoded(messages) => Some(std::borrow::Cow::Borrowed(messages)),
+            Messages::Encoded(raw) => super::cache::decode_messages(raw, &self.keys).map(std::borrow::Cow::Owned),
+        }
+    }
 }
 
 pub fn finish_claude_scan(
@@ -54,6 +77,7 @@ pub fn finish_claude_scan(
     resolver: &dyn ProjectResolver,
 ) -> CachedParse {
     let mut parse = CachedParse::default();
+    let mut messages = Vec::new();
     let mut attributions: HashMap<Option<String>, Attribution> = HashMap::new();
     for ScannedClaudeMessage { key, date, model, mut counts, cwd } in scanned {
         counts.cost_usd = pricing.claude_cost(&model, &counts, date);
@@ -64,8 +88,9 @@ pub fn finish_claude_scan(
         }
         let message = CachedMessage { key, date, model, counts, attribution };
         add_cached_message(&mut parse.days, &message);
-        parse.messages.push(message);
+        messages.push(message);
     }
+    parse.messages = Some(Messages::Decoded(messages));
     parse
 }
 
@@ -88,11 +113,12 @@ pub fn merge_claude_parsed(parsed: &[CachedParse]) -> DayMap {
                 fresh = Some(entry.keys[..index].iter().map(String::as_str).collect());
             }
         }
-        let Some(mut fresh) = fresh else {
+        let messages = fresh.as_ref().and_then(|_| entry.messages());
+        let (Some(mut fresh), Some(messages)) = (fresh, messages) else {
             merge_day_maps(&mut all, &entry.days);
             continue;
         };
-        for message in &entry.messages {
+        for message in messages.iter() {
             if message.key.as_deref().is_none_or(|key| fresh.remove(key)) {
                 add_cached_message(&mut all, message);
             }
