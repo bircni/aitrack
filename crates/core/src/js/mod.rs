@@ -2,7 +2,7 @@
 
 mod collate;
 mod json;
-mod number;
+pub(crate) mod number;
 mod text;
 mod value;
 

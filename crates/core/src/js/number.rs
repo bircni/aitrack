@@ -40,7 +40,7 @@ pub fn number_to_string(x: f64) -> String {
 }
 
 /// The significant digits of `x` and the position of the decimal point relative to them.
-fn shortest_digits(x: f64) -> (String, i32) {
+pub(crate) fn shortest_digits(x: f64) -> (String, i32) {
     let mut buffer = ryu::Buffer::new();
     let text = buffer.format_finite(x);
     let (mantissa, exponent) = text.split_once('e').unwrap_or((text, "0"));

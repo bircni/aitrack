@@ -3,6 +3,7 @@
 pub mod config;
 pub mod data;
 pub mod day;
+pub mod display;
 pub mod env;
 pub mod error;
 pub mod fs;

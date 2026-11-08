@@ -1,0 +1,1135 @@
+{
+  "schemaVersion": 2,
+  "hostname": "kiri",
+  "timezone": "Pacific/Kiritimati",
+  "dayBucket": "local",
+  "lastUpdated": "2026-03-20T08:00:00.000Z",
+  "days": {
+    "2025-04-16": {
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 65783,
+            "outputTokens": 917
+          }
+        },
+        "totals": {
+          "inputTokens": 65783,
+          "outputTokens": 917
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "z": {
+            "inputTokens": 16186,
+            "outputTokens": 3119,
+            "rawInputTokens": 5395,
+            "cachedInputTokens": 8093
+          }
+        },
+        "totals": {
+          "inputTokens": 16186,
+          "outputTokens": 3119,
+          "rawInputTokens": 5395,
+          "cachedInputTokens": 8093
+        },
+        "byProject": {
+          "b/b": {
+            "inputTokens": 9711,
+            "outputTokens": 1871
+          }
+        }
+      }
+    },
+    "2025-09-19": {},
+    "2026-01-19": {
+      "codex": {
+        "byModel": {
+          "(compacted)": {
+            "inputTokens": 28647,
+            "outputTokens": 1455,
+            "rawInputTokens": 9549,
+            "cachedInputTokens": 14323
+          }
+        },
+        "totals": {
+          "inputTokens": 28647,
+          "outputTokens": 1455,
+          "rawInputTokens": 9549,
+          "cachedInputTokens": 14323
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "z": {
+            "inputTokens": 12068,
+            "outputTokens": 4877,
+            "rawInputTokens": 4022,
+            "cachedInputTokens": 6034
+          }
+        },
+        "totals": {
+          "inputTokens": 12068,
+          "outputTokens": 4877,
+          "rawInputTokens": 4022,
+          "cachedInputTokens": 6034,
+          "costUSD": 0
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 7240,
+            "outputTokens": 2926,
+            "costUSD": 0
+          }
+        }
+      }
+    },
+    "2025-10-16": {
+      "claude_code": {
+        "byModel": {
+          "claude-opus-4-1": {
+            "inputTokens": 27577,
+            "outputTokens": 4621,
+            "cachedInputTokens": 13788,
+            "costUSD": 0.027022
+          },
+          "claude-mystery": {
+            "inputTokens": 76290,
+            "outputTokens": 3949,
+            "rawInputTokens": 25430,
+            "cachedInputTokens": 38145,
+            "costUSD": 0.249866
+          }
+        },
+        "totals": {
+          "inputTokens": 103867,
+          "outputTokens": 8570,
+          "rawInputTokens": 25430,
+          "cachedInputTokens": 51933,
+          "costUSD": 0.276888
+        },
+        "byProject": {
+          "b/b": {
+            "inputTokens": 103867,
+            "outputTokens": 8570,
+            "costUSD": 0.276888
+          }
+        }
+      },
+      "codex": {
+        "byModel": {
+          "(compacted)": {
+            "inputTokens": 65174,
+            "outputTokens": 7025,
+            "rawInputTokens": 21724
+          }
+        },
+        "totals": {
+          "inputTokens": 65174,
+          "outputTokens": 7025,
+          "rawInputTokens": 21724
+        }
+      }
+    },
+    "2025-05-18": {},
+    "2025-03-22": {
+      "claude_code": {
+        "byModel": {
+          "claude-opus-4-1": {
+            "inputTokens": 76814,
+            "outputTokens": 5526,
+            "rawInputTokens": 25604,
+            "cachedInputTokens": 38407
+          },
+          "claude-haiku-5-5": {
+            "inputTokens": 60358,
+            "outputTokens": 2472,
+            "rawInputTokens": 20119
+          },
+          "claude-fable-5-1": {
+            "inputTokens": 45481,
+            "outputTokens": 6251,
+            "cachedInputTokens": 22740
+          },
+          "claude-mystery": {
+            "inputTokens": 78299,
+            "outputTokens": 4537,
+            "rawInputTokens": 26099,
+            "cachedInputTokens": 39149,
+            "costUSD": 2.147031
+          }
+        },
+        "totals": {
+          "inputTokens": 260952,
+          "outputTokens": 18786,
+          "rawInputTokens": 71822,
+          "cachedInputTokens": 100296,
+          "costUSD": 2.147031
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "z": {
+            "inputTokens": 7636,
+            "outputTokens": 1516,
+            "rawInputTokens": 2545,
+            "cachedInputTokens": 3818
+          }
+        },
+        "totals": {
+          "inputTokens": 7636,
+          "outputTokens": 1516,
+          "rawInputTokens": 2545,
+          "cachedInputTokens": 3818
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 7636,
+            "outputTokens": 1516
+          }
+        }
+      },
+      "codex": {
+        "byModel": {
+          "gpt-mystery": {
+            "inputTokens": 37741,
+            "outputTokens": 8945,
+            "rawInputTokens": 12580,
+            "cachedInputTokens": 18870,
+            "costUSD": 3.075318,
+            "hasUnpricedTokens": true
+          }
+        },
+        "totals": {
+          "inputTokens": 37741,
+          "outputTokens": 8945,
+          "rawInputTokens": 12580,
+          "cachedInputTokens": 18870,
+          "costUSD": 3.075318,
+          "hasUnpricedTokens": true
+        },
+        "byProject": {
+          "acme/widget": {
+            "inputTokens": 22644,
+            "outputTokens": 5367,
+            "costUSD": 1.8451908000000001
+          }
+        }
+      }
+    },
+    "2026-01-07": {
+      "claude_code": {
+        "byModel": {
+          "(compacted)": {
+            "inputTokens": 78287,
+            "outputTokens": 4788,
+            "rawInputTokens": 26095
+          }
+        },
+        "totals": {
+          "inputTokens": 78287,
+          "outputTokens": 4788,
+          "rawInputTokens": 26095
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 46972,
+            "outputTokens": 2872
+          }
+        }
+      },
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 40163,
+            "outputTokens": 745,
+            "rawInputTokens": 13387,
+            "cachedInputTokens": 20081,
+            "costUSD": 0.74983
+          },
+          "gpt-mystery": {
+            "inputTokens": 86328,
+            "outputTokens": 921,
+            "rawInputTokens": 28776,
+            "cachedInputTokens": 43164
+          }
+        },
+        "totals": {
+          "inputTokens": 126491,
+          "outputTokens": 1666,
+          "rawInputTokens": 42163,
+          "cachedInputTokens": 63245
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 75894,
+            "outputTokens": 999
+          }
+        }
+      }
+    },
+    "2026-02-18": {
+      "claude_code": {
+        "byModel": {
+          "claude-fable-5-1": {
+            "inputTokens": 85566,
+            "outputTokens": 6271,
+            "rawInputTokens": 28522
+          }
+        },
+        "totals": {
+          "inputTokens": 85566,
+          "outputTokens": 6271,
+          "rawInputTokens": 28522,
+          "costUSD": 0
+        }
+      },
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 35692,
+            "outputTokens": 2877,
+            "rawInputTokens": 11897,
+            "cachedInputTokens": 17846
+          },
+          "gpt-mystery": {
+            "inputTokens": 55505,
+            "outputTokens": 2372,
+            "cachedInputTokens": 27752
+          }
+        },
+        "totals": {
+          "inputTokens": 91197,
+          "outputTokens": 5249,
+          "rawInputTokens": 11897,
+          "cachedInputTokens": 45598,
+          "costUSD": 0
+        }
+      }
+    },
+    "2025-03-23": {},
+    "2025-06-05": {
+      "claude_code": {
+        "byModel": {
+          "claude-fable-5-1": {
+            "inputTokens": 19145,
+            "outputTokens": 7821,
+            "rawInputTokens": 6381,
+            "costUSD": 3.705312
+          },
+          "claude-mystery": {
+            "inputTokens": 13944,
+            "outputTokens": 5238,
+            "cachedInputTokens": 6972,
+            "costUSD": 2.516813,
+            "hasUnpricedTokens": true
+          }
+        },
+        "totals": {
+          "inputTokens": 33089,
+          "outputTokens": 13059,
+          "rawInputTokens": 6381,
+          "cachedInputTokens": 6972,
+          "costUSD": 6.222125,
+          "hasUnpricedTokens": true
+        },
+        "byProject": {
+          "acme/widget": {
+            "inputTokens": 19853,
+            "outputTokens": 7835,
+            "costUSD": 3.733275
+          }
+        }
+      },
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 55735,
+            "outputTokens": 5220,
+            "rawInputTokens": 18578,
+            "cachedInputTokens": 27867,
+            "costUSD": 1.651951,
+            "hasUnpricedTokens": true
+          },
+          "gpt-5-mini": {
+            "inputTokens": 12123,
+            "outputTokens": 7901,
+            "costUSD": 1.096666
+          }
+        },
+        "totals": {
+          "inputTokens": 67858,
+          "outputTokens": 13121,
+          "rawInputTokens": 18578,
+          "cachedInputTokens": 27867,
+          "costUSD": 2.748617,
+          "hasUnpricedTokens": true
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "z": {
+            "inputTokens": 5065,
+            "outputTokens": 7305,
+            "cachedInputTokens": 2532
+          }
+        },
+        "totals": {
+          "inputTokens": 5065,
+          "outputTokens": 7305,
+          "cachedInputTokens": 2532
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 3039,
+            "outputTokens": 4383
+          }
+        }
+      }
+    },
+    "2025-02-18": {
+      "claude_code": {
+        "byModel": {
+          "(compacted)": {
+            "inputTokens": 37838,
+            "outputTokens": 966,
+            "rawInputTokens": 12612,
+            "cachedInputTokens": 18919
+          }
+        },
+        "totals": {
+          "inputTokens": 37838,
+          "outputTokens": 966,
+          "rawInputTokens": 12612,
+          "cachedInputTokens": 18919
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 37838,
+            "outputTokens": 966
+          }
+        }
+      },
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 26249,
+            "outputTokens": 5690,
+            "rawInputTokens": 8749,
+            "cachedInputTokens": 13124,
+            "costUSD": 3.393296
+          },
+          "gpt-mystery": {
+            "inputTokens": 78185,
+            "outputTokens": 865,
+            "rawInputTokens": 26061,
+            "cachedInputTokens": 39092
+          }
+        },
+        "totals": {
+          "inputTokens": 104434,
+          "outputTokens": 6555,
+          "rawInputTokens": 34810,
+          "cachedInputTokens": 52216,
+          "costUSD": 3.393296
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 104434,
+            "outputTokens": 6555,
+            "costUSD": 3.393296
+          }
+        }
+      }
+    },
+    "2025-11-07": {
+      "claude_code": {
+        "byModel": {
+          "claude-fable-5-1": {
+            "inputTokens": 28398,
+            "outputTokens": 2425,
+            "rawInputTokens": 9466
+          },
+          "claude-mystery": {
+            "inputTokens": 86775,
+            "outputTokens": 4678,
+            "rawInputTokens": 28925,
+            "cachedInputTokens": 43387,
+            "costUSD": 3.670287
+          }
+        },
+        "totals": {
+          "inputTokens": 115173,
+          "outputTokens": 7103,
+          "rawInputTokens": 38391,
+          "cachedInputTokens": 43387
+        },
+        "byProject": {
+          "acme/widget": {
+            "inputTokens": 115173,
+            "outputTokens": 7103
+          }
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "z": {
+            "inputTokens": 51387,
+            "outputTokens": 1846,
+            "rawInputTokens": 17129,
+            "costUSD": 0.204218
+          }
+        },
+        "totals": {
+          "inputTokens": 51387,
+          "outputTokens": 1846,
+          "rawInputTokens": 17129,
+          "costUSD": 0.204218
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 30832,
+            "outputTokens": 1107,
+            "costUSD": 0.1225308
+          }
+        }
+      }
+    },
+    "2025-11-08": {
+      "claude_code": {
+        "byModel": {
+          "claude-opus-4-1": {
+            "inputTokens": 17647,
+            "outputTokens": 2780,
+            "cachedInputTokens": 8823
+          },
+          "claude-haiku-5-5": {
+            "inputTokens": 129,
+            "outputTokens": 444,
+            "rawInputTokens": 43,
+            "cachedInputTokens": 64
+          },
+          "claude-fable-5-1": {
+            "inputTokens": 63715,
+            "outputTokens": 1797,
+            "rawInputTokens": 21238,
+            "cachedInputTokens": 31857
+          },
+          "claude-mystery": {
+            "inputTokens": 86409,
+            "outputTokens": 1358,
+            "cachedInputTokens": 43204,
+            "costUSD": 2.154761
+          }
+        },
+        "totals": {
+          "inputTokens": 167900,
+          "outputTokens": 6379,
+          "rawInputTokens": 21281,
+          "cachedInputTokens": 83948
+        }
+      },
+      "codex": {
+        "byModel": {
+          "(compacted)": {
+            "inputTokens": 65969,
+            "outputTokens": 991,
+            "rawInputTokens": 21989,
+            "cachedInputTokens": 32984,
+            "costUSD": 0.119815
+          }
+        },
+        "totals": {
+          "inputTokens": 65969,
+          "outputTokens": 991,
+          "rawInputTokens": 21989,
+          "cachedInputTokens": 32984,
+          "costUSD": 0.119815
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "z": {
+            "inputTokens": 40453,
+            "outputTokens": 2143,
+            "cachedInputTokens": 20226
+          }
+        },
+        "totals": {
+          "inputTokens": 40453,
+          "outputTokens": 2143,
+          "cachedInputTokens": 20226,
+          "costUSD": 0
+        },
+        "byProject": {
+          "b/b": {
+            "inputTokens": 24271,
+            "outputTokens": 1285,
+            "costUSD": 0
+          }
+        }
+      }
+    },
+    "2025-11-30": {
+      "claude_code": {
+        "byModel": {
+          "claude-fable-5-1": {
+            "inputTokens": 54168,
+            "outputTokens": 8796,
+            "cachedInputTokens": 27084
+          }
+        },
+        "totals": {
+          "inputTokens": 54168,
+          "outputTokens": 8796,
+          "cachedInputTokens": 27084
+        },
+        "byProject": {
+          "acme/widget": {
+            "inputTokens": 32500,
+            "outputTokens": 5277
+          }
+        }
+      },
+      "codex": {
+        "byModel": {
+          "gpt-5-mini": {
+            "inputTokens": 7910,
+            "outputTokens": 5255,
+            "cachedInputTokens": 3955
+          },
+          "gpt-mystery": {
+            "inputTokens": 51333,
+            "outputTokens": 3494,
+            "cachedInputTokens": 25666,
+            "costUSD": 0.777319
+          }
+        },
+        "totals": {
+          "inputTokens": 59243,
+          "outputTokens": 8749,
+          "cachedInputTokens": 29621,
+          "costUSD": 0.777319
+        },
+        "byProject": {
+          "b/b": {
+            "inputTokens": 35545,
+            "outputTokens": 5249,
+            "costUSD": 0.46639139999999996
+          }
+        }
+      }
+    },
+    "2025-09-29": {
+      "codex": {
+        "byModel": {
+          "gpt-mystery": {
+            "inputTokens": 80755,
+            "outputTokens": 4263,
+            "cachedInputTokens": 40377,
+            "costUSD": 3.967333
+          }
+        },
+        "totals": {
+          "inputTokens": 80755,
+          "outputTokens": 4263,
+          "cachedInputTokens": 40377,
+          "costUSD": 3.967333
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 48453,
+            "outputTokens": 2557,
+            "costUSD": 2.3803997999999997
+          }
+        }
+      }
+    },
+    "2025-10-12": {
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 5167,
+            "outputTokens": 1914,
+            "rawInputTokens": 1722,
+            "cachedInputTokens": 2583,
+            "costUSD": 2.224654
+          },
+          "gpt-mystery": {
+            "inputTokens": 63890,
+            "outputTokens": 900,
+            "rawInputTokens": 21296,
+            "cachedInputTokens": 31945,
+            "costUSD": 3.859894,
+            "hasUnpricedTokens": true
+          }
+        },
+        "totals": {
+          "inputTokens": 69057,
+          "outputTokens": 2814,
+          "rawInputTokens": 23018,
+          "cachedInputTokens": 34528,
+          "costUSD": 6.084548,
+          "hasUnpricedTokens": true
+        },
+        "byProject": {
+          "acme/widget": {
+            "inputTokens": 41434,
+            "outputTokens": 1688,
+            "costUSD": 3.6507287999999996
+          }
+        }
+      }
+    },
+    "2025-07-17": {},
+    "2026-02-24": {
+      "claude_code": {
+        "byModel": {
+          "claude-opus-4-1": {
+            "inputTokens": 47019,
+            "outputTokens": 5129,
+            "rawInputTokens": 15673,
+            "cachedInputTokens": 23509
+          },
+          "claude-haiku-5-5": {
+            "inputTokens": 8652,
+            "outputTokens": 5189,
+            "rawInputTokens": 2884,
+            "cachedInputTokens": 4326,
+            "costUSD": 0.888541
+          },
+          "claude-fable-5-1": {
+            "inputTokens": 74205,
+            "outputTokens": 5386,
+            "rawInputTokens": 24735,
+            "cachedInputTokens": 37102,
+            "costUSD": 3.085739,
+            "hasUnpricedTokens": true
+          }
+        },
+        "totals": {
+          "inputTokens": 129876,
+          "outputTokens": 15704,
+          "rawInputTokens": 43292,
+          "cachedInputTokens": 64937,
+          "hasUnpricedTokens": true
+        },
+        "byProject": {
+          "b/b": {
+            "inputTokens": 77925,
+            "outputTokens": 9422
+          }
+        }
+      },
+      "codex": {
+        "byModel": {
+          "(compacted)": {
+            "inputTokens": 34645,
+            "outputTokens": 6382,
+            "rawInputTokens": 11548,
+            "cachedInputTokens": 17322,
+            "costUSD": 1.142534
+          }
+        },
+        "totals": {
+          "inputTokens": 34645,
+          "outputTokens": 6382,
+          "rawInputTokens": 11548,
+          "cachedInputTokens": 17322,
+          "costUSD": 1.142534
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 20787,
+            "outputTokens": 3829,
+            "costUSD": 0.6855203999999999
+          }
+        }
+      }
+    },
+    "2025-03-11": {
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 6572,
+            "outputTokens": 8840
+          },
+          "gpt-5-mini": {
+            "inputTokens": 58117,
+            "outputTokens": 5666,
+            "rawInputTokens": 19372,
+            "cachedInputTokens": 29058
+          },
+          "gpt-mystery": {
+            "inputTokens": 26934,
+            "outputTokens": 2262,
+            "rawInputTokens": 8978,
+            "cachedInputTokens": 13467
+          }
+        },
+        "totals": {
+          "inputTokens": 91623,
+          "outputTokens": 16768,
+          "rawInputTokens": 28350,
+          "cachedInputTokens": 42525
+        }
+      }
+    },
+    "2025-05-29": {
+      "claude_code": {
+        "byModel": {
+          "claude-haiku-5-5": {
+            "inputTokens": 23377,
+            "outputTokens": 3107
+          },
+          "claude-mystery": {
+            "inputTokens": 31833,
+            "outputTokens": 4262,
+            "costUSD": 3.207816
+          }
+        },
+        "totals": {
+          "inputTokens": 55210,
+          "outputTokens": 7369
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "(compacted)": {
+            "inputTokens": 49059,
+            "outputTokens": 3769,
+            "rawInputTokens": 16353,
+            "cachedInputTokens": 24529,
+            "costUSD": 0.172917,
+            "hasUnpricedTokens": true
+          }
+        },
+        "totals": {
+          "inputTokens": 49059,
+          "outputTokens": 3769,
+          "rawInputTokens": 16353,
+          "cachedInputTokens": 24529,
+          "costUSD": 0.172917,
+          "hasUnpricedTokens": true
+        }
+      }
+    },
+    "2025-03-06": {
+      "claude_code": {
+        "byModel": {
+          "claude-opus-4-1": {
+            "inputTokens": 9311,
+            "outputTokens": 6943
+          },
+          "claude-haiku-5-5": {
+            "inputTokens": 30448,
+            "outputTokens": 5484,
+            "rawInputTokens": 10149,
+            "cachedInputTokens": 15224,
+            "costUSD": 0.528909
+          },
+          "claude-fable-5-1": {
+            "inputTokens": 88494,
+            "outputTokens": 8054,
+            "rawInputTokens": 29498,
+            "cachedInputTokens": 44247
+          },
+          "claude-mystery": {
+            "inputTokens": 9697,
+            "outputTokens": 3821,
+            "rawInputTokens": 3232,
+            "cachedInputTokens": 4848,
+            "costUSD": 2.707559
+          }
+        },
+        "totals": {
+          "inputTokens": 137950,
+          "outputTokens": 24302,
+          "rawInputTokens": 42879,
+          "cachedInputTokens": 64319,
+          "costUSD": 3.236468
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 82770,
+            "outputTokens": 14581,
+            "costUSD": 1.9418807999999999
+          }
+        }
+      },
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 57806,
+            "outputTokens": 7408,
+            "rawInputTokens": 19268,
+            "cachedInputTokens": 28903
+          },
+          "gpt-5-mini": {
+            "inputTokens": 81612,
+            "outputTokens": 4178,
+            "rawInputTokens": 27204,
+            "cachedInputTokens": 40806,
+            "costUSD": 1.517712
+          }
+        },
+        "totals": {
+          "inputTokens": 139418,
+          "outputTokens": 11586,
+          "rawInputTokens": 46472,
+          "cachedInputTokens": 69709
+        },
+        "byProject": {
+          "acme/widget": {
+            "inputTokens": 83650,
+            "outputTokens": 6951
+          }
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "z": {
+            "inputTokens": 54143,
+            "outputTokens": 1186,
+            "rawInputTokens": 18047,
+            "cachedInputTokens": 27071
+          }
+        },
+        "totals": {
+          "inputTokens": 54143,
+          "outputTokens": 1186,
+          "rawInputTokens": 18047,
+          "cachedInputTokens": 27071
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 32485,
+            "outputTokens": 711
+          }
+        }
+      }
+    },
+    "2025-06-10": {
+      "claude_code": {
+        "byModel": {
+          "claude-opus-4-1": {
+            "inputTokens": 66696,
+            "outputTokens": 7066,
+            "rawInputTokens": 22232,
+            "cachedInputTokens": 33348,
+            "costUSD": 0.651308
+          },
+          "claude-haiku-5-5": {
+            "inputTokens": 36060,
+            "outputTokens": 210,
+            "rawInputTokens": 12020,
+            "costUSD": 2.793676
+          }
+        },
+        "totals": {
+          "inputTokens": 102756,
+          "outputTokens": 7276,
+          "rawInputTokens": 34252,
+          "cachedInputTokens": 33348,
+          "costUSD": 3.444984
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 102756,
+            "outputTokens": 7276,
+            "costUSD": 3.444984
+          }
+        }
+      }
+    },
+    "2025-05-08": {},
+    "2025-08-04": {
+      "codex": {
+        "byModel": {
+          "gpt-mystery": {
+            "inputTokens": 5795,
+            "outputTokens": 2058,
+            "rawInputTokens": 1931,
+            "cachedInputTokens": 2897
+          }
+        },
+        "totals": {
+          "inputTokens": 5795,
+          "outputTokens": 2058,
+          "rawInputTokens": 1931,
+          "cachedInputTokens": 2897
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "z": {
+            "inputTokens": 57698,
+            "outputTokens": 529,
+            "rawInputTokens": 19232,
+            "costUSD": 0.135426,
+            "hasUnpricedTokens": true
+          }
+        },
+        "totals": {
+          "inputTokens": 57698,
+          "outputTokens": 529,
+          "rawInputTokens": 19232,
+          "costUSD": 0.135426,
+          "hasUnpricedTokens": true
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 34618,
+            "outputTokens": 317,
+            "costUSD": 0.0812556
+          }
+        }
+      }
+    },
+    "2025-02-22": {
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 11266,
+            "outputTokens": 8969,
+            "cachedInputTokens": 5633
+          },
+          "gpt-mystery": {
+            "inputTokens": 78454,
+            "outputTokens": 2659,
+            "cachedInputTokens": 39227,
+            "costUSD": 3.339545
+          }
+        },
+        "totals": {
+          "inputTokens": 89720,
+          "outputTokens": 11628,
+          "cachedInputTokens": 44860,
+          "costUSD": 3.339545
+        }
+      }
+    },
+    "2025-10-01": {
+      "claude_code": {
+        "byModel": {
+          "claude-mystery": {
+            "inputTokens": 46926,
+            "outputTokens": 2587,
+            "rawInputTokens": 15642,
+            "cachedInputTokens": 23463,
+            "costUSD": 0.672499
+          }
+        },
+        "totals": {
+          "inputTokens": 46926,
+          "outputTokens": 2587,
+          "rawInputTokens": 15642,
+          "cachedInputTokens": 23463,
+          "costUSD": 0.672499
+        }
+      },
+      "codex": {
+        "byModel": {
+          "gpt-5": {
+            "inputTokens": 19364,
+            "outputTokens": 4055,
+            "rawInputTokens": 6454,
+            "cachedInputTokens": 9682
+          },
+          "gpt-5-mini": {
+            "inputTokens": 79644,
+            "outputTokens": 5913,
+            "cachedInputTokens": 39822,
+            "costUSD": 3.19303
+          }
+        },
+        "totals": {
+          "inputTokens": 99008,
+          "outputTokens": 9968,
+          "rawInputTokens": 6454,
+          "cachedInputTokens": 49504
+        }
+      },
+      "zzz": {
+        "byModel": {
+          "z": {
+            "inputTokens": 54138,
+            "outputTokens": 7353,
+            "rawInputTokens": 18046
+          }
+        },
+        "totals": {
+          "inputTokens": 54138,
+          "outputTokens": 7353,
+          "rawInputTokens": 18046
+        },
+        "byProject": {
+          "o/r": {
+            "inputTokens": 54138,
+            "outputTokens": 7353
+          }
+        }
+      }
+    },
+    "2025-02-16": {
+      "claude_code": {
+        "byModel": {
+          "claude-opus-4-1": {
+            "inputTokens": 84974,
+            "outputTokens": 5203,
+            "cachedInputTokens": 42487,
+            "costUSD": 2.466361
+          },
+          "claude-haiku-5-5": {
+            "inputTokens": 14516,
+            "outputTokens": 6722
+          },
+          "claude-fable-5-1": {
+            "inputTokens": 73233,
+            "outputTokens": 3618,
+            "cachedInputTokens": 36616
+          }
+        },
+        "totals": {
+          "inputTokens": 172723,
+          "outputTokens": 15543,
+          "cachedInputTokens": 79103
+        },
+        "byProject": {
+          "b/b": {
+            "inputTokens": 103633,
+            "outputTokens": 9325
+          }
+        }
+      },
+      "codex": {
+        "byModel": {
+          "gpt-5-mini": {
+            "inputTokens": 22853,
+            "outputTokens": 3122,
+            "cachedInputTokens": 11426,
+            "costUSD": 2.73109
+          },
+          "gpt-mystery": {
+            "inputTokens": 85996,
+            "outputTokens": 2249,
+            "costUSD": 2.923195
+          }
+        },
+        "totals": {
+          "inputTokens": 108849,
+          "outputTokens": 5371,
+          "cachedInputTokens": 11426,
+          "costUSD": 5.654285
+        },
+        "byProject": {
+          "b/b": {
+            "inputTokens": 65309,
+            "outputTokens": 3222,
+            "costUSD": 3.392571
+          }
+        }
+      }
+    }
+  }
+}
