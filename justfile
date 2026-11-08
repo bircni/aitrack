@@ -27,3 +27,9 @@ renderer:
 
 audit:
     cargo deny check advisories sources
+
+# 4.x and 5.0 on the same fixture home, in four time zones; until the cut-over removes 4.x
+parity:
+    bun nx run aitrack:build
+    cargo build -p aitrack-cli
+    node scripts/diff-cli.ts
