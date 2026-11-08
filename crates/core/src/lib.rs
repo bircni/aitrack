@@ -4,7 +4,9 @@ pub mod config;
 pub mod data;
 pub mod day;
 pub mod env;
+pub mod error;
 pub mod fs;
+pub mod git;
 pub mod http;
 pub mod js;
 pub mod machine_id;
@@ -13,16 +15,20 @@ pub mod pricing;
 pub mod process;
 pub mod providers;
 pub mod readers;
+pub mod recompute;
 pub mod store;
+pub mod sync;
 pub mod time;
 
 use std::collections::HashSet;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use crate::config::{Config, ConfigLoad};
 use crate::env::{Env, Paths};
+use crate::http::{HttpClient, UreqClient};
 use crate::output::Output;
+use crate::pricing::store::PricingStore;
 use crate::store::validate::Diagnostic;
 use crate::time::Clock;
 
@@ -50,6 +56,10 @@ pub struct Core {
     warned_invalid_config: AtomicBool,
     /// Other machines' files cannot self-heal, so their dropped days are reported once per file.
     warned_files: Mutex<HashSet<String>>,
+    /// One operation on the data repo at a time.
+    repo_lock: Mutex<()>,
+    pub http: Box<dyn HttpClient>,
+    pricing: OnceLock<PricingStore>,
 }
 
 impl Core {
@@ -62,7 +72,22 @@ impl Core {
             output,
             warned_invalid_config: AtomicBool::new(false),
             warned_files: Mutex::default(),
+            repo_lock: Mutex::default(),
+            http: Box::new(UreqClient::default()),
+            pricing: OnceLock::new(),
         }
+    }
+
+    /// Replaces the network, for tests.
+    #[must_use]
+    pub fn with_http(mut self, http: Box<dyn HttpClient>) -> Self {
+        self.http = http;
+        self
+    }
+
+    /// The rates in use, opened from `~/.config/aitrack/pricing` on first use.
+    pub fn pricing(&self) -> &PricingStore {
+        self.pricing.get_or_init(|| PricingStore::open(&self.paths.app_dir.join("pricing")))
     }
 
     /// Warns about what reading a machine file found: every skipped file, other findings once per file.

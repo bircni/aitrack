@@ -185,3 +185,16 @@ writeFileSync(
   new URL('machine-ids.json', import.meta.url),
   rows(machineIds.map((id) => [id, machineIdValidationError(id)])),
 );
+
+const { redactUrl, sameRemote } = await import('../../../../../libs/aitrack-lib/src/git/remote.js');
+const remotes = [
+  'git@github.com:me/data.git', 'git@github.com:me/data', 'git@github.com:Me/Data.git', 'ssh://git@github.com/me/data.git',
+  'ssh://git@github.com:22/me/data.git', 'ssh://git@github.com:2222/me/data.git', 'https://github.com/me/data.git',
+  'https://github.com/me/data', 'https://GitHub.com/me/data/', 'https://ghp_token@github.com/me/data.git', 'https://user:pass@github.com/me/data',
+  'https://github.com:443/me/data', 'https://github.com:8443/me/data', 'http://github.com/me/data', 'git://github.com/me/data',
+  'git+ssh://git@github.com/me/data.git', 'file:///srv/data.git', 'file:///srv/data', '/srv/data.git', '/srv/data', 'C:/srv/data',
+  'C:\\srv\\data', 'git@[::1]:me/data.git', 'ssh://user:secret@host/x', 'SSH://git@host/x', 'https://@host/x', 'ftp://u:p@host/x',
+  'not a url', '', 'git@gitlab.com:me/data.git', 'https://gitea.local/me/data', 'https://gitea.local:443/me/data',
+];
+const remoteRows = remotes.map((url) => [url, redactUrl(url), remotes.filter((other) => sameRemote(url, other))]);
+writeFileSync(new URL('remotes.json', import.meta.url), rows(remoteRows));

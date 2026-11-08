@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::data::day_map::Attribution;
 use crate::data::project::{NO_REMOTE_PROJECT, normalize_remote_url};
-use crate::process::run_with_timeout;
+use crate::process::run;
 
 const GIT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -32,12 +32,8 @@ impl ProjectResolver for GitProjectResolver {
 }
 
 fn origin_url(cwd: &str) -> Option<String> {
-    let output = run_with_timeout(
-        "git",
-        &["-C", cwd, "remote", "get-url", "origin"],
-        &[("GIT_TERMINAL_PROMPT", "0")],
-        GIT_TIMEOUT,
-    )?;
+    let env = [("GIT_TERMINAL_PROMPT".to_owned(), "0".to_owned())];
+    let output = run("git", &["-C", cwd, "remote", "get-url", "origin"], &env, None, Some(GIT_TIMEOUT)).ok()?;
     let url = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     (output.status.success() && !url.is_empty()).then_some(url)
 }
