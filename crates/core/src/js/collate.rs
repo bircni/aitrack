@@ -16,16 +16,18 @@ pub fn locale_compare(a: &str, b: &str) -> Ordering {
     primary(&a).cmp(&primary(&b)).then_with(|| tertiary(&a).cmp(&tertiary(&b)))
 }
 
-#[expect(clippy::expect_used, reason = "ORDER is a short constant string")]
+/// Where `a` sits in ORDER; a test pins it.
+const LETTER_START: u32 = 48;
+
 fn weights(s: &str) -> Vec<(u32, u8)> {
     s.chars()
         .filter_map(|c| {
             if c.is_ascii() {
                 let index = ORDER.find(c)?; // Control characters are not listed: ignorable.
-                let index = u32::try_from(index).expect("ORDER is short");
+                let index = u32::try_from(index).ok()?;
                 if c.is_ascii_alphabetic() {
-                    let letter = index - letter_start();
-                    Some((letter_start() + letter / 2, u8::from(c.is_ascii_uppercase())))
+                    let letter = index - LETTER_START;
+                    Some((LETTER_START + letter / 2, u8::from(c.is_ascii_uppercase())))
                 } else {
                     Some((index, 0))
                 }
@@ -36,14 +38,14 @@ fn weights(s: &str) -> Vec<(u32, u8)> {
         .collect()
 }
 
-#[expect(clippy::expect_used, reason = "ORDER is a short constant string that lists the letters")]
-fn letter_start() -> u32 {
-    u32::try_from(ORDER.find('a').expect("ORDER lists letters")).expect("ORDER is short")
-}
-
 #[cfg(test)]
 mod tests {
-    use super::locale_compare;
+    use super::{LETTER_START, ORDER, locale_compare};
+
+    #[test]
+    fn letters_start_where_order_lists_a() {
+        assert_eq!(ORDER.find('a').map(|i| u32::try_from(i).unwrap()), Some(LETTER_START));
+    }
 
     #[test]
     fn matches_node_for_every_ascii_fixture_pair() {

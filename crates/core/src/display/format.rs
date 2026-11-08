@@ -4,18 +4,14 @@ use crate::js::number::shortest_digits;
 use crate::js::number_to_string;
 
 /// `x.toFixed(digits)`: rounded from the exact binary value, an exact tie going away from zero.
-///
-/// # Panics
-///
-/// Never: a fixed-point number with digits always has a decimal point.
 #[must_use]
-#[expect(clippy::expect_used, reason = "to_fixed with digits > 0 always writes a decimal point")]
 pub fn to_fixed(x: f64, digits: usize) -> String {
     if !x.is_finite() || x.abs() >= 1e21 {
         return number_to_string(x);
     }
     let exact = format!("{:.1100}", x.abs());
-    let (int, frac) = exact.split_once('.').expect("a fractional part was asked for");
+    let (int, frac) = exact.split_once('.').unwrap_or((&exact, ""));
+    let frac = format!("{frac:0<width$}", width = digits + 1);
     let mut kept = format!("{int}{}", &frac[..digits]).into_bytes();
     if frac.as_bytes()[digits] >= b'5' {
         increment(&mut kept);
@@ -26,12 +22,7 @@ pub fn to_fixed(x: f64, digits: usize) -> String {
 
 /// `x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })`: ICU rounds
 /// the shortest decimal rather than the binary value, half away from zero, and groups thousands.
-///
-/// # Panics
-///
-/// Never: two-decimal output always has a decimal point.
 #[must_use]
-#[expect(clippy::expect_used, reason = "two-decimal formatting always writes a decimal point")]
 pub fn en_us_2dp(x: f64) -> String {
     if x == 0.0 {
         return "0.00".to_owned();
@@ -47,8 +38,8 @@ pub fn en_us_2dp(x: f64) -> String {
     if frac.as_bytes()[2] >= b'5' {
         increment(&mut kept);
     }
-    let text = with_point("", &kept, 2);
-    let (int, cents) = text.split_once('.').expect("two decimals");
+    let kept = format!("{:0>3}", String::from_utf8_lossy(&kept));
+    let (int, cents) = kept.split_at(kept.len() - 2);
     let int = int.trim_start_matches('0');
     let sign = if x < 0.0 { "-" } else { "" };
     format!("{sign}{}.{cents}", group_thousands(if int.is_empty() { "0" } else { int }))
@@ -67,14 +58,9 @@ fn increment(digits: &mut Vec<u8>) {
     digits.insert(0, b'1');
 }
 
-#[expect(clippy::expect_used, reason = "the buffer only ever holds ASCII digits and commas")]
 fn with_point(sign: &str, digits: &[u8], decimals: usize) -> String {
-    let text = std::str::from_utf8(digits).expect("ASCII digits");
-    let padded = if text.len() <= decimals {
-        format!("{}{text}", "0".repeat(decimals + 1 - text.len()))
-    } else {
-        text.to_owned()
-    };
+    let text = String::from_utf8_lossy(digits).into_owned();
+    let padded = if text.len() <= decimals { format!("{}{text}", "0".repeat(decimals + 1 - text.len())) } else { text };
     let (int, frac) = padded.split_at(padded.len() - decimals);
     if decimals == 0 { format!("{sign}{int}") } else { format!("{sign}{int}.{frac}") }
 }
