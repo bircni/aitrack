@@ -8,6 +8,8 @@ pub mod fs;
 pub mod js;
 pub mod machine_id;
 pub mod output;
+pub mod process;
+pub mod readers;
 pub mod time;
 
 use std::sync::atomic::{AtomicBool, Ordering};

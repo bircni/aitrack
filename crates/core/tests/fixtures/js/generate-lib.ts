@@ -1,4 +1,4 @@
-// Regenerate with `bun crates/core/tests/fixtures/js/generate-lib.ts` while the 4.x library is in the tree.
+// Regenerate with `node --import tsx crates/core/tests/fixtures/js/generate-lib.ts` while the 4.x library is in the tree.
 // Records what the TypeScript library returns, so the Rust port is tested against the real thing.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 

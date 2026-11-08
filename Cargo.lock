@@ -32,6 +32,7 @@ dependencies = [
  "gethostname",
  "indexmap 2.14.2",
  "jiff",
+ "memchr",
  "proptest",
  "ryu",
  "serde",

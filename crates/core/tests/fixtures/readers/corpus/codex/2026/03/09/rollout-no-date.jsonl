@@ -1,0 +1,4 @@
+{"timestamp":"bad","type":"turn_context","payload":{"model":"gpt-5"}}
+{"timestamp":"bad","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":10,"output_tokens":2}}}}
+{"timestamp":"2026-03-09T08:00:00Z","type":"response_item","payload":{}}
+{"timestamp":"bad","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":30,"output_tokens":4}}}}
