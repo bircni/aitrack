@@ -196,7 +196,7 @@
 
   function patch(change: Partial<Settings>): void {
     if (!settings) return;
-    // Applied now so a second change made before the sidecar replies builds on this one.
+    // Applied now so a second change made before the shell replies builds on this one.
     settings = { ...settings, ...change };
     // Plain data for the shell, not Svelte's state proxies.
     queued = $state.snapshot(settings);

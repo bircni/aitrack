@@ -212,8 +212,7 @@ jobs:
         if: steps.opentrack.outputs.affected
         run: bun nx run opentrack:format:check
 
-      # The Rust shell embeds the renderer and bundles the native Node sidecar;
-      # Nx builds those dependencies without running their JS checks or tests.
+      # The Rust shell embeds the renderer; Nx builds it without running its JS checks or tests.
       - name: Lint Rust
         if: steps.opentrack.outputs.affected
         run: bun nx run opentrack:lint

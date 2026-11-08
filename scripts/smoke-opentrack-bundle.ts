@@ -22,7 +22,7 @@ function onlyMatch(pattern: string, cwd: string): string {
   return join(cwd, match);
 }
 
-function extractSidecars(): string[] {
+function extractApps(): string[] {
   if (process.platform === 'darwin') {
     const arch = process.arch === 'arm64' ? 'aarch64' : process.arch;
     const installer = onlyMatch(`opentrack_${version}_${arch}.dmg`, join(bundleRoot, 'dmg'));
@@ -37,7 +37,7 @@ function extractSidecars(): string[] {
     cleanup.push(() => {
       execFileSync('hdiutil', ['detach', mountPoint], { stdio: 'pipe' });
     });
-    return [onlyMatch('*.app/Contents/Resources/opentrack-sidecar.exe', mountPoint)];
+    return [onlyMatch('*.app/Contents/MacOS/opentrack', mountPoint)];
   }
   if (process.platform === 'linux') {
     const deb = onlyMatch(`opentrack_${version}_amd64.deb`, join(bundleRoot, 'deb'));
@@ -47,8 +47,8 @@ function extractSidecars(): string[] {
     // Runs only the AppImage runtime, which unpacks to ./squashfs-root without FUSE.
     execFileSync(appImage, ['--appimage-extract'], { cwd: temporary, stdio: 'pipe' });
     return [
-      onlyMatch('**/opentrack-sidecar.exe', debRoot),
-      onlyMatch('**/opentrack-sidecar.exe', join(temporary, 'squashfs-root')),
+      onlyMatch('usr/bin/opentrack', debRoot),
+      onlyMatch('squashfs-root/usr/bin/opentrack', temporary),
     ];
   }
   assert.equal(process.platform, 'win32', 'Installer smoke checks require macOS, Linux or Windows');
@@ -56,10 +56,11 @@ function extractSidecars(): string[] {
   const extracted = join(temporary, 'installer');
   // Unpack the installer without registering or launching an installed app.
   execFileSync('7z', ['x', installer, `-o${extracted}`, '-y'], { stdio: 'pipe' });
-  return [onlyMatch('**/opentrack-sidecar.exe', extracted)];
+  return [onlyMatch('**/opentrack.exe', extracted)];
 }
 
-function checkSidecar(program: string, dataDir: string): void {
+/** Starts the packaged app in its smoke-test mode, which answers before any window or tray exists. */
+function checkApp(program: string, dataDir: string): void {
   mkdirSync(dataDir);
   writeFileSync(join(dataDir, 'settings.json'), JSON.stringify({ theme: 'dark' }));
   const result = spawnSync(program, ['--smoke-test', '--data-dir', dataDir], {
@@ -68,12 +69,12 @@ function checkSidecar(program: string, dataDir: string): void {
     windowsHide: true,
   });
   assert.ifError(result.error);
-  assert.equal(result.status, 0, `Packaged sidecar failed: ${result.stderr}`);
+  assert.equal(result.status, 0, `Packaged app failed: ${result.stderr}`);
   const messages: unknown[] = result.stdout
     .trim()
     .split('\n')
     .map((line) => JSON.parse(line) as unknown);
-  assert.equal(messages.length, 2, 'Expected both protocol responses');
+  assert.equal(messages.length, 2, 'Expected the settings and the state');
   const [settings, state] = messages as [
     { id: number; result?: { theme?: string } },
     { id: number; result?: { providers?: unknown[]; refreshing?: boolean } },
@@ -90,14 +91,12 @@ function checkSidecar(program: string, dataDir: string): void {
 }
 
 try {
-  for (const [index, program] of extractSidecars().entries()) {
-    checkSidecar(program, join(temporary, `data-${String(index)}`));
+  for (const [index, program] of extractApps().entries()) {
+    checkApp(program, join(temporary, `data-${String(index)}`));
   }
-  console.log(
-    'Packaged sidecar started, read isolated settings and answered both protocol requests.',
-  );
+  console.log('Packaged app started, read isolated settings and reported its state.');
 } finally {
   for (const clean of cleanup) clean();
-  // Windows can keep the exited sidecar's image locked for a moment.
+  // Windows can keep the exited app's image locked for a moment.
   rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }

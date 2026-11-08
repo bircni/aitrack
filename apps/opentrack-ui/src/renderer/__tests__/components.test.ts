@@ -10,8 +10,8 @@ import type {
   Settings,
 } from '../../shared/types.js';
 import { EMPTY_PERIOD } from '../../shared/types.js';
-import { DEFAULT_SETTINGS } from '../../sidecar/settings.js';
 import type { api } from '../api.js';
+import { DEFAULT_SETTINGS } from './settings.js';
 
 const mocks = vi.hoisted(() => ({
   api: {
@@ -1063,7 +1063,7 @@ it('falls back to automatic tray selection when its provider is disabled and han
   ).toBe(true);
 });
 
-it('updates quota meters and settings controls when the sidecar pushes new values', async () => {
+it('updates quota meters and settings controls when the shell pushes new values', async () => {
   const now = Date.now();
   const provider = {
     key: 'codex' as const,

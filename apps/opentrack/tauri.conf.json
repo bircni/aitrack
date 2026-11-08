@@ -44,9 +44,6 @@
     "homepage": "https://github.com/bircni/aitrack/blob/main/docs/opentrack.md",
     "shortDescription": "Live limits, reset times and spend for Claude Code, Codex and Cursor",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.png", "icons/icon.ico"],
-    "resources": {
-      "../opentrack-ui/dist-sidecar/opentrack-sidecar.exe": "opentrack-sidecar.exe"
-    },
     "windows": {
       "nsis": {
         "installMode": "currentUser"

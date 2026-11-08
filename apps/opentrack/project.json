@@ -23,7 +23,7 @@
         "{workspaceRoot}/package.json",
         "cargo"
       ],
-      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "dependsOn": ["opentrack-ui:build"],
       "outputs": ["{workspaceRoot}/target/debug"],
       "options": {}
     },
@@ -36,7 +36,7 @@
         "{workspaceRoot}/package.json",
         "cargo"
       ],
-      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "dependsOn": ["opentrack-ui:build"],
       "options": {}
     },
     "lint": {
@@ -49,12 +49,12 @@
         "{workspaceRoot}/package.json",
         "cargo"
       ],
-      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "dependsOn": ["opentrack-ui:build"],
       "options": { "all-targets": true, "args": ["-D", "warnings"] }
     },
     "dev": {
       "executor": "@monodon/rust:run",
-      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "dependsOn": ["opentrack-ui:build"],
       "continuous": true,
       "options": {}
     },
@@ -68,7 +68,7 @@
     },
     "package": {
       "executor": "nx:run-commands",
-      "dependsOn": ["opentrack-ui:build", "opentrack-ui:sea"],
+      "dependsOn": ["opentrack-ui:build"],
       "outputs": ["{workspaceRoot}/target/release/bundle"],
       "options": {
         "cwd": "{projectRoot}",

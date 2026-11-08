@@ -2957,11 +2957,15 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 name = "opentrack"
 version = "0.1.0"
 dependencies = [
- "base64 0.23.1",
+ "aitrack-core",
+ "indexmap 2.14.2",
+ "jiff",
  "objc2",
  "objc2-app-kit",
  "objc2-quartz-core",
+ "serde",
  "serde_json",
+ "sha2 0.11.1",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
@@ -2970,6 +2974,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "tempfile",
  "tokio",
  "windows",
 ]

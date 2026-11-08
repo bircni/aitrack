@@ -16,8 +16,8 @@ local logs / Cursor export                  other machines
                      data/usageReport (periods, totals, comparisons)
                                │
         ┌──────────────────────┼───────────────────────┐
-   display/ (TUI, PNG,    apps/aitrack commands   apps/opentrack-ui sidecar
-   PDF, CSV)                                       (JSON for the dashboard)
+   display/ (TUI, PNG,    apps/aitrack commands   apps/opentrack (Rust, on
+   PDF, CSV)                                       aitrack-core; JSON for the dashboard)
 ```
 
 - **Readers** turn provider logs into a `DayMap`: local calendar day → token counts per model. Only
@@ -56,17 +56,12 @@ and cover the log format with a fixture-driven test.
 ## opentrack
 
 ```text
-Svelte renderer ◄──► Tauri shell (Rust) ◄── JSON lines over stdio ──► Node sidecar
- dashboard, settings   window, tray, shortcut,                       quota fetches, usage
-                       autostart, updater                            (aitrack-lib), settings,
-                                                                     tray icon, alerts
+Svelte renderer ◄──► Tauri app (Rust)
+ dashboard, settings   window, tray, shortcut, autostart, updater, and on aitrack-core:
+                       quota fetches, usage, settings, tray icon, alerts
 ```
 
-The Rust shell supervises the sidecar and restarts it with a growing delay when it stops. A request
-unanswered after 30 seconds fails, and only 300 seconds of silence while a line is owed (since spawn or
-an unanswered request) kills the process, which counts as a failed run however long it took. It reports `starting`, `running` or `down`
-through the `service_status` command and `service-status` event: requests wait while starting and fail
-at once with the reason while down, and the last state stays available. The sidecar owns all provider
-access and state; the renderer only renders the `AppState` it is pushed and sends
-requests (refresh, sync, save settings). The shared types are in
+The app owns all provider access and state on background threads; the renderer only renders the
+`AppState` it is pushed and sends requests (refresh, sync, save settings). `service_status` always
+reports `running`, since the work runs in the app's own process. The shared types are in
 `apps/opentrack-ui/src/shared/types.ts`.

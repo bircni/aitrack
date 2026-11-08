@@ -8,8 +8,8 @@ vi.mock('@tauri-apps/api/event', () => ({
   // A promise the spy does not track, since tracking would mark a rejection as handled.
   listen: (...args: unknown[]) => (mocks.listen(...args) as Promise<unknown>).then((stop) => stop),
 }));
-import { DEFAULT_SETTINGS } from '../../sidecar/settings.js';
 import { api } from '../api.js';
+import { DEFAULT_SETTINGS } from './settings.js';
 
 afterEach(() => {
   vi.resetAllMocks();

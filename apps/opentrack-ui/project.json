@@ -24,46 +24,6 @@
         "command": "knip --workspace opentrack-ui"
       }
     },
-    "build-sidecar": {
-      "executor": "@nx/esbuild:esbuild",
-      "cache": true,
-      "inputs": ["production", "^production"],
-      "outputs": ["{options.outputPath}"],
-      "options": {
-        "main": "apps/opentrack-ui/src/sidecar/index.ts",
-        "outputPath": "apps/opentrack-ui/dist-sidecar/js",
-        "outputFileName": "index.cjs",
-        "tsConfig": "apps/opentrack-ui/tsconfig.json",
-        "platform": "node",
-        "target": "node24",
-        "format": ["cjs"],
-        "bundle": true,
-        "thirdParty": true,
-        "skipTypeCheck": true,
-        "generatePackageJson": false,
-        "esbuildConfig": "apps/opentrack-ui/esbuild.sidecar.ts",
-        "declaration": false
-      }
-    },
-    "sea": {
-      "executor": "nx:run-commands",
-      "dependsOn": ["build-sidecar"],
-      "cache": true,
-      "inputs": [
-        "{projectRoot}/sea-config.json",
-        "{projectRoot}/package.json",
-        "{workspaceRoot}/scripts/build-opentrack-sea.ts",
-        {
-          "dependentTasksOutputFiles": "**/*.cjs"
-        },
-        "platform"
-      ],
-      "outputs": ["{projectRoot}/dist-sidecar/opentrack-sidecar.exe"],
-      "options": {
-        "cwd": "{projectRoot}",
-        "command": "node ../../scripts/build-opentrack-sea.ts"
-      }
-    },
     "test": {
       "configurations": {
         "ci": {

@@ -17,8 +17,7 @@ export default defineConfig({
       include: ['src/**/*.ts', 'src/**/*.svelte'],
       exclude: [
         'src/**/__tests__/**',
-        // Untested process and webview glue; opentrack:bundle:check only smoke-runs startup.
-        'src/sidecar/index.ts',
+        // Untested webview glue.
         'src/renderer/main.ts',
         'src/shared/types.ts',
       ],

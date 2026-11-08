@@ -3,8 +3,8 @@
 ## Development setup
 
 Install Node.js (the version in `.node-version`), Bun (the version in `package.json`), git, and
-rustup. Building needs Node 26 or newer, because the desktop sidecar's build uses `--build-sea`, which
-Node 24 rejects; the published `aitrack` and `aitrack-lib` run on Node 24+, and CI tests them there.
+rustup. Building needs Node 26 or newer; the published `aitrack` and `aitrack-lib` run on Node 24+,
+and CI tests them there.
 `bun nx run aitrack:build` builds only the CLI and the library. The pinned Rust version and components
 live in `rust-toolchain.toml`.
 The workspace builds both the CLI and the Tauri desktop app. On macOS, install Xcode
@@ -30,21 +30,19 @@ Use `bun run dev init` (or `sync`, `show`) to build the CLI's dependencies, then
 
 ## Desktop development
 
-opentrack has two Nx projects: `opentrack-ui` (Svelte renderer and Node sidecar, which reads
-usage through `aitrack-lib`) and `opentrack` (Tauri 2 Rust shell). They exchange JSON lines
-on stdin/stdout. The UI uses the system webview (WebView2, WKWebView, WebKitGTK on Linux).
+opentrack has two Nx projects: `opentrack-ui` (Svelte renderer) and `opentrack` (the Tauri 2
+app, which reads limits and usage through `aitrack-core`). The UI uses the system webview
+(WebView2, WKWebView, WebKitGTK on Linux).
 See [docs/opentrack.md](docs/opentrack.md).
 
 ```sh
 bun nx run opentrack:dev
-bun nx run opentrack:package        # builds renderer and sidecar first; run on the target platform
+bun nx run opentrack:package        # builds the renderer first; run on the target platform
 bun nx run opentrack:bundle:check
 ```
 
 Installers (NSIS, DMG, AppImage and `.deb`) land under `target/release/bundle/`; package on
-the platform you target. The `sea` target embeds the sidecar in the `node` on `PATH`; use the
-version in `.node-version` from nodejs.org (or a version manager), since some system Node
-builds (including Homebrew's) disable SEA. macOS builds are ad hoc signed, not notarized, and need
+the platform you target. macOS builds are ad hoc signed, not notarized, and need
 macOS 13.5+. The app version is the workspace `package.json` version; there is no separate
 desktop tag.
 
@@ -60,12 +58,11 @@ apps/
       cli/            Commander program, option parsing and JSON output
       commands/       Command handlers (show, sync, usage, …)
   opentrack/          Tauri Rust shell, native configuration and icons
-    src/             Window, tray, commands and sidecar supervision
-  opentrack-ui/       Desktop frontend and bundled Node runtime
+    src/             Window, tray, commands, and the limits, usage, polling and tray state
+  opentrack-ui/       Desktop frontend
     src/
       renderer/      Svelte dashboard and settings
-      sidecar/       Provider limits, usage, polling and tray state
-      shared/        Types and pacing shared by the renderer and sidecar
+      shared/        Types and pacing the renderer shares with its tests
 libs/
   aitrack-lib/        The library: everything that is not the command line
     src/
@@ -84,7 +81,7 @@ libs/
   test-fixtures/      Fixtures and the isolated test environment shared by the test suites.
                       Never published.
 scripts/              Repo tooling: release and release notes, npm publish, pricing pack
-                      build/check, sidecar SEA build, bundle smoke check, updater manifest,
+                      build/check, bundle smoke check, updater manifest,
                       Homebrew cask and winget manifests, reader benchmark
 ```
 
@@ -165,7 +162,7 @@ tests and the CLI smoke tests on Node 24. A `macos-latest` / `windows-latest` /
 that do not affect `opentrack`; pushes to `main` save the Cargo cache those runs restore, and CI
 packages build without LTO, which only the Publish workflow keeps (the Linux row installs the WebKitGTK, AppIndicator and
 `libxdo` development packages first) and uploads the NSIS installer, Apple Silicon DMG,
-AppImage and `.deb` as workflow artifacts. `bundle:check` starts the bundled sidecar from the
+AppImage and `.deb` as workflow artifacts. `bundle:check` starts the bundled app in its smoke-test mode from the
 DMG, the installer (Windows needs `7z` on `PATH`), the `.deb` (`dpkg-deb`) or the AppImage
 (`--appimage-extract`) with temporary app data and no provider or remote requests.
 

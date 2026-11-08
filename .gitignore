@@ -1,7 +1,6 @@
 artifacts/
 node_modules/
 dist/
-dist-sidecar/
 aitrack*.png
 aitrack*.pdf
 coverage/
