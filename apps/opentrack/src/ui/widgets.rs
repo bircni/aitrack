@@ -192,7 +192,7 @@ pub fn spread(ui: &mut Ui, left: RichText, right: RichText) {
 /// A stacked bar of `(fraction, colour)` parts on a track.
 pub fn stacked_bar(ui: &mut Ui, palette: &Palette, parts: &[(f32, Color32)], height: f32, width: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
-    let radius = CornerRadius::same(u8::try_from((height / 2.0).round() as i32).unwrap_or(3));
+    let radius = CornerRadius::from(height / 2.0);
     ui.painter().rect_filled(rect, radius, palette.track);
     let mut x = rect.left();
     let clip = ui.painter().with_clip_rect(rect);
@@ -213,9 +213,15 @@ pub fn divider(ui: &mut Ui, palette: &Palette) {
     ui.add_space(12.0);
 }
 
+/// The animation angle `time * rate`, wrapped to one turn in f64 so long uptimes stay smooth in f32.
+pub fn phase(ui: &Ui, rate: f64) -> f32 {
+    let turn = (ui.input(|i| i.time) * rate).rem_euclid(std::f64::consts::TAU);
+    #[expect(clippy::cast_possible_truncation, reason = "wrapped to [0, 2π), which f32 holds")]
+    let turn = turn as f32;
+    turn
+}
+
 /// One turn every 0.9 s, for the refresh spinners.
 pub fn spin_angle(ui: &Ui) -> f32 {
-    #[expect(clippy::cast_possible_truncation, reason = "the value is rounded and bounded to the target range first")]
-    let time = ui.input(|i| i.time) as f32;
-    time * std::f32::consts::TAU / 0.9
+    phase(ui, std::f64::consts::TAU / 0.9)
 }

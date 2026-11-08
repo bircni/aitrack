@@ -334,7 +334,7 @@ fn footer_bar(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame
             frame.act(Action::Refresh);
         }
         let sync_label = state.sync_result.as_ref().map_or("Sync this machine (aitrack sync)", |r| r.message.as_str());
-        let pulse = if state.syncing { 0.55 + 0.45 * (ui.input(|i| i.time) as f32 * 5.2).cos().abs() } else { 1.0 };
+        let pulse = if state.syncing { 0.55 + 0.45 * crate::ui::widgets::phase(ui, 5.2).cos().abs() } else { 1.0 };
         let sync = ui.scope(|ui| {
             ui.set_opacity(pulse);
             icon_button(ui, &palette, IconButton { enabled: !busy, ..IconButton::new(Glyph::Sync, sync_label) })

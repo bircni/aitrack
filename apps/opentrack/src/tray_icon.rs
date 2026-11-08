@@ -313,6 +313,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::float_cmp, reason = "test values are sums of small integers and halves, exact in f64")]
     fn follows_the_chosen_provider_and_window() {
         let codex = keyed("codex", "Codex", vec![session_window(90.0, 2.5), weekly(10.0)]);
         let providers = [provider(vec![session_window(60.0, 2.5)]), codex.clone()];

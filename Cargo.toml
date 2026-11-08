@@ -56,8 +56,6 @@ wildcard_enum_match_arm = "warn"
 suboptimal_flops = "allow"
 imprecise_flops = "allow"
 similar_names = "allow"
-cast_possible_truncation = "allow"
-float_cmp = "allow"
 many_single_char_names = "allow"
 too_long_first_doc_paragraph = "allow"
 

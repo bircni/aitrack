@@ -41,7 +41,7 @@ pub fn popup_bounds(tray: Rect, work: Rect, width: i32, height: i32) -> Rect {
 }
 
 fn max_height(height: i32, work: Rect) -> i32 {
-    height.min((f64::from(work.height) * 0.85).floor() as i32)
+    height.min(work.height.saturating_mul(17) / 20)
 }
 
 /// A new height for a window whose top is at `top`, which moves up only as far as the work area needs.

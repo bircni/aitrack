@@ -311,6 +311,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::float_cmp, reason = "test values are sums of small integers and halves, exact in f64")]
     fn builds_every_period_and_the_daily_series_empty_where_a_provider_has_nothing() {
         let sonnet = "claude-sonnet-4-6";
         let data = loaded(vec![
@@ -360,6 +361,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::float_cmp, reason = "test values are sums of small integers and halves, exact in f64")]
     fn groups_usage_by_project_and_adds_the_remainder_up_to_the_provider_totals() {
         let mut attributed = day(100, 50, 1.5, "claude-sonnet-4-6");
         attributed.by_project = Some(IndexMap::from([("acme/widget".to_owned(), counts(90, 0, 1.0))]));
@@ -381,6 +383,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::float_cmp, reason = "test values are sums of small integers and halves, exact in f64")]
     fn splits_usage_per_machine_and_keeps_live_providers_apart_as_account_usage() {
         let provider_day = |input, output, cost, model: &str| aitrack_core::data::types::ProviderDay {
             by_model: IndexMap::from([(model.to_owned(), counts(input, output, cost))]),
