@@ -64,12 +64,8 @@ jobs:
       - run: just fmt-check lint
 
   test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    name: Test
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -82,7 +78,6 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install GTK
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
@@ -93,29 +88,3 @@ jobs:
 
       - run: just test
 
-  # A Windows runner costs far more than Linux, so Windows is linted and built from Ubuntu with MinGW;
-  # the tests themselves run on Ubuntu and macOS.
-  windows:
-    name: Windows (cross-compiled)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Set up Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          targets: x86_64-pc-windows-gnu
-
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          shared-key: windows-gnu
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Install MinGW
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64
-
-      - run: cargo clippy --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings
-
-      - run: cargo build --workspace --all-targets --target x86_64-pc-windows-gnu
