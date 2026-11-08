@@ -5,7 +5,7 @@ use std::process::Command;
 
 use aitrack_core::semver::Version;
 
-use crate::{Result, root};
+use crate::{Result, cmd, root};
 
 const BUMPS: [&str; 8] = ["none", "patch", "minor", "major", "prepatch", "preminor", "premajor", "prerelease"];
 
@@ -68,6 +68,46 @@ pub fn bump(current: &str, bump: &str) -> Result<String> {
 }
 
 const RELEASE_BRANCH: &str = "main";
+
+/// Linux on every pull request, macOS and Windows on demand: a release waits for all of them.
+const RELEASE_WORKFLOWS: [&str; 2] = ["ci.yml", "platforms.yml"];
+
+/// The newest run in `gh run list --json databaseId,createdAt` started at or after `since`.
+fn run_started_since(runs: &str, since: &str) -> Option<u64> {
+    let runs: serde_json::Value = serde_json::from_str(runs).ok()?;
+    runs.as_array()?
+        .iter()
+        .filter(|run| run["createdAt"].as_str().is_some_and(|at| at >= since))
+        .max_by_key(|run| run["createdAt"].as_str().map(str::to_owned))
+        .and_then(|run| run["databaseId"].as_u64())
+}
+
+/// Runs every release workflow on `head` and waits for them; any failure stops the release untagged.
+fn remote_checks(head: &str, dry_run: bool) -> Result<()> {
+    let since = jiff::Timestamp::now().strftime("%Y-%m-%dT%H:%M:%SZ").to_string();
+    for workflow in RELEASE_WORKFLOWS {
+        run("gh", &["workflow", "run", workflow, "--ref", RELEASE_BRANCH], dry_run)?;
+    }
+    if dry_run {
+        println!("[dry-run] wait for {} on {head}", RELEASE_WORKFLOWS.join(" and "));
+        return Ok(());
+    }
+    for workflow in RELEASE_WORKFLOWS {
+        let list = ["run", "list", "--workflow", workflow, "--commit", head, "--json", "databaseId,createdAt"];
+        let mut id = None;
+        for _ in 0..60 {
+            id = run_started_since(&cmd("gh", &list, None)?, &since);
+            if id.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
+        let id = id.ok_or_else(|| format!("{workflow} did not start a run on {head}"))?.to_string();
+        run("gh", &["run", "watch", &id, "--exit-status"], false)
+            .map_err(|_| format!("{workflow} failed on {head}; nothing was tagged. See: gh run view {id}"))?;
+    }
+    Ok(())
+}
 
 /// Whether git succeeded, with its stdout and stderr: a release check reads failures as answers.
 fn git(cwd: Option<&Path>, args: &[&str]) -> (bool, String, String) {
@@ -162,7 +202,7 @@ pub fn release(args: &[String]) -> Result<()> {
     for problem in &problems {
         eprintln!("A real release would stop here: {problem}");
     }
-    run("just", &["validate"], dry_run)?;
+    remote_checks(&git(None, &["rev-parse", "HEAD"]).1, dry_run)?;
     if bump_arg != "none" {
         if dry_run {
             println!("[dry-run] set [workspace.package] version = \"{version}\"");
@@ -215,6 +255,15 @@ fn is_link_definition(line: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn waits_only_for_runs_this_release_started() {
+        let runs = r#"[{"databaseId":1,"createdAt":"2026-11-08T10:00:00Z"},
+            {"databaseId":3,"createdAt":"2026-11-08T12:00:05Z"},{"databaseId":2,"createdAt":"2026-11-08T12:00:01Z"}]"#;
+        assert_eq!(run_started_since(runs, "2026-11-08T12:00:00Z"), Some(3));
+        assert_eq!(run_started_since(runs, "2026-11-08T13:00:00Z"), None);
+        assert_eq!(run_started_since("not json", "2026-11-08T12:00:00Z"), None);
+    }
 
     #[test]
     fn bumps_like_npm() {

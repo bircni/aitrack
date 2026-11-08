@@ -132,7 +132,9 @@ cargo xtask release patch --dry-run
 ```
 
 It checks that you are on `main` with a clean tree in sync with the remote and that the tag is free,
-and stops otherwise. It then runs `just validate`, sets `[workspace.package] version` in `Cargo.toml`
+and stops otherwise. It then starts the CI and Platforms workflows on that commit with `gh` and
+watches them; if either fails it stops before anything is changed. Only then does it set
+`[workspace.package] version` in `Cargo.toml`
 (the CLI, opentrack and the npm packages all carry it), runs `cargo update --workspace`, updates
 `CHANGELOG.md`, commits, tags `v<version>`, and pushes `main` and that tag atomically. The dry run
 prints all of this, and whatever would stop a real release, without changing anything.
