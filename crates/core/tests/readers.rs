@@ -1,5 +1,6 @@
 //! The readers against what 4.x made of the same corpus, recorded by `fixtures/readers/generate.ts`.
 
+use jiff::tz::TimeZoneDatabase;
 use std::path::{Path, PathBuf};
 
 use aitrack_core::data::types::{CountsByKey, DayMap, TokenCounts};
@@ -81,7 +82,7 @@ fn check_zone(zone: &str, chunk: usize) {
             .unwrap(),
     )
     .unwrap();
-    let clock = Clock::in_zone(zone).unwrap();
+    let clock = Clock::with_zone(None, TimeZoneDatabase::bundled().get(zone).unwrap());
     let bundled = PricingStore::bundled();
     let pricing = ReaderPricing { pricing: &bundled, fallbacks: None };
     let claude_files = list_unique_source_files(&[corpus().join("claude")]).unwrap();

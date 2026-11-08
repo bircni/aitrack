@@ -1,6 +1,7 @@
 //! The loader, reports, comparisons, project breakdowns and rankings against 4.x, recorded by
 //! `fixtures/usage/generate.ts` over a data repo of machines in several zones.
 
+use jiff::tz::TimeZoneDatabase;
 use std::path::{Path, PathBuf};
 
 use aitrack_core::Core;
@@ -280,7 +281,11 @@ fn loaded_for(
             ("AITRACK_CODEX_SESSION_DIRS", corpus.join("codex").to_string_lossy().into_owned()),
         ],
     );
-    let core = Core::new(env, Clock::fixed(now(), zone).unwrap(), Box::new(VecOutput::default()));
+    let core = Core::new(
+        env,
+        Clock::with_zone(Some(now()), TimeZoneDatabase::bundled().get(zone).unwrap()),
+        Box::new(VecOutput::default()),
+    );
     let reader_pricing = ReaderPricing { pricing, fallbacks: None };
     let maps = IndexMap::from([
         ("claude_code".to_owned(), read_claude_days(&core, &reader_pricing, &NoRemotes).unwrap()),

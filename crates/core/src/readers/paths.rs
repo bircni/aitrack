@@ -140,7 +140,11 @@ mod tests {
             .iter()
             .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"))
             .collect();
-        assert_eq!(names, ["_.jsonl", "a/B.jsonl", "a/z.jsonl", "a.jsonl", "b.jsonl", "c/d/e.jsonl"]);
+        let mut expected = vec!["_.jsonl", "a/B.jsonl", "a/z.jsonl", "a.jsonl", "b.jsonl", "c/d/e.jsonl"];
+        if cfg!(windows) {
+            expected.rotate_left(1); // Upper-cased, `_` sorts after the letters.
+        }
+        assert_eq!(names, expected);
         assert!(list_jsonl_files(&root.join("missing")).unwrap().is_empty());
         assert!(list_jsonl_files(&root.join("b.jsonl")).unwrap().is_empty());
         let overlapping = [root.to_owned(), root.join("a"), root.join("a")];
@@ -150,7 +154,7 @@ mod tests {
     #[test]
     fn orders_roots_env_first_and_resolves_them() {
         let roots = resolve_source_roots(Some(" /x , ,/y/../z"), Some("/x,/w/."), &[PathBuf::from("/d")]);
-        assert_eq!(roots, ["/x", "/z", "/w", "/d"].map(PathBuf::from));
+        assert_eq!(roots, ["/x", "/z", "/w", "/d"].map(|p| absolute(Path::new(p))));
         let env = Env::new("/home/me", [("CLAUDE_CONFIG_DIR", "/cfg"), ("XDG_CONFIG_HOME", "/xdg")]);
         assert_eq!(
             claude_home_dirs(&env, false),

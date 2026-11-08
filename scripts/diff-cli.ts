@@ -129,6 +129,10 @@ function run(cli: Cli, home: string, args: string[], zone: string): Run {
       AITRACK_NO_CACHE: '1',
       AITRACK_NO_PRICING_REFRESH: '1',
       CURSOR_STATE_DB_PATH: join(home, 'none.vscdb'),
+      GIT_AUTHOR_NAME: 'parity',
+      GIT_AUTHOR_EMAIL: 'parity@example.com',
+      GIT_COMMITTER_NAME: 'parity',
+      GIT_COMMITTER_EMAIL: 'parity@example.com',
       ...(process.platform === 'win32' && {
         USERPROFILE: home,
         APPDATA: join(home, 'AppData/Roaming'),

@@ -87,10 +87,11 @@ jobs:
 
       - run: just test
 
-  # 4.x is the oracle until the cut-over deletes it, and this job with it.
+  # 4.x is the oracle until the cut-over deletes it, and this job with it. macOS, because Debian's tzdata
+  # disagrees with Node's on pre-1901 offsets, which the fixtures cover.
   parity:
     name: Parity with 4.x
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     env:
       NX_NO_CLOUD: true
     steps:

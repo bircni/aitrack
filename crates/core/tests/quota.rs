@@ -1,5 +1,6 @@
 //! Quota mappers, pacing, value parsing, JWTs and Cursor's CSV against 4.x, from `fixtures/quota/generate.ts`.
 
+use jiff::tz::TimeZoneDatabase;
 use std::path::Path;
 
 use aitrack_core::js;
@@ -109,7 +110,7 @@ fn matches_4x_in_every_recorded_zone() {
             assert_eq!(json!(jwt_subject(token)), row[3], "sub {token}");
             assert_eq!(cursor_account_id(token), row[4], "account {token}");
         }
-        let clock = Clock::in_zone(zone).unwrap();
+        let clock = Clock::with_zone(None, TimeZoneDatabase::bundled().get(zone).unwrap());
         let pricing = PricingStore::bundled();
         for (csv, want) in d["csvInputs"].as_array().unwrap().iter().zip(d["csvDays"].as_array().unwrap()) {
             let days = aggregate_cursor_csv(csv.as_str().unwrap(), &clock, &pricing);

@@ -31,6 +31,12 @@ impl Clock {
         Ok(Self { now: Some(now), zone: TimeZone::get(zone)? })
     }
 
+    /// A zone resolved elsewhere, such as from a database other than the system's.
+    #[must_use]
+    pub fn with_zone(now: Option<Timestamp>, zone: TimeZone) -> Self {
+        Self { now, zone }
+    }
+
     #[must_use]
     pub fn now(&self) -> Timestamp {
         self.now.unwrap_or_else(Timestamp::now)
