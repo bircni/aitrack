@@ -1,0 +1,9 @@
+//! JavaScript-compatible output, so files written here are byte-identical to the ones 4.x writes.
+
+mod collate;
+mod json;
+mod number;
+
+pub use collate::locale_compare;
+pub use json::{to_string, to_string_pretty};
+pub use number::number_to_string;
