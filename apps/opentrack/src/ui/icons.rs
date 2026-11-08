@@ -7,7 +7,6 @@ type Polylines = Vec<Vec<(f32, f32)>>;
 
 const STEPS: u16 = 16;
 
-
 fn numbers(text: &str) -> Vec<f32> {
     let mut out = Vec::new();
     let mut current = String::new();

@@ -1,10 +1,10 @@
 //! The tray pixels, settings and cache.json normalization against 4.x's sidecar, recorded before 4.x was removed.
 
 use aitrack_core::time::Clock;
-use std::fmt::Write as _;
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
 
 use crate::cache::load_cached_state;
 use crate::pace::Tone;
