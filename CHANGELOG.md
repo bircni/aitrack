@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v5.0.0] - 2026-11-09
+
+
+### ⚠ Breaking Changes
+
+- Node is no longer needed or used, and `aitrack-lib` is
+discontinued. The heatmap PNG uses an embedded font, completion scripts
+and argument-error wording change, and `doctor` no longer reports Node.
+Synced data, config, caches and opentrack settings stay compatible with
+4.x, so 4.x and 5.0 machines can share one data repo.
+
+
 ## [v4.2.1] - 2026-11-08
 
 

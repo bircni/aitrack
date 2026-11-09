@@ -182,7 +182,7 @@ dependencies = [
 
 [[package]]
 name = "aitrack-cli"
-version = "4.2.0"
+version = "5.0.0"
 dependencies = [
  "aitrack-core",
  "assert_cmd",
@@ -198,7 +198,7 @@ dependencies = [
 
 [[package]]
 name = "aitrack-core"
-version = "4.2.0"
+version = "5.0.0"
 dependencies = [
  "ab_glyph",
  "aes-gcm",
@@ -3276,7 +3276,7 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
 name = "opentrack"
-version = "4.2.0"
+version = "5.0.0"
 dependencies = [
  "aitrack-core",
  "auto-launch",
@@ -5745,7 +5745,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "4.2.0"
+version = "5.0.0"
 dependencies = [
  "aitrack-core",
  "base64",
