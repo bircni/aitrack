@@ -1,0 +1,7 @@
+[alias]
+xtask = "run --quiet --package xtask --"
+# Warnings fail the run at the end instead of stopping at the first crate, so every crate is linted;
+# extra arguments (`cargo lint -p aitrack-core`) reach cargo.
+lint = ["clippy", "--all-targets", "--keep-going", "--config", "build.warnings='deny'"]
+# opentrack in debug; a separate data dir keeps it apart from an installed copy
+dev = "run --package opentrack -- --data-dir target/opentrack-dev"

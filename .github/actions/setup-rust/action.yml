@@ -1,5 +1,10 @@
 name: Set up Rust
 description: Install the toolchain pinned in rust-toolchain.toml
+inputs:
+  targets:
+    description: Extra targets to install, comma-separated
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -19,3 +24,4 @@ runs:
       with:
         toolchain: ${{ steps.toolchain.outputs.version }}
         components: ${{ steps.toolchain.outputs.components }}
+        targets: ${{ inputs.targets }}

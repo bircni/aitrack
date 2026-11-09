@@ -1,38 +1,69 @@
 [package]
 name = "opentrack"
-version = "0.1.0"
-description = "Tray shell for opentrack: window, tray icon and the Node sidecar that does the work."
+version.workspace = true
+description = "opentrack: the tray popup for aitrack's live limits and usage."
 license = "MIT"
 edition = "2021"
 publish = false
+
+[lints]
+workspace = true
 
 [[bin]]
 name = "opentrack"
 path = "src/main.rs"
 
-[build-dependencies]
-tauri-build = { version = "2", features = [] }
-
 [dependencies]
-base64 = "0.23"
-serde_json = "1"
-tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-autostart = "2"
-tauri-plugin-global-shortcut = "2"
-tauri-plugin-notification = "2"
-tauri-plugin-opener = "2"
-tauri-plugin-single-instance = "2"
-tauri-plugin-updater = "2"
-tokio = { version = "1", features = ["sync", "time"] }
+aitrack-core.workspace = true
+auto-launch = "0.6.0"
+eframe = { version = "0.37.0", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
+getrandom = "0.4.3"
+global-hotkey = "0.9.0"
+indexmap = "2.14.2"
+jiff = { version = "0.2.40", default-features = false, features = ["std"] }
+notify-rust = "4.19.0"
+open = "5.4.5"
+raw-window-handle = "0.6.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["float_roundtrip", "preserve_order"] }
+tray-icon = "0.26.1"
+winit = { version = "0.30.13", default-features = false }
+
+[dev-dependencies]
+sha2 = "0.11.1"
+tempfile = "3.27.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSColor", "NSGraphics", "NSResponder", "NSView", "NSWindow", "objc2-quartz-core"] }
+objc2-app-kit = { version = "0.3", features = ["NSColor", "NSGraphics", "NSResponder", "NSScreen", "NSView", "NSWindow", "objc2-quartz-core"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSGeometry"] }
 objc2-quartz-core = { version = "0.3", features = ["CALayer"] }
 
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
 
-[features]
-# `tauri build` turns this on; a plain `cargo build` then serves the built renderer as a dev build.
-custom-protocol = ["tauri/custom-protocol"]
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_UI_HiDpi", "Win32_UI_Shell"] }
+
+# `cargo packager --release` in this folder; `cargo xtask updater-artifacts` then lays the result out and signs it.
+[package.metadata.packager]
+product-name = "opentrack"
+identifier = "dev.bircni.opentrack"
+publisher = "bircni"
+category = "DeveloperTool"
+homepage = "https://github.com/bircni/aitrack/blob/main/docs/opentrack.md"
+description = "Live limits, reset times and spend for Claude Code, Codex and Cursor"
+icons = ["icons/32x32.png", "icons/128x128.png", "icons/icon.png", "icons/icon.ico"]
+out-dir = "../../target/release/packager"
+before-packaging-command = "cargo build --release --locked -p opentrack"
+binaries = [{ path = "opentrack", main = true }]
+
+[package.metadata.packager.macos]
+minimum-system-version = "13.5"
+signing-identity = "-"
+
+[package.metadata.packager.nsis]
+installer-mode = "currentUser"
+
+[package.metadata.packager.deb]
+depends = ["libayatana-appindicator3-1 | libappindicator3-1", "libgtk-3-0", "libxdo3"]

@@ -41,7 +41,7 @@ pub fn popup_bounds(tray: Rect, work: Rect, width: i32, height: i32) -> Rect {
 }
 
 fn max_height(height: i32, work: Rect) -> i32 {
-    height.min((f64::from(work.height) * 0.85).floor() as i32)
+    height.min(work.height.saturating_mul(17) / 20)
 }
 
 /// A new height for a window whose top is at `top`, which moves up only as far as the work area needs.
@@ -50,9 +50,26 @@ pub fn grown_bounds(top: i32, height: i32, work: Rect) -> (i32, i32) {
     (top.min(work.y + work.height - height).max(work.y), height)
 }
 
+/// Where the window goes for a content `height` (physical pixels): grown in place from `kept_at`, the
+/// top-left of a kept-open window, or else at the tray (a corner stand-in before any tray click).
+pub fn window_bounds(
+    tray: Option<Rect>,
+    kept_at: Option<(i32, i32)>,
+    work: Rect,
+    width: i32,
+    height: i32,
+    tray_on_top: bool,
+) -> Rect {
+    if let Some((x, top)) = kept_at {
+        let (y, height) = grown_bounds(top, height, work);
+        return Rect { x, y, width, height };
+    }
+    popup_bounds(tray.unwrap_or_else(|| corner_tray(work, tray_on_top)), work, width, height)
+}
+
 /// A stand-in tray in the right-hand corner, above or below the work area, for a popup opened
 /// before any tray click; Linux reports none, and its tray is usually in a top bar.
-pub fn corner_tray(work: Rect, top: bool) -> Rect {
+pub const fn corner_tray(work: Rect, top: bool) -> Rect {
     let y = if top { work.y - 1 } else { work.y + work.height + 1 };
     Rect { x: work.x + work.width - 1, y, width: 1, height: 1 }
 }
@@ -100,6 +117,18 @@ mod tests {
         let work = Rect { height: 600, ..WORK };
         assert_eq!(popup_bounds(tray(0, 700, 1), work, 320, 640).height, 510);
         assert_eq!(grown_bounds(0, 640, work), (0, 510));
+    }
+
+    #[test]
+    fn places_a_popup_at_the_tray_and_a_kept_window_where_it_is() {
+        let work = Rect { y: 25, ..WORK };
+        assert_eq!(window_bounds(Some(tray(900, 0, 22)), None, work, 320, 640, true).y, 31);
+        assert_eq!(window_bounds(None, None, work, 320, 640, true), Rect { x: 1600, y: 31, width: 320, height: 640 });
+        assert_eq!(window_bounds(None, None, WORK, 320, 640, false).y, 394);
+        assert_eq!(
+            window_bounds(Some(tray(900, 0, 22)), Some((40, 700)), WORK, 320, 600, true),
+            Rect { x: 40, y: 440, width: 320, height: 600 }
+        );
     }
 
     #[test]

@@ -1,0 +1,23 @@
+[package]
+name = "xtask"
+description = "Maintainer tasks for the aitrack workspace."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+aitrack-core.workspace = true
+base64 = "0.23.1"
+jiff = { version = "0.2.40", default-features = false, features = ["std"] }
+minisign = "0.7.9"
+serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtrip"] }
+sha2 = "0.11.1"
+flate2 = "1.1.10"
+tar = { version = "0.4.46", default-features = false }
+tempfile = "3.27.0"

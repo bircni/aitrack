@@ -1,0 +1,15 @@
+use serde_json::{Map, Value};
+
+/// `{ "command": <command>, ...payload }`, pretty, on stdout: with `--json` it is the only thing there.
+pub fn print_json_command(command: &str, payload: Value) {
+    let mut object = Map::new();
+    object.insert("command".into(), Value::from(command));
+    if let Value::Object(fields) = payload {
+        object.extend(fields);
+    }
+    println!("{}", aitrack_core::js::stringify_pretty(&Value::Object(object)));
+}
+
+pub fn print_json_error(command: &str, error: &str) {
+    print_json_command(command, serde_json::json!({ "error": error }));
+}

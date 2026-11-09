@@ -1,11 +1,85 @@
 [workspace]
-resolver = "2"
-members = ["apps/opentrack"]
+resolver = "3"
+members = ["apps/opentrack", "crates/cli", "crates/core", "crates/xtask"]
 
-# Size over speed: the shell only routes messages, the work happens in the sidecar.
+[workspace.package]
+version = "4.2.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+repository = "https://github.com/bircni/aitrack"
+publish = false
+
+[workspace.dependencies]
+aitrack-core = { path = "crates/core" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+deprecated = "warn"
+elided_lifetimes_in_paths = "warn"
+rust_2021_prelude_collisions = "warn"
+semicolon_in_expressions_from_macros = "warn"
+trivial_numeric_casts = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+unused_extern_crates = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+
+[workspace.lints.rustdoc]
+all = "warn"
+missing_crate_level_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+# Restriction lints, as in the cargo-* repos.
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+assertions_on_result_states = "warn"
+create_dir = "warn"
+clone_on_ref_ptr = "warn"
+expect_used = "warn"
+missing_assert_message = "warn"
+panic_in_result_fn = "warn"
+str_to_string = "warn"
+todo = "warn"
+unwrap_used = "warn"
+unimplemented = "warn"
+wildcard_enum_match_arm = "warn"
+# Costs and amounts must round exactly as 4.x's JavaScript did; fused or "precise" float forms change bytes.
+suboptimal_flops = "allow"
+imprecise_flops = "allow"
+similar_names = "allow"
+many_single_char_names = "allow"
+too_long_first_doc_paragraph = "allow"
+
+# Size over speed: smallest binaries and lowest RAM are the priority.
 [profile.release]
 codegen-units = 1
 lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# Line tables keep backtraces readable while cutting what CI compiles and caches.
+[profile.dev]
+debug = "line-tables-only"
+
+# Key derivation is slow by design; unoptimised it costs seconds per encryption test.
+[profile.dev.package.scrypt]
+opt-level = 3
+
+[profile.dev.package.salsa20]
+opt-level = 3
+
+[profile.dev.package.pbkdf2]
+opt-level = 3
+
+[profile.dev.package.sha2]
+opt-level = 3

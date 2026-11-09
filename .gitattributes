@@ -1,1 +1,3 @@
 * text=auto eol=lf
+# Reader corpora test exact bytes: CRLF lines and invalid UTF-8.
+crates/core/tests/fixtures/readers/corpus/** -text

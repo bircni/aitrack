@@ -89,7 +89,7 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 | `aitrack top [days\|models\|projects]` | Rank busiest days, most-used models or projects by cost (or `--sort tokens`)                                                                                                                                                                                    |
 | `aitrack machines`                     | Per-machine totals, timezone, and last sync time, marked `(stale)` after three days without a sync and `not synced` before the first one, including before `init` (this machine includes fresh local logs; costs match `usage`, and a known zero shows `$0.00`) |
 | `aitrack recompute-costs`              | Refresh costs: re-read local JSONL; reprice other machines from stored cache. `--replace-local` rebuilds this machine from the logs and drops synced days they no longer cover; see [How it works](#how-it-works)                                               |
-| `aitrack doctor`                       | Check Node, git, config, source paths, Cursor auth, sync health, and pricing                                                                                                                                                                                    |
+| `aitrack doctor`                       | Check git, config, source paths, Cursor auth, sync health, and pricing                                                                                                                                                                                          |
 | `aitrack completion <shell>`           | Print a `bash`, `zsh` or `fish` completion script, e.g. `eval "$(aitrack completion zsh)"` (zsh registers it only after `compinit` has run)                                                                                                                     |
 | `aitrack config list\|get\|set`        | Inspect or update supported configuration keys                                                                                                                                                                                                                  |
 | `aitrack install-opentrack`            | Download the latest opentrack desktop app, verify its release signature and install it (`--dir` picks the macOS or Linux folder)                                                                                                                                |
@@ -158,7 +158,7 @@ A project is the git `origin` of the folder the work happened in, written `owner
 
 **`doctor` checks** include warnings for a clone whose `origin` differs from `repoUrl`, for an interrupted rebase and for machine files left out of reports because they cannot be read.
 
-**`doctor` flags:** `--pricing-check` also runs the pricing drift script when you are in a source checkout. Without it, doctor still reports the pricing cache: model counts, refresh outcome and the rates' `updatedAt`.
+**`doctor` flags:** `--pricing-check` also runs `cargo xtask pricing-check` when you are in a source checkout. Without it, doctor still reports the pricing cache: model counts, refresh outcome and the rates' `updatedAt`.
 
 ---
 
@@ -197,7 +197,7 @@ A project is the git `origin` of the folder the work happened in, written `owner
 
 ### Cost handling
 
-Claude Code, Codex, and Cursor costs are API-equivalent estimates from per-model list pricing, not subscription charges. Claude Code messages in fast mode, and Haiku 5.5 prompts over 100,000 tokens, have their own rates and appear as their own model rows. Rates live in `libs/aitrack-lib/src/pricing/tables/*.json` so a price change is a JSON edit. Claude estimates account for regular input, cache reads, cache creation, and output. Cache creation uses the 5-minute write rate (1.25× input) unless the transcript splits out 1-hour writes, which are 2× input. Claude 4.6 and later list prices cover the full context window at those base rates, so there is no separate long-context surcharge to apply. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Cursor estimates use the same CSV token buckets (uncached input, cache write, cache read, output) and ignore the export's Cost column, which is plan-included rather than a list price. Cursor CSV rows are aggregates, so long-context rate tiers are not applied. No other table carries a tier either: a context-length surcharge is decided per request, but usage is stored as per-day, per-model sums, and Claude transcripts do not record whether an extended-context mode was on. The tables hold no sourced tier rates (the Claude 4.6+ and Codex rows are flat, and Cursor prices its 1M-context Sonnet as its own `claude-4-sonnet-1m` row), so a tier would have to be invented rather than read from a source; none is applied. Unknown Claude or Codex model IDs that name a known family use that family's rates and emit a warning from `sync`, `show`, `usage`, `top`, and `export`. An id that matches no family stays unpriced, as do unknown Cursor models. When priced and unpriced usage are combined, desktop and terminal totals are marked as partial estimates. JSON includes `hasUnpricedTokens` and `totals.unpricedModels`; `top --json` adds `unpricedModels`; CSV adds `pricing_status` (`complete`, `partial` or `unpriced`) and `unpriced_models`; terminals print an `Unpriced models:` footnote and PDF receipts name them. If stored Claude or Codex estimates are missing or pricing changed, run `aitrack recompute-costs`.
+Claude Code, Codex, and Cursor costs are API-equivalent estimates from per-model list pricing, not subscription charges. Claude Code messages in fast mode, and Haiku 5.5 prompts over 100,000 tokens, have their own rates and appear as their own model rows. Rates live in `crates/core/pricing-tables/*.json` so a price change is a JSON edit. Claude estimates account for regular input, cache reads, cache creation, and output. Cache creation uses the 5-minute write rate (1.25× input) unless the transcript splits out 1-hour writes, which are 2× input. Claude 4.6 and later list prices cover the full context window at those base rates, so there is no separate long-context surcharge to apply. Codex estimates use the cached-input count recorded by newer sessions and apply the prompt-cache discount (10% of the input rate); older records without that field are treated as uncached input. A long Astra or Fable session is mostly cache hits, so a multi-million-token day can still be a few dollars. Cursor estimates use the same CSV token buckets (uncached input, cache write, cache read, output) and ignore the export's Cost column, which is plan-included rather than a list price. Cursor CSV rows are aggregates, so long-context rate tiers are not applied. No other table carries a tier either: a context-length surcharge is decided per request, but usage is stored as per-day, per-model sums, and Claude transcripts do not record whether an extended-context mode was on. The tables hold no sourced tier rates (the Claude 4.6+ and Codex rows are flat, and Cursor prices its 1M-context Sonnet as its own `claude-4-sonnet-1m` row), so a tier would have to be invented rather than read from a source; none is applied. Unknown Claude or Codex model IDs that name a known family use that family's rates and emit a warning from `sync`, `show`, `usage`, `top`, and `export`. An id that matches no family stays unpriced, as do unknown Cursor models. When priced and unpriced usage are combined, desktop and terminal totals are marked as partial estimates. JSON includes `hasUnpricedTokens` and `totals.unpricedModels`; `top --json` adds `unpricedModels`; CSV adds `pricing_status` (`complete`, `partial` or `unpriced`) and `unpriced_models`; terminals print an `Unpriced models:` footnote and PDF receipts name them. If stored Claude or Codex estimates are missing or pricing changed, run `aitrack recompute-costs`.
 
 ---
 
@@ -234,7 +234,7 @@ The same repository in another form counts as a match: `.git`, a trailing slash,
 `aitrack config set encryptData true` encrypts this machine's `data/{machineId}.json` before it is committed. It is off by default. The key comes from the `AITRACK_ENCRYPTION_PASSPHRASE` environment variable, which is never written to the config or the repo; every machine and the desktop app must have it set to read the encrypted files. Use the same passphrase on all machines, or each machine's file will be unreadable to the others.
 
 - `sync` fails with a clear message when `encryptData` is on and the variable is missing, and so does `recompute-costs` when it has a file to write. `recompute-costs` leaves this machine's file alone, with a warning, when it cannot decrypt it, and rewrites other machines' files in the mode they were already in. Turning the setting on or off rewrites the file on the next `sync` even if no usage changed.
-- Files use scrypt (N=2^15) and AES-256-GCM from Node's built-in crypto, with a random salt and IV per file. The file is a small JSON envelope (`"encrypted": "aitrack-aes-256-gcm-scrypt-v1"`, base64 `salt`, `iv`, `tag`, `data`); any change to it or a wrong passphrase fails authentication.
+- Files use scrypt (N=2^15) and AES-256-GCM, with a random salt and IV per file. The file is a small JSON envelope (`"encrypted": "aitrack-aes-256-gcm-scrypt-v1"`, base64 `salt`, `iv`, `tag`, `data`); any change to it or a wrong passphrase fails authentication.
 - Plain and encrypted files can sit side by side in one repo. A reader without the right passphrase skips an encrypted file with a warning that names the file and the variable to set; the rest of the fleet still loads. An aitrack version that predates encryption skips it with an "upgrade aitrack" message.
 - Threat model: this hides token counts, models, project names and costs from whoever hosts or can read the data repo. It does not hide metadata: file names (so machine IDs), commit times and sizes, and the fact that you use aitrack. A weak passphrase can be brute-forced offline from any clone, and history committed before you enabled encryption stays readable in git. The GUI launches with its own environment, so export the variable where the desktop app starts or it will skip encrypted machines.
 
@@ -309,6 +309,23 @@ Each machine's file in the repo:
 }
 ```
 
-Claude Code entries can also carry `rawInputTokens`, `cacheCreationInputTokens` and `cacheCreation1hInputTokens`. [`data/types.ts`](../libs/aitrack-lib/src/data/types.ts) has the full shape.
+Claude Code entries can also carry `rawInputTokens`, `cacheCreationInputTokens` and `cacheCreation1hInputTokens`. [`data/types.rs`](../crates/core/src/data/types.rs) has the full shape.
 
 ---
+
+## Upgrading from 4.x
+
+aitrack 5.0 is a native binary instead of a Node.js program; `npm install -g aitrack` and `npx aitrack`
+fetch the binary for your platform. Machine files, `config.json`, encrypted files, the pricing cache
+and opentrack's settings keep their format, so 4.x and 5.0 machines can sync into the same repo and
+an upgrade keeps everything. Visible differences:
+
+- The PNG heatmap uses an embedded DejaVu Sans font instead of the system's Arial, so labels are
+  slightly wider.
+- Error messages for an unknown command, option or value use clap's wording; the exit code (2) and
+  the `--json` error document stay the same.
+- `aitrack completion <shell>` prints different, equivalent completion scripts.
+- `doctor` no longer reports the Node.js version.
+- The first run after the upgrade re-reads the logs once, since the parse cache format changed, and
+  re-fetches Cursor's export.
+- `aitrack-lib` is discontinued; see the [library note](library.md).

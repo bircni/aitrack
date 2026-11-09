@@ -1,0 +1,50 @@
+[package]
+name = "aitrack-core"
+description = "Usage readers, pricing, data repo sync and live limits shared by the aitrack CLI and opentrack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# PNG heatmaps; off by default so the desktop app does not carry a rasteriser.
+render = ["dep:ab_glyph", "dep:png", "dep:tiny-skia"]
+
+[dependencies]
+ab_glyph = { version = "0.2.32", optional = true }
+aes-gcm = "0.11.1"
+base64 = "0.23.1"
+gethostname = "1.1.0"
+getrandom = "0.4.3"
+indexmap = { version = "2.14.2", features = ["serde"] }
+jiff = { version = "0.2.40", default-features = false, features = ["std", "tz-system", "tz-fat", "tzdb-bundle-platform", "tzdb-zoneinfo", "tzdb-concatenated", "serde"] }
+memchr = "2.8.3"
+minisign-verify = "0.3.0"
+png = { version = "0.18.1", optional = true }
+regex-lite = "0.1.9"
+ryu = "1.0.23"
+scrypt = { version = "0.12.0", default-features = false }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["float_roundtrip", "preserve_order", "raw_value"] }
+sha2 = "0.11.1"
+thiserror = "2.0.21"
+tiny-skia = { version = "0.12.0", default-features = false, features = ["std", "simd"], optional = true }
+ureq = { version = "3.5.1", default-features = false, features = ["rustls", "platform-verifier"] }
+
+[dev-dependencies]
+# Hosts disagree on pre-1900 offsets (Debian builds with backzone), so goldens use jiff's own copy.
+jiff = { version = "0.2.40", default-features = false, features = ["tzdb-bundle-always"] }
+proptest = "1.12.0"
+tempfile = "3.27.0"
+
+# macOS ships libsqlite3; elsewhere it is compiled in.
+[target.'cfg(target_os = "macos")'.dependencies]
+rusqlite = { version = "0.41", features = ["backup"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+rusqlite = { version = "0.41", features = ["backup", "bundled"] }

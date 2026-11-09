@@ -1,0 +1,5 @@
+{"type":"user","cwd":"/nonexistent/aitrack/repo-c","timestamp":"2026-03-08T12:00:00Z"}
+{"type":"assistant","timestamp":"2026-03-08T12:00:01Z","requestId":"r2","message":{"id":"m2","model":"claude-opus-4-1","usage":{"input_tokens":999,"output_tokens":999,"cache_read_input_tokens":0},"content":[{"type":"text","text":"x"}]}}
+{"type":"assistant","timestamp":"2026-03-08T12:00:02Z","requestId":"r6","message":{"id":"m6","model":"claude-opus-4-1","usage":{"input_tokens":3,"output_tokens":4,"cache_read_input_tokens":0},"content":[{"type":"text","text":"x"}]}}
+{"type":"assistant","timestamp":"2026-03-08T12:00:03Z","requestId":"r1","message":{"id":"m1","model":"claude-opus-4-1","usage":{"input_tokens":1,"output_tokens":1,"cache_read_input_tokens":0},"content":[{"type":"text","text":"x"}]}}
+{"type":"assistant","timestamp":"2026-03-08T12:00:04Z","requestId":"r7","message":{"id":"m7","model":"claude-opus-4-1","usage":{"input_tokens":5,"output_tokens":6,"cache_read_input_tokens":0},"content":[{"type":"text","text":"x"}]}}

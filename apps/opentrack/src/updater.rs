@@ -1,65 +1,84 @@
-use std::sync::Mutex;
+//! Checks the latest GitHub release and installs it: the same manifest, key and installers 4.x's
+//! Tauri updater used, so either version can update to the next.
+
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_updater::{Update, UpdaterExt};
+use aitrack_core::http::UreqClient;
+use aitrack_core::update::{download_verified, is_newer, latest_release, updater_target, InstallTarget, Release};
+
+use crate::app::{Bus, Msg};
+use aitrack_core::Locked;
 
 const FIRST_CHECK_DELAY: Duration = Duration::from_secs(30);
-const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
-const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
-/// Limits the whole download rather than a stall, so a slow link still has to fit inside it.
-const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(20 * 60);
+const CHECK_INTERVAL: Duration = Duration::from_hours(6);
 
-/// The newest release found on GitHub, kept until the user installs it.
-#[derive(Default)]
-pub struct Updates {
-    pending: Mutex<Option<Update>>,
+#[derive(Clone, Default)]
+pub struct Updater {
+    pending: Arc<Mutex<Option<Release>>>,
 }
 
-impl Updates {
-    pub fn version(&self) -> Option<String> {
-        self.pending.lock().unwrap().as_ref().map(|update| update.version.clone())
+impl Updater {
+    /// Sends the newer version on offer, if any. Only a check the user asked for reports a failure;
+    /// a background one that finds the network down just tries again later.
+    pub fn check(&self, bus: &Bus, asked: bool) {
+        match newer_release() {
+            Ok(newer) => {
+                let version = newer.as_ref().map(|r| r.version.clone());
+                *self.pending.locked() = newer;
+                bus.send(Msg::UpdateFound(version));
+            }
+            Err(error) if asked => bus.send(Msg::UpdateCheckFailed(error)),
+            Err(error) => eprintln!("opentrack: update check: {error}"),
+        }
     }
 
-    pub async fn install(&self, app: &AppHandle) -> Result<(), String> {
-        let Some(mut update) = self.pending.lock().unwrap().clone() else {
-            return Err("No update is available".into());
+    /// Shortly after launch and then every few hours; development builds never update.
+    pub fn watch(&self, bus: Bus) {
+        if cfg!(debug_assertions) {
+            return;
+        }
+        let updater = self.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(FIRST_CHECK_DELAY);
+            loop {
+                updater.check(&bus, false);
+                std::thread::sleep(CHECK_INTERVAL);
+            }
+        });
+    }
+
+    /// Downloads, verifies and installs, then restarts into it; the popup hears only of failures.
+    pub fn install(&self, bus: Bus) {
+        let Some(release) = self.pending.locked().clone() else {
+            bus.send(Msg::UpdateInstallFailed("No update is available".into()));
+            return;
         };
-        update.timeout = Some(DOWNLOAD_TIMEOUT);
-        update.download_and_install(|_, _| {}, || {}).await.map_err(|error| error.to_string())?;
-        // Windows never gets here: the installer closes the app and starts the new one.
-        app.restart();
+        std::thread::spawn(move || {
+            if let Err(error) = install_and_relaunch(&release) {
+                bus.send(Msg::UpdateInstallFailed(error));
+            }
+        });
     }
 }
 
-/// The newer version the latest release offers, if any; the renderer hears of it as an event too,
-/// including `null` once a withdrawn release is no longer offered.
-pub async fn check(app: &AppHandle) -> Result<Option<String>, String> {
-    // A dev build would offer to replace itself with the installed release.
+/// A newer release, whether or not this copy can install it: a `.deb` install still hears of one.
+fn newer_release() -> Result<Option<Release>, String> {
     if cfg!(debug_assertions) {
         return Err("Development builds do not update".into());
     }
-    let updater = app.updater_builder().timeout(CHECK_TIMEOUT).build().map_err(|error| error.to_string())?;
-    let found = updater.check().await.map_err(|error| error.to_string())?;
-    let version = found.as_ref().map(|update| update.version.clone());
-    *app.state::<Updates>().pending.lock().unwrap() = found;
-    let _ = app.emit("update", &version);
-    Ok(version)
+    let release = latest_release(&UreqClient::default(), updater_target()?)?;
+    Ok(is_newer(&release.version, env!("CARGO_PKG_VERSION")).then_some(release))
 }
 
-/// Checks the latest GitHub release shortly after launch and then every few hours.
-pub fn watch(app: AppHandle) {
-    if cfg!(debug_assertions) {
-        return;
+fn install_and_relaunch(release: &Release) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let target = InstallTarget::running(&exe, std::env::var_os("APPIMAGE").map(PathBuf::from))?;
+    let file = download_verified(&UreqClient::default(), release)?;
+    if let Some(mut relaunch) = target.replace_running(&file)? {
+        crate::instance::release(); // So the new copy starts as the only one while this one exits.
+        relaunch.spawn().map_err(|e| e.to_string())?;
     }
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(FIRST_CHECK_DELAY).await;
-        loop {
-            // Offline or GitHub unreachable: the next check tries again, nothing to show.
-            if let Err(error) = check(&app).await {
-                eprintln!("opentrack: update check failed: {error}");
-            }
-            tokio::time::sleep(CHECK_INTERVAL).await;
-        }
-    });
+    std::process::exit(0);
 }

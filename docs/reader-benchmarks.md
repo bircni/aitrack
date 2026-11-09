@@ -1,5 +1,10 @@
 # Reader benchmark
 
+These measurements are of the 4.x TypeScript readers. The 5.0 Rust readers keep their design (the
+needle filter, up to four scan threads, the parse cache and merged snapshot). On one machine's real
+logs (4.9 GB of Claude transcripts, caches off) a 5.0 cold read took 0.6 s and 130 MB resident
+against 4.x's 1.5 s and 510 MB.
+
 The first two tables were measured on 2026-10-31, Linux x64 (4 vCPUs), Node v26.8.2. Baseline is
 `main` before the filtered scan, worker threads and compact parse cache; Updated is the reader that
 introduced them. [Later changes](#later-changes) were measured on another machine and are not
@@ -26,7 +31,8 @@ Node itself starts in about 30 ms on this machine.
 
 ## Synthetic reader
 
-Reproduce with `bun x tsx scripts/benchmark-readers.ts`. Set `AITRACK_BENCH_ROOT` to another
+These were run with 4.x's `scripts/benchmark-readers.ts`, which 5.0 removed with the rest of the
+TypeScript tree; git history keeps it. Set `AITRACK_BENCH_ROOT` to another
 source checkout to compare implementations; that checkout must have its dependencies
 available. The benchmark makes no network requests and removes its temporary home after
 completion. It imports the TypeScript sources, so it measures the in-thread scan.
