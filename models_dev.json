@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-09T18:04:46.473Z",
+  "retrievedAt": "2026-11-10T14:51:04.664Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -12,6 +12,12 @@
       "o": 50,
       "cw": 12.5,
       "cr": 0.25
+    },
+    "anthropic/claude-fable-5-2": {
+      "i": 8,
+      "o": 40,
+      "cw": 10,
+      "cr": 0.2
     },
     "anthropic/claude-haiku-4-5": {
       "i": 1,
@@ -108,6 +114,12 @@
       "o": 50,
       "cw": 12.5,
       "cr": 0.25
+    },
+    "google-vertex/claude-fable-5-2@default": {
+      "i": 8,
+      "o": 40,
+      "cw": 10,
+      "cr": 0.2
     },
     "google-vertex/claude-fable-5@default": {
       "i": 10,
