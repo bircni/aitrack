@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::claude_scan::ScannedClaudeMessage;
 use super::codex_scan::CodexScan;
+use super::copilot_scan::CopilotScan;
 use super::project::{ProjectResolver, attribute_cwd};
 use crate::data::day_map::{Attribution, add_model_usage, get_or_create_day, merge_all_day_maps, merge_day_maps};
 use crate::data::project::normalize_remote_url;
@@ -99,7 +100,7 @@ fn add_cached_message(days: &mut DayMap, message: &CachedMessage) {
 }
 
 /// Keep the first file's contribution when resumed transcripts repeat a message.
-pub fn merge_claude_parsed(parsed: &[CachedParse]) -> DayMap {
+pub fn merge_keyed_parsed(parsed: &[CachedParse]) -> DayMap {
     let mut all = DayMap::new();
     let mut seen: HashSet<&str> = HashSet::new();
     for entry in parsed {
@@ -127,11 +128,10 @@ pub fn merge_claude_parsed(parsed: &[CachedParse]) -> DayMap {
     all
 }
 
-fn attribute_scan(scan: &CodexScan, resolver: &dyn ProjectResolver) -> Attribution {
-    scan.repository_url
-        .as_deref()
+fn attribute_session(repository_url: Option<&str>, cwd: Option<&str>, resolver: &dyn ProjectResolver) -> Attribution {
+    repository_url
         .and_then(normalize_remote_url)
-        .map_or_else(|| attribute_cwd(resolver, scan.cwd.as_deref()), |project| Attribution { project, cwd: None })
+        .map_or_else(|| attribute_cwd(resolver, cwd), |project| Attribution { project, cwd: None })
 }
 
 pub fn finish_codex_scan(scan: &CodexScan, pricing: &dyn Pricing, resolver: &dyn ProjectResolver) -> CachedParse {
@@ -139,7 +139,7 @@ pub fn finish_codex_scan(scan: &CodexScan, pricing: &dyn Pricing, resolver: &dyn
     if scan.sessions.is_empty() {
         return parse; // No git call for a file without usage.
     }
-    let attribution = attribute_scan(scan, resolver);
+    let attribution = attribute_session(scan.repository_url.as_deref(), scan.cwd.as_deref(), resolver);
     for session in &scan.sessions {
         let counts = TokenCounts {
             input_tokens: session.input_tokens,
@@ -162,4 +162,30 @@ pub fn finish_codex_scan(scan: &CodexScan, pricing: &dyn Pricing, resolver: &dyn
 #[must_use]
 pub fn merge_codex_parsed(parsed: &[CachedParse]) -> DayMap {
     merge_all_day_maps(parsed.iter().map(|p| &p.days))
+}
+
+/// Costs are the credits Copilot logged, so pricing plays no part.
+pub fn finish_copilot_scan(scan: CopilotScan, resolver: &dyn ProjectResolver) -> CachedParse {
+    let mut parse = CachedParse::default();
+    if scan.messages.is_empty() {
+        return parse; // No git call for a file without usage.
+    }
+    let attribution = attribute_session(scan.repository_url.as_deref(), scan.cwd.as_deref(), resolver);
+    let mut messages = Vec::new();
+    for message in scan.messages {
+        if let Some(key) = &message.key {
+            parse.keys.push(key.clone());
+        }
+        let message = CachedMessage {
+            key: message.key,
+            date: message.date,
+            model: message.model,
+            counts: message.counts,
+            attribution: attribution.clone(),
+        };
+        add_cached_message(&mut parse.days, &message);
+        messages.push(message);
+    }
+    parse.messages = Some(Messages::Decoded(messages));
+    parse
 }

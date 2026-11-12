@@ -99,6 +99,14 @@ pub fn codex_home_dirs(env: &Env, override_only: bool) -> Vec<PathBuf> {
     codex_home.into_iter().chain([env.home().join(".codex"), env.home().join(".config").join("codex")]).collect()
 }
 
+/// The Copilot CLI's home: `COPILOT_HOME`, else `~/.copilot`.
+#[must_use]
+pub fn copilot_home_dir(env: &Env) -> PathBuf {
+    env.var("COPILOT_HOME")
+        .filter(|dir| !crate::js::trim(dir).is_empty())
+        .map_or_else(|| env.home().join(".copilot"), PathBuf::from)
+}
+
 /// Env roots, then config roots, then defaults, de-duplicated as written and made absolute.
 #[must_use]
 pub fn resolve_source_roots(env_value: Option<&str>, config_value: Option<&str>, defaults: &[PathBuf]) -> Vec<PathBuf> {

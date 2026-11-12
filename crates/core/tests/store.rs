@@ -20,7 +20,7 @@ use aitrack_core::readers::codex_scan::scan_codex_file;
 use aitrack_core::readers::jsonl::CHUNK_BYTES;
 use aitrack_core::readers::paths::list_unique_source_files;
 use aitrack_core::readers::project::ProjectResolver;
-use aitrack_core::readers::provider::{finish_claude_scan, finish_codex_scan, merge_claude_parsed, merge_codex_parsed};
+use aitrack_core::readers::provider::{finish_claude_scan, finish_codex_scan, merge_codex_parsed, merge_keyed_parsed};
 use aitrack_core::store::validate::{Diagnostic, Failure, ValidationOptions, check_raw_machine_file};
 use aitrack_core::time::Clock;
 use indexmap::IndexMap;
@@ -98,7 +98,7 @@ fn the_writer_builds_the_bytes_4x_builds() {
         .map(|f| finish_codex_scan(&scan_codex_file(f, &clock, CHUNK_BYTES).unwrap(), &pricing, &NoRemotes))
         .collect();
     let maps = IndexMap::from([
-        ("claude_code".to_owned(), merge_claude_parsed(&claude)),
+        ("claude_code".to_owned(), merge_keyed_parsed(&claude)),
         ("codex".to_owned(), merge_codex_parsed(&codex)),
     ]);
     let now = "2026-03-08T10:00:00Z".parse().unwrap();

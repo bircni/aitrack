@@ -21,7 +21,7 @@ use crate::pricing::ReaderPricing;
 use crate::pricing::cost::{FallbackCollector, PriceMode, price_model_cost};
 use crate::providers::{PROVIDERS, synced_provider_keys};
 use crate::readers::project::GitProjectResolver;
-use crate::readers::read::{read_claude_days, read_codex_days};
+use crate::readers::read::{read_claude_days, read_codex_days, read_copilot_days};
 use crate::store::encryption::{ENCRYPTION_PASSPHRASE_ENV, encryption_passphrase};
 use crate::store::machine_files::{MachineFileError, remove_pending_machine_file, write_machine_file};
 use crate::store::validate::{Failure, ValidationOptions, check_raw_machine_file};
@@ -49,6 +49,9 @@ pub fn read_local_provider_maps(
     }
     if wanted("codex") {
         maps.insert("codex".into(), read_codex_days(core, &pricing, &resolver)?);
+    }
+    if wanted("copilot") {
+        maps.insert("copilot".into(), read_copilot_days(core, &resolver)?);
     }
     Ok(maps)
 }

@@ -18,7 +18,7 @@ pub struct Descriptor {
     pub heatmap_dark: [&'static str; 5],
 }
 
-pub const PROVIDERS: [Descriptor; 3] = [
+pub const PROVIDERS: [Descriptor; 4] = [
     Descriptor {
         key: "claude_code",
         label: "Claude Code",
@@ -36,6 +36,15 @@ pub const PROVIDERS: [Descriptor; 3] = [
         synced: true,
         heatmap_light: ["#ebedf0", "#cde4f8", "#7db9ea", "#2472c8", "#0b3d7a"],
         heatmap_dark: ["#1e1e24", "#0c2240", "#0d4a8a", "#1a7fd4", "#4db8ff"],
+    },
+    Descriptor {
+        key: "copilot",
+        label: "GitHub Copilot",
+        aliases: &["copilot", "github-copilot", "github_copilot", "githubcopilot"],
+        cost_label: "Est. cost",
+        synced: true,
+        heatmap_light: ["#ebedf0", "#e7dcfa", "#b99bef", "#8250df", "#4c2889"],
+        heatmap_dark: ["#1e1e24", "#2a1a4a", "#4c2889", "#8250df", "#b99bef"],
     },
     Descriptor {
         key: "cursor",

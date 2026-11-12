@@ -1,13 +1,14 @@
 # opentrack desktop guide
 
-A tray (or menu-bar) dashboard for Claude Code, Codex and Cursor: live session and weekly limits
+A tray (or menu-bar) dashboard for Claude Code, Codex, GitHub Copilot and Cursor: live session and weekly limits
 with reset times and pacing, plus token usage and estimated cost from the same data `aitrack`
 reads — including other machines synced through your aitrack data repo.
 
 ## What it shows
 
 - **Limits** — Claude Code session / weekly / per-model weekly windows and extra usage; Codex
-  session and weekly windows and credits; Cursor total, Auto and API usage and on-demand spend.
+  session and weekly windows and credits; GitHub Copilot's monthly premium requests (and chat and
+  completions on plans that limit them); Cursor total, Auto and API usage and on-demand spend.
 - **Pacing** — whether each limit is on track to last until it resets, with alerts when one is
   almost used up or on pace to run out. The tick on a meter is the even-pace marker: where usage
   would be now if the limit were used evenly until it resets.
@@ -70,16 +71,20 @@ otherwise hides the popup, but not a window kept open.
 
 opentrack reuses the logins your tools already saved and never writes to them:
 
-| Provider    | Credentials read                                   | Request                                                    |
-| ----------- | -------------------------------------------------- | ---------------------------------------------------------- |
-| Claude Code | `~/.claude/.credentials.json` (macOS: Keychain)    | `GET https://api.anthropic.com/api/oauth/usage`            |
-| Codex       | `$CODEX_HOME/auth.json`, `~/.codex/auth.json`      | `GET https://chatgpt.com/backend-api/wham/usage`           |
-| Cursor      | `cursorAuth/accessToken` in Cursor's `state.vscdb` | `POST https://api2.cursor.sh/aiserver.v1.DashboardService` |
+| Provider       | Credentials read                                                         | Request                                                    |
+| -------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| Claude Code    | `~/.claude/.credentials.json` (macOS: Keychain)                          | `GET https://api.anthropic.com/api/oauth/usage`            |
+| Codex          | `$CODEX_HOME/auth.json`, `~/.codex/auth.json`                            | `GET https://chatgpt.com/backend-api/wham/usage`           |
+| GitHub Copilot | `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`, then `gh auth token` | `GET https://api.github.com/copilot_internal/user`         |
+| Cursor         | `cursorAuth/accessToken` in Cursor's `state.vscdb`                       | `POST https://api2.cursor.sh/aiserver.v1.DashboardService` |
 
 Tokens are not refreshed by opentrack: when one expires, the provider shows a message until you
 next use that tool. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
+GitHub Copilot follows the Copilot CLI's own lookup order but skips its keychain item, so a login
+made only with the CLI's `/login` needs `gh auth login` (or `GH_TOKEN`) as well. Its usage endpoint
+is the undocumented one Copilot's own clients use.
 
-Usage history comes from the local Claude/Codex logs and, while Cursor is enabled, Cursor's CSV
+Usage history comes from the local Claude Code, Codex and Copilot CLI logs and, while Cursor is enabled, Cursor's CSV
 usage export, which is downloaded from `CURSOR_WEB_BASE_URL` (`https://cursor.com` by default) with
 the saved Cursor token at most every 6 hours (`AITRACK_CURSOR_CACHE_TTL`) and on each manual
 refresh. A provider turned off in Settings is neither read nor contacted. Usage is merged with the

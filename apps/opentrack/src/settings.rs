@@ -220,7 +220,12 @@ mod tests {
             settings.providers.iter().map(|p| (p.key.as_str(), p.label.as_str(), p.enabled)).collect();
         assert_eq!(
             providers,
-            [("cursor", "Cursor", false), ("codex", "Codex", true), ("claude_code", "Claude Code", true)]
+            [
+                ("cursor", "Cursor", false),
+                ("codex", "Codex", true),
+                ("claude_code", "Claude Code", true),
+                ("copilot", "GitHub Copilot", true)
+            ]
         );
     }
 

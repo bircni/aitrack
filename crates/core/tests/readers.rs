@@ -13,7 +13,7 @@ use aitrack_core::readers::jsonl::CHUNK_BYTES;
 use aitrack_core::readers::paths::list_unique_source_files;
 use aitrack_core::readers::project::ProjectResolver;
 use aitrack_core::readers::provider::{
-    CachedParse, finish_claude_scan, finish_codex_scan, merge_claude_parsed, merge_codex_parsed,
+    CachedParse, finish_claude_scan, finish_codex_scan, merge_codex_parsed, merge_keyed_parsed,
 };
 use aitrack_core::time::Clock;
 use serde_json::{Value, json};
@@ -113,7 +113,7 @@ fn check_zone(zone: &str, chunk: usize) {
         assert_eq!(json!([relative(file), got]), *want, "{zone} chunk {chunk}");
         codex_parsed.push(finish_codex_scan(&scan, &pricing, &NoRemotes));
     }
-    assert_eq!(days(&merge_claude_parsed(&claude_parsed)), expected["claudeDays"], "{zone} Claude days");
+    assert_eq!(days(&merge_keyed_parsed(&claude_parsed)), expected["claudeDays"], "{zone} Claude days");
     assert_eq!(days(&merge_codex_parsed(&codex_parsed)), expected["codexDays"], "{zone} Codex days");
 }
 

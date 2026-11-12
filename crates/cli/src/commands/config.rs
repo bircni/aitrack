@@ -18,11 +18,12 @@ use crate::json::print_json_command;
 use crate::{Failure, Outcome};
 use aitrack_core::display::style;
 
-pub const CONFIG_KEYS: [&str; 7] = [
+pub const CONFIG_KEYS: [&str; 8] = [
     "repoUrl",
     "machineId",
     "claudeProjectsDir",
     "codexSessionsDir",
+    "copilotSessionsDir",
     "budget.monthly",
     "encryptData",
     "compactAfterDays",
@@ -43,7 +44,7 @@ pub enum ConfigAction {
         #[arg(long)]
         json: bool,
     },
-    /// Set a configuration value (keys: repoUrl, machineId, claudeProjectsDir, codexSessionsDir, budget.monthly, encryptData, compactAfterDays)
+    /// Set a configuration value (keys: repoUrl, machineId, claudeProjectsDir, codexSessionsDir, copilotSessionsDir, budget.monthly, encryptData, compactAfterDays)
     Set { key: String, value: String },
 }
 
@@ -67,6 +68,7 @@ fn config_value(config: Option<&Config>, key: &str) -> Option<Value> {
         "machineId" => config.machine_id.clone().map(Value::from),
         "claudeProjectsDir" => config.claude_projects_dir.clone().map(Value::from),
         "codexSessionsDir" => config.codex_sessions_dir.clone().map(Value::from),
+        "copilotSessionsDir" => config.copilot_sessions_dir.clone().map(Value::from),
         "budget.monthly" => config.budget.as_ref().and_then(|b| b.monthly_usd).map(Value::from),
         "encryptData" => config.encrypt_data.map(Value::from),
         "compactAfterDays" => config.compact_after_days.map(Value::from),
@@ -203,7 +205,8 @@ fn set(core: &Core, key: &str, value: &str) -> Outcome {
             value.clone_into(&mut next.repo_url);
         }
         "claudeProjectsDir" => next.claude_projects_dir = Some(value.to_owned()),
-        _ => next.codex_sessions_dir = Some(value.to_owned()),
+        "codexSessionsDir" => next.codex_sessions_dir = Some(value.to_owned()),
+        _ => next.copilot_sessions_dir = Some(value.to_owned()),
     }
     save_config(&core.paths.config, &next)?;
     let message = config_value(Some(&next), key)

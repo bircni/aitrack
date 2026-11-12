@@ -28,6 +28,7 @@ pub struct Palette {
     pub edge: Color32,
     pub claude: Color32,
     pub codex: Color32,
+    pub copilot: Color32,
     pub cursor: Color32,
     pub curve: Color32,
     pub curve_fill: Color32,
@@ -58,6 +59,7 @@ pub const LIGHT: Palette = Palette {
     edge: Color32::from_rgba_premultiplied(0, 0, 0, 20),
     claude: hex(0x00c9_6442),
     codex: hex(0x0027_876d),
+    copilot: hex(0x0082_50df),
     cursor: hex(0x0062_73bc),
     curve: Color32::from_rgba_premultiplied(38, 38, 42, 230),
     curve_fill: Color32::from_rgba_premultiplied(3, 3, 3, 15),
@@ -83,6 +85,7 @@ pub const DARK: Palette = Palette {
     edge: Color32::from_rgba_premultiplied(18, 18, 18, 18),
     claude: hex(0x00d9_7757),
     codex: hex(0x0065_c3a3),
+    copilot: hex(0x00a3_71f7),
     cursor: hex(0x009b_a9ee),
     curve: Color32::from_rgba_premultiplied(210, 210, 212, 230),
     curve_fill: Color32::from_rgba_premultiplied(19, 19, 19, 20),
@@ -100,6 +103,7 @@ impl Palette {
     pub fn provider(&self, key: &str) -> Color32 {
         match key {
             "claude_code" => self.claude,
+            "copilot" => self.copilot,
             "cursor" => self.cursor,
             _ => self.codex,
         }

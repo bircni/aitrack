@@ -2,6 +2,7 @@
 
 pub mod claude;
 pub mod codex;
+pub mod copilot;
 pub mod cursor;
 pub mod pacing;
 
@@ -251,6 +252,7 @@ pub fn fetch_quota(core: &Core, provider: &str) -> QuotaResult {
     match provider {
         "claude_code" => claude::fetch_claude_quota(core, now),
         "codex" => codex::fetch_codex_quota(core, now),
+        "copilot" => copilot::fetch_copilot_quota(core, now),
         "cursor" => cursor::fetch_cursor_quota(core, now),
         other => Err(QuotaError::new(QuotaErrorKind::InvalidResponse, format!("no quota for {other}"))),
     }

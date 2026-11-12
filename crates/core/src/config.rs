@@ -22,6 +22,9 @@ pub struct Config {
     /// Comma-separated Codex session roots.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub codex_sessions_dir: Option<String>,
+    /// Comma-separated Copilot CLI session-state roots.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copilot_sessions_dir: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub budget: Option<Budget>,
     /// Encrypt this machine's synced file with `AITRACK_ENCRYPTION_PASSPHRASE`.
@@ -151,6 +154,7 @@ fn validate_config(parsed: &Value) -> Option<Config> {
     };
     let claude_projects_dir = optional_string("claudeProjectsDir")?;
     let codex_sessions_dir = optional_string("codexSessionsDir")?;
+    let copilot_sessions_dir = optional_string("copilotSessionsDir")?;
     let budget = match fields.get("budget") {
         None => None,
         Some(value) => Some(validate_budget(value.as_object()?)?),
@@ -168,6 +172,7 @@ fn validate_config(parsed: &Value) -> Option<Config> {
         machine_id,
         claude_projects_dir,
         codex_sessions_dir,
+        copilot_sessions_dir,
         budget,
         encrypt_data,
         compact_after_days,
@@ -227,6 +232,7 @@ mod tests {
             machine_id: Some(" Work Laptop_01.2 ".into()),
             claude_projects_dir: Some("/data/claude-a,/data/claude-b".into()),
             codex_sessions_dir: Some("/data/codex".into()),
+            copilot_sessions_dir: None,
             budget: Some(Budget { monthly_usd: Some(5.0) }),
             encrypt_data: None,
             compact_after_days: Some(90),

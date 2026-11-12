@@ -31,7 +31,7 @@ A Cargo workspace.
 crates/
   core/               aitrack-core: everything that is not the command line or the window
     src/
-      readers/        Provider logs (Claude, Codex) and the Cursor export into day maps
+      readers/        Provider logs (Claude, Codex, Copilot) and the Cursor export into day maps
       pricing/        Cost resolution, the pricing pack store, repricing
       data/           Machine files, reports, periods, rankings, projects
       store/          Machine files on disk, validation, encryption, migrations

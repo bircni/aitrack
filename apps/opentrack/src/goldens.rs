@@ -90,7 +90,9 @@ fn renders_the_tray_icon_pixel_for_pixel() {
 fn normalizes_settings_byte_for_byte() {
     for case in expected().settings {
         let input = case.input.unwrap_or(Value::Null);
-        assert_eq!(settings_json(&normalize_settings(&input)), case.output, "{input}");
+        let mut settings = normalize_settings(&input);
+        settings.providers.retain(|p| p.key != "copilot"); // 4.x knew no Copilot.
+        assert_eq!(settings_json(&settings), case.output, "{input}");
     }
 }
 

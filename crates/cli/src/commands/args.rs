@@ -4,7 +4,7 @@ use aitrack_core::data::usage_periods::{invalid_date_message, parse_positive_int
 use aitrack_core::day::Day;
 use aitrack_core::providers::{PROVIDERS, normalize_provider_key};
 
-pub const PROVIDERS_HELP: &str = "comma-separated providers to show (claude, codex, cursor); default: all";
+pub const PROVIDERS_HELP: &str = "comma-separated providers to show (claude, codex, copilot, cursor); default: all";
 pub const REFRESH_HELP: &str = "re-fetch live provider data (Cursor), ignoring the local cache";
 const WATCH_MIN_SECONDS: u64 = 5;
 
