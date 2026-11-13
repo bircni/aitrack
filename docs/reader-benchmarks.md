@@ -1,5 +1,13 @@
 # Reader benchmark
 
+`crates/core/tests/perf.rs` times the 5.0 readers on a generated corpus (no cache, cold, warm, one
+file changed) and checks that every path gives the same days. It is ignored by default; compare a
+change against its base on the same machine, pinned to one core when other work is running:
+
+```sh
+cargo test --release -p aitrack-core --test perf -- --ignored --nocapture
+```
+
 These measurements are of the 4.x TypeScript readers. The 5.0 Rust readers keep their design (the
 needle filter, up to four scan threads, the parse cache and merged snapshot). On one machine's real
 logs (4.9 GB of Claude transcripts, caches off) a 5.0 cold read took 0.6 s and 130 MB resident

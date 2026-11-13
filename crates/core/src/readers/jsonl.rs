@@ -43,23 +43,20 @@ pub fn for_each_object<T>(
         Err(error) => return Err(error),
     };
     let size = usize::try_from(file.metadata()?.len()).unwrap_or(usize::MAX);
-    let mut buffer = vec![0u8; size.saturating_add(1).max(1024).min(chunk_bytes.max(1))];
-    let mut filled = 0;
+    let mut chunk = size.saturating_add(1).max(1024).min(chunk_bytes.max(1));
+    // Filled by `read_to_end`, which reads into spare capacity without zeroing it first.
+    let mut buffer = Vec::with_capacity(chunk);
     loop {
-        if filled == buffer.len() {
-            buffer.resize(buffer.len() * 2, 0); // A line longer than the buffer.
+        if buffer.len() == chunk {
+            chunk *= 2; // A line longer than the buffer.
         }
-        let read = file.read(&mut buffer[filled..])?;
-        filled += read;
-        let is_last = read == 0;
-        if !is_last && filled < buffer.len() {
-            continue; // Fill the chunk, so a file that fits is one pass.
-        }
-        let end = if is_last { filled } else { memchr::memrchr(b'\n', &buffer[..filled]).map_or(0, |i| i + 1) };
+        let want = chunk - buffer.len();
+        let read = (&mut file).take(want as u64).read_to_end(&mut buffer)?;
+        let is_last = read < want;
+        let end = if is_last { buffer.len() } else { memchr::memrchr(b'\n', &buffer).map_or(0, |i| i + 1) };
         if end > 0 {
             matching_lines(&buffer[..end], filter, is_last, &parse, &mut visit);
-            buffer.copy_within(end..filled, 0);
-            filled -= end;
+            buffer.drain(..end);
         }
         if is_last {
             return Ok(());
@@ -132,20 +129,20 @@ fn last_carrier<T>(
     carry: &Carry<'_, T>,
     parse: &impl Fn(&[u8]) -> Option<T>,
 ) -> Option<T> {
-    let needle = carry.needle.as_bytes();
-    let finder = memmem::FinderRev::new(needle);
-    let gap = &view[from..to];
-    let mut at = gap.len();
-    while at > 0 {
-        let window = &gap[..(at - 1 + needle.len()).min(gap.len())];
-        let hit = finder.rfind(window)?;
-        let start = line_start(view, from + hit);
-        if let Some(record) = parse_line(view, start, line_end(view, from + hit, to), parse)
+    // Searched forwards: unlike `FinderRev`, `Finder` is vectorised, and gaps are mostly tool output.
+    let hits: Vec<usize> = memmem::find_iter(&view[from..to], carry.needle.as_bytes()).map(|i| from + i).collect();
+    let mut tried = to;
+    for &hit in hits.iter().rev() {
+        let start = line_start(view, hit);
+        if start >= tried {
+            continue; // Another hit on a line already tried.
+        }
+        tried = start;
+        if let Some(record) = parse_line(view, start, line_end(view, hit, to), parse)
             && (carry.holds)(&record)
         {
             return Some(record);
         }
-        at = start - from;
     }
     None
 }

@@ -101,7 +101,7 @@ fn add_cached_message(days: &mut DayMap, message: &CachedMessage) {
 /// Keep the first file's contribution when resumed transcripts repeat a message.
 pub fn merge_claude_parsed(parsed: &[CachedParse]) -> DayMap {
     let mut all = DayMap::new();
-    let mut seen: HashSet<&str> = HashSet::new();
+    let mut seen: HashSet<&str> = HashSet::with_capacity(parsed.iter().map(|p| p.keys.len()).sum());
     for entry in parsed {
         let mut fresh: Option<HashSet<&str>> = None;
         for (index, key) in entry.keys.iter().enumerate() {

@@ -138,6 +138,7 @@ fn encode_messages(messages: &[CachedMessage], keys: &[String]) -> Option<Box<Ra
 pub(super) fn decode_messages(raw: &RawValue, keys: &[String]) -> Option<Vec<CachedMessage>> {
     let encoded: EncodedMessages = serde_json::from_str(raw.get()).ok()?;
     let text = |i: u32| encoded.strings.get(i as usize).cloned();
+    let dates: Vec<Option<Day>> = encoded.strings.iter().map(|s| Day::parse(s)).collect(); // A few per file.
     encoded
         .rows
         .iter()
@@ -149,7 +150,7 @@ pub(super) fn decode_messages(raw: &RawValue, keys: &[String]) -> Option<Vec<Cac
             };
             Some(CachedMessage {
                 key,
-                date: Day::parse(&text(row.date)?)?,
+                date: (*dates.get(row.date as usize)?)?,
                 model: text(row.model)?,
                 counts: row.counts.clone(),
                 attribution: Attribution {
@@ -178,6 +179,7 @@ pub struct ParseCache {
     name: String,
     timezone: String,
     previous: IndexMap<String, CacheEntry>,
+    had_previous: bool,
     next: IndexMap<String, CacheEntry>,
     missed: IndexMap<String, FileStamp>,
     recorded: Vec<FileStamp>,
@@ -192,6 +194,7 @@ impl ParseCache {
             path,
             name: name.to_owned(),
             timezone: context.timezone.clone(),
+            had_previous: !previous.is_empty(),
             previous,
             next: IndexMap::new(),
             missed: IndexMap::new(),
@@ -209,8 +212,9 @@ impl ParseCache {
         }
         match self.previous.get(&key) {
             Some(entry) if entry.stamp == stamp => {
-                let parse = to_parse(entry);
-                self.next.insert(key, entry.clone());
+                let entry = self.previous.swap_remove(&key)?; // Moved, not cloned: blobs are most of the cache.
+                let parse = to_parse(&entry);
+                self.next.insert(key, entry);
                 Some(parse)
             }
             _ => {
@@ -248,11 +252,12 @@ impl ParseCache {
     /// Persist. Entries never looked up this run are dropped, so deleted logs age out.
     pub fn save(self) {
         let Some(path) = &self.path else { return };
+        // Hits were moved out of `previous`, so what is left there was missed or not looked up.
         let evicted = self.previous.keys().any(|file| !self.next.contains_key(file));
         if self.recorded.is_empty() && !evicted {
             return;
         }
-        let update = !evicted && !self.previous.is_empty();
+        let update = !evicted && self.had_previous;
         if update && is_cheaper_to_rescan(&self.recorded, FileStamp::of(path)) {
             return;
         }
