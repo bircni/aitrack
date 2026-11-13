@@ -580,7 +580,7 @@ mod tests {
     }
 
     fn all() -> Vec<String> {
-        ["claude_code", "codex", "cursor"].map(String::from).to_vec()
+        PROVIDERS.iter().map(|p| p.key.to_owned()).collect()
     }
 
     #[test]
@@ -637,13 +637,13 @@ mod tests {
         let (fake, service) = harness(Fake::default());
         service.refresh(false);
         service.refresh(false);
-        assert_eq!(fake.calls.lock().unwrap().len(), 3);
+        assert_eq!(fake.calls.lock().unwrap().len(), all().len());
         fake.advance(REFRESH_INTERVAL_MS);
         service.refresh(false);
-        assert_eq!(fake.calls.lock().unwrap().len(), 6);
+        assert_eq!(fake.calls.lock().unwrap().len(), 2 * all().len());
         assert_eq!(fake.pulls(), [true, false]);
         service.refresh(true);
-        assert_eq!(fake.calls.lock().unwrap().len(), 9);
+        assert_eq!(fake.calls.lock().unwrap().len(), 3 * all().len());
         assert_eq!(fake.pulls(), [true, false, true]);
         fake.advance(PULL_INTERVAL_MS);
         service.refresh(false);
@@ -673,10 +673,12 @@ mod tests {
         service.refresh(true);
         let mut calls = fake.take_calls();
         calls.sort();
-        assert_eq!(calls, ["claude_code", "cursor"]);
+        assert_eq!(calls, ["claude_code", "copilot", "cursor"]);
         fake.advance(FAILURE_BACKOFF_MS);
         service.refresh(false);
-        assert_eq!(fake.take_calls(), ["cursor"]);
+        let mut calls = fake.take_calls();
+        calls.sort();
+        assert_eq!(calls, ["copilot", "cursor"]);
     }
 
     #[test]
@@ -774,7 +776,7 @@ mod tests {
         service.refresh(true);
         let mut calls = restarted.take_calls();
         calls.sort();
-        assert_eq!(calls, ["codex", "cursor"]);
+        assert_eq!(calls, ["codex", "copilot", "cursor"]);
     }
 
     #[test]

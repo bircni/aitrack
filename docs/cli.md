@@ -96,7 +96,7 @@ Run `aitrack init` once per machine with the **same** repo URL, choose a unique,
 
 **Usage and export windows:** `today`, `yesterday`, `date <YYYY-MM-DD>`, `range <from> <to>`, `thisweek`, `lastweek`, `week` (rolling 7 days), `thismonth`, `lastmonth`, `month` (rolling 30 days), `last <n>` (at most 36500), `year`, and `all`.
 
-**Provider selection:** `--providers <list>` accepts comma-separated `claude`, `codex`, and `cursor` values and works with `show`, every `usage` window, `export`, and `top`. All three are selected by default. Filtered reports read only selected local providers. Excluding `cursor` prevents the Cursor credential read and HTTPS export request. `show` and sync still read complete local-machine data when staging requires it.
+**Provider selection:** `--providers <list>` accepts comma-separated `claude`, `codex`, `copilot`, and `cursor` values and works with `show`, every `usage` window, `export`, and `top`. All of them are selected by default. Filtered reports read only selected local providers. Excluding `cursor` prevents the Cursor credential read and HTTPS export request. `show` and sync still read complete local-machine data when staging requires it.
 
 **Live data refresh:** Cursor's CSV export is cached at `~/.config/aitrack/cache/cursor.json` (default 6 h, `AITRACK_CURSOR_CACHE_TTL` seconds to change, `AITRACK_NO_CACHE=1` to disable), so `show` / `usage` / `top` no longer hit the network on every run. Pass `--refresh` to `show`, `export`, `top` or any `usage` window to request a fresh fetch. Refresh attempts still honor failure backoff and `Retry-After`. The cache contains an account hash, never a token, and is served only after verifying the current local account. Legacy, mismatched or unverifiable-account exports are rejected. Alternate credential variants are tried only after 401/403 responses; server failures and rate limits stop the request sequence.
 
@@ -211,6 +211,7 @@ Stored at `~/.config/aitrack/config.json`:
   "machineId": "work-laptop",
   "claudeProjectsDir": "/custom/claude/projects",
   "codexSessionsDir": "/custom/codex/sessions-a,/custom/codex/sessions-b",
+  "copilotSessionsDir": "/custom/copilot/session-state",
   "budget": {
     "monthlyUSD": 200
   },
@@ -221,7 +222,7 @@ Stored at `~/.config/aitrack/config.json`:
 
 `repoUrl` is the git remote used by `init` and `sync`. `machineId` becomes the `data/{machineId}.json` filename; `init` asks for it and defaults to the short hostname. Keep it unique, stable, and valid as a filename on every machine you use. Changing it through the CLI migrates the old pending and synced file without overwriting an existing target.
 
-`claudeProjectsDir` and `codexSessionsDir` are optional comma-separated **additional** source roots. They do not replace the standard locations; aitrack recursively scans the configured, environment, and default roots and deduplicates identical paths. You can also add roots with `AITRACK_CLAUDE_PROJECTS_DIRS` or `AITRACK_CODEX_SESSION_DIRS`.
+`claudeProjectsDir`, `codexSessionsDir` and `copilotSessionsDir` are optional comma-separated **additional** source roots. They do not replace the standard locations; aitrack recursively scans the configured, environment, and default roots and deduplicates identical paths. You can also add roots with `AITRACK_CLAUDE_PROJECTS_DIRS`, `AITRACK_CODEX_SESSION_DIRS` or `AITRACK_COPILOT_SESSION_DIRS`.
 
 `aitrack config list`, `get`, and `set` cover every key shown above, using dotted names for nested settings. The one name that differs is `budget.monthly`, stored as `budget.monthlyUSD`.
 
@@ -252,7 +253,10 @@ A compacted day keeps its `byProject` map (it is small, and not part of the tota
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Claude Code           | `projects/**/*.jsonl` under each of `$CLAUDE_CONFIG_DIR`, `$XDG_CONFIG_HOME/claude`, `~/.config/claude` and `~/.claude` |
 | Codex                 | `sessions/**/*.jsonl` under each of `$CODEX_HOME`, `~/.codex` and `~/.config/codex`                                     |
+| GitHub Copilot        | `session-state/*/events.jsonl` under `$COPILOT_HOME`, else `~/.copilot`                                                 |
 | Cursor _(local only)_ | local `state.vscdb`, then Cursor's HTTPS CSV export — **never synced to your repo**                                     |
+
+GitHub Copilot usage is read from the per-request `session.usage_record` events the Copilot CLI writes, which also covers agent sessions VS Code runs through it. Older Copilot CLI versions that do not write those events show no usage. Each request's cost is the AI credits Copilot logged for it (`totalNanoAiu`, one credit being $0.01), not a rate from the pricing tables, so `recompute-costs` leaves it as logged. The project comes from the repository the session recorded, or the session's working directory.
 
 These roots are additive, along with the configured ones: setting `CODEX_HOME` or `CLAUDE_CONFIG_DIR` adds a folder and does not replace the defaults, and a file counted under several roots is deduplicated by path. To separate two accounts, keep one out of those folders.
 

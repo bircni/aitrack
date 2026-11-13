@@ -51,7 +51,7 @@ local logs / Cursor export                  other machines
 A provider is a descriptor in `providers.rs` (key, label, aliases, whether it has live limits),
 plus either:
 
-- a **synced** reader: Claude Code and Codex, read from local logs and written to the data repo; or
+- a **synced** reader: Claude Code, Codex and GitHub Copilot, read from local logs and written to the data repo; or
 - a **live** reader: Cursor, fetched from the account (cached for six hours by default) and never
   written to git.
 

@@ -11,7 +11,7 @@ use aitrack_core::git::{GitError, is_cloned};
 use aitrack_core::readers::cursor::auth_state::read_cursor_auth_state;
 use aitrack_core::readers::cursor::location::cursor_state_database_path;
 use aitrack_core::readers::paths::list_jsonl_files;
-use aitrack_core::readers::read::{claude_roots, codex_roots};
+use aitrack_core::readers::read::{claude_roots, codex_roots, copilot_roots};
 use aitrack_core::store::machine_files::{list_data_files, read_data_file};
 use aitrack_core::store::validate::ValidationOptions;
 use clap::Args;
@@ -297,6 +297,7 @@ fn collect_checks(core: &Core, args: &DoctorArgs) -> Vec<Check> {
             vec![
                 source_check("Claude Code source", &claude_roots(core)),
                 source_check("Codex source", &codex_roots(core)),
+                source_check("GitHub Copilot source", &copilot_roots(core)),
                 cursor_check(core),
             ]
         });

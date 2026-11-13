@@ -6,12 +6,16 @@ use std::path::PathBuf;
 use super::cache::{CacheContext, FileStamp, MergedSnapshot, ParseCache};
 use super::claude_scan::scan_claude_file;
 use super::codex_scan::scan_codex_file;
+use super::copilot_scan::scan_copilot_file;
 use super::jsonl::CHUNK_BYTES;
-use super::paths::{claude_home_dirs, codex_home_dirs, list_unique_source_files, resolve_source_roots};
+use super::paths::{
+    claude_home_dirs, codex_home_dirs, copilot_home_dir, list_unique_source_files, resolve_source_roots,
+};
 use super::pool::scan_all;
 use super::project::ProjectResolver;
 use super::provider::{
-    CachedParse, Pricing, finish_claude_scan, finish_codex_scan, merge_claude_parsed, merge_codex_parsed,
+    CachedParse, Pricing, finish_claude_scan, finish_codex_scan, finish_copilot_scan, merge_codex_parsed,
+    merge_keyed_parsed,
 };
 use crate::Core;
 use crate::data::project::normalize_remote_url;
@@ -39,6 +43,15 @@ pub fn codex_roots(core: &Core) -> Vec<PathBuf> {
     )
 }
 
+pub fn copilot_roots(core: &Core) -> Vec<PathBuf> {
+    let config = core.try_load_config();
+    resolve_source_roots(
+        core.env.var("AITRACK_COPILOT_SESSION_DIRS"),
+        config.as_ref().and_then(|c| c.copilot_sessions_dir.as_deref()),
+        &[copilot_home_dir(&core.env).join("session-state")],
+    )
+}
+
 /// Caches live in `~/.config/aitrack/cache` unless `AITRACK_NO_CACHE` is set.
 pub fn cache_context(core: &Core, pricing: &dyn Pricing) -> CacheContext {
     CacheContext {
@@ -53,6 +66,7 @@ pub fn cache_context(core: &Core, pricing: &dyn Pricing) -> CacheContext {
 enum Kind {
     Claude,
     Codex,
+    Copilot,
 }
 
 impl Kind {
@@ -60,6 +74,7 @@ impl Kind {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+            Self::Copilot => "copilot",
         }
     }
 }
@@ -78,6 +93,13 @@ pub fn read_codex_days(core: &Core, pricing: &dyn Pricing, resolver: &dyn Projec
     read_days(core, Kind::Codex, &codex_roots(core), pricing, resolver)
 }
 
+/// # Errors
+///
+/// When the logs cannot be read.
+pub fn read_copilot_days(core: &Core, resolver: &dyn ProjectResolver) -> io::Result<DayMap> {
+    read_days(core, Kind::Copilot, &copilot_roots(core), &super::provider::NoPricing, resolver)
+}
+
 fn read_days(
     core: &Core,
     kind: Kind,
@@ -87,7 +109,10 @@ fn read_days(
 ) -> io::Result<DayMap> {
     let context = cache_context(core, pricing);
     // Stamped before any scan, so a write during one reads as a change next run.
-    let files = list_unique_source_files(roots)?;
+    let mut files = list_unique_source_files(roots)?;
+    if matches!(kind, Kind::Copilot) {
+        files.retain(|f| f.file_name().is_some_and(|name| name == "events.jsonl")); // Sessions keep other files beside it.
+    }
     let stamps: Vec<Option<FileStamp>> = files.iter().map(|f| FileStamp::of(f)).collect();
     let snapshot = MergedSnapshot::open(&context, kind.name(), &files, &stamps);
     if let Some(days) = snapshot.read() {
@@ -113,6 +138,15 @@ fn read_days(
             resolver.prefetch(&unique(unknown.filter_map(|s| s.cwd.as_deref())));
             scanned.into_iter().map(|scan| scan.map(|scan| finish_codex_scan(&scan, pricing, resolver))).collect()
         }
+        Kind::Copilot => {
+            let scanned = scan_all(&missed, cache.missed_bytes(), |f| scan_copilot_file(f, clock, CHUNK_BYTES));
+            let unknown = scanned
+                .iter()
+                .flatten()
+                .filter(|s| s.repository_url.as_deref().and_then(normalize_remote_url).is_none());
+            resolver.prefetch(&unique(unknown.filter_map(|s| s.cwd.as_deref())));
+            scanned.into_iter().map(|scan| scan.map(|scan| finish_copilot_scan(scan, resolver))).collect()
+        }
     };
     for (slot, (file, parse)) in parsed.iter_mut().filter(|slot| slot.is_none()).zip(missed.iter().zip(scans)) {
         let parse = parse?;
@@ -122,7 +156,7 @@ fn read_days(
     cache.save();
     let parsed: Vec<CachedParse> = parsed.into_iter().flatten().collect();
     let days = match kind {
-        Kind::Claude => merge_claude_parsed(&parsed),
+        Kind::Claude | Kind::Copilot => merge_keyed_parsed(&parsed),
         Kind::Codex => merge_codex_parsed(&parsed),
     };
     snapshot.write(&days);
