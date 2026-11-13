@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-11T14:18:49.814Z",
+  "retrievedAt": "2026-11-13T07:12:02.988Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -382,6 +382,13 @@
       "cr": 0.1,
       "cwe": false
     },
+    "google-vertex/gemini-4-hydrogen": {
+      "i": 1.5,
+      "o": 7.5,
+      "cw": 1.5,
+      "cr": 0.075,
+      "cwe": false
+    },
     "google-vertex/gemini-embedding-001": {
       "i": 0.15,
       "o": 0,
@@ -742,6 +749,13 @@
       "cr": 0.1,
       "cwe": false
     },
+    "google/gemini-4-hydrogen": {
+      "i": 1.5,
+      "o": 7.5,
+      "cw": 1.5,
+      "cr": 0.075,
+      "cwe": false
+    },
     "google/gemini-embedding-001": {
       "i": 0.15,
       "o": 0,
@@ -772,19 +786,18 @@
       "cr": 0.03,
       "cwe": false
     },
-    "google/gemini-omni-flash-preview": {
-      "i": 1.5,
-      "o": 17.5,
-      "cw": 1.5,
-      "cr": 0.15000000000000002,
-      "cre": false,
-      "cwe": false
-    },
     "google/gemini-pro-latest": {
       "i": 2,
       "o": 12,
       "cw": 2,
       "cr": 0.2,
+      "cwe": false
+    },
+    "openai/chatgpt-image-latest": {
+      "i": 5,
+      "o": 10,
+      "cw": 5,
+      "cr": 1.25,
       "cwe": false
     },
     "openai/gpt-3.5-turbo": {
@@ -1041,6 +1054,13 @@
       "o": 75,
       "cw": 15.625,
       "cr": 1.25
+    },
+    "openai/gpt-image-1.5": {
+      "i": 5,
+      "o": 10,
+      "cw": 5,
+      "cr": 1.25,
+      "cwe": false
     },
     "openai/gpt-image-2": {
       "i": 5,
