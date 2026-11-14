@@ -5,6 +5,8 @@ use aitrack_core::providers::{provider_label, PROVIDERS};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::alerts::AlertRules;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderSetting {
     pub key: String,
@@ -41,6 +43,13 @@ pub struct Settings {
     pub tray_window: String,
     pub tray_style: String,
     pub tray_colored: bool,
+    /// Percent left at which a limit counts as almost used up. Written only when changed, like
+    /// `alert_unused`, so an untouched file stays as 4.x wrote it.
+    #[serde(default = "default_alert_threshold", skip_serializing_if = "is_default_alert_threshold")]
+    pub alert_threshold: u32,
+    /// Alert when a weekly limit is about to reset mostly unused.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub alert_unused: bool,
 }
 
 impl Default for Settings {
@@ -63,6 +72,8 @@ impl Default for Settings {
             tray_window: "highest".into(),
             tray_style: "icon".into(),
             tray_colored: true,
+            alert_threshold: DEFAULT_ALERT_THRESHOLD,
+            alert_unused: false,
         }
     }
 }
@@ -72,12 +83,27 @@ const DISPLAYS: &[&str] = &["used", "left"];
 const RESET_DISPLAYS: &[&str] = &["relative", "absolute"];
 const TRAY_WINDOWS: &[&str] = &["highest", "session", "weekly"];
 const TRAY_STYLES: &[&str] = &["icon", "bars"];
+pub const ALERT_THRESHOLDS: &[u32] = &[5, 10, 20, 30];
+const DEFAULT_ALERT_THRESHOLD: u32 = 10;
+
+const fn default_alert_threshold() -> u32 {
+    DEFAULT_ALERT_THRESHOLD
+}
+
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde passes the field by reference")]
+const fn is_default_alert_threshold(value: &u32) -> bool {
+    *value == DEFAULT_ALERT_THRESHOLD
+}
 
 fn tray_providers() -> Vec<&'static str> {
     std::iter::once("auto").chain(PROVIDERS.iter().map(|p| p.key)).collect()
 }
 
 impl Settings {
+    pub fn alert_rules(&self) -> AlertRules {
+        AlertRules { almost_out_left: f64::from(self.alert_threshold), unused: self.alert_unused }
+    }
+
     pub fn enabled_providers(&self) -> Vec<String> {
         self.providers.iter().filter(|p| p.enabled).map(|p| p.key.clone()).collect()
     }
@@ -103,6 +129,7 @@ impl Settings {
             tray_provider: fix(self.tray_provider, &tray_providers(), d.tray_provider),
             tray_window: fix(self.tray_window, TRAY_WINDOWS, d.tray_window),
             tray_style: fix(self.tray_style, TRAY_STYLES, d.tray_style),
+            alert_threshold: threshold(Some(self.alert_threshold.into())),
             ..self
         }
     }
@@ -114,6 +141,13 @@ fn pick(value: Option<&Value>, allowed: &[&str], fallback: &str) -> String {
 
 fn boolean(value: Option<&Value>, fallback: bool) -> bool {
     value.and_then(Value::as_bool).unwrap_or(fallback)
+}
+
+fn threshold(value: Option<u64>) -> u32 {
+    value
+        .and_then(|v| u32::try_from(v).ok())
+        .filter(|v| ALERT_THRESHOLDS.contains(v))
+        .unwrap_or(DEFAULT_ALERT_THRESHOLD)
 }
 
 /// Known providers once each, in the order given, then any missing ones turned on.
@@ -163,6 +197,8 @@ pub fn normalize_settings(input: &Value) -> Settings {
         tray_window: pick(field("trayWindow"), TRAY_WINDOWS, &d.tray_window),
         tray_style: pick(field("trayStyle"), TRAY_STYLES, &d.tray_style),
         tray_colored: boolean(field("trayColored"), d.tray_colored),
+        alert_threshold: threshold(field("alertThreshold").and_then(Value::as_u64)),
+        alert_unused: boolean(field("alertUnused"), d.alert_unused),
     }
 }
 
@@ -207,12 +243,15 @@ mod tests {
             "notifications": "yes",
             "trayStyle": "square",
             "trayColored": "yes",
+            "alertThreshold": 7,
+            "alertUnused": true,
         }));
         assert_eq!(settings.theme, "system");
         assert_eq!(settings.display, "left");
         assert_eq!(settings.global_shortcut, "Alt+U");
         assert!(settings.notifications && settings.tray_colored && !settings.keep_open);
         assert_eq!(settings.tray_style, "icon");
+        assert_eq!((settings.alert_threshold, settings.alert_unused), (10, true));
         assert!(normalize_settings(&json!({ "windowMode": "floating" })).keep_open);
         assert!(!normalize_settings(&json!({ "windowMode": "docked" })).keep_open);
         assert!(normalize_settings(&json!({ "alwaysOnTop": true })).keep_open);
@@ -232,6 +271,7 @@ mod tests {
             global_shortcut: " Ctrl+K ".into(),
             providers: vec![codex.clone(), ProviderSetting { key: "bogus".into(), ..codex.clone() }, codex],
             tray_window: "monthly".into(),
+            alert_threshold: 15,
             ..Settings::default()
         };
         let from_file = normalize_settings(&serde_json::to_value(&built).unwrap());
@@ -243,8 +283,13 @@ mod tests {
     fn round_trips_through_disk_and_tolerates_a_corrupt_file() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nested/settings.json");
-        let saved =
-            Settings { theme: "dark".into(), tray_style: "bars".into(), tray_colored: false, ..Settings::default() };
+        let saved = Settings {
+            theme: "dark".into(),
+            tray_style: "bars".into(),
+            tray_colored: false,
+            alert_threshold: 30,
+            ..Settings::default()
+        };
         write_settings(&path, &saved).unwrap();
         assert_eq!(load_settings(&path), saved);
         std::fs::write(&path, "{").unwrap();

@@ -8,7 +8,7 @@ use aitrack_core::quota::{QuotaError, QuotaErrorKind, QuotaResult, QuotaSnapshot
 use aitrack_core::time::{iso_millis, Clock};
 use indexmap::IndexMap;
 
-use crate::alerts::{due_alerts, prune_fired, Alert};
+use crate::alerts::{due_alerts, prune_fired, Alert, AlertRules};
 use crate::cache::CachedState;
 use crate::pace::parse_ms;
 use crate::settings::Settings;
@@ -337,8 +337,11 @@ impl<D: Deps> QuotaService<D> {
                     runtime.error = None;
                     runtime.next_attempt_at = now + REFRESH_INTERVAL_MS;
                     cache.updated_at = Some(iso(now));
-                    let alerts =
-                        if settings.notifications { self.alerts_for(key, &snapshot, cache, now) } else { vec![] };
+                    let alerts = if settings.notifications {
+                        self.alerts_for(key, &snapshot, settings.alert_rules(), cache, now)
+                    } else {
+                        vec![]
+                    };
                     cache.quotas.insert(key.to_owned(), snapshot);
                     alerts
                 }
@@ -366,8 +369,15 @@ impl<D: Deps> QuotaService<D> {
         self.emit();
     }
 
-    fn alerts_for(&self, key: &str, snapshot: &QuotaSnapshot, cache: &mut CachedState, now: f64) -> Vec<Alert> {
-        let alerts = due_alerts(&self.clock, provider_label(key), snapshot, &cache.fired, now);
+    fn alerts_for(
+        &self,
+        key: &str,
+        snapshot: &QuotaSnapshot,
+        rules: AlertRules,
+        cache: &mut CachedState,
+        now: f64,
+    ) -> Vec<Alert> {
+        let alerts = due_alerts(&self.clock, provider_label(key), snapshot, rules, &cache.fired, now);
         for alert in &alerts {
             cache.fired.insert(alert.key.clone(), alert.resets_at.clone());
         }
