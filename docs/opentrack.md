@@ -90,6 +90,21 @@ other machines in your aitrack data repo when one is configured (`aitrack init`)
 press the sync button in the dashboard, which does exactly what `aitrack sync` does, including refusing
 a clone whose `origin` differs from `repoUrl`; that shows as a failed sync.
 
+**Sync settings** (off by default) shares the settings that mean the same on every machine through
+that repo: the theme, limits shown as used or left, reset times, the providers' order and which
+are on, alerts with their threshold and the unused-limit alert, the
+compact view, and the tray's provider and limit. Start at login, the shortcut, Keep open, the
+tray's style and colour and the two data repo switches stay with each machine. The shared settings
+are one file, `opentrack/settings.json`, with the time they last changed, and the newest change
+wins as a whole rather than key by key. opentrack takes a newer file over its own settings after a
+pull, and a machine that turns the setting on takes what the repo already has. Changes made here
+go out the next time you press the sync button, never on their own; with **Include other
+machines** off, that is also the only time other machines' changes come in. When two machines push
+at once, the later change is kept and the other machine takes it. With
+[`encryptData`](cli.md#encrypting-the-synced-files) on, the file is encrypted like the machine
+files and stays encrypted whichever machine rewrites it; a machine without the passphrase leaves
+it alone and its sync says so.
+
 A failed pull remains visible until recovery and retries after one minute; a successful
 pull restores the 30-minute schedule. Failed local reads retain their own warning.
 Quota and usage update times advance only after successful updates and survive app

@@ -11,11 +11,13 @@ use crate::fs::write_file_atomic;
 use crate::machine_id::{machine_data_filename, normalize_machine_id};
 use crate::process::{RunError, run, run_interactive};
 use crate::store::merge_conflict::merge_conflicted_machine_file;
+use crate::store::shared_settings::{SHARED_SETTINGS_PATH, newest_shared_settings};
 use crate::time::iso_millis;
 
 const MAX_PUSH_ATTEMPTS: u32 = 3;
 
-/// Starts the subject of a commit that only adds this machine's usage, the one kind a per-day merge cannot undo.
+/// Starts the subject of a commit that only adds this machine's usage, the one kind a per-day merge cannot undo,
+/// or that shares opentrack's settings, where the newest file wins.
 pub const SYNC_COMMIT_PREFIX: &str = "sync: ";
 
 #[derive(Debug, thiserror::Error)]
@@ -187,6 +189,18 @@ impl Git {
         let status = self.untimed().run(&["status", "--porcelain", "--", &format!(":(literal)data/{name}")])?;
         Ok(!status.is_empty())
     }
+
+    /// A write that was never committed would fail every pull once another machine changes the file.
+    fn drop_uncommitted_shared_settings(&self) {
+        let path = format!(":(literal){SHARED_SETTINGS_PATH}");
+        if self.untimed().run(&["status", "--porcelain", "--", &path]).is_ok_and(|status| status.is_empty()) {
+            return;
+        }
+        let _ = self.untimed().run(&["reset", "--quiet", "--", &path]);
+        if self.untimed().run(&["checkout", "--quiet", "--", &path]).is_err() {
+            let _ = std::fs::remove_file(self.repo.join(SHARED_SETTINGS_PATH)); // Never committed.
+        }
+    }
 }
 
 /// One side is absent from a modify/delete conflict, which has no merge.
@@ -201,11 +215,15 @@ fn is_machine_file_path(path: &str) -> bool {
 }
 
 fn resolve_conflict(core: &Core, git: &Git, path: &str) -> Result<(), GitError> {
-    let remote = if is_machine_file_path(path) { conflicted_side(git, path, 2) } else { None };
-    let local = remote.as_ref().and_then(|_| conflicted_side(git, path, 3));
-    let merged = match (&remote, &local) {
-        (Some(remote), Some(local)) => merge_conflicted_machine_file(core, path, remote, local),
-        _ => None,
+    let merged = if path == SHARED_SETTINGS_PATH {
+        newest_shared_settings(core, conflicted_side(git, path, 2), conflicted_side(git, path, 3))
+    } else {
+        let remote = if is_machine_file_path(path) { conflicted_side(git, path, 2) } else { None };
+        let local = remote.as_ref().and_then(|_| conflicted_side(git, path, 3));
+        match (&remote, &local) {
+            (Some(remote), Some(local)) => merge_conflicted_machine_file(core, path, remote, local),
+            _ => None,
+        }
     };
     let merged = merged.ok_or_else(|| GitError::Other(format!("{path} cannot be merged automatically")))?;
     write_file_atomic(&git.repo.join(path), &merged, None).map_err(|e| GitError::Other(e.to_string()))?;
@@ -297,7 +315,11 @@ pub fn push_with_retry(core: &Core, guard: &RepoGuard<'_>, git: &Git) -> Result<
 ///
 /// When git fails.
 pub fn commit_staged_data(core: &Core, guard: &RepoGuard<'_>, git: &Git, message: &str) -> Result<bool, GitError> {
-    if git.untimed().run(&["diff", "--cached", "--name-only", "--", "data/"])?.is_empty() {
+    commit_staged(core, guard, git, message, "data/")
+}
+
+fn commit_staged(core: &Core, guard: &RepoGuard<'_>, git: &Git, message: &str, scope: &str) -> Result<bool, GitError> {
+    if git.untimed().run(&["diff", "--cached", "--name-only", "--", scope])?.is_empty() {
         return Ok(false);
     }
     git.untimed().run(&["commit", "-m", message])?;
@@ -323,6 +345,7 @@ pub fn push_pending_commits(core: &Core, guard: &RepoGuard<'_>, git: &Git) -> Re
 /// When the fetch or rebase fails.
 pub fn pull(core: &Core, guard: &RepoGuard<'_>, git: &Git) -> Result<(), GitError> {
     git.abort_rebase_if_in_progress(); // A dead process's rebase would fail everything below, on every run.
+    git.drop_uncommitted_shared_settings();
     let Err(error) = git.run(&["pull", "--ff-only", "--quiet"]) else { return Ok(()) };
     if !matches!(error, GitError::Command { .. }) {
         return Err(error); // A timeout says nothing about an empty remote.
@@ -380,6 +403,17 @@ pub fn commit_and_push(core: &Core, guard: &RepoGuard<'_>, git: &Git, hostname: 
     git.untimed().run(&["add", "--", &format!(":(literal)data/{name}")])?;
     let message = format!("{SYNC_COMMIT_PREFIX}{machine_id} at {}", iso_millis(core.clock.now()));
     commit_staged_data(core, guard, git, &message)
+}
+
+/// Stages and pushes the shared settings as a sync commit, which a rebase replays with the newest file winning.
+///
+/// # Errors
+///
+/// When git fails.
+pub fn commit_and_push_shared_settings(core: &Core, guard: &RepoGuard<'_>, git: &Git) -> Result<bool, GitError> {
+    git.untimed().run(&["add", "--", &format!(":(literal){SHARED_SETTINGS_PATH}")])?;
+    let message = format!("{SYNC_COMMIT_PREFIX}opentrack settings at {}", iso_millis(core.clock.now()));
+    commit_staged(core, guard, git, &message, SHARED_SETTINGS_PATH)
 }
 
 pub fn is_cloned(core: &Core) -> bool {

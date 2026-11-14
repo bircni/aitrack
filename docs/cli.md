@@ -235,6 +235,7 @@ The same repository in another form counts as a match: `.git`, a trailing slash,
 
 - `sync` fails with a clear message when `encryptData` is on and the variable is missing, and so does `recompute-costs` when it has a file to write. `recompute-costs` leaves this machine's file alone, with a warning, when it cannot decrypt it, and rewrites other machines' files in the mode they were already in. Turning the setting on or off rewrites the file on the next `sync` even if no usage changed.
 - Files use scrypt (N=2^15) and AES-256-GCM, with a random salt and IV per file. The file is a small JSON envelope (`"encrypted": "aitrack-aes-256-gcm-scrypt-v1"`, base64 `salt`, `iv`, `tag`, `data`); any change to it or a wrong passphrase fails authentication.
+- opentrack's shared `opentrack/settings.json` is encrypted the same way when the machine that pushes it has `encryptData` on, and stays encrypted once it is.
 - Plain and encrypted files can sit side by side in one repo. A reader without the right passphrase skips an encrypted file with a warning that names the file and the variable to set; the rest of the fleet still loads. An aitrack version that predates encryption skips it with an "upgrade aitrack" message.
 - Threat model: this hides token counts, models, project names and costs from whoever hosts or can read the data repo. It does not hide metadata: file names (so machine IDs), commit times and sizes, and the fact that you use aitrack. A weak passphrase can be brute-forced offline from any clone, and history committed before you enabled encryption stays readable in git. The GUI launches with its own environment, so export the variable where the desktop app starts or it will skip encrypted machines.
 
@@ -310,6 +311,18 @@ Each machine's file in the repo:
 ```
 
 Claude Code entries can also carry `rawInputTokens`, `cacheCreationInputTokens` and `cacheCreation1hInputTokens`. [`data/types.rs`](../crates/core/src/data/types.rs) has the full shape.
+
+The repo can also hold `opentrack/settings.json`, which opentrack writes when its **Sync settings** is on (see the [desktop guide](opentrack.md#where-data-comes-from)). It is one file for all machines, where the newest `updatedAt` wins:
+
+```json
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-04-12T10:00:00.000Z",
+  "settings": { "theme": "dark", "display": "used" }
+}
+```
+
+`aitrack` reads only `data/*.json`, as every earlier version does, so the file changes no report.
 
 ---
 

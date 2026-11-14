@@ -279,7 +279,8 @@ impl App {
                 Msg::Refresh => self.background.refresh_in_background(true),
                 Msg::Quit => std::process::exit(0),
                 Msg::State(state) => self.on_state(state),
-                Msg::Settings(settings) => {
+                // Edits a failed save left pending are newer than what another machine shared.
+                Msg::Settings(settings) if self.settings_error.is_none() => {
                     self.settings = *settings;
                     self.apply_settings(ctx, window);
                 }
@@ -293,7 +294,7 @@ impl App {
                     }
                     Err(error) => self.settings_error = Some(error),
                 },
-                Msg::Saved(..) => {}
+                Msg::Settings(_) | Msg::Saved(..) => {}
                 Msg::LaunchAtLogin(error) => self.setting_errors.launch_at_login = error,
                 Msg::Alert { title, body } => notify(title, body),
                 Msg::Tray(image) => self.tray.set(image),
@@ -325,8 +326,8 @@ impl App {
             }
             Action::Save(settings) => {
                 self.save_seq += 1;
-                let _ = self.saves.send((self.save_seq, settings.clone()));
-                self.settings = settings;
+                let _ = self.saves.send((self.save_seq, (*settings).clone()));
+                self.settings = *settings;
                 self.apply_settings(ctx, window);
             }
             Action::OpenDashboard(provider) => {

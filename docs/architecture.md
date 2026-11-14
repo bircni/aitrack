@@ -75,3 +75,8 @@ install an update) for `app.rs` to carry out. `tray-icon`, `global-hotkey`, `aut
 `notify-rust` cover the tray, shortcut, start at login and alerts; the updater reads the same
 `latest.json` and key as 4.x's Tauri updater through `aitrack_core::update`, which
 `aitrack install-opentrack` shares.
+
+With **Sync settings** on, `settings_sync.rs` reconciles the settings every machine can use with
+`opentrack/settings.json` in the data repo (`store/shared_settings` in the core): the newest
+`updatedAt` wins, after a pull and on the sync button, and a diverged commit of that file is
+replayed the same way.
