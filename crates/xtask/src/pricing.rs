@@ -27,7 +27,6 @@ const LITELLM_PREFIXES: [&str; 10] = [
     "vercel_ai_gateway/anthropic/",
     "vercel_ai_gateway/openai/",
 ];
-pub const CURSOR_PROVIDERS: [&str; 5] = ["cursor", "xai", "google", "openai", "anthropic"];
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -205,11 +204,10 @@ fn field(row: &Value, key: &str) -> f64 {
     row.get(key).and_then(Value::as_f64).unwrap_or(0.0)
 }
 
-/// `claude.json`, `codex.json` and `cursor.json` as read, key order kept.
+/// `claude.json` and `codex.json` as read, key order kept.
 pub struct Tables {
     pub claude: Map<String, Value>,
     pub codex: Map<String, Value>,
-    pub cursor: Map<String, Value>,
 }
 
 impl Tables {
@@ -222,7 +220,7 @@ impl Tables {
                 _ => Err(format!("{} is not a JSON object", path.display())),
             }
         };
-        Ok(Self { claude: read("claude")?, codex: read("codex")?, cursor: read("cursor")? })
+        Ok(Self { claude: read("claude")?, codex: read("codex")? })
     }
 
     /// The supplement the tables make; its `updatedAt` is the newest table's.
@@ -232,7 +230,7 @@ impl Tables {
             let text = if updated.contains('T') { updated.to_owned() } else { format!("{updated}T00:00:00Z") };
             Clock::system().parse_timestamp(&text).ok_or_else(|| format!("table updatedAt {updated:?} is not a date"))
         };
-        let newest = stamp(&self.claude)?.max(stamp(&self.codex)?).max(stamp(&self.cursor)?);
+        let newest = stamp(&self.claude)?.max(stamp(&self.codex)?);
         let pick = |table: &Map<String, Value>, keys: &[&str]| {
             Value::Object(
                 keys.iter().map(|k| ((*k).to_owned(), table.get(*k).cloned().unwrap_or(Value::Null))).collect(),
@@ -243,7 +241,8 @@ impl Tables {
             "comment": "First-party pricing from tables/*.json. Catalogs supply additional models.",
             "claude": pick(&self.claude, &["models", "overrides", "familyFallback"]),
             "codex": pick(&self.codex, &["current", "historical", "overrides", "familyFallback"]),
-            "cursor": pick(&self.cursor, &["models", "fastMultipliers", "aliases"]),
+            // 4.x and 5.0 reject a supplement without this section; empty, they keep their bundled rates.
+            "cursor": { "models": {}, "fastMultipliers": {}, "aliases": [] },
         }))
     }
 }
@@ -361,6 +360,14 @@ mod tests {
             }))
             .unwrap()
         );
+    }
+
+    #[test]
+    fn the_supplement_is_one_every_version_accepts() {
+        let tables = Path::new(env!("CARGO_MANIFEST_DIR")).join("../core/pricing-tables");
+        let supplement = Tables::read(&tables).unwrap().supplement().unwrap();
+        assert_eq!(supplement["cursor"], json!({ "models": {}, "fastMultipliers": {}, "aliases": [] }));
+        assert!(aitrack_core::pricing::supplement::parse_supplement(&supplement).is_some());
     }
 
     #[test]

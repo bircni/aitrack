@@ -67,7 +67,7 @@ pub fn parse_compact_catalog(value: &Value) -> Option<Catalog> {
 
 /// Prefer first-party provider keys when both `anthropic/x` and `x` exist.
 fn provider_key_rank(key: &str) -> u8 {
-    if key.starts_with("anthropic/") || key.starts_with("openai/") || key.starts_with("cursor/") {
+    if key.starts_with("anthropic/") || key.starts_with("openai/") {
         0
     } else if key.starts_with("xai/") || key.starts_with("google/") {
         1

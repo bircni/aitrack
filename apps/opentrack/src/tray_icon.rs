@@ -328,21 +328,21 @@ mod tests {
     #[test]
     fn includes_monetary_limits_in_tray_usage_tone_and_bars() {
         let money = QuotaWindow {
-            id: "onDemand".into(),
-            label: "On-demand".into(),
+            id: "extra".into(),
+            label: "Extra usage".into(),
             format: QuotaFormat::Dollars,
             used_value: Some(95.0),
             limit_value: Some(100.0),
             ..session_window(95.0, 2.5)
         };
-        let cursor = keyed("cursor", "Cursor", vec![money]);
+        let claude = keyed("claude_code", "Claude Code", vec![money]);
         assert_eq!(
-            summarize_tray(&clock(), &[cursor], NOW, TrayChoice { style: "bars", ..AUTO }),
+            summarize_tray(&clock(), &[claude], NOW, TrayChoice { style: "bars", ..AUTO }),
             TraySummary {
                 tone: Tone::Crit,
                 used_percent: 95.0,
                 bars: vec![TrayBar { tone: Tone::Crit, used_percent: 95.0 }],
-                tooltip: "opentrack\nCursor On-demand: 95%".into(),
+                tooltip: "opentrack\nClaude Code Extra usage: 95%".into(),
             }
         );
     }

@@ -1,13 +1,13 @@
 # opentrack desktop guide
 
-A tray (or menu-bar) dashboard for Claude Code, Codex and Cursor: live session and weekly limits
+A tray (or menu-bar) dashboard for Claude Code and Codex: live session and weekly limits
 with reset times and pacing, plus token usage and estimated cost from the same data `aitrack`
 reads — including other machines synced through your aitrack data repo.
 
 ## What it shows
 
 - **Limits** — Claude Code session / weekly / per-model weekly windows and extra usage; Codex
-  session and weekly windows and credits; Cursor total, Auto and API usage and on-demand spend.
+  session and weekly windows and credits.
 - **Pacing** — whether each limit is on track to last until it resets, with alerts when one is
   almost used up or on pace to run out. Settings picks how much left counts as almost used up
   (5, 10, 20 or 30%; 10% by default) and can add an alert for a weekly limit that resets within
@@ -22,16 +22,15 @@ reads — including other machines synced through your aitrack data repo.
 - **Projects** — a tab that lists projects (the git `owner/repo` of the folder the work ran in)
   for the selected period (Today / 7 days / 30 days / All time) with cost, tokens and a share bar;
   expand one for its split per provider. Usage that no project explains is shown as
-  `(unattributed)`, and work in folders without a remote as `(no remote)`. Cursor has no project
-  data and is not counted. Attribution starts with the next refresh (this machine) or sync (other
-  machines), so the tab is empty until then and older synced days stay unattributed. The numbers
-  come from the same report builder as `aitrack top projects`.
+  `(unattributed)`, and work in folders without a remote as `(no remote)`. Attribution starts with
+  the next refresh (this machine) or sync (other machines), so the tab is empty until then and older
+  synced days stay unattributed. The numbers come from the same report builder as
+  `aitrack top projects`.
 - **Machines** — with a synced data repo, a tab next to Providers splits the same estimated cost per
   machine: its share of the period, a 30-day activity strip on one scale for every machine, shaded
   at the same steps as `aitrack`'s heatmap, the
   machine's local time when its timezone differs, and when it last synced. A machine that has not
-  synced for three days is marked stale. This machine always shows its live logs. Cursor usage
-  comes from your Cursor account, not from any machine, so it is listed separately.
+  synced for three days is marked stale. This machine always shows its live logs.
 - **Tray icon** — the opentrack "O" filled like a pie, coloured by pace. It follows the most used
   provider and limit by default; Settings picks a provider and session or weekly instead. Choose
   **Bars** for a rounded progress bar per available limit (session, weekly and model limits),
@@ -72,19 +71,16 @@ otherwise hides the popup, but not a window kept open.
 
 opentrack reuses the logins your tools already saved and never writes to them:
 
-| Provider    | Credentials read                                   | Request                                                    |
-| ----------- | -------------------------------------------------- | ---------------------------------------------------------- |
-| Claude Code | `~/.claude/.credentials.json` (macOS: Keychain)    | `GET https://api.anthropic.com/api/oauth/usage`            |
-| Codex       | `$CODEX_HOME/auth.json`, `~/.codex/auth.json`      | `GET https://chatgpt.com/backend-api/wham/usage`           |
-| Cursor      | `cursorAuth/accessToken` in Cursor's `state.vscdb` | `POST https://api2.cursor.sh/aiserver.v1.DashboardService` |
+| Provider    | Credentials read                                | Request                                          |
+| ----------- | ----------------------------------------------- | ------------------------------------------------ |
+| Claude Code | `~/.claude/.credentials.json` (macOS: Keychain) | `GET https://api.anthropic.com/api/oauth/usage`  |
+| Codex       | `$CODEX_HOME/auth.json`, `~/.codex/auth.json`   | `GET https://chatgpt.com/backend-api/wham/usage` |
 
 Tokens are not refreshed by opentrack: when one expires, the provider shows a message until you
 next use that tool. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
 
-Usage history comes from the local Claude/Codex logs and, while Cursor is enabled, Cursor's CSV
-usage export, which is downloaded from `CURSOR_WEB_BASE_URL` (`https://cursor.com` by default) with
-the saved Cursor token at most every 6 hours (`AITRACK_CURSOR_CACHE_TTL`) and on each manual
-refresh. A provider turned off in Settings is neither read nor contacted. Usage is merged with the
+Usage history comes from the local Claude/Codex logs. A provider turned off in Settings is neither
+read nor contacted. Usage is merged with the
 other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
 `git pull`s that repo every 30 minutes (can be turned off). It commits and pushes only when you
 press the sync button in the dashboard, which does exactly what `aitrack sync` does, including refusing
@@ -163,9 +159,8 @@ not start them. The behaviour differs from macOS and Windows in a few places:
   AppImage or the installed binary. After moving the AppImage, start it once from its new
   place so the entry follows.
 - **Credentials** — there is no Keychain to fall back on, so the files are the only source:
-  Claude Code's `.credentials.json` in `$CLAUDE_CONFIG_DIR`, `~/.config/claude` or `~/.claude`;
-  Codex's `auth.json` in `$CODEX_HOME`, `~/.codex` or `~/.config/codex`; and Cursor's
-  `state.vscdb` under `$XDG_CONFIG_HOME/Cursor` (default `~/.config/Cursor`).
+  Claude Code's `.credentials.json` in `$CLAUDE_CONFIG_DIR`, `~/.config/claude` or `~/.claude`, and
+  Codex's `auth.json` in `$CODEX_HOME`, `~/.codex` or `~/.config/codex`.
 - **Updates** — the AppImage replaces itself in place, so keep it in a folder you can write
   to. A `.deb` install updates by installing the new package and asks for your password
   through `pkexec`.

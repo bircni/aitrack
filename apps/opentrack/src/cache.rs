@@ -202,7 +202,6 @@ fn normalize_cached_state(clock: &Clock, raw: &Map<String, Value>) -> CachedStat
             .get("machines")
             .and_then(Value::as_array)
             .map(|machines| machines.iter().filter_map(read_machine_usage).collect()),
-        account: usage.get("account").filter(|a| a.is_object()).map(|a| usage_map(Some(a))),
         projects: read_projects(usage.get("projects")),
     });
     CachedState {
@@ -285,7 +284,6 @@ mod tests {
                 "usage": {
                     "providers": {},
                     "machines": [{ "name": "work", "timezone": "UTC", "lastUpdated": "", "current": false, "providers": {} }],
-                    "account": {},
                 },
                 "fired": { "a": "2026-06-01T12:00:00.000Z" },
                 "rateLimitedUntil": { "codex": 1_780_315_200_000_i64 },

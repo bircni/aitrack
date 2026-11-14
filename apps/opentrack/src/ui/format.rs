@@ -640,7 +640,6 @@ mod tests {
             providers,
             refreshing: false,
             machines: None,
-            account_usage: None,
             projects: None,
             usage_error: None,
             updated_at: None,
@@ -856,8 +855,8 @@ mod tests {
         app.usage_error = Some("x".into());
         assert_eq!(usage_availability(&app), Availability::Ready);
         assert_eq!(
-            empty_usage_guidance(&["Codex", "Cursor"]),
-            "Use Codex or Cursor, then refresh. To add your other machines, run `npx aitrack init`."
+            empty_usage_guidance(&["Claude Code", "Codex"]),
+            "Use Claude Code or Codex, then refresh. To add your other machines, run `npx aitrack init`."
         );
         assert_eq!(or_list(&["A", "B", "C"]), "A, B, or C");
     }

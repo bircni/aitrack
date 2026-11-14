@@ -164,9 +164,6 @@ fn merge_supplement(local: &Supplement, remote: &Supplement) -> Supplement {
     merged.codex.overrides = merge_overrides(&local.codex.overrides, &remote.codex.overrides);
     merged.codex.family_fallback =
         merge_rules(&local.codex.family_fallback, &remote.codex.family_fallback, |rule| rule.pattern.as_str());
-    merged.cursor.models = merge_maps(&local.cursor.models, &remote.cursor.models);
-    merged.cursor.fast_multipliers = merge_maps(&local.cursor.fast_multipliers, &remote.cursor.fast_multipliers);
-    merged.cursor.aliases = merge_rules(&local.cursor.aliases, &remote.cursor.aliases, |rule| rule.pattern.as_str());
     merged
 }
 

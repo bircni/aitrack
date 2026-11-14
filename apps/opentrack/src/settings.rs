@@ -233,12 +233,13 @@ mod tests {
             "theme": "neon",
             "display": "left",
             "providers": [
+                { "key": "codex", "enabled": false },
                 { "key": "cursor", "enabled": false },
                 { "key": "codex" },
-                { "key": "cursor" },
                 { "key": "bogus" },
                 null,
             ],
+            "trayProvider": "cursor",
             "globalShortcut": "  Alt+U ",
             "notifications": "yes",
             "trayStyle": "square",
@@ -257,10 +258,8 @@ mod tests {
         assert!(normalize_settings(&json!({ "alwaysOnTop": true })).keep_open);
         let providers: Vec<(&str, &str, bool)> =
             settings.providers.iter().map(|p| (p.key.as_str(), p.label.as_str(), p.enabled)).collect();
-        assert_eq!(
-            providers,
-            [("cursor", "Cursor", false), ("codex", "Codex", true), ("claude_code", "Claude Code", true)]
-        );
+        assert_eq!(providers, [("codex", "Codex", false), ("claude_code", "Claude Code", true)]);
+        assert_eq!(settings.tray_provider, "auto");
     }
 
     #[test]

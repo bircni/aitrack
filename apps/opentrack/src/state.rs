@@ -114,9 +114,6 @@ pub struct UsageSummary {
     pub projects: Option<ProjectUsages>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub machines: Option<Vec<MachineUsage>>,
-    /// Providers read live from the account (Cursor), which no machine's logs hold.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub account: Option<ProviderUsages>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -149,8 +146,6 @@ pub struct AppState {
     pub refreshing: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub machines: Option<Vec<MachineUsage>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub account_usage: Option<ProviderUsages>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub projects: Option<ProjectUsages>,
     #[serde(skip_serializing_if = "Option::is_none")]
