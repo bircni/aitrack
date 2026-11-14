@@ -8,7 +8,7 @@ use super::icons::Glyph;
 use super::theme::Palette;
 use super::widgets::{icon_button, link, strong, switch, text, IconButton};
 use super::{Action, Frame, Model, Screen, UpdateCheck, View};
-use crate::settings::Settings;
+use crate::settings::{Settings, ALERT_THRESHOLDS};
 
 fn group(ui: &mut Ui, palette: &Palette, title: &str, add: impl FnOnce(&mut Ui)) {
     EguiFrame::new().outer_margin(Margin { left: 12, right: 12, top: 0, bottom: 14 }).show(ui, |ui| {
@@ -288,6 +288,24 @@ fn general(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_
             settings.notifications,
             |s, v| s.notifications = v,
         );
+        if settings.notifications {
+            let options: Vec<(String, String)> =
+                ALERT_THRESHOLDS.iter().map(|t| (t.to_string(), format!("{t}% left"))).collect();
+            let options: Vec<(&str, &str)> = options.iter().map(|(v, l)| (v.as_str(), l.as_str())).collect();
+            let current = settings.alert_threshold.to_string();
+            select_line(ui, frame, settings, "Almost used up at", &current, &options, |s, v| {
+                s.alert_threshold = v.parse().unwrap_or(s.alert_threshold);
+            });
+            let hint = "When a weekly limit resets within a day with over half left";
+            switch_line(
+                ui,
+                frame,
+                settings,
+                &Note { label: "Unused limit alerts", hint: Some(hint), error: None },
+                settings.alert_unused,
+                |s, v| s.alert_unused = v,
+            );
+        }
         switch_line(
             ui,
             frame,

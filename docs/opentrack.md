@@ -9,7 +9,9 @@ reads — including other machines synced through your aitrack data repo.
 - **Limits** — Claude Code session / weekly / per-model weekly windows and extra usage; Codex
   session and weekly windows and credits; Cursor total, Auto and API usage and on-demand spend.
 - **Pacing** — whether each limit is on track to last until it resets, with alerts when one is
-  almost used up or on pace to run out. The tick on a meter is the even-pace marker: where usage
+  almost used up or on pace to run out. Settings picks how much left counts as almost used up
+  (5, 10, 20 or 30%; 10% by default) and can add an alert for a weekly limit that resets within
+  a day with over half of it left. The tick on a meter is the even-pace marker: where usage
   would be now if the limit were used evenly until it resets.
 - **Usage** — today, yesterday, the last 7 / 30 days and all-time per provider, a daily trend
   and a per-model breakdown. Numbers come from the same report builder as `aitrack usage`, so
