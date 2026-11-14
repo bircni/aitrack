@@ -2,17 +2,26 @@ use std::path::Path;
 
 use aitrack_core::js;
 use aitrack_core::providers::{provider_label, PROVIDERS};
+use aitrack_core::quota::QuotaSnapshot;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::alerts::AlertRules;
+use crate::state::ProviderState;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderSetting {
     pub key: String,
     /// Filled in from the provider registry; what is saved is ignored.
     pub label: String,
     pub enabled: bool,
+    /// Limit ids left out of the cards, the tray and alerts. Written only when set, like `pinned`,
+    /// so an untouched file stays as 4.x wrote it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden: Vec<String>,
+    /// Limit ids shown in the Pinned card, which the tray then follows.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pinned: Vec<String>,
 }
 
 #[expect(
@@ -60,7 +69,12 @@ impl Default for Settings {
             reset_display: "absolute".into(),
             providers: PROVIDERS
                 .iter()
-                .map(|p| ProviderSetting { key: p.key.into(), label: p.label.into(), enabled: true })
+                .map(|p| ProviderSetting {
+                    key: p.key.into(),
+                    label: p.label.into(),
+                    enabled: true,
+                    ..ProviderSetting::default()
+                })
                 .collect(),
             launch_at_login: false,
             global_shortcut: String::new(),
@@ -104,6 +118,60 @@ impl Settings {
         AlertRules { almost_out_left: f64::from(self.alert_threshold), unused: self.alert_unused }
     }
 
+    fn limits(&self, provider: &str) -> Option<&ProviderSetting> {
+        self.providers.iter().find(|p| p.key == provider)
+    }
+
+    pub fn is_hidden(&self, provider: &str, limit: &str) -> bool {
+        self.limits(provider).is_some_and(|p| p.hidden.iter().any(|id| id == limit))
+    }
+
+    pub fn is_pinned(&self, provider: &str, limit: &str) -> bool {
+        self.limits(provider).is_some_and(|p| p.pinned.iter().any(|id| id == limit))
+    }
+
+    /// Hiding a limit unpins it, and pinning one shows it.
+    pub fn set_limit(&mut self, provider: &str, limit: &str, hidden: bool, pinned: bool) {
+        let Some(entry) = self.providers.iter_mut().find(|p| p.key == provider) else { return };
+        for (list, on) in [(&mut entry.hidden, hidden), (&mut entry.pinned, pinned && !hidden)] {
+            list.retain(|id| id != limit);
+            if on {
+                list.push(limit.to_owned());
+            }
+        }
+    }
+
+    /// The limits alerts are raised for: all but the hidden ones.
+    pub fn shown_limits(&self, snapshot: &QuotaSnapshot) -> QuotaSnapshot {
+        let mut shown = snapshot.clone();
+        shown.windows.retain(|w| !self.is_hidden(&snapshot.provider, &w.id));
+        shown
+    }
+
+    /// What the tray follows: no hidden limits, and only the pinned ones while any of them is reported.
+    pub fn tray_providers(&self, providers: &[ProviderState]) -> Vec<ProviderState> {
+        let keep = |pinned_only: bool| -> Vec<ProviderState> {
+            providers
+                .iter()
+                .map(|p| {
+                    let mut p = p.clone();
+                    if let Some(quota) = &mut p.quota {
+                        quota.windows.retain(|w| {
+                            !self.is_hidden(&p.key, &w.id) && (!pinned_only || self.is_pinned(&p.key, &w.id))
+                        });
+                    }
+                    p
+                })
+                .collect()
+        };
+        let pinned = keep(true);
+        if pinned.iter().any(|p| p.quota.as_ref().is_some_and(|q| !q.windows.is_empty())) {
+            pinned
+        } else {
+            keep(false)
+        }
+    }
+
     pub fn enabled_providers(&self) -> Vec<String> {
         self.providers.iter().filter(|p| p.enabled).map(|p| p.key.clone()).collect()
     }
@@ -119,7 +187,7 @@ impl Settings {
                 fallback
             }
         };
-        let providers = complete_providers(self.providers.iter().map(|p| (p.key.as_str(), p.enabled)));
+        let providers = complete_providers(self.providers.clone());
         Self {
             theme: fix(self.theme, THEMES, d.theme),
             display: fix(self.display, DISPLAYS, d.display),
@@ -150,19 +218,32 @@ fn threshold(value: Option<u64>) -> u32 {
         .unwrap_or(DEFAULT_ALERT_THRESHOLD)
 }
 
+/// Each id once, without the ones in `except`.
+fn limit_ids(ids: Vec<String>, except: &[String]) -> Vec<String> {
+    let mut kept: Vec<String> = Vec::new();
+    for id in ids {
+        if !kept.contains(&id) && !except.contains(&id) {
+            kept.push(id);
+        }
+    }
+    kept
+}
+
 /// Known providers once each, in the order given, then any missing ones turned on.
-fn complete_providers<'a>(entries: impl IntoIterator<Item = (&'a str, bool)>) -> Vec<ProviderSetting> {
+fn complete_providers(entries: impl IntoIterator<Item = ProviderSetting>) -> Vec<ProviderSetting> {
     let mut providers: Vec<ProviderSetting> = Vec::new();
-    let mut add = |key: &str, enabled: bool| {
-        if PROVIDERS.iter().any(|p| p.key == key) && !providers.iter().any(|p| p.key == key) {
-            providers.push(ProviderSetting { key: key.into(), label: provider_label(key).into(), enabled });
+    let mut add = |entry: ProviderSetting| {
+        if PROVIDERS.iter().any(|p| p.key == entry.key) && !providers.iter().any(|p| p.key == entry.key) {
+            let hidden = limit_ids(entry.hidden, &[]);
+            let pinned = limit_ids(entry.pinned, &hidden);
+            providers.push(ProviderSetting { label: provider_label(&entry.key).into(), hidden, pinned, ..entry });
         }
     };
-    for (key, enabled) in entries {
-        add(key, enabled);
+    for entry in entries {
+        add(entry);
     }
     for descriptor in &PROVIDERS {
-        add(descriptor.key, true);
+        add(ProviderSetting { key: descriptor.key.into(), enabled: true, ..ProviderSetting::default() });
     }
     providers
 }
@@ -173,9 +254,18 @@ pub fn normalize_settings(input: &Value) -> Settings {
     let empty = serde_json::Map::new();
     let raw = input.as_object().unwrap_or(&empty);
     let field = |key: &str| raw.get(key);
+    let ids = |value: Option<&Value>| -> Vec<String> {
+        value.and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect()
+    };
     let entries = field("providers").and_then(Value::as_array).into_iter().flatten().filter_map(|entry| {
         let entry = entry.as_object()?;
-        Some((entry.get("key")?.as_str()?, boolean(entry.get("enabled"), true)))
+        Some(ProviderSetting {
+            key: entry.get("key")?.as_str()?.to_owned(),
+            label: String::new(),
+            enabled: boolean(entry.get("enabled"), true),
+            hidden: ids(entry.get("hidden")),
+            pinned: ids(entry.get("pinned")),
+        })
     });
     let providers = complete_providers(entries);
     let d = Settings::default();
@@ -234,7 +324,7 @@ mod tests {
             "display": "left",
             "providers": [
                 { "key": "cursor", "enabled": false },
-                { "key": "codex" },
+                { "key": "codex", "hidden": ["weekly", 3, "weekly"], "pinned": ["session", "weekly"] },
                 { "key": "cursor" },
                 { "key": "bogus" },
                 null,
@@ -255,6 +345,10 @@ mod tests {
         assert!(normalize_settings(&json!({ "windowMode": "floating" })).keep_open);
         assert!(!normalize_settings(&json!({ "windowMode": "docked" })).keep_open);
         assert!(normalize_settings(&json!({ "alwaysOnTop": true })).keep_open);
+        assert_eq!(
+            (settings.providers[1].hidden.as_slice(), settings.providers[1].pinned.as_slice()),
+            (&["weekly".to_owned()][..], &["session".to_owned()][..])
+        );
         let providers: Vec<(&str, &str, bool)> =
             settings.providers.iter().map(|p| (p.key.as_str(), p.label.as_str(), p.enabled)).collect();
         assert_eq!(
@@ -265,7 +359,12 @@ mod tests {
 
     #[test]
     fn normalizes_settings_the_app_built_as_it_does_the_file() {
-        let codex = ProviderSetting { key: "codex".into(), label: "?".into(), enabled: false };
+        let codex = ProviderSetting {
+            key: "codex".into(),
+            label: "?".into(),
+            pinned: vec!["weekly".into(), "weekly".into()],
+            ..ProviderSetting::default()
+        };
         let built = Settings {
             theme: "neon".into(),
             global_shortcut: " Ctrl+K ".into(),
@@ -294,5 +393,37 @@ mod tests {
         assert_eq!(load_settings(&path), saved);
         std::fs::write(&path, "{").unwrap();
         assert_eq!(load_settings(&path), Settings::default());
+    }
+
+    #[test]
+    fn hides_and_pins_limits_for_the_tray_and_alerts() {
+        use crate::alerts::fixtures::{session_window, snapshot};
+        use aitrack_core::quota::QuotaWindow;
+
+        let weekly = QuotaWindow { id: "weekly".into(), ..session_window(40.0, 2.5) };
+        let provider = ProviderState {
+            key: "claude_code".into(),
+            label: "Claude Code".into(),
+            quota: Some(snapshot(vec![session_window(90.0, 2.5), weekly])),
+            quota_error: None,
+            retry_at: None,
+            usage: None,
+            refreshing: false,
+        };
+        let ids = |providers: &[ProviderState]| -> Vec<String> {
+            providers.iter().flat_map(|p| p.quota.iter().flat_map(|q| &q.windows)).map(|w| w.id.clone()).collect()
+        };
+        let mut settings = Settings::default();
+        assert_eq!(ids(&settings.tray_providers(std::slice::from_ref(&provider))), ["session", "weekly"]);
+
+        settings.set_limit("claude_code", "weekly", false, true);
+        assert_eq!(ids(&settings.tray_providers(std::slice::from_ref(&provider))), ["weekly"]);
+        settings.set_limit("claude_code", "gone", false, true);
+        settings.set_limit("claude_code", "weekly", true, true);
+        assert!(settings.is_hidden("claude_code", "weekly") && !settings.is_pinned("claude_code", "weekly"));
+        assert_eq!(ids(&settings.tray_providers(std::slice::from_ref(&provider))), ["session"]);
+        let shown = settings.shown_limits(provider.quota.as_ref().unwrap());
+        assert_eq!(shown.windows.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(), ["session"]);
+        assert_eq!(settings.clone().normalized(), settings);
     }
 }

@@ -137,6 +137,8 @@ pub struct View {
     pub history_range: usize,
     pub history_bucket: Bucket,
     pub open_providers: HashSet<String>,
+    /// Providers whose hidden limits are shown for now.
+    pub hidden_shown: HashSet<String>,
     pub open_row: Option<String>,
     pub shortcut: Option<String>,
     pub scroll_to_top: bool,
@@ -154,6 +156,7 @@ impl Default for View {
             history_range: 30,
             history_bucket: Bucket::Day,
             open_providers: HashSet::new(),
+            hidden_shown: HashSet::new(),
             open_row: None,
             shortcut: None,
             scroll_to_top: false,

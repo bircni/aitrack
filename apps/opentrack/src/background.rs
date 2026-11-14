@@ -100,7 +100,8 @@ impl LiveDeps {
             window: &settings.tray_window,
             style: &settings.tray_style,
         };
-        let summary = summarize_tray(&self.core.clock, &state.providers, self.now(), choice);
+        let providers = settings.tray_providers(&state.providers);
+        let summary = summarize_tray(&self.core.clock, &providers, self.now(), choice);
         // A repeated state can still mean a new tray setting or a passed reset.
         let key = Some((summary.clone(), settings.tray_style.clone(), settings.tray_colored));
         {
