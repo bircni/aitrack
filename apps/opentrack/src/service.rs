@@ -338,7 +338,7 @@ impl<D: Deps> QuotaService<D> {
                     runtime.next_attempt_at = now + REFRESH_INTERVAL_MS;
                     cache.updated_at = Some(iso(now));
                     let alerts = if settings.notifications {
-                        self.alerts_for(key, &snapshot, settings.alert_rules(), cache, now)
+                        self.alerts_for(key, &settings.shown_limits(&snapshot), settings.alert_rules(), cache, now)
                     } else {
                         vec![]
                     };

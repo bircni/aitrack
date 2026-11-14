@@ -4,7 +4,7 @@ use aitrack_core::quota::pacing::{project_pace, PaceProjection, PaceSeverity};
 use aitrack_core::quota::{QuotaFormat, QuotaWindow};
 use eframe::egui::{
     self, Align, CornerRadius, FontId, Frame as EguiFrame, Layout, Margin, Pos2, Rect, Role, Sense, Shape, Stroke,
-    StrokeKind, Ui, Vec2, WidgetInfo,
+    StrokeKind, Ui, UiBuilder, Vec2, WidgetInfo,
 };
 
 use super::format::{
@@ -78,6 +78,7 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'
     tab_bar(ui, view, model, frame);
     match view.tab {
         Tab::Providers => {
+            pinned(ui, model, frame);
             for provider in &state.providers {
                 provider_section(ui, view, model, frame, provider);
             }
@@ -324,6 +325,30 @@ fn heading(ui: &mut Ui, frame: &Frame<'_>, provider: &ProviderState) {
     }
 }
 
+/// The pinned limits of every provider, named after it.
+fn pinned(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
+    let palette = frame.palette;
+    let settings = model.settings;
+    let limits: Vec<(&ProviderState, QuotaWindow)> = model
+        .state
+        .providers
+        .iter()
+        .flat_map(|p| p.quota.iter().flat_map(|q| &q.windows).map(move |w| (p, w)))
+        .filter(|(p, w)| settings.is_pinned(&p.key, &w.id))
+        .map(|(p, w)| (p, QuotaWindow { label: format!("{} · {}", p.label, w.label), ..w.clone() }))
+        .collect();
+    if limits.is_empty() {
+        return;
+    }
+    card(ui, &palette, |ui| {
+        ui.spacing_mut().item_spacing.y = 16.0;
+        ui.label(strong("Pinned", 13.0, palette.ink));
+        for (provider, window) in &limits {
+            limit_meter(ui, model, frame, &provider.key, window, provider.quota_error.is_some());
+        }
+    });
+}
+
 fn provider_section(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>, provider: &ProviderState) {
     let palette = frame.palette;
     let spend = provider.usage.as_ref().map(|usage| period_usage(usage, view.period));
@@ -387,7 +412,10 @@ fn provider_section(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut
             });
         }
         let stale = provider.quota_error.is_some();
-        for window in provider.quota.iter().flat_map(|q| &q.windows) {
+        let settings = model.settings;
+        let windows = || provider.quota.iter().flat_map(|q| &q.windows);
+        let is_hidden = |window: &&QuotaWindow| settings.is_hidden(&provider.key, &window.id);
+        for window in windows().filter(|w| !is_hidden(w) && !settings.is_pinned(&provider.key, &w.id)) {
             limit_meter(ui, model, frame, &provider.key, window, stale);
         }
         for value in provider.quota.iter().flat_map(|q| &q.values) {
@@ -400,6 +428,23 @@ fn provider_section(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut
         }
         if provider.quota.is_none() && provider.quota_error.is_none() {
             ui.label(text("Checking limits…", 12.0, palette.ink2));
+        }
+        let hidden = windows().filter(is_hidden).count();
+        if hidden > 0 {
+            let shown = view.hidden_shown.contains(&provider.key);
+            if shown {
+                for window in windows().filter(is_hidden) {
+                    limit_meter(ui, model, frame, &provider.key, window, stale);
+                }
+            }
+            let label = if shown { "Hide again".to_owned() } else { format!("{hidden} hidden") };
+            if link(ui, &palette, &label, true).clicked() {
+                if shown {
+                    view.hidden_shown.remove(&provider.key);
+                } else {
+                    view.hidden_shown.insert(provider.key.clone());
+                }
+            }
         }
         if let (true, Some(usage), Some(spend)) = (open, &provider.usage, spend) {
             details(ui, &palette, view.period, usage, spend);
@@ -476,69 +521,87 @@ pub fn limit_meter(
     let label = pace_label(&pace, model.now, model.clock.zone());
     let reset = format_reset(model.clock, window.resets_at.as_deref(), model.now, settings.reset_display == "relative");
     let value = format_limit_value(window, left);
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = 6.0;
-        ui.horizontal(|ui| {
-            ui.label(text(&window.label, 12.5, palette.ink));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let response = ui
-                    .add(egui::Label::new(strong(&value, 12.5, palette.ink)).sense(Sense::click()))
-                    .on_hover_text("Show used or left");
-                if response.clicked() {
-                    frame.patch(settings, |s| s.display = if left { "used".into() } else { "left".into() });
-                }
-            });
-        });
-        let fill = fill_percent(window, left);
-        #[expect(clippy::cast_possible_truncation, reason = "a percentage of at most 100, drawn in f32")]
-        let target = (fill / 100.0) as f32;
-        let id = ui.scope_id().with((provider, &window.id));
-        let shown = ui.ctx().animate_value_with_time(id, target, 0.22);
-        let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 5.0), Sense::hover());
-        ui.painter().rect_filled(rect, CornerRadius::same(3), palette.track);
-        let color = if past { palette.ink3 } else { palette.tone(tone, provider) };
-        let fill_rect = Rect::from_min_size(rect.min, Vec2::new(rect.width() * shown, rect.height()));
-        ui.painter().rect_filled(fill_rect, CornerRadius::same(3), color);
-        if let (Some(_), Some(even)) = (&label, pace.even_pace_percent) {
-            let at = if left { 100.0 - even } else { even }.clamp(0.0, 100.0);
-            #[expect(clippy::cast_possible_truncation, reason = "a percentage of at most 100, drawn in f32")]
-            let x = rect.left() + rect.width() * (at / 100.0) as f32;
-            ui.painter().vline(x, (rect.top() - 2.0)..=(rect.bottom() + 2.0), Stroke::new(1.5, palette.ink2));
-        }
-        let state = if past {
-            Some("reset passed".to_owned())
-        } else if stale {
-            Some("cached".into())
-        } else {
-            label.as_deref().map(str::to_lowercase)
-        };
-        response.widget_info(|| {
-            let reading = [Some(value.as_str()), state.as_deref()].into_iter().flatten().collect::<Vec<_>>().join(", ");
-            WidgetInfo::labeled(
-                Role::ProgressIndicator,
-                true,
-                format!("{} {}: {reading}", window.label, settings.display),
-            )
-        });
-        if reset.is_some() || label.is_some() {
+    // The scope senses clicks before its labels do, so theirs still reach them.
+    let meter =
+        ui.scope_builder(UiBuilder::new().id_salt(("limit", provider, &window.id)).sense(Sense::click()), |ui| {
+            ui.spacing_mut().item_spacing.y = 6.0;
             ui.horizontal(|ui| {
-                if let Some(reset) = &reset {
+                ui.label(text(&window.label, 12.5, palette.ink));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let response = ui
-                        .add(egui::Label::new(text(reset, 11.5, palette.ink2)).sense(Sense::click()))
-                        .on_hover_text("Show time or countdown");
+                        .add(egui::Label::new(strong(&value, 12.5, palette.ink)).sense(Sense::click()))
+                        .on_hover_text("Show used or left");
                     if response.clicked() {
-                        let relative = settings.reset_display == "relative";
-                        frame.patch(settings, |s| {
-                            s.reset_display = if relative { "absolute".into() } else { "relative".into() }
+                        frame.patch(settings, |s| s.display = if left { "used".into() } else { "left".into() });
+                    }
+                });
+            });
+            let fill = fill_percent(window, left);
+            #[expect(clippy::cast_possible_truncation, reason = "a percentage of at most 100, drawn in f32")]
+            let target = (fill / 100.0) as f32;
+            let id = ui.scope_id().with((provider, &window.id));
+            let shown = ui.ctx().animate_value_with_time(id, target, 0.22);
+            let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 5.0), Sense::hover());
+            ui.painter().rect_filled(rect, CornerRadius::same(3), palette.track);
+            let color = if past { palette.ink3 } else { palette.tone(tone, provider) };
+            let fill_rect = Rect::from_min_size(rect.min, Vec2::new(rect.width() * shown, rect.height()));
+            ui.painter().rect_filled(fill_rect, CornerRadius::same(3), color);
+            if let (Some(_), Some(even)) = (&label, pace.even_pace_percent) {
+                let at = if left { 100.0 - even } else { even }.clamp(0.0, 100.0);
+                #[expect(clippy::cast_possible_truncation, reason = "a percentage of at most 100, drawn in f32")]
+                let x = rect.left() + rect.width() * (at / 100.0) as f32;
+                ui.painter().vline(x, (rect.top() - 2.0)..=(rect.bottom() + 2.0), Stroke::new(1.5, palette.ink2));
+            }
+            let state = if past {
+                Some("reset passed".to_owned())
+            } else if stale {
+                Some("cached".into())
+            } else {
+                label.as_deref().map(str::to_lowercase)
+            };
+            response.widget_info(|| {
+                let reading =
+                    [Some(value.as_str()), state.as_deref()].into_iter().flatten().collect::<Vec<_>>().join(", ");
+                WidgetInfo::labeled(
+                    Role::ProgressIndicator,
+                    true,
+                    format!("{} {}: {reading}", window.label, settings.display),
+                )
+            });
+            if reset.is_some() || label.is_some() {
+                ui.horizontal(|ui| {
+                    if let Some(reset) = &reset {
+                        let response = ui
+                            .add(egui::Label::new(text(reset, 11.5, palette.ink2)).sense(Sense::click()))
+                            .on_hover_text("Show time or countdown");
+                        if response.clicked() {
+                            let relative = settings.reset_display == "relative";
+                            frame.patch(settings, |s| {
+                                s.reset_display = if relative { "absolute".into() } else { "relative".into() }
+                            });
+                        }
+                    }
+                    if let Some(label) = &label {
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.label(text(label, 11.5, palette.tone_text(tone)));
                         });
                     }
-                }
-                if let Some(label) = &label {
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(text(label, 11.5, palette.tone_text(tone)));
-                    });
-                }
-            });
+                });
+            }
+        });
+    let (hidden, pinned) = (settings.is_hidden(provider, &window.id), settings.is_pinned(provider, &window.id));
+    meter.response.context_menu(|ui| {
+        let mut set = |ui: &mut Ui, label: &str, hidden: bool, pinned: bool| {
+            if ui.button(label).clicked() {
+                frame.patch(settings, |s| s.set_limit(provider, &window.id, hidden, pinned));
+                ui.close();
+            }
+        };
+        if hidden {
+            set(ui, "Show limit", false, false);
+        } else {
+            set(ui, if pinned { "Unpin" } else { "Pin to top" }, false, !pinned);
+            set(ui, "Hide limit", true, false);
         }
     });
 }
@@ -562,10 +625,17 @@ pub fn compact(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
                 if let Some(error) = &provider.quota_error {
                     ui.label(text(problem_line(error, model.now, provider.retry_at).0, 12.0, palette.ink2));
                 }
-                let windows = provider.quota.as_ref().map(|q| q.windows.as_slice()).unwrap_or_default();
+                let settings = model.settings;
+                let windows: Vec<&QuotaWindow> = provider
+                    .quota
+                    .iter()
+                    .flat_map(|q| &q.windows)
+                    .filter(|w| !settings.is_hidden(&provider.key, &w.id))
+                    .collect();
                 let session = windows
                     .iter()
-                    .find(|w| w.id == "session")
+                    .find(|w| settings.is_pinned(&provider.key, &w.id))
+                    .or_else(|| windows.iter().find(|w| w.id == "session"))
                     .or_else(|| windows.iter().find(|w| w.id == "weekly"))
                     .or_else(|| windows.first());
                 match session {

@@ -13,6 +13,10 @@ reads — including other machines synced through your aitrack data repo.
   (5, 10, 20 or 30%; 10% by default) and can add an alert for a weekly limit that resets within
   a day with over half of it left. The tick on a meter is the even-pace marker: where usage
   would be now if the limit were used evenly until it resets.
+- **Pin and hide** — right-click a limit to pin or hide it. Pinned limits move into a Pinned card
+  above the providers, and the tray icon and the compact view follow them instead of the most used
+  limit. A hidden limit leaves its card, the tray and the alerts; the card's "hidden" link shows it
+  again so it can be brought back.
 - **Usage** — today, yesterday, the last 7 / 30 days and all-time per provider, a daily trend
   and a per-model breakdown. Numbers come from the same report builder as `aitrack usage`, so
   they match the CLI.
