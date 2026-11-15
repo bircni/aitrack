@@ -8,14 +8,13 @@ pub mod theme;
 mod views;
 mod widgets;
 
-use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use aitrack_core::time::Clock;
 use eframe::egui::{self, Align, Color32, CornerRadius, Layout, Mesh, Rect, ScrollArea, Sense, Stroke, Ui, Vec2};
 
-use self::format::{freshness_line, Bucket, History, Period};
+use self::format::{freshness_line, Period, UsageGrid};
 use self::icons::{Glyph, ProviderMarks};
 use self::theme::Palette;
 use self::widgets::{banner, icon_button, link, spin_angle, text, IconButton};
@@ -23,7 +22,7 @@ use crate::settings::Settings;
 use crate::state::AppState;
 use crate::system::SettingErrors;
 
-pub const WIDTH: f32 = 320.0;
+pub const WIDTH: f32 = 340.0;
 /// The height before the first layout measures the content.
 pub const INITIAL_HEIGHT: f32 = 560.0;
 const FOOTER_HEIGHT: f32 = 48.0;
@@ -36,10 +35,16 @@ pub enum Screen {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
-    Providers,
-    History,
-    Projects,
-    Machines,
+    Limits,
+    Usage,
+}
+
+/// What the Usage tab splits the period's spend by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum By {
+    Model,
+    Project,
+    Machine,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -134,15 +139,12 @@ pub struct View {
     pub screen: Screen,
     pub period: Period,
     pub tab: Tab,
-    pub history_range: usize,
-    pub history_bucket: Bucket,
-    pub open_providers: HashSet<String>,
+    pub by: By,
     pub open_row: Option<String>,
     pub shortcut: Option<String>,
     pub scroll_to_top: bool,
-    history: Memo<(usize, Bucket), History>,
+    grid: Memo<Period, UsageGrid>,
     machine_rows: Memo<Period, Vec<views::Row>>,
-    spark: Memo<(), Option<dashboard::Spark>>,
 }
 
 impl Default for View {
@@ -150,16 +152,13 @@ impl Default for View {
         Self {
             screen: Screen::Dashboard,
             period: Period::Today,
-            tab: Tab::Providers,
-            history_range: 30,
-            history_bucket: Bucket::Day,
-            open_providers: HashSet::new(),
+            tab: Tab::Limits,
+            by: By::Model,
             open_row: None,
             shortcut: None,
             scroll_to_top: false,
-            history: Memo::default(),
+            grid: Memo::default(),
             machine_rows: Memo::default(),
-            spark: Memo::default(),
         }
     }
 }
@@ -256,7 +255,7 @@ fn handle_keys(ui: &Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_
         }
     }
     if view.screen == Screen::Dashboard && !typing && (left || right) {
-        let tabs = dashboard::tabs(model.state);
+        let tabs = dashboard::TABS;
         let index = tabs.iter().position(|(tab, _)| *tab == view.tab).unwrap_or(0);
         let step = if right { 1 } else { tabs.len() - 1 };
         view.tab = tabs[(index + step) % tabs.len()].0;

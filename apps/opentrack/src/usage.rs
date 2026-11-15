@@ -26,8 +26,8 @@ use crate::state::{
     ProviderUsage, ProviderUsages, UsageSummary,
 };
 
-/// The History tab's longest range; the sparkline and strips show the last 30 of these.
-const TREND_DAYS: i64 = 90;
+/// The usage grid's 18 weeks; the machine strips show the last 30 of these days.
+const TREND_DAYS: i64 = 126;
 
 pub const GIT_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -302,7 +302,7 @@ mod tests {
         let data = loaded(vec![("codex", vec![("2026-06-15", partial), ("2026-06-14", day(10, 2, 1.0, "gpt-5"))])]);
         let daily = &summarize(&data, "UTC", "2026-06-15T12:00:00Z").providers["codex"].daily;
         assert_eq!(
-            daily[88..],
+            daily[124..],
             [
                 DailyUsage { date: "2026-06-14".into(), cost_usd: 1.0, has_unpriced_tokens: false },
                 DailyUsage { date: "2026-06-15".into(), cost_usd: 1.0, has_unpriced_tokens: true },
@@ -345,7 +345,7 @@ mod tests {
         );
         let tokens = [&claude.yesterday, &claude.last7_days, &claude.last30_days, &claude.all_time].map(|p| p.tokens);
         assert_eq!(tokens, [15.0, 165.0, 165.0, 195.0]);
-        assert_eq!(claude.daily.len(), 90);
+        assert_eq!(claude.daily.len(), 126);
         assert_eq!(claude.daily.last().unwrap().date, "2026-06-15");
         assert_eq!(summary.providers["codex"].today, PeriodUsage::default());
         assert!(!summary.providers.contains_key("cursor"));
@@ -428,7 +428,7 @@ mod tests {
         assert!(!desk.providers.contains_key("codex"));
         assert_eq!((laptop.name.as_str(), laptop.current), ("laptop", true));
         assert_eq!(laptop.providers["codex"].yesterday.tokens, 20.0);
-        assert_eq!(laptop.providers["codex"].daily[88].cost_usd, 0.2);
+        assert_eq!(laptop.providers["codex"].daily[124].cost_usd, 0.2);
         let account = summary.account.unwrap();
         assert_eq!(account.keys().collect::<Vec<_>>(), ["cursor"]);
         assert_eq!((account["cursor"].today.tokens, account["cursor"].today.cost_usd), (10.0, 0.5));
