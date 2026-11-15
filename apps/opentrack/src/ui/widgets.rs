@@ -207,12 +207,6 @@ pub fn stacked_bar(ui: &mut Ui, palette: &Palette, parts: &[(f32, Color32)], hei
     }
 }
 
-/// A rule across the section, with the room below it a new block starts after.
-pub fn divider(ui: &mut Ui, palette: &Palette) {
-    ui.painter().hline(ui.max_rect().x_range(), ui.cursor().top(), Stroke::new(1.0, palette.rule));
-    ui.add_space(12.0);
-}
-
 /// The animation angle `time * rate`, wrapped to one turn in f64 so long uptimes stay smooth in f32.
 pub fn phase(ui: &Ui, rate: f64) -> f32 {
     let turn = (ui.input(|i| i.time) * rate).rem_euclid(std::f64::consts::TAU);

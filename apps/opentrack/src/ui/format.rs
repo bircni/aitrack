@@ -6,13 +6,13 @@ use aitrack_core::day::Day;
 use aitrack_core::display::format::{fmt, fmt_usd_cost, group_thousands};
 pub use aitrack_core::display::heatmap::intensity::intensity_level;
 use aitrack_core::display::heatmap::stats::MONTHS;
-use aitrack_core::quota::pacing::{js_round, PaceProjection, PaceSeverity};
-use aitrack_core::quota::{QuotaError, QuotaErrorKind, QuotaFormat, QuotaWindow};
+use aitrack_core::quota::pacing::{js_round, project_pace, PaceProjection, PaceSeverity};
+use aitrack_core::quota::{QuotaError, QuotaErrorKind, QuotaFormat, QuotaWindow, WEEK_SECONDS};
 use aitrack_core::time::{from_js_millis, Clock};
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 
-use crate::pace::{format_when, parse_ms};
+use crate::pace::{format_when, has_reset, meter_tone, parse_ms, Tone};
 use crate::state::{
     AppState, DailyUsage, MachineUsage, ModelUsage, PeriodUsage, ProjectProviderEntry, ProjectUsageEntry,
     ProjectUsages, ProviderState, ProviderUsage,
@@ -373,15 +373,6 @@ pub fn build_history(providers: &[ProviderState], range: usize, bucket: Bucket) 
     }
 }
 
-/// "$115" and ".70", so the cents can be set quieter.
-pub fn split_amount(value: f64) -> (String, String) {
-    let text = format_cost(value);
-    match text.rsplit_once('.') {
-        Some((whole, cents)) if !text.starts_with('<') => (whole.to_owned(), format!(".{cents}")),
-        _ => (text, String::new()),
-    }
-}
-
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -431,6 +422,74 @@ pub fn pace_label(pace: &PaceProjection, now: f64, zone: &TimeZone) -> Option<St
         ),
         PaceSeverity::Spent => Some("Limit reached".into()),
     }
+}
+
+/// The limits a provider's card leads with; the others are listed small beneath them.
+pub fn is_primary_limit(window: &QuotaWindow) -> bool {
+    matches!(window.id.as_str(), "session" | "weekly")
+}
+
+/// A week-long limit other than the weekly one covers part of it, which its bare name does not say.
+pub fn limit_label(window: &QuotaWindow) -> String {
+    if window.id != "weekly" && (window.period_seconds - WEEK_SECONDS).abs() < 1.0 {
+        format!("Weekly · {}", window.label)
+    } else {
+        window.label.clone()
+    }
+}
+
+fn lower_first(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| first.to_lowercase().chain(chars).collect())
+}
+
+/// Whether any limit needs attention, in one line.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LimitStatus {
+    pub tone: Tone,
+    pub title: String,
+    pub detail: Option<String>,
+}
+
+/// The most urgent limit, or the next reset when none is. Cached limits and ones whose reset has
+/// passed say nothing about now and are left out; `None` when that leaves nothing.
+pub fn limit_status(clock: &Clock, providers: &[ProviderState], now: f64, relative: bool) -> Option<LimitStatus> {
+    let live = providers.iter().filter(|provider| provider.quota_error.is_none()).flat_map(|provider| {
+        let windows = provider.quota.iter().flat_map(|quota| &quota.windows);
+        windows.filter(|window| !has_reset(clock, window, now)).map(move |window| (provider, window))
+    });
+    let mut seen = false;
+    let mut worst: Option<(Tone, f64, &ProviderState, &QuotaWindow, PaceProjection)> = None;
+    let mut next: Option<(f64, &ProviderState, &QuotaWindow)> = None;
+    for (provider, window) in live {
+        seen = true;
+        let pace = project_pace(window, now);
+        let urgency = (meter_tone(window, &pace), window.used_percent);
+        if urgency.0 > Tone::Calm && worst.as_ref().is_none_or(|(tone, used, ..)| urgency > (*tone, *used)) {
+            worst = Some((urgency.0, urgency.1, provider, window, pace));
+        }
+        let at = window.resets_at.as_deref().map_or(f64::NAN, |at| parse_ms(clock, at));
+        if at.is_finite() && next.is_none_or(|(soonest, ..)| at < soonest) {
+            next = Some((at, provider, window));
+        }
+    }
+    let name = |provider: &ProviderState, window: &QuotaWindow| {
+        format!("{} {}", provider.label, lower_first(&limit_label(window)))
+    };
+    let reset = |window: &QuotaWindow| format_reset(clock, window.resets_at.as_deref(), now, relative);
+    if let Some((tone, _, provider, window, pace)) = worst {
+        let reading = pace_label(&pace, now, clock.zone())
+            .unwrap_or_else(|| format!("{} used", format_percent(fill_percent(window, false) / 100.0)));
+        let title = format!("{}: {}", name(provider, window), lower_first(&reading));
+        return Some(LimitStatus { tone, title, detail: reset(window) });
+    }
+    seen.then(|| LimitStatus {
+        tone: Tone::Calm,
+        title: "All limits on track".into(),
+        detail: next.and_then(|(_, provider, window)| {
+            reset(window).map(|reset| format!("Next: {} {}", name(provider, window), lower_first(&reset)))
+        }),
+    })
 }
 
 pub fn fill_percent(window: &QuotaWindow, left: bool) -> f64 {
@@ -523,28 +582,6 @@ pub fn refresh_outcome(state: &AppState) -> String {
     } else {
         format!("Refresh finished, {}", problems.join(", "))
     }
-}
-
-/// Points for a small spend curve in a `width` × `height` box.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
-)]
-pub fn sparkline(values: &[f64], width: f64, height: f64, pad: f64) -> Option<Vec<(f64, f64)>> {
-    let max = values.iter().copied().fold(0.0, f64::max);
-    if values.len() < 2 || max <= 0.0 {
-        return None;
-    }
-    let steps = (values.len() - 1) as f64;
-    Some(
-        values
-            .iter()
-            .enumerate()
-            .map(|(i, v)| {
-                (pad + (i as f64 * (width - pad * 2.0)) / steps, height - pad - (v / max) * (height - pad * 2.0))
-            })
-            .collect(),
-    )
 }
 
 /// How current a machine's numbers are: this one reads its logs live, others are as of their last sync.
@@ -722,18 +759,8 @@ mod tests {
     }
 
     #[test]
-    fn splits_dollars_from_cents_and_shows_sub_cent_as_not_free() {
-        assert_eq!(split_amount(115.7), ("$115".into(), ".70".into()));
-        assert_eq!(split_amount(4246.62), ("$4,246".into(), ".62".into()));
-        assert_eq!(split_amount(0.004), ("<$0.01".into(), String::new()));
+    fn shows_sub_cent_as_not_free() {
         assert_eq!(format_cost(0.004), "<$0.01");
-    }
-
-    #[test]
-    fn draws_a_sparkline_or_nothing_without_data() {
-        assert_eq!(sparkline(&[0.0, 5.0, 10.0], 112.0, 36.0, 3.0), Some(vec![(3.0, 33.0), (56.0, 18.0), (109.0, 3.0)]));
-        assert_eq!(sparkline(&[0.0, 0.0], 112.0, 36.0, 3.0), None);
-        assert_eq!(sparkline(&[4.0], 112.0, 36.0, 3.0), None);
     }
 
     #[test]
@@ -773,6 +800,52 @@ mod tests {
             "Runs out 1:00\u{202f}PM"
         );
         assert_eq!(pace_label(&pace(PaceSeverity::Spent, None), now, &zone).unwrap(), "Limit reached");
+    }
+
+    #[test]
+    fn names_the_most_urgent_limit_or_the_next_reset() {
+        let now = ms("2026-06-01T12:00:00Z");
+        let limits = |label: &str, windows: Vec<QuotaWindow>| ProviderState {
+            quota: Some(aitrack_core::quota::QuotaSnapshot {
+                provider: label.into(),
+                plan: None,
+                windows,
+                values: Vec::new(),
+                fetched_at: "2026-06-01T12:00:00Z".into(),
+            }),
+            ..provider(label, label, None)
+        };
+        let session = QuotaWindow {
+            id: "session".into(),
+            label: "Session".into(),
+            resets_at: Some("2026-06-01T14:00:00Z".into()),
+            ..window(30.0)
+        };
+        let sonnet = QuotaWindow {
+            id: "model:sonnet".into(),
+            label: "Sonnet".into(),
+            period_seconds: WEEK_SECONDS,
+            ..window(92.0)
+        };
+        assert_eq!(limit_label(&sonnet), "Weekly · Sonnet");
+        assert!(is_primary_limit(&session) && !is_primary_limit(&sonnet));
+        assert_eq!(limit_status(&clock(), &[provider("codex", "Codex", None)], now, true), None);
+
+        let calm = limits("Claude Code", vec![session]);
+        let status = limit_status(&clock(), std::slice::from_ref(&calm), now, true).unwrap();
+        assert_eq!((status.tone, status.title.as_str()), (Tone::Calm, "All limits on track"));
+        assert_eq!(status.detail.unwrap(), "Next: Claude Code session resets in 2h");
+
+        let full = limits("Codex", vec![window(85.0), sonnet]);
+        let status = limit_status(&clock(), &[calm.clone(), full.clone()], now, true).unwrap();
+        assert_eq!((status.tone, status.title.as_str()), (Tone::Crit, "Codex weekly · Sonnet: 92% used"));
+        assert_eq!(status.detail, None);
+
+        // A cached limit, or one whose reset has passed, says nothing about now.
+        let failed = ProviderState { quota_error: Some(error(QuotaErrorKind::Network, "down")), ..full };
+        let later = ms("2026-06-01T15:00:00Z");
+        assert_eq!(limit_status(&clock(), std::slice::from_ref(&failed), now, true), None);
+        assert_eq!(limit_status(&clock(), &[calm, failed], later, true), None);
     }
 
     #[test]

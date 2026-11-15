@@ -1,23 +1,22 @@
-//! The cost summary, the usage tabs, the provider cards with their limit meters, and the compact view.
+//! The tab bar, the Limits tab with its status line and provider cards, and the compact view.
 
 use aitrack_core::quota::pacing::{project_pace, PaceProjection, PaceSeverity};
 use aitrack_core::quota::{QuotaFormat, QuotaWindow};
 use eframe::egui::{
-    self, Align, CornerRadius, FontId, Frame as EguiFrame, Layout, Margin, Pos2, Rect, Role, Sense, Shape, Stroke,
-    StrokeKind, Ui, Vec2, WidgetInfo,
+    self, Align, Color32, CornerRadius, FontId, Frame as EguiFrame, Layout, Margin, Pos2, Rect, Response, Role, Sense,
+    Shape, Stroke, StrokeKind, Ui, Vec2, WidgetInfo,
 };
 
 use super::format::{
-    combined_daily, empty_usage_guidance, fill_percent, format_cost, format_limit_value, format_number, format_reset,
-    format_tokens, format_updated, is_priced, pace_label, period_usage, period_value, problem_line, sparkline,
-    spend_label, spend_reading, split_amount, total_spend, usage_availability, usage_note, Availability, Period,
-    ProblemAction, Spend,
+    fill_percent, format_cost, format_limit_value, format_number, format_reset, format_updated, is_primary_limit,
+    limit_label, limit_status, pace_label, problem_line, usage_availability, usage_note, Availability, ProblemAction,
 };
-use super::widgets::{banner, card, divider, empty, link, paint_focus, segmented, spin_angle, spread, strong, text};
+use super::theme::Palette;
+use super::widgets::{card, empty, link, paint_focus, spin_angle, spread, strong, text};
 use super::{retry_banner, views, Action, Frame, Model, Tab, View};
 use crate::pace::{has_reset, meter_tone, Tone};
 use crate::settings::Settings;
-use crate::state::{AppState, ProviderState};
+use crate::state::ProviderState;
 
 const NO_PACE: PaceProjection = PaceProjection {
     severity: PaceSeverity::Level,
@@ -26,88 +25,48 @@ const NO_PACE: PaceProjection = PaceProjection {
     run_out_at: None,
 };
 
-pub fn tabs(state: &AppState) -> Vec<(Tab, String)> {
-    let mut tabs = vec![
-        (Tab::Providers, "Providers".to_owned()),
-        (Tab::History, "History".to_owned()),
-        (Tab::Projects, "Projects".to_owned()),
-    ];
-    let machines = state.machines.as_ref().map_or(0, Vec::len);
-    if machines > 0 {
-        tabs.push((Tab::Machines, format!("Machines {machines}")));
-    }
-    tabs
-}
+pub const TABS: [(Tab, &str); 2] = [(Tab::Limits, "Limits"), (Tab::Usage, "Usage")];
 
 pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
     let palette = frame.palette;
     let state = model.state;
     let availability = usage_availability(state);
-    let machines = state.machines.as_ref().map_or(0, Vec::len);
-    summary(ui, view, model, frame, availability, machines);
-
-    if availability == Availability::Empty {
-        let labels: Vec<&str> = state.providers.iter().map(|p| p.label.as_str()).collect();
-        banner(ui, &palette, |ui| {
-            ui.label(text(empty_usage_guidance(&labels), 12.0, palette.ink2));
-        });
+    ui.add_space(12.0);
+    if availability == Availability::Off {
+        empty(ui, &palette, &format!("{}. Choose some in Settings.", usage_note(Availability::Off)));
+        return;
     }
+    tab_bar(ui, view, &palette);
     if let Some(error) = &state.pull_error {
-        retry_banner(ui, frame, error, || Action::Refresh);
-    }
-    if let Some(error) = &state.usage_error {
-        if let Some(at) = &state.usage_updated_at {
-            banner(ui, &palette, |ui| {
-                let age = format_updated(model.clock, Some(at), model.now);
-                ui.label(text(format!("Cached usage: {age}"), 12.0, palette.ink2));
-            });
-        }
         retry_banner(ui, frame, error, || Action::Refresh);
     }
     if let Some(result) = state.sync_result.as_ref().filter(|r| !r.ok) {
         retry_banner(ui, frame, format!("Sync failed: {}", result.message), || Action::Sync);
     }
-    if availability == Availability::Off {
-        empty(ui, &palette, &format!("{}. Choose some in Settings.", usage_note(Availability::Off)));
-        return;
-    }
-
-    if view.tab == Tab::Machines && machines == 0 {
-        view.tab = Tab::Providers;
-    }
-    tab_bar(ui, view, model, frame);
     match view.tab {
-        Tab::Providers => {
+        Tab::Limits => {
+            status(ui, model, &palette);
             for provider in &state.providers {
-                provider_section(ui, view, model, frame, provider);
+                provider_card(ui, model, frame, provider);
             }
         }
-        Tab::Machines => views::machines(ui, view, model, frame),
-        _ if availability != Availability::Ready => empty(ui, &palette, &format!("{}.", usage_note(availability))),
-        Tab::History => views::history(ui, view, model, frame),
-        Tab::Projects => views::projects(ui, view, model, frame),
+        Tab::Usage => views::usage(ui, view, model, frame, availability),
     }
 }
 
-fn tab_bar(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) {
-    let palette = frame.palette;
-    let tabs = tabs(model.state);
+fn tab_bar(ui: &mut Ui, view: &mut View, palette: &Palette) {
     EguiFrame::new()
         .fill(palette.raised)
         .corner_radius(CornerRadius::same(9))
         .inner_margin(Margin::same(2))
-        .outer_margin(Margin { left: 12, right: 12, top: 0, bottom: 10 })
+        .outer_margin(Margin { left: 12, right: 12, top: 0, bottom: 12 })
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
-            )]
-            let width = (ui.available_width() - 2.0 * (tabs.len() - 1) as f32) / tabs.len() as f32;
+            let width = (ui.available_width() - 2.0) / 2.0;
             ui.horizontal(|ui| {
-                for (tab, label) in &tabs {
-                    let selected = view.tab == *tab;
-                    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 24.0), Sense::click());
+                for (tab, label) in TABS {
+                    let selected = view.tab == tab;
+                    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 26.0), Sense::click());
                     if selected {
                         ui.painter().rect(
                             rect,
@@ -119,193 +78,44 @@ fn tab_bar(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) {
                     }
                     let color = if selected { palette.ink } else { palette.ink2 };
                     let galley =
-                        ui.painter().layout_no_wrap(label.clone(), FontId::new(12.0, super::theme::bold()), color);
+                        ui.painter().layout_no_wrap(label.to_owned(), FontId::new(13.0, super::theme::bold()), color);
                     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, color);
                     response.widget_info(|| WidgetInfo::selected(Role::Button, true, selected, label));
-                    paint_focus(ui, &palette, &response, rect, 7);
+                    paint_focus(ui, palette, &response, rect, 7);
                     if response.clicked() {
-                        view.tab = *tab;
+                        view.tab = tab;
                     }
                 }
             });
         });
 }
 
-fn summary(
-    ui: &mut Ui,
-    view: &mut View,
-    model: &Model<'_>,
-    frame: &Frame<'_>,
-    availability: Availability,
-    machines: usize,
-) {
-    let palette = frame.palette;
-    let providers = &model.state.providers;
-    let spend = total_spend(providers.iter().map(|p| p.usage.as_ref()), view.period);
-    EguiFrame::new().inner_margin(Margin { left: 16, right: 16, top: 16, bottom: 14 }).show(ui, |ui| {
+const fn tone_dot(palette: &Palette, tone: Tone) -> Color32 {
+    match tone {
+        Tone::Neutral | Tone::Calm => palette.ok,
+        Tone::Warn => palette.warn,
+        Tone::Crit => palette.crit,
+    }
+}
+
+/// The one line that says whether any limit needs attention, so the popup can be closed after it.
+fn status(ui: &mut Ui, model: &Model<'_>, palette: &Palette) {
+    let relative = model.settings.reset_display == "relative";
+    let Some(status) = limit_status(model.clock, &model.state.providers, model.now, relative) else { return };
+    EguiFrame::new().inner_margin(Margin { left: 16, right: 16, top: 2, bottom: 14 }).show(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.spacing_mut().item_spacing.y = 12.0;
-        ui.horizontal(|ui| {
-            ui.label(strong("Est. cost", 12.0, palette.ink2));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let options: Vec<(Period, &str)> = Period::ALL.iter().map(|p| (*p, p.label())).collect();
-                segmented(ui, &palette, &mut view.period, &options);
-            });
-        });
-        ui.horizontal(|ui| {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
+            let (dot, _) = ui.allocate_exact_size(Vec2::new(8.0, 18.0), Sense::hover());
+            ui.painter().circle_filled(dot.center(), 4.0, tone_dot(palette, status.tone));
             ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 6.0;
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    if availability == Availability::Ready && is_priced(&spend) {
-                        let (whole, cents) = split_amount(spend.cost_usd);
-                        ui.label(strong(whole, 30.0, palette.ink));
-                        ui.label(text(cents, 30.0, palette.ink3));
-                    } else {
-                        ui.label(strong("—", 30.0, palette.ink));
-                    }
-                });
-                if availability == Availability::Ready && spend.has_cost && spend.has_unpriced_tokens {
-                    ui.label(text("Partial estimate", 12.0, palette.ink2));
+                ui.spacing_mut().item_spacing.y = 3.0;
+                ui.add(egui::Label::new(strong(&status.title, 14.0, palette.ink)).wrap());
+                if let Some(detail) = &status.detail {
+                    ui.add(egui::Label::new(text(detail, 11.0, palette.ink2)).wrap());
                 }
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    let reading = if availability == Availability::Ready {
-                        format!("{} tokens", format_tokens(spend.tokens))
-                    } else {
-                        usage_note(availability).to_owned()
-                    };
-                    ui.label(text(reading, 12.0, palette.ink2));
-                    if machines > 1 {
-                        ui.label(text("\u{a0}· ", 12.0, palette.ink2));
-                        let response = ui.add(
-                            egui::Label::new(text(format!("{machines} machines"), 12.0, palette.ink2))
-                                .sense(Sense::click()),
-                        );
-                        if response.clicked() {
-                            view.tab = Tab::Machines;
-                        }
-                    }
-                });
             });
-            if view.period != Period::All {
-                let spark = view.spark.get(model.state, (), || Spark::new(model.state));
-                if let Some(spark) = spark.as_ref() {
-                    ui.with_layout(Layout::right_to_left(Align::Max), |ui| spark.show(ui, frame));
-                }
-            }
         });
-        if !providers.is_empty() {
-            provider_chips(ui, view.period, providers, frame);
-        }
-    });
-}
-
-/// The summary's 30-day cost curve, worked out once per state.
-pub struct Spark {
-    points: Vec<(f64, f64)>,
-    peak: f64,
-}
-
-impl Spark {
-    fn new(state: &AppState) -> Option<Self> {
-        let daily = combined_daily(state.providers.iter().map(|p| p.usage.as_ref()), 30);
-        let values: Vec<f64> = daily.iter().map(|d| d.cost_usd).collect();
-        let points = sparkline(&values, 112.0, 36.0, 3.0)?;
-        Some(Self { points, peak: values.iter().copied().fold(0.0, f64::max) })
-    }
-
-    fn show(&self, ui: &mut Ui, frame: &Frame<'_>) {
-        let palette = frame.palette;
-        let points = &self.points;
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 2.0;
-            let (rect, response) = ui.allocate_exact_size(Vec2::new(112.0, 36.0), Sense::hover());
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "sparkline points lie inside the chart's small pixel box"
-            )]
-            let at = |(x, y): (f64, f64)| Pos2::new(rect.left() + x as f32, rect.top() + y as f32);
-            let line: Vec<Pos2> = points.iter().copied().map(at).collect();
-            let baseline = rect.top() + 33.0;
-            for pair in line.windows(2) {
-                let quad = vec![pair[0], pair[1], Pos2::new(pair[1].x, baseline), Pos2::new(pair[0].x, baseline)];
-                ui.painter().add(Shape::convex_polygon(quad, palette.curve_fill, Stroke::NONE));
-            }
-            let end = line.last().copied();
-            ui.painter().add(Shape::line(line, Stroke::new(1.4, palette.curve)));
-            if let Some(end) = end {
-                ui.painter().circle(end, 2.6, palette.surface, Stroke::new(1.4, palette.curve));
-            }
-            response.widget_info(|| {
-                let label = format!("Estimated cost per day, last 30 days, peak {}", format_cost(self.peak));
-                WidgetInfo::labeled(Role::Image, true, label)
-            });
-            ui.with_layout(Layout::right_to_left(Align::Min), |ui| ui.label(text("30 days", 10.5, palette.ink3)));
-        });
-    }
-}
-
-/// The width each of `count` chips gets in a row with 6 pt gaps.
-pub fn chip_width(ui: &Ui, count: usize) -> f32 {
-    let count = count.max(1);
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
-    )]
-    let width = (ui.available_width() - 6.0 * (count - 1) as f32) / count as f32;
-    width
-}
-
-/// A small card naming a provider over a figure; `swatch` adds its chart colour.
-pub fn chip(
-    ui: &mut Ui,
-    frame: &Frame<'_>,
-    width: f32,
-    (key, label): (&str, &str),
-    figure: String,
-    swatch: bool,
-) -> egui::Response {
-    let palette = frame.palette;
-    EguiFrame::new()
-        .fill(palette.card)
-        .stroke(Stroke::new(1.0, palette.edge))
-        .corner_radius(CornerRadius::same(9))
-        .inner_margin(Margin::symmetric(9, 8))
-        .show(ui, |ui| {
-            ui.set_width(width - 20.0);
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 5.0;
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 5.0;
-                    if swatch {
-                        let (rect, _) = ui.allocate_exact_size(Vec2::splat(7.0), Sense::hover());
-                        ui.painter().rect_filled(rect, CornerRadius::same(2), palette.provider(key));
-                    }
-                    mark(ui, frame, key, 12.0);
-                    ui.add(egui::Label::new(text(label, 10.0, palette.ink2)).truncate());
-                });
-                ui.add(egui::Label::new(strong(figure, 12.0, palette.ink)).wrap());
-            });
-        })
-        .response
-}
-
-fn provider_chips(ui: &mut Ui, period: Period, providers: &[ProviderState], frame: &Frame<'_>) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let width = chip_width(ui, providers.len());
-        for provider in providers {
-            let value = period_value(provider.usage.as_ref(), period);
-            let cost = if provider.usage.is_some() { spend_label(&value) } else { "—".into() };
-            chip(ui, frame, width, (&provider.key, &provider.label), cost, false).on_hover_text(
-                if provider.usage.is_some() {
-                    format!("{}: {} tokens", provider.label, format_tokens(value.tokens))
-                } else {
-                    format!("{}: usage unavailable", provider.label)
-                },
-            );
-        }
     });
 }
 
@@ -315,52 +125,26 @@ pub fn mark(ui: &mut Ui, frame: &Frame<'_>, key: &str, size: f32) {
     frame.marks.paint(ui.painter(), rect, key, color);
 }
 
-fn heading(ui: &mut Ui, frame: &Frame<'_>, provider: &ProviderState) {
+fn provider_card(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>, provider: &ProviderState) {
     let palette = frame.palette;
-    mark(ui, frame, &provider.key, 18.0);
-    ui.label(strong(&provider.label, 13.0, palette.ink));
-    if let Some(plan) = provider.quota.as_ref().and_then(|q| q.plan.as_deref()) {
-        ui.label(text(plan, 10.5, palette.ink2));
-    }
-}
-
-fn provider_section(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>, provider: &ProviderState) {
-    let palette = frame.palette;
-    let spend = provider.usage.as_ref().map(|usage| period_usage(usage, view.period));
-    let open = view.open_providers.contains(&provider.key) && spend.is_some();
     card(ui, &palette, |ui| {
-        ui.spacing_mut().item_spacing.y = 16.0;
-        let head = ui.horizontal(|ui| {
-            ui.set_min_height(28.0);
-            ui.spacing_mut().item_spacing.x = 9.0;
-            heading(ui, frame, provider);
+        ui.spacing_mut().item_spacing.y = 14.0;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            mark(ui, frame, &provider.key, 16.0);
+            ui.label(strong(&provider.label, 13.0, palette.ink));
             if provider.refreshing {
                 busy_dot(ui, &palette);
             }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if spend.is_some() {
-                    views::chevron(ui, &palette, &provider.key, open);
-                }
-                let cost = spend.map_or_else(|| "—".into(), |spend| spend_label(&Spend::from(spend)));
-                ui.label(text(cost, 12.0, palette.ink2));
-            });
-        });
-        let response = ui.interact(head.response.rect, ui.scope_id().with(("head", &provider.key)), Sense::click());
-        if spend.is_some() {
-            response.widget_info(|| WidgetInfo::selected(Role::Button, true, open, &provider.label));
-            if response.clicked() {
-                if open {
-                    view.open_providers.remove(&provider.key);
-                } else {
-                    view.open_providers.insert(provider.key.clone());
-                }
+            if let Some(plan) = provider.quota.as_ref().and_then(|q| q.plan.as_deref()) {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(text(plan, 11.0, palette.ink2)));
             }
-        }
+        });
 
         if let (Some(_), Some(quota)) = (&provider.quota_error, &provider.quota) {
             ui.label(text(
                 format!("Cached limits: {}", format_updated(model.clock, Some(&quota.fetched_at), model.now)),
-                12.0,
+                11.0,
                 palette.ink2,
             ));
         }
@@ -368,7 +152,7 @@ fn provider_section(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut
             let (line, action) = problem_line(error, model.now, provider.retry_at);
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
-                let label = ui.label(text(&line, 12.0, palette.ink2));
+                let label = ui.label(text(&line, 11.0, palette.ink2));
                 if line != error.message {
                     label.on_hover_text(&error.message);
                 }
@@ -387,65 +171,38 @@ fn provider_section(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut
             });
         }
         let stale = provider.quota_error.is_some();
-        for window in provider.quota.iter().flat_map(|q| &q.windows) {
+        let windows = provider.quota.as_ref().map(|q| q.windows.as_slice()).unwrap_or_default();
+        for window in windows.iter().filter(|w| is_primary_limit(w)) {
             limit_meter(ui, model, frame, &provider.key, window, stale);
         }
-        for value in provider.quota.iter().flat_map(|q| &q.values) {
-            let shown = if value.format == QuotaFormat::Dollars {
-                format_cost(value.value)
-            } else {
-                format_number(value.value)
-            };
-            spread(ui, text(&value.label, 12.5, palette.ink), strong(shown, 12.5, palette.ink));
+        let values = provider.quota.as_ref().map(|q| q.values.as_slice()).unwrap_or_default();
+        if windows.iter().any(|w| !is_primary_limit(w)) || !values.is_empty() {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 6.0;
+                if windows.iter().any(is_primary_limit) {
+                    ui.painter().hline(ui.max_rect().x_range(), ui.cursor().top(), Stroke::new(1.0, palette.rule));
+                    ui.add_space(4.0);
+                }
+                for window in windows.iter().filter(|w| !is_primary_limit(w)) {
+                    small_limit(ui, model, &palette, window, stale);
+                }
+                for value in values {
+                    let shown = if value.format == QuotaFormat::Dollars {
+                        format_cost(value.value)
+                    } else {
+                        format_number(value.value)
+                    };
+                    spread(ui, text(&value.label, 12.0, palette.ink2), strong(shown, 12.0, palette.ink));
+                }
+            });
         }
         if provider.quota.is_none() && provider.quota_error.is_none() {
-            ui.label(text("Checking limits…", 12.0, palette.ink2));
-        }
-        if let (true, Some(usage), Some(spend)) = (open, &provider.usage, spend) {
-            details(ui, &palette, view.period, usage, spend);
+            ui.label(text("Checking limits…", 11.0, palette.ink2));
         }
     });
 }
 
-fn details(
-    ui: &mut Ui,
-    palette: &super::theme::Palette,
-    period: Period,
-    usage: &crate::state::ProviderUsage,
-    spend: &crate::state::PeriodUsage,
-) {
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = 8.0;
-        divider(ui, palette);
-        for (label, period_usage) in [
-            (Period::Today.label(), &usage.today),
-            ("Yesterday", &usage.yesterday),
-            (Period::Week.label(), &usage.last7_days),
-            (Period::Month.label(), &usage.last30_days),
-            (Period::All.label(), &usage.all_time),
-        ] {
-            spread(
-                ui,
-                text(label, 12.0, palette.ink2),
-                text(spend_reading(&Spend::from(period_usage)), 12.0, palette.ink),
-            );
-        }
-        if !spend.models.is_empty() {
-            let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 5.0), Sense::hover());
-            ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(1.0, palette.rule));
-            ui.label(text(format!("Models · {}", period.label()), 12.0, palette.ink2));
-            for model in &spend.models {
-                spread(
-                    ui,
-                    text(&model.model, 11.5, palette.ink2),
-                    text(spend_reading(&Spend::from(model)), 11.5, palette.ink),
-                );
-            }
-        }
-    });
-}
-
-fn busy_dot(ui: &mut Ui, palette: &super::theme::Palette) {
+fn busy_dot(ui: &mut Ui, palette: &Palette) {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
     let start = spin_angle(ui);
     let points: Vec<Pos2> = (0..=18u8)
@@ -459,6 +216,84 @@ fn busy_dot(ui: &mut Ui, palette: &super::theme::Palette) {
     ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
 }
 
+/// How a limit reads right now, worked out the same way for every size it is drawn at.
+struct Reading {
+    value: String,
+    fill: f32,
+    color: Color32,
+    tone: Tone,
+    /// Where usage would be if it were spent evenly, as a share of the bar.
+    even: Option<f32>,
+    pace: Option<String>,
+    reset: Option<String>,
+    state: Option<String>,
+}
+
+impl Reading {
+    fn new(model: &Model<'_>, palette: &Palette, window: &QuotaWindow, stale: bool) -> Self {
+        let settings: &Settings = model.settings;
+        let left = settings.display == "left";
+        let past = has_reset(model.clock, window, model.now);
+        let pace = if stale || past { NO_PACE } else { project_pace(window, model.now) };
+        let tone = if past { Tone::Calm } else { meter_tone(window, &pace) };
+        let label = pace_label(&pace, model.now, model.clock.zone());
+        #[expect(clippy::cast_possible_truncation, reason = "a percentage of at most 100, drawn in f32")]
+        let share = |percent: f64| (percent.clamp(0.0, 100.0) / 100.0) as f32;
+        // Colour is kept for a limit that needs attention; a calm one is plain ink.
+        let color = match tone {
+            _ if past => palette.ink3,
+            Tone::Neutral | Tone::Calm => palette.meter,
+            Tone::Warn => palette.warn,
+            Tone::Crit => palette.crit,
+        };
+        let state = if past {
+            Some("reset passed".to_owned())
+        } else if stale {
+            Some("cached".into())
+        } else {
+            label.as_deref().map(str::to_lowercase)
+        };
+        Self {
+            value: format_limit_value(window, left),
+            fill: share(fill_percent(window, left)),
+            color,
+            tone,
+            even: label.as_ref().and(pace.even_pace_percent).map(|even| share(if left { 100.0 - even } else { even })),
+            pace: label,
+            reset: format_reset(
+                model.clock,
+                window.resets_at.as_deref(),
+                model.now,
+                settings.reset_display == "relative",
+            ),
+            state,
+        }
+    }
+
+    fn describe(&self, window: &QuotaWindow, display: &str) -> String {
+        let reading =
+            [Some(self.value.as_str()), self.state.as_deref()].into_iter().flatten().collect::<Vec<_>>().join(", ");
+        format!("{} {display}: {reading}", limit_label(window))
+    }
+}
+
+/// A rounded bar filled to `fill`, with the even-pace tick when there is one.
+fn bar(ui: &mut Ui, palette: &Palette, size: Vec2, fill: f32, color: Color32, even: Option<f32>) -> Response {
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    let radius = CornerRadius::from(size.y / 2.0);
+    ui.painter().rect_filled(rect, radius, palette.track);
+    ui.painter().rect_filled(
+        Rect::from_min_size(rect.min, Vec2::new(rect.width() * fill, rect.height())),
+        radius,
+        color,
+    );
+    if let Some(even) = even {
+        let x = rect.left() + rect.width() * even;
+        ui.painter().vline(x, (rect.top() - 2.0)..=(rect.bottom() + 2.0), Stroke::new(1.5, palette.ink2));
+    }
+    response
+}
+
 pub fn limit_meter(
     ui: &mut Ui,
     model: &Model<'_>,
@@ -470,61 +305,32 @@ pub fn limit_meter(
     let palette = frame.palette;
     let settings: &Settings = model.settings;
     let left = settings.display == "left";
-    let past = has_reset(model.clock, window, model.now);
-    let pace = if stale || past { NO_PACE } else { project_pace(window, model.now) };
-    let tone = if past { Tone::Calm } else { meter_tone(window, &pace) };
-    let label = pace_label(&pace, model.now, model.clock.zone());
-    let reset = format_reset(model.clock, window.resets_at.as_deref(), model.now, settings.reset_display == "relative");
-    let value = format_limit_value(window, left);
+    let reading = Reading::new(model, &palette, window, stale);
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 6.0;
         ui.horizontal(|ui| {
-            ui.label(text(&window.label, 12.5, palette.ink));
+            ui.label(text(limit_label(window), 13.0, palette.ink));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let response = ui
-                    .add(egui::Label::new(strong(&value, 12.5, palette.ink)).sense(Sense::click()))
+                    .add(egui::Label::new(strong(&reading.value, 13.0, palette.ink)).sense(Sense::click()))
                     .on_hover_text("Show used or left");
                 if response.clicked() {
                     frame.patch(settings, |s| s.display = if left { "used".into() } else { "left".into() });
                 }
             });
         });
-        let fill = fill_percent(window, left);
-        #[expect(clippy::cast_possible_truncation, reason = "a percentage of at most 100, drawn in f32")]
-        let target = (fill / 100.0) as f32;
         let id = ui.scope_id().with((provider, &window.id));
-        let shown = ui.ctx().animate_value_with_time(id, target, 0.22);
-        let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 5.0), Sense::hover());
-        ui.painter().rect_filled(rect, CornerRadius::same(3), palette.track);
-        let color = if past { palette.ink3 } else { palette.tone(tone, provider) };
-        let fill_rect = Rect::from_min_size(rect.min, Vec2::new(rect.width() * shown, rect.height()));
-        ui.painter().rect_filled(fill_rect, CornerRadius::same(3), color);
-        if let (Some(_), Some(even)) = (&label, pace.even_pace_percent) {
-            let at = if left { 100.0 - even } else { even }.clamp(0.0, 100.0);
-            #[expect(clippy::cast_possible_truncation, reason = "a percentage of at most 100, drawn in f32")]
-            let x = rect.left() + rect.width() * (at / 100.0) as f32;
-            ui.painter().vline(x, (rect.top() - 2.0)..=(rect.bottom() + 2.0), Stroke::new(1.5, palette.ink2));
-        }
-        let state = if past {
-            Some("reset passed".to_owned())
-        } else if stale {
-            Some("cached".into())
-        } else {
-            label.as_deref().map(str::to_lowercase)
-        };
+        let shown = ui.ctx().animate_value_with_time(id, reading.fill, 0.22);
+        let size = Vec2::new(ui.available_width(), 6.0);
+        let response = bar(ui, &palette, size, shown, reading.color, reading.even);
         response.widget_info(|| {
-            let reading = [Some(value.as_str()), state.as_deref()].into_iter().flatten().collect::<Vec<_>>().join(", ");
-            WidgetInfo::labeled(
-                Role::ProgressIndicator,
-                true,
-                format!("{} {}: {reading}", window.label, settings.display),
-            )
+            WidgetInfo::labeled(Role::ProgressIndicator, true, reading.describe(window, &settings.display))
         });
-        if reset.is_some() || label.is_some() {
+        if reading.reset.is_some() || reading.pace.is_some() {
             ui.horizontal(|ui| {
-                if let Some(reset) = &reset {
+                if let Some(reset) = &reading.reset {
                     let response = ui
-                        .add(egui::Label::new(text(reset, 11.5, palette.ink2)).sense(Sense::click()))
+                        .add(egui::Label::new(text(reset, 11.0, palette.ink2)).sense(Sense::click()))
                         .on_hover_text("Show time or countdown");
                     if response.clicked() {
                         let relative = settings.reset_display == "relative";
@@ -533,9 +339,9 @@ pub fn limit_meter(
                         });
                     }
                 }
-                if let Some(label) = &label {
+                if let Some(pace) = &reading.pace {
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(text(label, 11.5, palette.tone_text(tone)));
+                        ui.label(text(pace, 11.0, palette.tone_text(reading.tone)));
                     });
                 }
             });
@@ -543,42 +349,93 @@ pub fn limit_meter(
     });
 }
 
-pub fn compact(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
+/// A limit that rarely decides anything, on one line; its reset and pace are in the tooltip.
+fn small_limit(ui: &mut Ui, model: &Model<'_>, palette: &Palette, window: &QuotaWindow, stale: bool) {
+    let reading = Reading::new(model, palette, window, stale);
+    let row = ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.add_sized(
+                [96.0, 16.0],
+                egui::Label::new(strong(&reading.value, 12.0, palette.ink)).truncate().halign(Align::Max),
+            );
+            let response = bar(ui, palette, Vec2::new(64.0, 4.0), reading.fill, reading.color, None);
+            response.widget_info(|| {
+                WidgetInfo::labeled(Role::ProgressIndicator, true, reading.describe(window, &model.settings.display))
+            });
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.add(egui::Label::new(text(limit_label(window), 12.0, palette.ink2)).truncate());
+            });
+        });
+    });
+    let note: Vec<&str> = [reading.reset.as_deref(), reading.pace.as_deref()].into_iter().flatten().collect();
+    if !note.is_empty() {
+        row.response.on_hover_text(note.join(" · "));
+    }
+}
+
+pub fn compact(ui: &mut Ui, model: &Model<'_>, frame: &Frame<'_>) {
     let palette = frame.palette;
     let providers = &model.state.providers;
     if providers.is_empty() {
         empty(ui, &palette, "No providers are turned on.");
         return;
     }
-    EguiFrame::new().inner_margin(Margin { left: 16, right: 16, top: 14, bottom: 6 }).show(ui, |ui| {
+    EguiFrame::new().inner_margin(Margin { left: 16, right: 16, top: 14, bottom: 8 }).show(ui, |ui| {
         ui.set_width(ui.available_width());
+        ui.spacing_mut().item_spacing.y = 10.0;
         for provider in providers {
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 8.0;
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 9.0;
-                    heading(ui, frame, provider);
-                });
-                if let Some(error) = &provider.quota_error {
-                    ui.label(text(problem_line(error, model.now, provider.retry_at).0, 12.0, palette.ink2));
-                }
-                let windows = provider.quota.as_ref().map(|q| q.windows.as_slice()).unwrap_or_default();
-                let session = windows
-                    .iter()
-                    .find(|w| w.id == "session")
-                    .or_else(|| windows.iter().find(|w| w.id == "weekly"))
-                    .or_else(|| windows.first());
-                match session {
-                    Some(window) => {
-                        limit_meter(ui, model, frame, &provider.key, window, provider.quota_error.is_some());
+            let windows = provider.quota.as_ref().map(|q| q.windows.as_slice()).unwrap_or_default();
+            let window = windows
+                .iter()
+                .find(|w| w.id == "session")
+                .or_else(|| windows.iter().find(|w| w.id == "weekly"))
+                .or_else(|| windows.first());
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                mark(ui, frame, &provider.key, 14.0);
+                ui.add_sized(
+                    [84.0, 16.0],
+                    egui::Label::new(strong(&provider.label, 12.0, palette.ink)).truncate().halign(Align::Min),
+                );
+                match (window, &provider.quota_error) {
+                    (Some(window), error) => compact_meter(ui, model, &palette, window, error.is_some()),
+                    (None, Some(error)) => {
+                        let line = problem_line(error, model.now, provider.retry_at).0;
+                        ui.add(egui::Label::new(text(line, 11.0, palette.ink2)).truncate());
                     }
-                    None if provider.quota_error.is_none() => {
-                        ui.label(text("No limits yet.", 12.0, palette.ink3));
+                    (None, None) => {
+                        ui.label(text("No limits yet.", 11.0, palette.ink2));
                     }
-                    None => {}
                 }
             });
-            ui.add_space(14.0);
         }
+        let relative = model.settings.reset_display == "relative";
+        let urgent = limit_status(model.clock, providers, model.now, relative).filter(|s| s.tone > Tone::Calm);
+        if let Some(status) = urgent {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                let (dot, _) = ui.allocate_exact_size(Vec2::new(8.0, 16.0), Sense::hover());
+                ui.painter().circle_filled(dot.center(), 4.0, tone_dot(&palette, status.tone));
+                ui.add(egui::Label::new(text(&status.title, 12.0, palette.tone_text(status.tone))).truncate());
+            });
+        }
+    });
+}
+
+fn compact_meter(ui: &mut Ui, model: &Model<'_>, palette: &Palette, window: &QuotaWindow, stale: bool) {
+    let reading = Reading::new(model, palette, window, stale);
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        let reset = reading.reset.as_deref().map_or("", |reset| reset.strip_prefix("Resets ").unwrap_or(reset));
+        ui.add_sized([72.0, 16.0], egui::Label::new(text(reset, 11.0, palette.ink2)).truncate().halign(Align::Max));
+        ui.add_sized(
+            [38.0, 16.0],
+            egui::Label::new(strong(&reading.value, 12.0, palette.ink)).truncate().halign(Align::Max),
+        );
+        let size = Vec2::new(ui.available_width(), 6.0);
+        let response = bar(ui, palette, size, reading.fill, reading.color, reading.even);
+        response.widget_info(|| {
+            WidgetInfo::labeled(Role::ProgressIndicator, true, reading.describe(window, &model.settings.display))
+        });
     });
 }

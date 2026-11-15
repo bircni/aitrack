@@ -29,8 +29,6 @@ pub struct Palette {
     pub claude: Color32,
     pub codex: Color32,
     pub cursor: Color32,
-    pub curve: Color32,
-    pub curve_fill: Color32,
 }
 
 const fn hex(rgb: u32) -> Color32 {
@@ -59,8 +57,6 @@ pub const LIGHT: Palette = Palette {
     claude: hex(0x00c9_6442),
     codex: hex(0x0027_876d),
     cursor: hex(0x0062_73bc),
-    curve: Color32::from_rgba_premultiplied(38, 38, 42, 230),
-    curve_fill: Color32::from_rgba_premultiplied(3, 3, 3, 15),
 };
 
 pub const DARK: Palette = Palette {
@@ -84,8 +80,6 @@ pub const DARK: Palette = Palette {
     claude: hex(0x00d9_7757),
     codex: hex(0x0065_c3a3),
     cursor: hex(0x009b_a9ee),
-    curve: Color32::from_rgba_premultiplied(210, 210, 212, 230),
-    curve_fill: Color32::from_rgba_premultiplied(19, 19, 19, 20),
 };
 
 impl Palette {
@@ -102,16 +96,6 @@ impl Palette {
             "claude_code" => self.claude,
             "cursor" => self.cursor,
             _ => self.codex,
-        }
-    }
-
-    /// A meter's fill; a calm one wears its provider's colour.
-    pub fn tone(&self, tone: Tone, provider: &str) -> Color32 {
-        match tone {
-            Tone::Neutral => self.track,
-            Tone::Calm => self.provider(provider),
-            Tone::Warn => self.warn,
-            Tone::Crit => self.crit,
         }
     }
 
