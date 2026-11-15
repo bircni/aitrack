@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-13T07:12:02.988Z",
+  "retrievedAt": "2026-11-15T13:54:55.582Z",
   "models": {
     "claude-fable-5": {
       "i": 10,
@@ -1245,6 +1245,12 @@
       "o": 0.6,
       "cw": 0,
       "cr": 0.075
+    },
+    "vercel_ai_gateway/openai/gpt-6-luna-decisions": {
+      "i": 0.09999999999999999,
+      "o": 0,
+      "cw": 0.125,
+      "cr": 0.01
     },
     "vercel_ai_gateway/openai/o1": {
       "i": 15,

@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-13T07:12:02.988Z",
+  "retrievedAt": "2026-11-15T13:54:55.582Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -784,6 +784,14 @@
       "o": 2.5,
       "cw": 0.3,
       "cr": 0.03,
+      "cwe": false
+    },
+    "google/gemini-omni-flash-preview": {
+      "i": 1.5,
+      "o": 17.5,
+      "cw": 1.5,
+      "cr": 0.15000000000000002,
+      "cre": false,
       "cwe": false
     },
     "google/gemini-pro-latest": {
