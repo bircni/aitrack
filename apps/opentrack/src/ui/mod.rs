@@ -14,7 +14,7 @@ use std::sync::Arc;
 use aitrack_core::time::Clock;
 use eframe::egui::{self, Align, Color32, CornerRadius, Layout, Mesh, Rect, ScrollArea, Sense, Stroke, Ui, Vec2};
 
-use self::format::{freshness_line, History, Period};
+use self::format::{freshness_line, Period, UsageGrid};
 use self::icons::{Glyph, ProviderMarks};
 use self::theme::Palette;
 use self::widgets::{banner, icon_button, link, spin_angle, text, IconButton};
@@ -143,7 +143,7 @@ pub struct View {
     pub open_row: Option<String>,
     pub shortcut: Option<String>,
     pub scroll_to_top: bool,
-    history: Memo<Period, History>,
+    grid: Memo<Period, UsageGrid>,
     machine_rows: Memo<Period, Vec<views::Row>>,
 }
 
@@ -157,7 +157,7 @@ impl Default for View {
             open_row: None,
             shortcut: None,
             scroll_to_top: false,
-            history: Memo::default(),
+            grid: Memo::default(),
             machine_rows: Memo::default(),
         }
     }

@@ -27,8 +27,6 @@ pub struct Palette {
     pub focus: Color32,
     pub edge: Color32,
     pub claude: Color32,
-    pub codex: Color32,
-    pub cursor: Color32,
 }
 
 const fn hex(rgb: u32) -> Color32 {
@@ -55,20 +53,18 @@ pub const LIGHT: Palette = Palette {
     focus: hex(0x002f_6fe4),
     edge: Color32::from_rgba_premultiplied(0, 0, 0, 20),
     claude: hex(0x00c9_6442),
-    codex: hex(0x0027_876d),
-    cursor: hex(0x0062_73bc),
 };
 
 pub const DARK: Palette = Palette {
     dark: true,
-    surface: hex(0x0019_1c20),
-    card: hex(0x0022_262b),
-    raised: hex(0x002b_3036),
-    ink: hex(0x00f3_f3f5),
-    ink2: hex(0x00a3_a4ab),
-    ink3: hex(0x0096_9ca6),
-    rule: hex(0x0030_363d),
-    track: hex(0x0035_3c44),
+    surface: hex(0x000d_1117),
+    card: hex(0x0016_1b22),
+    raised: hex(0x0021_262d),
+    ink: hex(0x00e6_edf3),
+    ink2: hex(0x008b_949e),
+    ink3: hex(0x008b_949e),
+    rule: hex(0x0021_262d),
+    track: hex(0x001e_232b),
     meter: hex(0x00e9_e9ec),
     warn: hex(0x00f5_b945),
     crit: hex(0x00ff_7a66),
@@ -78,8 +74,6 @@ pub const DARK: Palette = Palette {
     focus: hex(0x008a_b4ff),
     edge: Color32::from_rgba_premultiplied(18, 18, 18, 18),
     claude: hex(0x00d9_7757),
-    codex: hex(0x0065_c3a3),
-    cursor: hex(0x009b_a9ee),
 };
 
 impl Palette {
@@ -91,11 +85,19 @@ impl Palette {
         }
     }
 
-    pub fn provider(&self, key: &str) -> Color32 {
-        match key {
-            "claude_code" => self.claude,
-            "cursor" => self.cursor,
-            _ => self.codex,
+    /// A provider's heatmap ramp, dimmest first, without the empty cell.
+    pub fn ramp(&self, provider: &str) -> [Color32; 4] {
+        let cells = aitrack_core::display::heatmap::themes::provider_cells(provider, self.dark);
+        [1, 2, 3, 4].map(|level| u32::from_str_radix(cells[level].trim_start_matches('#'), 16).map_or(self.meter, hex))
+    }
+
+    /// The ramp a row of cells lights along: the provider's while calm, the warning's when not.
+    pub fn tone_ramp(&self, tone: Tone, provider: &str) -> [Color32; 4] {
+        let shades = |color: Color32| [0.3, 0.55, 0.8, 1.0].map(|share| Self::mix(color, share, self.track));
+        match tone {
+            Tone::Neutral | Tone::Calm => self.ramp(provider),
+            Tone::Warn => shades(self.warn),
+            Tone::Crit => shades(self.crit),
         }
     }
 

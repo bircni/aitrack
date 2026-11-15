@@ -1,26 +1,32 @@
-//! The Usage tab: the period, the total with its chart, and one breakdown by model, project or machine.
+//! The Usage tab: the total, the heatmap with its streaks, and one breakdown by model, project or machine.
 
 use eframe::egui::{
-    self, Align, Color32, CornerRadius, FontFamily, FontId, Frame as EguiFrame, Layout, Margin, Pos2, Rect, Role,
-    Sense, Stroke, Ui, Vec2, WidgetInfo,
+    self, Align, Color32, CornerRadius, Frame as EguiFrame, Layout, Margin, Pos2, Rect, Role, Sense, Stroke, Ui, Vec2,
+    WidgetInfo,
 };
 
 use super::dashboard::mark;
 use super::format::{
-    build_history, by_cost_then_tokens, combined_daily, day_cost_label, empty_usage_guidance, format_cost, format_day,
-    format_percent, format_tokens, format_updated, intensity_level, is_priced, period_projects, period_usage,
-    spend_label, spend_reading, sync_status, total_spend, usage_note, zone_clock, Availability, Bucket, Period,
-    ShareBasis, Spend, INIT_HINT,
+    by_cost_then_tokens, combined_daily, day_cost_label, empty_usage_guidance, format_cost, format_day, format_percent,
+    format_tokens, format_updated, intensity_level, is_priced, period_projects, period_usage, spend_label,
+    spend_reading, sync_status, total_spend, usage_grid, usage_note, zone_clock, Availability, Period, ShareBasis,
+    Spend, UsageGrid, GRID_WEEKS, INIT_HINT,
 };
 use super::icons::{paint_glyph, Glyph};
-use super::theme::{bold, Palette};
-use super::widgets::{banner, card, empty, paint_focus, segmented, spread, stacked_bar, strong, text};
+use super::theme::Palette;
+use super::widgets::{
+    banner, caps, caps_tabs, cells, empty, fixed, lit_cells, mono, section, segmented, spread, strong, text,
+};
 use super::{retry_banner, Action, By, Frame, Model, View};
 use crate::state::{AppState, DailyUsage, MachineUsage, ModelUsage, ProviderUsages};
+
+/// The cells of a row's share strip.
+const SHARE_CELLS: usize = 24;
 
 pub fn usage(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>, availability: Availability) {
     let palette = frame.palette;
     let state = model.state;
+    ui.add_space(10.0);
     if availability == Availability::Empty {
         let labels: Vec<&str> = state.providers.iter().map(|p| p.label.as_str()).collect();
         banner(ui, &palette, |ui| {
@@ -40,128 +46,106 @@ pub fn usage(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<
         empty(ui, &palette, &format!("{}.", usage_note(availability)));
         return;
     }
-    period_tabs(ui, view, &palette);
-    total(ui, view.period, model, &palette);
-    chart(ui, view, model, &palette);
+    section(ui, &palette, |ui| {
+        ui.spacing_mut().item_spacing.y = 12.0;
+        total(ui, view, model, &palette);
+        let daily = combined_daily(state.providers.iter().map(|p| p.usage.as_ref()), GRID_WEEKS * 7);
+        let grid = view.grid.get(state, view.period, || usage_grid(&daily, view.period));
+        heatmap(ui, &palette, &grid);
+        stats(ui, &palette, &grid);
+    });
     breakdown(ui, view, model, frame);
 }
 
-/// The one period every number on the tab is for.
-fn period_tabs(ui: &mut Ui, view: &mut View, palette: &Palette) {
-    EguiFrame::new().inner_margin(Margin { left: 16, right: 16, top: 0, bottom: 12 }).show(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 14.0;
-            for period in Period::ALL.iter().copied() {
-                let selected = view.period == period;
-                let family = if selected { bold() } else { FontFamily::Proportional };
-                let color = if selected { palette.ink } else { palette.ink2 };
-                let galley = ui.painter().layout_no_wrap(period.label().to_owned(), FontId::new(12.0, family), color);
-                let (rect, response) = ui.allocate_exact_size(galley.size() + Vec2::new(0.0, 6.0), Sense::click());
-                ui.painter().galley(rect.min, galley, color);
-                if selected {
-                    ui.painter().hline(rect.x_range(), rect.bottom() - 1.0, Stroke::new(2.0, palette.ink));
-                }
-                response.widget_info(|| WidgetInfo::selected(Role::Button, true, selected, period.label()));
-                paint_focus(ui, palette, &response, rect, 3);
-                if response.clicked() {
-                    view.period = period;
-                }
-            }
-        });
+/// The period's estimated cost, and the switch every number on the tab follows.
+fn total(ui: &mut Ui, view: &mut View, model: &Model<'_>, palette: &Palette) {
+    let spend = total_spend(model.state.providers.iter().map(|p| p.usage.as_ref()), view.period);
+    let size = Vec2::new(ui.available_width(), 30.0);
+    ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::BOTTOM), |ui| {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        let figure = if is_priced(&spend) { format_cost(spend.cost_usd) } else { "—".into() };
+        ui.label(mono(figure, 26.0, palette.ink));
+        let kind = if spend.has_cost && spend.has_unpriced_tokens { "partial est." } else { "est." };
+        ui.label(text(format!("{kind} · {} tokens", format_tokens(spend.tokens)), 11.0, palette.ink2));
     });
+    let options: Vec<(Period, &str)> = Period::ALL.iter().map(|period| (*period, period.label())).collect();
+    segmented(ui, palette, &mut view.period, &options);
 }
 
-fn total(ui: &mut Ui, period: Period, model: &Model<'_>, palette: &Palette) {
-    let spend = total_spend(model.state.providers.iter().map(|p| p.usage.as_ref()), period);
-    EguiFrame::new().inner_margin(Margin { left: 16, right: 16, top: 0, bottom: 12 }).show(ui, |ui| {
-        let size = Vec2::new(ui.available_width(), 30.0);
-        ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::BOTTOM), |ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
-            let figure = if is_priced(&spend) { format_cost(spend.cost_usd) } else { "—".into() };
-            ui.label(strong(figure, 26.0, palette.ink));
-            let kind = if spend.has_cost && spend.has_unpriced_tokens { "partial estimate" } else { "estimated" };
-            ui.label(text(format!("{kind} · {} tokens", format_tokens(spend.tokens)), 11.0, palette.ink2));
-        });
-    });
-}
-
-/// Estimated cost per day, stacked by provider, over the days the period covers.
-fn chart(ui: &mut Ui, view: &mut View, model: &Model<'_>, palette: &Palette) {
-    let (range, bucket) = match view.period {
-        Period::Today | Period::Week => (7, Bucket::Day),
-        Period::Month => (30, Bucket::Day),
-        Period::All => (90, Bucket::Week),
-    };
-    let history = view.history.get(model.state, view.period, || build_history(&model.state.providers, range, bucket));
-    EguiFrame::new().inner_margin(Margin { left: 16, right: 16, top: 0, bottom: 14 }).show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.spacing_mut().item_spacing.y = 8.0;
-        if history.peak_usd <= 0.0 {
-            ui.label(text(format!("No priced usage in the last {range} days."), 11.0, palette.ink2));
-            return;
+/// The heatmap `aitrack show` draws: a column per week, Monday first, with the chosen period lit.
+fn heatmap(ui: &mut Ui, palette: &Palette, grid: &UsageGrid) {
+    const LABELS: f32 = 26.0;
+    const MONTHS: f32 = 14.0;
+    const GAP: f32 = 3.0;
+    #[expect(clippy::cast_precision_loss, reason = "a few dozen columns and rows")]
+    let at = |index: usize, cell: f32| index as f32 * (cell + GAP);
+    let columns = grid.cells.last().map_or(1, |cell| cell.column + 1).max(GRID_WEEKS);
+    #[expect(clippy::cast_precision_loss, reason = "a few dozen columns")]
+    let cell = (ui.available_width() - LABELS - GAP * (columns - 1) as f32) / columns as f32;
+    let size = Vec2::new(ui.available_width(), MONTHS + at(7, cell) - GAP);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    let origin = Pos2::new(rect.left() + LABELS, rect.top() + MONTHS);
+    let ramp = palette.ramp("all");
+    let font = egui::FontId::proportional(9.5);
+    for (column, month) in &grid.months {
+        let place = Pos2::new(origin.x + at(*column, cell), rect.top());
+        ui.painter().text(place, egui::Align2::LEFT_TOP, *month, font.clone(), palette.ink2);
+    }
+    for (row, day) in [(0, "Mon"), (2, "Wed"), (4, "Fri")] {
+        let place = Pos2::new(rect.left(), origin.y + at(row, cell) + cell / 2.0);
+        ui.painter().text(place, egui::Align2::LEFT_CENTER, day, font.clone(), palette.ink2);
+    }
+    let pointer = response.hover_pos();
+    for day in &grid.cells {
+        let min = Pos2::new(origin.x + at(day.column, cell), origin.y + at(day.row, cell));
+        let square = Rect::from_min_size(min, Vec2::splat(cell));
+        let color = if day.level == 0 { palette.track } else { ramp[usize::from(day.level - 1)] };
+        // The days outside the chosen period stay, dimmed, so the period reads against them.
+        let color = if day.lit { color } else { Palette::mix(color, 0.4, palette.surface) };
+        ui.painter().rect_filled(square, CornerRadius::same(3), color);
+        if pointer.is_some_and(|p| square.expand(GAP / 2.0).contains(p)) {
+            let tip = format!("{} · {}", format_day(&day.day.date), day_cost_label(&day.day));
+            response.clone().on_hover_text_at_pointer(tip);
         }
-        let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 64.0), Sense::hover());
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
-        )]
-        let slot = rect.width() / history.bars.len().max(1) as f32;
-        let gap = (slot * 0.14).min(6.0);
-        let pointer = response.hover_pos();
-        let (noun, each) = if bucket == Bucket::Day { ("Day", "day") } else { ("Week of", "week") };
-        for (index, bar) in history.bars.iter().enumerate() {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
-            )]
-            let x = rect.left() + index as f32 * slot + gap / 2.0;
-            let mut top = rect.bottom();
-            for part in bar.parts.iter().filter(|p| p.cost_usd > 0.0) {
-                #[expect(clippy::cast_possible_truncation, reason = "a share of at most 1, drawn in f32")]
-                let height = (part.cost_usd / history.peak_usd) as f32 * rect.height();
-                let layer = Rect::from_min_max(Pos2::new(x, top - height), Pos2::new(x + (slot - gap).max(0.5), top));
-                ui.painter().rect_filled(layer, CornerRadius::ZERO, palette.provider(&part.key));
-                top -= height;
-            }
-            let column = Rect::from_min_max(Pos2::new(x, rect.top()), Pos2::new(x + slot, rect.bottom()));
-            if pointer.is_some_and(|p| column.contains(p)) {
-                let split: Vec<String> = bar
-                    .parts
-                    .iter()
-                    .filter(|p| p.cost_usd > 0.0)
-                    .map(|p| format!("{} {}", p.label, format_cost(p.cost_usd)))
-                    .collect();
-                let split = if split.is_empty() { String::new() } else { format!(" ({})", split.join(", ")) };
-                let tip = format!("{noun} {} · {}{split}", format_day(&bar.start), format_cost(bar.total_usd));
-                response.clone().on_hover_text_at_pointer(tip);
-            }
-        }
-        response.widget_info(|| {
-            let label = format!(
-                "Estimated cost per {each}, last {range} days, peak {} on {}",
-                format_cost(history.peak_usd),
-                format_day(&history.busiest)
-            );
-            WidgetInfo::labeled(Role::Image, true, label)
-        });
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing.x = 5.0;
-            for part in &history.by_provider {
-                let (swatch, _) = ui.allocate_exact_size(Vec2::splat(8.0), Sense::hover());
-                ui.painter().rect_filled(swatch, CornerRadius::same(2), palette.provider(&part.key));
-                let cost = if part.cost_usd > 0.0 { format_cost(part.cost_usd) } else { "—".into() };
-                let partial = if part.has_unpriced_tokens { " (partial)" } else { "" };
-                ui.label(text(format!("{} {cost}{partial}", part.label), 11.0, palette.ink2));
-                ui.add_space(9.0);
-            }
-        });
-        let by_week = if bucket == Bucket::Week { ", by week" } else { "" };
-        let caption = format!(
-            "Last {range} days{by_week} · {} a day · busiest {each} {}",
-            format_cost(history.average_usd),
-            format_day(&history.busiest)
+    }
+    response.widget_info(|| {
+        let label = grid.peak.as_ref().map_or_else(
+            || format!("Estimated cost per day, last {GRID_WEEKS} weeks, nothing priced"),
+            |day| {
+                format!(
+                    "Estimated cost per day, last {GRID_WEEKS} weeks, peak {} on {}",
+                    format_cost(day.cost_usd),
+                    format_day(&day.date)
+                )
+            },
         );
-        ui.label(text(caption, 11.0, palette.ink2));
+        WidgetInfo::labeled(Role::Image, true, label)
+    });
+}
+
+/// The figures `aitrack show` prints under its heatmap, for the weeks shown here.
+fn stats(ui: &mut Ui, palette: &Palette, grid: &UsageGrid) {
+    let days = |count: usize| if count == 1 { "1 day".to_owned() } else { format!("{count} days") };
+    let current = format!("{}{}", days(grid.current_streak), if grid.streak_capped { " or more" } else { "" });
+    let peak = grid.peak.as_ref();
+    let figures = [
+        ("Current streak", current, String::new()),
+        ("Longest streak", days(grid.longest_streak), format!("in {GRID_WEEKS} weeks")),
+        (
+            "Peak day",
+            peak.map_or_else(|| "—".into(), |day| format_day(&day.date)),
+            peak.map_or_else(String::new, |day| format_cost(day.cost_usd)),
+        ),
+    ];
+    ui.columns(3, |columns| {
+        for (column, (label, value, note)) in columns.iter_mut().zip(figures) {
+            column.spacing_mut().item_spacing.y = 3.0;
+            column.label(caps(label, palette.ink2));
+            column.label(strong(value, 13.0, palette.ink));
+            if !note.is_empty() {
+                column.label(text(note, 11.0, palette.ink2));
+            }
+        }
     });
 }
 
@@ -171,20 +155,15 @@ fn breakdown(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>)
     if view.by == By::Machine && machines == 0 {
         view.by = By::Model;
     }
-    card(ui, &palette, |ui| {
+    section(ui, &palette, |ui| {
         ui.spacing_mut().item_spacing.y = 6.0;
-        ui.horizontal(|ui| {
-            ui.label(text("By", 11.0, palette.ink2));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let mut options = vec![(By::Model, "Model"), (By::Project, "Project")];
-                if machines > 0 {
-                    options.push((By::Machine, "Machine"));
-                }
-                if segmented(ui, &palette, &mut view.by, &options) {
-                    view.open_row = None;
-                }
-            });
-        });
+        let mut options = vec![(By::Model, "By model"), (By::Project, "By project")];
+        if machines > 0 {
+            options.push((By::Machine, "By machine"));
+        }
+        if caps_tabs(ui, &palette, &mut view.by, &options) {
+            view.open_row = None;
+        }
         match view.by {
             By::Model => models(ui, view, model, frame),
             By::Project => projects(ui, view, model, frame),
@@ -240,7 +219,7 @@ fn head(ui: &mut Ui, view: &mut View, frame: &Frame<'_>, head: &Head<'_>) -> boo
             if let Some(id) = head.id {
                 chevron(ui, &palette, id, open);
             }
-            ui.label(strong(spend_label(head.spend), 13.0, palette.ink));
+            ui.label(mono(spend_label(head.spend), 12.0, palette.ink));
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 let color = if head.muted { palette.ink2 } else { palette.ink };
                 ui.add(egui::Label::new(text(head.name, 13.0, color)).truncate()).on_hover_text(head.name);
@@ -266,7 +245,7 @@ fn chevron(ui: &mut Ui, palette: &Palette, id: &str, open: bool) {
     paint_glyph(ui.painter(), rect, Glyph::ChevronDown, palette.ink2, openness * std::f32::consts::PI);
 }
 
-/// The row's share of the whole, split by provider, with its tokens.
+/// The row's share of the whole as cells, each in the colour of the provider it belongs to, with its tokens.
 fn share<'a>(
     ui: &mut Ui,
     palette: &Palette,
@@ -281,14 +260,24 @@ fn share<'a>(
     let row = ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.add_sized([96.0, 14.0], egui::Label::new(text(reading, 11.0, palette.ink2)).halign(Align::Max));
+            fixed(ui, 96.0, Align::Max, text(reading, 11.0, palette.ink2));
             if shown {
                 #[expect(clippy::cast_possible_truncation, reason = "a share of at most 1, drawn in f32")]
-                let colored: Vec<(f32, Color32)> = parts
-                    .map(|(key, part)| ((basis.measure(&part) / basis.total) as f32, palette.provider(key)))
+                let of_all = |part: &Spend| (basis.measure(part) / basis.total) as f32;
+                // A share too small for a cell still gets one, so the row never reads as nothing.
+                let colors: Vec<Color32> = parts
+                    .flat_map(|(key, part)| {
+                        let lit = lit_cells(of_all(&part), SHARE_CELLS).max(1);
+                        std::iter::repeat_n(palette.ramp(key)[2], lit)
+                    })
                     .collect();
-                let width = ui.available_width();
-                stacked_bar(ui, palette, &colored, 4.0, width);
+                cells(
+                    ui,
+                    palette,
+                    (SHARE_CELLS, 5.0),
+                    |index| colors.get(index).copied().unwrap_or(palette.track),
+                    None,
+                );
             }
         });
     });
@@ -301,7 +290,7 @@ fn share<'a>(
 /// What an opened row holds, set apart from the rows around it.
 fn inset(ui: &mut Ui, palette: &Palette, add: impl FnOnce(&mut Ui)) {
     EguiFrame::new()
-        .fill(palette.surface)
+        .fill(palette.card)
         .corner_radius(CornerRadius::same(8))
         .inner_margin(Margin::symmetric(10, 8))
         .show(ui, |ui| {
@@ -501,13 +490,8 @@ fn machine_status(ui: &mut Ui, model: &Model<'_>, palette: &Palette, machine: Op
 fn strip(ui: &mut Ui, palette: &Palette, daily: &[DailyUsage], peak: f64) {
     let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 8.0), Sense::hover());
     let cell = (rect.width() - 2.0 * 29.0) / 30.0;
-    let colors = [
-        palette.track,
-        Palette::mix(palette.meter, 0.25, palette.track),
-        Palette::mix(palette.meter, 0.5, palette.track),
-        Palette::mix(palette.meter, 0.75, palette.track),
-        palette.meter,
-    ];
+    let ramp = palette.ramp("all");
+    let colors = [palette.track, ramp[0], ramp[1], ramp[2], ramp[3]];
     let pointer = response.hover_pos();
     for (index, day) in daily.iter().enumerate() {
         let level =

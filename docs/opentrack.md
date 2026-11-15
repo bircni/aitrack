@@ -8,31 +8,35 @@ reads — including other machines synced through your aitrack data repo.
 
 The popup has two tabs. **Limits** answers whether anything is about to run out; **Usage** shows
 where the tokens and their estimated cost went. The left and right arrow keys switch between them.
+Both are drawn the way `aitrack show` draws its heatmap: in cells, in each provider's heatmap colours.
 
-- **Limits** — a status line names the most urgent limit, or the next reset when every limit is on
-  track. Each provider then shows its session and weekly limits as full meters and the rest on one
-  line each: Claude Code's per-model weekly limits and extra usage, Codex's credits, Cursor's total,
-  Auto and API usage and on-demand spend. A one-line limit shows its reset time and pace on hover.
+- **Limits** — the ring from the app icon is filled to the limit that matters most: the most
+  urgent one, or the next to reset when every limit is on track, with what to make of it beside
+  it. Each provider then shows its session and weekly limits as a row of cells and the rest on one
+  line each: Claude Code's per-model weekly limits and extra usage, Codex's credits, Cursor's
+  total, Auto and API usage and on-demand spend. A one-line limit shows its reset time and pace on
+  hover.
 - **Pacing** — whether each limit is on track to last until it resets, with alerts when one is
   almost used up or on pace to run out. Settings picks how much left counts as almost used up
   (5, 10, 20 or 30%; 10% by default) and can add an alert for a weekly limit that resets within
-  a day with over half of it left. The tick on a meter is the even-pace marker: where usage
-  would be now if the limit were used evenly until it resets. A meter is plain while its limit is
-  on track and takes the warning or critical colour only when it is not.
-- **Usage** — one period (Today / 7 days / 30 days / All time) sets every number on the tab: the
-  estimated cost and tokens, a chart of estimated cost stacked by provider with the average per
-  day and the busiest day, and a breakdown. The chart shows the last 7 days by day for Today and
-  7 days, the last 30 days by day for 30 days, and the last 90 days by week for All time; a
-  provider with unpriced usage is marked as partial. Numbers come from the same report builder as
-  `aitrack usage`, so they match the CLI.
+  a day with over half of it left. The outlined cell is the even-pace marker: where usage would be
+  now if the limit were used evenly until it resets. A limit's cells wear its provider's colours
+  while it is on track and the warning or critical colour when it is not.
+- **Usage** — one period (Today / 7 days / 30 days / All time) sets the estimated cost, the tokens
+  and the breakdown. Under it is the heatmap of estimated cost per day for the last 18 weeks, a
+  column per week from Monday, with the chosen period lit and the other days dimmed; hover a day
+  for its cost. Below are the current streak, the longest streak and the peak day, all within
+  those 18 weeks, so a streak that began earlier reads as "or more". Numbers come from the same
+  report builder as `aitrack usage`, so they match the CLI.
 - **By model** — the breakdown's default: every model used in the period with its provider, cost,
   tokens and share.
 - **By project** — projects (the git `owner/repo` of the folder the work ran in) with cost, tokens
-  and a share bar; open one for its split per provider. Usage that no project explains is shown as
-  `(unattributed)`, and work in folders without a remote as `(no remote)`. Cursor has no project
-  data and is not counted. Attribution starts with the next refresh (this machine) or sync (other
-  machines), so the list is empty until then and older synced days stay unattributed. The numbers
-  come from the same report builder as `aitrack top projects`.
+  and their share, coloured by provider; open one for its split per provider. Usage that no
+  project explains is shown as `(unattributed)`, and work in folders without a remote as
+  `(no remote)`. Cursor has no project data and is not counted. Attribution starts with the next
+  refresh (this machine) or sync (other machines), so the list is empty until then and older
+  synced days stay unattributed. The numbers come from the same report builder as
+  `aitrack top projects`.
 - **By machine** — with a synced data repo, the same estimated cost per machine: its share of the
   period, a 30-day activity strip on one scale for every machine, shaded at the same steps as
   `aitrack`'s heatmap, the machine's local time when its timezone differs, and when it last
