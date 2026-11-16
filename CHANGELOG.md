@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v5.2.0] - 2026-11-16
+
+
+
+### Features
+
+- **opentrack:** Add a log export to settings (#153)
+- **opentrack:** Sync portable settings through the data repo (#150)
+
+### Tests
+
+- **opentrack:** Keep git from rewriting line endings in the settings sync test
+
+## [v5.1.0] - 2026-11-15
+
+
+
+### Features
+
+- **opentrack:** Add a configurable alert threshold and an unused-limit alert (#148)
+- **opentrack:** Redesign the popup (#152)
+
 ## [v5.0.0] - 2026-11-09
 
 

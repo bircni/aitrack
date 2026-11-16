@@ -6,31 +6,40 @@ reads — including other machines synced through your aitrack data repo.
 
 ## What it shows
 
-- **Limits** — Claude Code session / weekly / per-model weekly windows and extra usage; Codex
-  session and weekly windows and credits.
+The popup has two tabs. **Limits** answers whether anything is about to run out; **Usage** shows
+where the tokens and their estimated cost went. The left and right arrow keys switch between them.
+Both are drawn the way `aitrack show` draws its heatmap: in cells, in each provider's heatmap colours.
+
+- **Limits** — the ring from the app icon is filled to the limit that matters most: the most
+  urgent one, or the next to reset when every limit is on track, with what to make of it beside
+  it. Each provider then shows its session and weekly limits as a row of cells and the rest on one
+  line each: Claude Code's per-model weekly limits and extra usage and Codex's credits. A one-line
+  limit shows its reset time and pace on hover.
 - **Pacing** — whether each limit is on track to last until it resets, with alerts when one is
   almost used up or on pace to run out. Settings picks how much left counts as almost used up
   (5, 10, 20 or 30%; 10% by default) and can add an alert for a weekly limit that resets within
-  a day with over half of it left. The tick on a meter is the even-pace marker: where usage
-  would be now if the limit were used evenly until it resets.
-- **Usage** — today, yesterday, the last 7 / 30 days and all-time per provider, a daily trend
-  and a per-model breakdown. Numbers come from the same report builder as `aitrack usage`, so
-  they match the CLI.
-- **History** — a tab with stacked daily or weekly estimated cost per provider over the last 30 or
-  90 days, with the total, the average per day and the busiest day. The provider chips carry the
-  chart's colours, and a day with unpriced usage is marked as partial.
-- **Projects** — a tab that lists projects (the git `owner/repo` of the folder the work ran in)
-  for the selected period (Today / 7 days / 30 days / All time) with cost, tokens and a share bar;
-  expand one for its split per provider. Usage that no project explains is shown as
-  `(unattributed)`, and work in folders without a remote as `(no remote)`. Attribution starts with
-  the next refresh (this machine) or sync (other machines), so the tab is empty until then and older
+  a day with over half of it left. The outlined cell is the even-pace marker: where usage would be
+  now if the limit were used evenly until it resets. A limit's cells wear its provider's colours
+  while it is on track and the warning or critical colour when it is not.
+- **Usage** — one period (Today / 7 days / 30 days / All time) sets the estimated cost, the tokens
+  and the breakdown. Under it is the heatmap of estimated cost per day for the last 18 weeks, a
+  column per week from Monday, with the chosen period lit and the other days dimmed; hover a day
+  for its cost. Below are the current streak, the longest streak and the peak day, all within
+  those 18 weeks, so a streak that began earlier reads as "or more". Numbers come from the same
+  report builder as `aitrack usage`, so they match the CLI.
+- **By model** — the breakdown's default: every model used in the period with its provider, cost,
+  tokens and share.
+- **By project** — projects (the git `owner/repo` of the folder the work ran in) with cost, tokens
+  and their share, coloured by provider; open one for its split per provider. Usage that no
+  project explains is shown as `(unattributed)`, and work in folders without a remote as
+  `(no remote)`. Attribution starts with the next refresh (this machine) or sync (other machines), so the list is empty until then and older
   synced days stay unattributed. The numbers come from the same report builder as
   `aitrack top projects`.
-- **Machines** — with a synced data repo, a tab next to Providers splits the same estimated cost per
-  machine: its share of the period, a 30-day activity strip on one scale for every machine, shaded
-  at the same steps as `aitrack`'s heatmap, the
-  machine's local time when its timezone differs, and when it last synced. A machine that has not
-  synced for three days is marked stale. This machine always shows its live logs.
+- **By machine** — with a synced data repo, the same estimated cost per machine: its share of the
+  period, a 30-day activity strip on one scale for every machine, shaded at the same steps as
+  `aitrack`'s heatmap, the machine's local time when its timezone differs, and when it last
+  synced. A machine that has not synced for three days is marked stale. This machine always shows
+  its live logs. Open a machine for its split per provider and its top models.
 - **Tray icon** — the opentrack "O" filled like a pie, coloured by pace. It follows the most used
   provider and limit by default; Settings picks a provider and session or weekly instead. Choose
   **Bars** for a rounded progress bar per available limit (session, weekly and model limits),
@@ -47,7 +56,8 @@ sliding.
 The popup opens next to the tray, takes the height of what it shows and hides when you click
 elsewhere. **Keep open** in Settings turns it into a window that stays open and keeps the place you
 drag it to by its footer. The footer's compact button switches to the
-**compact view**, which shows only the session limit of each enabled provider. Closing the window
+**compact view**: one line per enabled provider with its session limit, and the limit that needs
+attention when there is one. Closing the window
 hides it; quit from the tray menu or the Quit button in Settings. Escape leaves Settings, and
 otherwise hides the popup, but not a window kept open.
 
@@ -80,11 +90,25 @@ Tokens are not refreshed by opentrack: when one expires, the provider shows a me
 next use that tool. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
 
 Usage history comes from the local Claude/Codex logs. A provider turned off in Settings is neither
-read nor contacted. Usage is merged with the
-other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
+read nor contacted. Usage is merged with the other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
 `git pull`s that repo every 30 minutes (can be turned off). It commits and pushes only when you
 press the sync button in the dashboard, which does exactly what `aitrack sync` does, including refusing
 a clone whose `origin` differs from `repoUrl`; that shows as a failed sync.
+
+**Sync settings** (off by default) shares the settings that mean the same on every machine through
+that repo: the theme, limits shown as used or left, reset times, the providers' order and which
+are on, alerts with their threshold and the unused-limit alert, the
+compact view, and the tray's provider and limit. Start at login, the shortcut, Keep open, the
+tray's style and colour and the two data repo switches stay with each machine. The shared settings
+are one file, `opentrack/settings.json`, with the time they last changed, and the newest change
+wins as a whole rather than key by key. opentrack takes a newer file over its own settings after a
+pull, and a machine that turns the setting on takes what the repo already has. Changes made here
+go out the next time you press the sync button, never on their own; with **Include other
+machines** off, that is also the only time other machines' changes come in. When two machines push
+at once, the later change is kept and the other machine takes it. With
+[`encryptData`](cli.md#encrypting-the-synced-files) on, the file is encrypted like the machine
+files and stays encrypted whichever machine rewrites it; a machine without the passphrase leaves
+it alone and its sync says so.
 
 A failed pull remains visible until recovery and retries after one minute; a successful
 pull restores the 30-minute schedule. Failed local reads retain their own warning.
@@ -106,7 +130,7 @@ Settings and the last snapshot live in the app's data folder
 (`~/Library/Application Support/dev.bircni.opentrack` on macOS, `%APPDATA%\dev.bircni.opentrack` on
 Windows, `~/.local/share/dev.bircni.opentrack` on Linux): `settings.json`, `cache.json` (discarded
 rather than migrated when its format is older), and `opentrack.log`, with the previous run's in
-`opentrack.log.1`. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
+`opentrack.log.1`. **Export…** next to Logs in Settings zips both logs to a place you choose. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
 check, and for the pricing refresh the sync button runs like `aitrack sync` (at most daily).
 
 ## Downloads
