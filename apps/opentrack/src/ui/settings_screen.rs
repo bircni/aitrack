@@ -391,6 +391,12 @@ fn about(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
                 }
             }
         });
+        rule(ui, &palette);
+        line(ui, &palette, "Logs", Some("A zip to attach to a bug report"), None, 80.0, |ui| {
+            if link(ui, &palette, "Export…", true).clicked() {
+                frame.act(Action::ExportLogs);
+            }
+        });
     });
 }
 

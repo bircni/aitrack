@@ -7,6 +7,7 @@ mod cache;
 #[cfg(test)]
 mod goldens;
 mod instance;
+mod logs;
 #[cfg(target_os = "macos")]
 mod macos;
 mod pace;
@@ -86,5 +87,9 @@ fn main() -> eframe::Result {
         event_loop_builder: Some(Box::new(platform::configure_event_loop)),
         ..Default::default()
     };
-    eframe::run_native("opentrack", options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, background, listener)))))
+    eframe::run_native(
+        "opentrack",
+        options,
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, background, dir, listener)))),
+    )
 }

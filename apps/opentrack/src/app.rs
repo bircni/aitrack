@@ -1,6 +1,7 @@
 //! The window: placing and hiding the popup, routing background events to the UI, and carrying out
 //! what the UI asks for.
 
+use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -69,6 +70,7 @@ enum Run {
 
 pub struct App {
     background: Arc<Background>,
+    data_dir: PathBuf,
     rx: Receiver<Msg>,
     bus: Bus,
     saves: Sender<(u64, Settings)>,
@@ -102,7 +104,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, background: Arc<Background>, listener: Listener) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        background: Arc<Background>,
+        data_dir: PathBuf,
+        listener: Listener,
+    ) -> Self {
         let ctx = cc.egui_ctx.clone();
         install_fonts(&ctx);
         let (tx, rx) = channel();
@@ -132,6 +139,7 @@ impl App {
             state: Arc::new(background.service.state()),
             settings: background.service.settings(),
             background,
+            data_dir,
             rx,
             bus,
             saves: save_count,
@@ -345,6 +353,9 @@ impl App {
                 self.update.installing = true;
                 self.update.error = None;
                 self.updater.install(self.bus.clone());
+            }
+            Action::ExportLogs => {
+                crate::logs::export(self.data_dir.clone(), crate::logs::archive_name(&self.clock), self.bus.clone());
             }
             Action::StartDrag => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
         }
