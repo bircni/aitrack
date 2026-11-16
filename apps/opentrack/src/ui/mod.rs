@@ -57,6 +57,7 @@ pub enum Action {
     Quit,
     CheckUpdate,
     InstallUpdate,
+    ExportLogs,
     StartDrag,
 }
 

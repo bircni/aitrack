@@ -17,7 +17,6 @@ fn listen(bus: &Bus) {
             "open" => menu_bus.send(Msg::Show(Screen::Dashboard)),
             "settings" => menu_bus.send(Msg::Show(Screen::Settings)),
             "refresh" => menu_bus.send(Msg::Refresh),
-            "export-logs" => menu_bus.send(Msg::ExportLogs),
             "quit" => menu_bus.send(Msg::Quit),
             _ => {}
         }
@@ -44,7 +43,6 @@ fn build() -> Option<TrayIcon> {
         MenuItem::with_id("open", "Open", true, None),
         MenuItem::with_id("refresh", "Refresh", true, None),
         MenuItem::with_id("settings", "Settings…", true, None),
-        MenuItem::with_id("export-logs", "Export logs…", true, None),
     ];
     for item in &items {
         let _ = menu.append(item);

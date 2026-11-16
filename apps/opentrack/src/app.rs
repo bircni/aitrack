@@ -32,7 +32,6 @@ pub enum Msg {
     Toggle(Option<Rect>),
     Show(Screen),
     Refresh,
-    ExportLogs,
     Quit,
     State(Arc<AppState>),
     Settings(Box<Settings>),
@@ -286,13 +285,6 @@ impl App {
                 },
                 Msg::Show(screen) => self.show(ctx, Some(screen)),
                 Msg::Refresh => self.background.refresh_in_background(true),
-                Msg::ExportLogs => {
-                    crate::logs::export(
-                        self.data_dir.clone(),
-                        crate::logs::archive_name(&self.clock),
-                        self.bus.clone(),
-                    );
-                }
                 Msg::Quit => std::process::exit(0),
                 Msg::State(state) => self.on_state(state),
                 Msg::Settings(settings) => {
@@ -361,6 +353,9 @@ impl App {
                 self.update.installing = true;
                 self.update.error = None;
                 self.updater.install(self.bus.clone());
+            }
+            Action::ExportLogs => {
+                crate::logs::export(self.data_dir.clone(), crate::logs::archive_name(&self.clock), self.bus.clone());
             }
             Action::StartDrag => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
         }
