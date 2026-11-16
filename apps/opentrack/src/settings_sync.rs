@@ -80,6 +80,7 @@ mod tests {
             git(&app, &["clone", "-q", &remote, "repo"]);
             git(&app.join("repo"), &["config", "user.email", "test@example.invalid"]);
             git(&app.join("repo"), &["config", "user.name", "Test"]);
+            git(&app.join("repo"), &["config", "core.autocrlf", "false"]); // Windows runners check out CRLF.
             Self { home, settings: Settings { sync: true, ..Settings::default() } }
         }
 
