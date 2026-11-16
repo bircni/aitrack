@@ -8,8 +8,6 @@ use aitrack_core::data::duplicate_machines::find_duplicate_machine_days;
 use aitrack_core::data::messages::INIT_HINT;
 use aitrack_core::git::remote::{differing_origin, origin_mismatch_message, redact_url};
 use aitrack_core::git::{GitError, is_cloned};
-use aitrack_core::readers::cursor::auth_state::read_cursor_auth_state;
-use aitrack_core::readers::cursor::location::cursor_state_database_path;
 use aitrack_core::readers::paths::list_jsonl_files;
 use aitrack_core::readers::read::{claude_roots, codex_roots};
 use aitrack_core::store::machine_files::{list_data_files, read_data_file};
@@ -83,22 +81,6 @@ fn source_check(label: &str, roots: &[PathBuf]) -> Check {
     }
 }
 
-fn cursor_check(core: &Core) -> Check {
-    let label = "Cursor source";
-    let Some(db) = cursor_state_database_path(&core.env) else {
-        return check(Status::Warn, label, "state.vscdb not found; Cursor usage will be skipped unless configured");
-    };
-    match read_cursor_auth_state(&db) {
-        Ok(auth) if auth.access_token.is_some() => {
-            check(Status::Ok, label, format!("auth token found in {}", db.display()))
-        }
-        Ok(_) => {
-            check(Status::Warn, label, format!("state DB found but no access token was present: {}", db.display()))
-        }
-        Err(error) => check(Status::Warn, label, error),
-    }
-}
-
 fn pricing_cache_check(core: &Core) -> Check {
     let result = core.pricing().refresh_if_due(core.http.as_ref(), &core.env, core.clock.now(), false);
     let pricing = core.pricing().current();
@@ -107,10 +89,9 @@ fn pricing_cache_check(core: &Core) -> Check {
         if result.failed || result.unverified { Status::Warn } else { Status::Ok },
         "Pricing cache",
         format!(
-            "{} Claude, {} Codex, {} Cursor — {} (updatedAt {}){}",
+            "{} Claude, {} Codex — {} (updatedAt {}){}",
             supplement.claude.models.len(),
             supplement.codex.current.len() + supplement.codex.historical.len(),
-            supplement.cursor.models.len(),
             result.reason,
             result.updated_at,
             if result.unverified { "; pack has no checksums, content not verified" } else { "" }
@@ -297,7 +278,6 @@ fn collect_checks(core: &Core, args: &DoctorArgs) -> Vec<Check> {
             vec![
                 source_check("Claude Code source", &claude_roots(core)),
                 source_check("Codex source", &codex_roots(core)),
-                cursor_check(core),
             ]
         });
         let pricing = pricing_cache_check(core);

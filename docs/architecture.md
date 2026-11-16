@@ -8,7 +8,7 @@ Everything except the window's markup is Rust. `crates/core` (aitrack-core) hold
 ## Data flow
 
 ```text
-local logs / Cursor export                  other machines
+local logs                                  other machines
         │                                        │
    readers/ (parse + cache)            git clone of the data repo
         │                                        │
@@ -23,8 +23,8 @@ local logs / Cursor export                  other machines
    PDF, CSV)                                       on the same state)
 ```
 
-- **`Core`** owns what a run shares: environment, paths, clock, output, the HTTP client, the
-  pricing store and Cursor's retry state. The CLI builds one per run; opentrack keeps one for its
+- **`Core`** owns what a run shares: environment, paths, clock, output, the HTTP client and the
+  pricing store. The CLI builds one per run; opentrack keeps one for its
   lifetime. Tests pass a fixed clock, zone and scripted HTTP client instead of changing the process.
 - **Readers** turn provider logs into a `DayMap`: local calendar day → token counts per model. Only
   lines that can count are parsed, and a large cold read is scanned on up to four threads. Each
@@ -48,12 +48,8 @@ local logs / Cursor export                  other machines
 
 ## Providers
 
-A provider is a descriptor in `providers.rs` (key, label, aliases, whether it has live limits),
-plus either:
-
-- a **synced** reader: Claude Code and Codex, read from local logs and written to the data repo; or
-- a **live** reader: Cursor, fetched from the account (cached for six hours by default) and never
-  written to git.
+A provider is a descriptor in `providers.rs` (key, label, aliases, heatmap colours) plus a reader
+under `readers/`: Claude Code and Codex are read from local logs and written to the data repo.
 
 Live limits (session and weekly windows) live in `quota/`, one module per provider.
 

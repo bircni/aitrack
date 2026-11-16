@@ -31,7 +31,7 @@ A Cargo workspace.
 crates/
   core/               aitrack-core: everything that is not the command line or the window
     src/
-      readers/        Provider logs (Claude, Codex) and the Cursor export into day maps
+      readers/        Provider logs (Claude, Codex) into day maps
       pricing/        Cost resolution, the pricing pack store, repricing
       data/           Machine files, reports, periods, rankings, projects
       store/          Machine files on disk, validation, encryption, migrations
@@ -39,7 +39,7 @@ crates/
       quota/          Live limits per provider
       display/        Terminal table, TUI, CSV, PDF, and the PNG heatmap (feature `render`)
       js/             Number formatting, collation and parsing as 4.x did, for byte-compatible files
-    pricing-tables/   claude.json, codex.json, cursor.json: editable first-party rates
+    pricing-tables/   claude.json, codex.json: editable first-party rates
     tests/fixtures/   Golden outputs recorded from 4.x (see its README)
   cli/                The `aitrack` binary (clap)
   xtask/              `cargo xtask`: pricing pack, release, packaging and publishing
@@ -85,7 +85,7 @@ and no provider or remote requests, from the DMG, the installer (Windows needs `
 ## Pricing updates
 
 The editable sources of first-party rates, also the offline baseline every build bundles, are
-`crates/core/pricing-tables/{claude,codex,cursor}.json`. No pricing pack ships with a release: CI
+`crates/core/pricing-tables/{claude,codex}.json`. No pricing pack ships with a release: CI
 builds `artifacts/pricing-pack/` and publishes it daily to the orphan `pricing` branch, adding a
 commit when rates changed; installs refresh into `~/.config/aitrack/pricing/`.
 

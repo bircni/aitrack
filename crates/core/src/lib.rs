@@ -77,8 +77,6 @@ pub struct Core {
     repo_lock: Mutex<()>,
     pub http: Box<dyn HttpClient>,
     pricing: OnceLock<PricingStore>,
-    /// Cursor's retry window and last aggregated export, for the life of the process.
-    pub(crate) cursor: Mutex<readers::cursor::CursorState>,
 }
 
 impl Core {
@@ -94,15 +92,7 @@ impl Core {
             repo_lock: Mutex::default(),
             http: Box::new(UreqClient::default()),
             pricing: OnceLock::new(),
-            cursor: Mutex::default(),
         }
-    }
-
-    /// Replaces the network, for tests.
-    #[must_use]
-    pub fn with_http(mut self, http: Box<dyn HttpClient>) -> Self {
-        self.http = http;
-        self
     }
 
     /// The rates in use, opened from `~/.config/aitrack/pricing` on first use.

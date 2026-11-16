@@ -6,7 +6,7 @@
 /// Claude families, in fallback-pricing order.
 pub const CLAUDE_FAMILIES: [&str; 5] = ["fable", "mythos", "opus", "haiku", "sonnet"];
 
-/// Effort labels Cursor and Claude Code append that are not part of the priced model id.
+/// Effort labels appended to a model that are not part of the priced model id.
 const EFFORT_TOKENS: [&str; 9] = ["low", "medium", "extra-high", "xhigh", "high", "max", "none", "minimal", "ultra"];
 
 /// Rate tiers a reader appends to a Claude id per message.

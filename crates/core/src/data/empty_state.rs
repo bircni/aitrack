@@ -18,7 +18,7 @@ pub fn usage_empty_message(not_configured: bool, providers: &[String]) -> String
             "No local usage data found (Claude Code or Codex). Run: {DOCTOR_HINT} to see which logs were checked, or {INIT_HINT} to sync across machines."
         )
     } else {
-        "No usage data found. Run: npx aitrack sync (Claude/Codex), or use Cursor locally.".to_owned()
+        "No usage data found. Run: npx aitrack sync.".to_owned()
     }
 }
 

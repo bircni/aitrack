@@ -365,31 +365,21 @@ fn projects(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<'_>) 
             });
         }
     }
-    if model.state.providers.iter().any(|p| p.key == "cursor") {
-        empty(ui, &palette, "Cursor is not attributed to projects and is not counted here.");
-    }
 }
 
-/// A machine (or the account) in the machine breakdown, worked out once per state and period.
+/// A machine in the machine breakdown, worked out once per state and period.
 pub struct Row {
     id: String,
     name: String,
-    /// Its index in the state's machines; the account has none.
-    machine: Option<usize>,
+    /// Its index in the state's machines.
+    machine: usize,
     parts: Vec<(String, Spend)>,
     spend: Spend,
     daily: Vec<DailyUsage>,
     models: Vec<ModelUsage>,
 }
 
-fn row(
-    state: &AppState,
-    id: String,
-    name: String,
-    usages: &ProviderUsages,
-    machine: Option<usize>,
-    period: Period,
-) -> Row {
+fn row(state: &AppState, id: String, name: String, usages: &ProviderUsages, machine: usize, period: Period) -> Row {
     let keys: Vec<&str> = state.providers.iter().map(|p| p.key.as_str()).collect();
     let spends: Vec<_> =
         keys.iter().filter_map(|key| usages.get(*key).map(|usage| (*key, period_usage(usage, period)))).collect();
@@ -418,15 +408,8 @@ fn rows(state: &AppState, period: Period) -> Vec<Row> {
     let mut rows: Vec<Row> = machines
         .iter()
         .enumerate()
-        .map(|(i, m)| row(state, format!("machine:{}", m.name), m.name.clone(), &m.providers, Some(i), period))
+        .map(|(i, m)| row(state, format!("machine:{}", m.name), m.name.clone(), &m.providers, i, period))
         .collect();
-    if let Some(account) = &state.account_usage {
-        let labels: Vec<&str> =
-            state.providers.iter().filter(|p| account.contains_key(&p.key)).map(|p| p.label.as_str()).collect();
-        if !labels.is_empty() {
-            rows.push(row(state, "account".into(), format!("{} account", labels.join(", ")), account, None, period));
-        }
-    }
     rows.sort_by(|a, b| by_cost_then_tokens(&a.spend, &b.spend));
     rows
 }
@@ -440,7 +423,7 @@ fn machines_list(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<
     let basis = ShareBasis::new(rows.iter().map(|r| &r.spend));
     let peak = rows.iter().flat_map(|r| r.daily.iter().map(|d| d.cost_usd)).fold(0.0, f64::max);
     for row in rows.iter() {
-        let machine = row.machine.and_then(|i| machines.get(i));
+        let machine = machines.get(row.machine);
         let current = machine.is_some_and(|m| m.current);
         let lead = Lead::Glyph(
             if machine.is_some() { Glyph::Laptop } else { Glyph::Cloud },

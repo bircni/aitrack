@@ -12,11 +12,11 @@ pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 pub struct TokenCounts {
     pub input_tokens: u64,
     pub output_tokens: u64,
-    /// Uncached input (Claude `input_tokens`, Cursor "Input (w/o Cache Write)").
+    /// Uncached input (Claude `input_tokens`).
     pub raw_input_tokens: Option<u64>,
     /// Input that hit a cache, billed at the cache-read rate; older synced data lacks the split.
     pub cached_input_tokens: Option<u64>,
-    /// Cache writes at the 5-minute rate; Cursor's "Input (w/ Cache Write)" lands here too.
+    /// Cache writes at the 5-minute rate.
     pub cache_creation_input_tokens: Option<u64>,
     /// Claude 1-hour cache writes, billed at twice the base input rate.
     pub cache_creation_1h_input_tokens: Option<u64>,
@@ -139,7 +139,7 @@ pub struct DayEntry {
 /// A provider's usage by local calendar day.
 pub type DayMap = IndexMap<Day, DayEntry>;
 
-/// Day maps keyed by provider (`claude_code`, `codex`, `cursor`, or one a newer version wrote).
+/// Day maps keyed by provider (`claude_code`, `codex`, or one another version wrote).
 pub type ProviderData = IndexMap<String, DayMap>;
 
 /// One provider's usage on one day, as a machine file stores it.

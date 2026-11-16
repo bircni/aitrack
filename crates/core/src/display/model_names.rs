@@ -26,9 +26,11 @@ fn title_case_rest(rest: &str) -> String {
 fn display_stem(model: &str) -> String {
     let lowered = model.to_lowercase();
     let stripped = strip_claude_tier_suffix(&lowered);
-    let stem = stripped.strip_prefix("cursor-").unwrap_or(stripped);
-    let canonical =
-        if stem.starts_with("claude-") { canonicalize_claude_model_id(stem) } else { canonical_model_id(stem) };
+    let canonical = if stripped.starts_with("claude-") {
+        canonicalize_claude_model_id(stripped)
+    } else {
+        canonical_model_id(stripped)
+    };
     canonical.strip_prefix("claude-").map_or_else(|| canonical.clone(), str::to_owned)
 }
 

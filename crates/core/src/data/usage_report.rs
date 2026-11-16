@@ -223,7 +223,7 @@ fn windowed_provider_data<'a>(
         return Ok((Cow::Borrowed(&loaded.provider_data), label_window));
     }
     let failure = std::cell::RefCell::new(None);
-    let data = provider_data_for_windows(context.pricing, loaded, context.clock.zone_name(), |zone| {
+    let data = provider_data_for_windows(context.pricing, loaded, |zone| {
         let today = context.today_for_zone(zone);
         let window = match kind {
             Kind::Current => context.window(options, today),
@@ -255,7 +255,7 @@ fn project_scope(
     window: &UsageWindow,
     sources: &[ZonedUsageSource],
 ) -> UsageProjectScope {
-    let mut notes = vec!["Cursor usage is not attributed to projects and is excluded.".to_owned()];
+    let mut notes = Vec::new();
     match selector {
         ProjectSelector::Dir(_) => notes.push(
             "This folder has no git remote: matched by working directory on this machine only, so other machines are not included."

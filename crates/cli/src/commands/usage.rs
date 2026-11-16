@@ -18,7 +18,7 @@ use aitrack_core::readers::project::resolve_project_selector;
 use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 
-use super::args::{PROVIDERS_HELP, Providers, REFRESH_HELP, parse_providers, parse_watch_seconds};
+use super::args::{PROVIDERS_HELP, Providers, parse_providers, parse_watch_seconds};
 use super::report::{load, not_configured};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
@@ -31,20 +31,17 @@ pub struct UsageArgs {
     pub window: Window,
 }
 
-#[expect(clippy::struct_excessive_bools, reason = "each bool is an independent command-line flag")]
 #[derive(Args, Clone)]
 pub struct UsageOptions {
     #[arg(long, value_name = "list", help = PROVIDERS_HELP, value_parser = parse_providers)]
     pub providers: Option<Providers>,
-    #[arg(long, help = REFRESH_HELP)]
-    pub refresh: bool,
     /// compare with the equivalent previous period
     #[arg(long)]
     pub compare: bool,
     /// print a single line (cost · tokens) for status bars and prompts
     #[arg(long)]
     pub short: bool,
-    /// only the project (origin remote) of this folder, default the current one; Cursor isn't attributed
+    /// only the project (origin remote) of this folder, default the current one
     #[arg(long, value_name = "path", num_args = 0..=1, default_missing_value = ".")]
     pub dir: Option<PathBuf>,
     /// print machine-readable JSON
@@ -287,7 +284,7 @@ fn render_budget_line(core: &Core, status: &BudgetStatus) {
 
 fn usage_once(core: &Core, options: &UsageOptions, report_options: &ReportOptions) -> Result<(), Failure> {
     let providers = options.providers.as_deref();
-    let loaded = load(core, providers, options.refresh, None)?;
+    let loaded = load(core, providers, None)?;
     let rates = core.pricing().current();
     let context = ReportContext { pricing: &rates, clock: &core.clock, now: core.clock.now() };
     let (report, comparison) = match &loaded {

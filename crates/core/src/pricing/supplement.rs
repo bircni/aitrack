@@ -36,18 +36,6 @@ pub struct CodexPricing {
     pub output_per_million: f64,
 }
 
-impl CodexPricing {
-    #[must_use]
-    pub fn rates(&self) -> FullRates {
-        FullRates {
-            input_per_million: self.input_per_million,
-            output_per_million: self.output_per_million,
-            cache_read_per_million: self.input_per_million * super::rates::CACHE_READ_RATE_MULTIPLIER,
-            cache_write_per_million: self.input_per_million,
-        }
-    }
-}
-
 /// `pricing` applies to usage dates strictly before `before`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Override<P> {
@@ -83,22 +71,8 @@ pub struct CodexSupplement {
     pub family_fallback: Vec<CodexFallbackRule>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CursorAlias {
-    pub pattern: String,
-    pub canonical: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CursorSupplement {
-    pub models: IndexMap<String, FullRates>,
-    pub fast_multipliers: IndexMap<String, f64>,
-    pub aliases: Vec<CursorAlias>,
-}
-
-/// Cursor-native rates, aliases, date overrides, historical Codex rows and the Claude cache
-/// multipliers catalogs get wrong, as published on the `pricing` branch.
+/// Date overrides, historical Codex rows and the Claude cache multipliers catalogs get wrong, as
+/// published on the `pricing` branch.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Supplement {
@@ -107,12 +81,10 @@ pub struct Supplement {
     pub comment: Option<String>,
     pub claude: ClaudeSupplement,
     pub codex: CodexSupplement,
-    pub cursor: CursorSupplement,
 }
 
 const CLAUDE_TABLE: &str = include_str!("../../pricing-tables/claude.json");
 const CODEX_TABLE: &str = include_str!("../../pricing-tables/codex.json");
-const CURSOR_TABLE: &str = include_str!("../../pricing-tables/cursor.json");
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,28 +102,17 @@ struct CodexTable {
     rates: CodexSupplement,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CursorTable {
-    updated_at: String,
-    #[serde(flatten)]
-    rates: CursorSupplement,
-}
-
 /// The supplement built from the bundled tables; its `updatedAt` is the newest table's.
 #[must_use]
 pub fn bundled_supplement() -> Supplement {
     let claude: ClaudeTable = bundled(CLAUDE_TABLE);
     let codex: CodexTable = bundled(CODEX_TABLE);
-    let cursor: CursorTable = bundled(CURSOR_TABLE);
-    let updated =
-        bundled_date(&claude.updated_at).max(bundled_date(&codex.updated_at)).max(bundled_date(&cursor.updated_at));
+    let updated = bundled_date(&claude.updated_at).max(bundled_date(&codex.updated_at));
     Supplement {
         updated_at: iso_millis(updated),
         comment: Some("First-party pricing from tables/*.json. Catalogs supply additional models.".to_owned()),
         claude: claude.rates,
         codex: codex.rates,
-        cursor: cursor.rates,
     }
 }
 
@@ -198,16 +159,14 @@ fn overrides(value: Option<&Value>, fields: &[&str]) -> bool {
 
 const IO: &[&str] = &["inputPerMillion", "outputPerMillion"];
 const CLAUDE: &[&str] = &["inputPerMillion", "outputPerMillion", "cacheReadPerMillion", "cacheCreatePerMillion"];
-const CURSOR: &[&str] = &["inputPerMillion", "outputPerMillion", "cacheReadPerMillion", "cacheWritePerMillion"];
 
 /// A published supplement, validated as 4.x validates it before trusting a single rate.
 pub fn parse_supplement(value: &Value) -> Option<Supplement> {
-    let (claude, codex, cursor) = (value.get("claude")?, value.get("codex")?, value.get("cursor")?);
+    let (claude, codex) = (value.get("claude")?, value.get("codex")?);
     let fallback = claude.get("familyFallback");
     let valid = is_timestamp(value.get("updatedAt"))
         && claude.is_object()
         && codex.is_object()
-        && cursor.is_object()
         && map(claude.get("models"), |row| rates(Some(row), CLAUDE))
         && overrides(claude.get("overrides"), CLAUDE)
         && CLAUDE_FAMILIES.iter().all(|family| rates(fallback.and_then(|f| f.get(*family)), CLAUDE))
@@ -216,13 +175,6 @@ pub fn parse_supplement(value: &Value) -> Option<Supplement> {
         && overrides(codex.get("overrides"), IO)
         && codex.get("familyFallback").and_then(Value::as_array).is_some_and(|rules| {
             rules.iter().all(|rule| rule.is_object() && is_pattern(rule.get("match")) && rates(Some(rule), IO))
-        })
-        && map(cursor.get("models"), |row| rates(Some(row), CURSOR))
-        && map(cursor.get("fastMultipliers"), |m| amount(Some(m)))
-        && cursor.get("aliases").and_then(Value::as_array).is_some_and(|aliases| {
-            aliases.iter().all(|a| {
-                a.is_object() && is_pattern(a.get("pattern")) && a.get("canonical").is_some_and(Value::is_string)
-            })
         });
     if !valid {
         return None;

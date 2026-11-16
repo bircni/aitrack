@@ -6,7 +6,7 @@ use std::path::Path;
 use aitrack_core::data::types::TokenCounts;
 use aitrack_core::pricing::cost::{
     FallbackCollector, estimate_claude_cost_from_aggregate, estimate_claude_cost_from_stored_counts,
-    estimate_codex_cost, estimate_cursor_cost,
+    estimate_codex_cost,
 };
 use aitrack_core::pricing::model_pricing::ModelPricing;
 use aitrack_core::pricing::store::PricingStore;
@@ -44,7 +44,6 @@ fn check(pricing: &ModelPricing, recorded: &str) {
                 date,
                 fb,
             )),
-            bits(estimate_cursor_cost(pricing, model, c, date)),
             Value::from(fallbacks.drain()),
         ];
         assert_eq!(Value::from(got.to_vec()), Value::from(row.as_array().unwrap()[3..].to_vec()), "{model} {row}");
@@ -64,7 +63,6 @@ fn check(pricing: &ModelPricing, recorded: &str) {
                 date,
                 None,
             )),
-            bits(estimate_cursor_cost(pricing, model, &c, date)),
         ];
         assert_eq!(Value::from(got.to_vec()), Value::from(row.as_array().unwrap()[2..].to_vec()), "{row}");
     }

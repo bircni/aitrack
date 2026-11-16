@@ -248,7 +248,6 @@ impl<D: Deps> QuotaService<D> {
             refreshing: inner.usage_running || providers.iter().any(|p| p.refreshing),
             providers,
             machines: usage.and_then(|u| u.machines.clone()),
-            account_usage: usage.and_then(|u| u.account.clone()),
             projects: usage.and_then(|u| u.projects.clone()),
             usage_error: inner.usage_error.clone(),
             updated_at: inner.cache.updated_at.clone(),
@@ -442,7 +441,7 @@ impl<D: Deps> QuotaService<D> {
         };
         self.emit();
         let key = providers_key(&providers);
-        let result = self.deps.load_usage(UsageLoadOptions { providers, pull, refresh_live: force, local_machine });
+        let result = self.deps.load_usage(UsageLoadOptions { providers, pull, local_machine });
         let completed_at = self.deps.now();
         {
             let mut inner = self.lock();
@@ -656,7 +655,7 @@ mod tests {
     }
 
     fn all() -> Vec<String> {
-        ["claude_code", "codex", "cursor"].map(String::from).to_vec()
+        ["claude_code", "codex"].map(String::from).to_vec()
     }
 
     #[test]
@@ -702,7 +701,7 @@ mod tests {
                 assert!(std::time::Instant::now() < deadline, "usage never showed");
                 std::thread::yield_now();
             }
-            for _ in 0..3 {
+            for _ in all() {
                 release.send(()).unwrap();
             }
         });
@@ -713,25 +712,25 @@ mod tests {
         let (fake, service) = harness(Fake::default());
         service.refresh(false);
         service.refresh(false);
-        assert_eq!(fake.calls.lock().unwrap().len(), 3);
+        assert_eq!(fake.calls.lock().unwrap().len(), 2);
         fake.advance(REFRESH_INTERVAL_MS);
         service.refresh(false);
-        assert_eq!(fake.calls.lock().unwrap().len(), 6);
+        assert_eq!(fake.calls.lock().unwrap().len(), 4);
         assert_eq!(fake.pulls(), [true, false]);
         service.refresh(true);
-        assert_eq!(fake.calls.lock().unwrap().len(), 9);
+        assert_eq!(fake.calls.lock().unwrap().len(), 6);
         assert_eq!(fake.pulls(), [true, false, true]);
         fake.advance(PULL_INTERVAL_MS);
         service.refresh(false);
         assert_eq!(fake.pulls().last(), Some(&true));
     }
 
-    fn failing() -> Fake {
+    /// Claude fails with `claude`; Codex is rate limited for five minutes.
+    fn failing(claude: QuotaErrorKind) -> Fake {
         Fake {
-            quota: Some(Box::new(|provider, _| match provider {
-                "claude_code" => Some(failure(QuotaErrorKind::Auth, "token rejected", None)),
-                "codex" => Some(failure(QuotaErrorKind::RateLimited, "slow down", Some(300))),
-                _ => Some(failure(QuotaErrorKind::NoCredentials, "sign in", None)),
+            quota: Some(Box::new(move |provider, _| match provider {
+                "claude_code" => Some(failure(claude, "sign in", None)),
+                _ => Some(failure(QuotaErrorKind::RateLimited, "slow down", Some(300))),
             })),
             ..Fake::default()
         }
@@ -739,20 +738,20 @@ mod tests {
 
     #[test]
     fn backs_off_after_failures_and_honours_retry_after_even_when_forced() {
-        let (fake, service) = harness(failing());
-        service.refresh(false);
-        let state = service.state();
-        assert_eq!(state.providers[1].quota_error.as_ref().unwrap().kind, QuotaErrorKind::RateLimited);
-        assert_eq!(state.providers[1].retry_at, Some(START + 300_000.0));
-        assert!(state.providers[2].quota.is_none());
-        fake.take_calls();
-        service.refresh(true);
-        let mut calls = fake.take_calls();
-        calls.sort();
-        assert_eq!(calls, ["claude_code", "cursor"]);
-        fake.advance(FAILURE_BACKOFF_MS);
-        service.refresh(false);
-        assert_eq!(fake.take_calls(), ["cursor"]);
+        for (kind, retried_after_backoff) in [(QuotaErrorKind::NoCredentials, true), (QuotaErrorKind::Auth, false)] {
+            let (fake, service) = harness(failing(kind));
+            service.refresh(false);
+            let state = service.state();
+            assert_eq!(state.providers[1].quota_error.as_ref().unwrap().kind, QuotaErrorKind::RateLimited);
+            assert_eq!(state.providers[1].retry_at, Some(START + 300_000.0));
+            assert!(state.providers[0].quota.is_none());
+            fake.take_calls();
+            service.refresh(true);
+            assert_eq!(fake.take_calls(), ["claude_code"]);
+            fake.advance(FAILURE_BACKOFF_MS);
+            service.refresh(false);
+            assert_eq!(fake.take_calls().len(), usize::from(retried_after_backoff), "{kind:?}");
+        }
     }
 
     #[test]
@@ -848,9 +847,7 @@ mod tests {
         let (restarted, service) = harness_with(Fake::default(), Settings::default(), Some(saved));
         assert_eq!(service.state().providers[0].quota_error.as_ref().unwrap().kind, QuotaErrorKind::RateLimited);
         service.refresh(true);
-        let mut calls = restarted.take_calls();
-        calls.sort();
-        assert_eq!(calls, ["codex", "cursor"]);
+        assert_eq!(restarted.take_calls(), ["codex"]);
     }
 
     #[test]
@@ -967,10 +964,7 @@ mod tests {
             assert_eq!(fake.syncs.load(Ordering::SeqCst), 1);
             assert!(service.state().syncing);
             let last = fake.loads.lock().unwrap().last().cloned().unwrap();
-            assert_eq!(
-                last,
-                UsageLoadOptions { providers: all(), pull: false, refresh_live: false, local_machine: Some(machine()) }
-            );
+            assert_eq!(last, UsageLoadOptions { providers: all(), pull: false, local_machine: Some(machine()) });
             finish_reload.send(()).unwrap();
         });
         let state = service.state();

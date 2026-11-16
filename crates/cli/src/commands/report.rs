@@ -14,10 +14,9 @@ use crate::json::print_json_command;
 pub fn load(
     core: &Core,
     providers: Option<&[String]>,
-    refresh: bool,
     local: Option<MachineFile>,
 ) -> Result<Option<LoadedUsage>, Failure> {
-    let loaded = load_usage(core, providers, refresh, local)?;
+    let loaded = load_usage(core, providers, local)?;
     if let Some(loaded) = &loaded {
         warn_about_pricing_fallbacks(core, &loaded.zoned.provider_data);
     }

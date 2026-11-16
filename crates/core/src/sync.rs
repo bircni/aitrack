@@ -19,17 +19,17 @@ use crate::js;
 use crate::machine_id::machine_data_filename;
 use crate::pricing::ReaderPricing;
 use crate::pricing::cost::{FallbackCollector, PriceMode, price_model_cost};
-use crate::providers::{PROVIDERS, synced_provider_keys};
+use crate::providers::PROVIDERS;
 use crate::readers::project::GitProjectResolver;
 use crate::readers::read::{read_claude_days, read_codex_days};
 use crate::store::encryption::{ENCRYPTION_PASSPHRASE_ENV, encryption_passphrase};
 use crate::store::machine_files::{MachineFileError, remove_pending_machine_file, write_machine_file};
 use crate::store::validate::{Failure, ValidationOptions, check_raw_machine_file};
 
-/// The synced providers' days from this machine's logs, keyed by provider.
+/// Each provider's days from this machine's logs, keyed by provider.
 pub type LocalMaps = IndexMap<String, DayMap>;
 
-/// Reads every synced provider's logs, priced with the current rates.
+/// Reads every provider's logs, priced with the current rates.
 ///
 /// # Errors
 ///
@@ -56,7 +56,7 @@ pub fn read_local_provider_maps(
 /// Records family-fallback guesses for models already loaded: cache hits never call the pricer.
 pub fn record_pricing_fallbacks(core: &Core, maps: &LocalMaps, fallbacks: &FallbackCollector) {
     let rates = core.pricing().current();
-    for provider in synced_provider_keys() {
+    for provider in PROVIDERS.iter().map(|p| p.key) {
         for (date, day) in maps.get(provider).into_iter().flatten() {
             let date = date.to_string();
             for (model, counts) in &day.by_model {
@@ -253,7 +253,7 @@ fn push_local_usage(
     let total_days = maps.values().flat_map(|m| m.keys()).collect::<HashSet<_>>().len();
     if total_days == 0 {
         let pushed = !options.dry_run && push_machine_data(core, guard, git, host)?;
-        let labels: Vec<&str> = PROVIDERS.iter().filter(|p| p.synced).map(|p| p.label).collect();
+        let labels: Vec<&str> = PROVIDERS.iter().map(|p| p.label).collect();
         let message = if pushed {
             format!("Done! Pushed machine data migration for {host}.")
         } else {
@@ -263,7 +263,6 @@ fn push_local_usage(
     }
     let found: Vec<String> = PROVIDERS
         .iter()
-        .filter(|p| p.synced)
         .filter_map(|p| maps.get(p.key).map(|m| (p.label, m.len())).filter(|(_, n)| *n > 0))
         .map(|(label, n)| format!("{label} ({n} days)"))
         .collect();
