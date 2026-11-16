@@ -2,7 +2,7 @@
 
 use eframe::egui::{
     self, Align, Color32, CornerRadius, FontFamily, FontId, Frame, Layout, Margin, Rect, Response, RichText, Role,
-    Sense, Shadow, Stroke, StrokeKind, Ui, Vec2, WidgetInfo,
+    Sense, Stroke, StrokeKind, Ui, Vec2, WidgetInfo,
 };
 
 use super::icons::{paint_glyph, square, Glyph};
@@ -16,19 +16,123 @@ pub fn strong(value: impl Into<String>, size: f32, color: Color32) -> RichText {
     RichText::new(value).font(FontId::new(size, bold())).color(color)
 }
 
-pub fn card<R>(ui: &mut Ui, palette: &Palette, add: impl FnOnce(&mut Ui) -> R) -> R {
+/// A figure, in the fixed-width face the heatmap and the terminal set numbers in.
+pub fn mono(value: impl Into<String>, size: f32, color: Color32) -> RichText {
+    RichText::new(value).font(FontId::new(size, FontFamily::Monospace)).color(color)
+}
+
+/// A small spaced-out capital label, as over the heatmap's stats.
+pub fn caps(value: &str, color: Color32) -> RichText {
+    strong(value.to_uppercase(), 10.0, color).extra_letter_spacing(0.7)
+}
+
+/// A block of the popup under a rule; the popup is flat, so rules and not cards part its blocks.
+pub fn section<R>(ui: &mut Ui, palette: &Palette, add: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.painter().hline(ui.max_rect().x_range(), ui.cursor().top(), Stroke::new(1.0, palette.rule));
     Frame::new()
-        .fill(palette.card)
-        .stroke(Stroke::new(1.0, palette.edge))
-        .corner_radius(CornerRadius::same(14))
-        .shadow(Shadow { offset: [0, 2], blur: 8, spread: 0, color: Color32::from_black_alpha(6) })
-        .inner_margin(Margin::same(14))
-        .outer_margin(Margin { left: 12, right: 12, top: 0, bottom: 10 })
+        .inner_margin(Margin { left: 16, right: 16, top: 14, bottom: 16 })
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             add(ui)
         })
         .inner
+}
+
+/// A row of `count` heatmap cells across the available width, coloured by `color`; `mark` outlines one.
+pub fn cells(
+    ui: &mut Ui,
+    palette: &Palette,
+    (count, height): (usize, f32),
+    color: impl Fn(usize) -> Color32,
+    mark: Option<usize>,
+) -> Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::hover());
+    #[expect(clippy::cast_precision_loss, reason = "a few dozen cells")]
+    let (slots, gaps) = (count.max(1) as f32, count.saturating_sub(1) as f32);
+    let width = (rect.width() - 2.0 * gaps) / slots;
+    let radius = CornerRadius::same(if height > 6.0 { 2 } else { 1 });
+    for index in 0..count {
+        #[expect(clippy::cast_precision_loss, reason = "a few dozen cells")]
+        let left = rect.left() + index as f32 * (width + 2.0);
+        let cell = Rect::from_min_size(egui::pos2(left, rect.top()), Vec2::new(width, height));
+        ui.painter().rect_filled(cell, radius, color(index));
+        if mark == Some(index) {
+            ui.painter().rect_stroke(cell, radius, Stroke::new(1.5, palette.ink), StrokeKind::Outside);
+        }
+    }
+    response
+}
+
+/// The colour of cell `index` when the first `filled` of a row are lit along `ramp`, dim to bright.
+pub fn ramp_cell(palette: &Palette, ramp: [Color32; 4], filled: usize, index: usize) -> Color32 {
+    if index >= filled {
+        return palette.track;
+    }
+    ramp[(index * 4 / filled.max(1)).min(3)]
+}
+
+/// How many of `count` cells a share of 0 to 1 lights.
+pub fn lit_cells(share: f32, count: usize) -> usize {
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a share of a few dozen cells, clamped to them first"
+    )]
+    let lit = (share.clamp(0.0, 1.0) * count as f32).round() as usize;
+    lit
+}
+
+/// Capital text tabs with a rule under the chosen one.
+pub fn caps_tabs<T: Copy + PartialEq>(ui: &mut Ui, palette: &Palette, value: &mut T, options: &[(T, &str)]) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 18.0;
+        for (option, label) in options {
+            let selected = *value == *option;
+            let color = if selected { palette.ink } else { palette.ink2 };
+            let galley = egui::WidgetText::from(caps(label, color)).into_galley(
+                ui,
+                Some(egui::TextWrapMode::Extend),
+                f32::INFINITY,
+                egui::TextStyle::Body,
+            );
+            let (rect, response) = ui.allocate_exact_size(galley.size() + Vec2::new(0.0, 7.0), Sense::click());
+            ui.painter().galley(rect.min, galley, color);
+            if selected {
+                ui.painter().hline(rect.x_range(), rect.bottom() - 1.0, Stroke::new(2.0, palette.ink));
+            }
+            response.widget_info(|| WidgetInfo::selected(Role::Button, true, selected, *label));
+            paint_focus(ui, palette, &response, rect, 3);
+            if response.clicked() && !selected {
+                *value = *option;
+                changed = true;
+            }
+        }
+    });
+    changed
+}
+
+/// The app icon's ring, filled to `share`, with `label` in its middle.
+pub fn ring(ui: &mut Ui, palette: &Palette, share: f32, color: Color32, label: &str) -> Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(68.0), Sense::hover());
+    let (center, radius) = (rect.center(), 29.0);
+    ui.painter().circle_stroke(center, radius, Stroke::new(8.0, palette.track));
+    let steps = 96_u16;
+    let end = lit_cells(share, usize::from(steps));
+    if end > 0 {
+        let points: Vec<egui::Pos2> = (0..=end)
+            .map(|step| {
+                #[expect(clippy::cast_precision_loss, reason = "at most 96 steps")]
+                let turn = step as f32 / f32::from(steps) * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+                center + Vec2::angled(turn) * radius
+            })
+            .collect();
+        ui.painter().add(egui::Shape::line(points, Stroke::new(8.0, color)));
+    }
+    let galley = ui.painter().layout_no_wrap(label.to_owned(), FontId::new(16.0, FontFamily::Monospace), palette.ink);
+    ui.painter().galley(center - galley.size() / 2.0, galley, palette.ink);
+    response
 }
 
 pub fn banner(ui: &mut Ui, palette: &Palette, add: impl FnOnce(&mut Ui)) {
@@ -180,37 +284,21 @@ pub fn switch(ui: &mut Ui, palette: &Palette, on: &mut bool, label: &str) -> boo
 /// Two labels at either end of a row, the left one cut short when they meet.
 pub fn spread(ui: &mut Ui, left: RichText, right: RichText) {
     ui.horizontal(|ui| {
-        let right_width = ui.painter().layout_no_wrap(right.text().into(), FontId::default(), Color32::WHITE).size().x;
-        ui.add_sized(
-            [ui.available_width() - right_width - 12.0, 16.0],
-            egui::Label::new(left).truncate().halign(Align::Min),
-        );
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(right));
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.label(right);
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| ui.add(egui::Label::new(left).truncate()));
+        });
     });
 }
 
-/// A stacked bar of `(fraction, colour)` parts on a track.
-pub fn stacked_bar(ui: &mut Ui, palette: &Palette, parts: &[(f32, Color32)], height: f32, width: f32) {
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
-    let radius = CornerRadius::from(height / 2.0);
-    ui.painter().rect_filled(rect, radius, palette.track);
-    let mut x = rect.left();
-    let clip = ui.painter().with_clip_rect(rect);
-    for (fraction, color) in parts {
-        let w = rect.width() * fraction.clamp(0.0, 1.0);
-        clip.rect_filled(
-            Rect::from_min_size(egui::pos2(x, rect.top()), Vec2::new(w, height)),
-            CornerRadius::ZERO,
-            *color,
-        );
-        x += w;
-    }
-}
-
-/// A rule across the section, with the room below it a new block starts after.
-pub fn divider(ui: &mut Ui, palette: &Palette) {
-    ui.painter().hline(ui.max_rect().x_range(), ui.cursor().top(), Stroke::new(1.0, palette.rule));
-    ui.add_space(12.0);
+/// A label in a column `width` wide, at its left or right edge, so what follows lines up row to row.
+pub fn fixed(ui: &mut Ui, width: f32, align: Align, label: RichText) {
+    let layout =
+        if align == Align::Max { Layout::right_to_left(Align::Center) } else { Layout::left_to_right(Align::Center) };
+    ui.allocate_ui_with_layout(Vec2::new(width, 16.0), layout, |ui| {
+        ui.set_min_width(width);
+        ui.add(egui::Label::new(label).truncate());
+    });
 }
 
 /// The animation angle `time * rate`, wrapped to one turn in f64 so long uptimes stay smooth in f32.
