@@ -327,6 +327,17 @@ fn general(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_
                 s.pull_synced_data = v;
             },
         );
+        let hint = "Shares look, providers, limits and alerts through your data repo. Changes go out when you sync";
+        switch_line(
+            ui,
+            frame,
+            settings,
+            &Note { label: "Sync settings", hint: Some(hint), error: None },
+            settings.sync,
+            |s, v| {
+                s.sync = v;
+            },
+        );
         let login_error = model.setting_errors.launch_at_login.as_deref();
         switch_line(
             ui,

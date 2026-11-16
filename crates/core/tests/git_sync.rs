@@ -219,3 +219,36 @@ fn recompute_restores_a_corrupt_file_from_its_last_commit_and_renames_move_files
     std::fs::write(a.repo().join("data/other.json"), "{}").unwrap();
     assert!(migrate_machine_data_files(&core, "laptop", "other").unwrap_err().0.contains("already exists"));
 }
+
+#[test]
+fn replays_a_diverged_shared_settings_commit_with_the_newest_file_winning() {
+    use aitrack_core::git::{commit_and_push_shared_settings, pull};
+    use aitrack_core::store::shared_settings::{read_shared_settings, write_shared_settings};
+
+    let root = tempfile::tempdir().unwrap();
+    let remote = remote(root.path());
+    let a = Machine::new(root.path(), "a", &remote, &[]);
+    let b = Machine::new(root.path(), "b", &remote, &[]);
+    let write = |m: &Machine, at: &str, theme: &str| {
+        let settings = serde_json::Map::from_iter([("theme".to_owned(), theme.into())]);
+        write_shared_settings(&m.core().0, at.parse().unwrap(), &settings, false).unwrap();
+    };
+    let share = |m: &Machine, at: &str, theme: &str| {
+        write(m, at, theme);
+        let (core, _) = m.core();
+        core.with_repo_lock(|guard| commit_and_push_shared_settings(&core, guard, guard.git())).unwrap();
+        assert_eq!(git(&m.repo(), &["status", "--porcelain"]), "");
+        assert_eq!(git(&m.repo(), &["rev-list", "--count", "@{upstream}..HEAD"]), "0");
+        read_shared_settings(&core).unwrap().unwrap().settings["theme"].clone()
+    };
+    assert_eq!(share(&a, "2026-03-10T12:00:00Z", "dark"), "dark");
+    assert_eq!(share(&b, "2026-03-10T13:00:00Z", "light"), "light", "the newer local commit wins");
+    assert_eq!(share(&a, "2026-03-10T11:00:00Z", "system"), "light", "the older local commit loses");
+    assert_eq!(git(&remote, &["log", "--format=%s", "main"]).lines().count(), 2);
+
+    write(&a, "2026-03-10T15:00:00Z", "system"); // Left by a run that died before committing.
+    assert_eq!(share(&b, "2026-03-10T14:00:00Z", "dark"), "dark");
+    let (core, _) = a.core();
+    core.with_repo_lock(|guard| pull(&core, guard, guard.git())).unwrap();
+    assert_eq!(read_shared_settings(&core).unwrap().unwrap().settings["theme"], "dark");
+}

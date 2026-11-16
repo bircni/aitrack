@@ -51,7 +51,7 @@ pub enum By {
 pub enum Action {
     Refresh,
     Sync,
-    Save(Settings),
+    Save(Box<Settings>),
     OpenDashboard(String),
     Hide,
     Quit,
@@ -180,7 +180,7 @@ impl Frame<'_> {
         let mut next = settings.clone();
         change(&mut next);
         if next != *settings {
-            self.act(Action::Save(next));
+            self.act(Action::Save(Box::new(next)));
         }
     }
 }
@@ -277,7 +277,9 @@ fn retry_banner(ui: &mut Ui, frame: &mut Frame<'_>, message: impl Into<String>, 
 fn body(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
     let palette = frame.palette;
     if let Some(error) = model.settings_error {
-        retry_banner(ui, frame, format!("Could not save settings: {error}"), || Action::Save(model.settings.clone()));
+        retry_banner(ui, frame, format!("Could not save settings: {error}"), || {
+            Action::Save(Box::new(model.settings.clone()))
+        });
     }
     if view.screen == Screen::Dashboard {
         if let Some(version) = &model.update.available {

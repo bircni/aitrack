@@ -20,6 +20,7 @@ use crate::alerts::Alert;
 use crate::cache::{cache_json, load_cached_state, CachedState};
 use crate::service::{Deps, QuotaService};
 use crate::settings::{load_settings, read_json_file, write_settings, Settings};
+use crate::settings_sync::reconcile;
 use crate::state::AppState;
 use crate::tray_icon::{render_tray_icon, summarize_tray, TrayAppearance, TrayChoice, TraySummary};
 use crate::usage::{load_usage_summary, UsageLoadOptions, UsageLoadResult, GIT_TIMEOUT};
@@ -80,6 +81,7 @@ impl Output for LogOutput {
 pub struct LiveDeps {
     core: Core,
     cache_path: PathBuf,
+    settings_path: PathBuf,
     sink: OnceLock<Sink>,
     /// The tray follows these; the service's own copy is behind its lock.
     settings: Mutex<Settings>,
@@ -159,11 +161,25 @@ impl Deps for LiveDeps {
         let options = SyncOptions { timeout: Some(GIT_TIMEOUT), ..SyncOptions::default() };
         sync_data(&self.core, options).map(|done| (done.message, done.machine)).map_err(|error| error.to_string())
     }
+
+    fn save_settings(&self, settings: &Settings) -> Result<(), String> {
+        write_settings(&self.settings_path, settings).map_err(|error| error.to_string())?;
+        settings.clone_into(&mut self.settings.locked());
+        Ok(())
+    }
+
+    fn on_settings(&self, settings: &Settings) {
+        self.send(Event::Settings(settings));
+    }
+
+    fn sync_settings(&self, settings: &mut Settings, push: bool) -> Result<(), String> {
+        reconcile(&self.core, settings, push)
+            .inspect_err(|error| self.core.output.warn(&format!("opentrack: could not sync the settings: {error}")))
+    }
 }
 
 pub struct Background {
     pub service: QuotaService<LiveDeps>,
-    settings_path: PathBuf,
 }
 
 impl Background {
@@ -178,11 +194,12 @@ impl Background {
         let deps = LiveDeps {
             core,
             cache_path,
+            settings_path,
             sink: OnceLock::new(),
             settings: Mutex::new(settings.clone()),
             last_tray: Mutex::new(None),
         };
-        Arc::new(Self { service: QuotaService::new(deps, clock, settings, Some(cached)), settings_path })
+        Arc::new(Self { service: QuotaService::new(deps, clock, settings, Some(cached)) })
     }
 
     const fn deps(&self) -> &LiveDeps {
@@ -212,10 +229,7 @@ impl Background {
     }
 
     fn save_settings(self: &Arc<Self>, settings: Settings) -> Result<Settings, String> {
-        let settings = settings.normalized();
-        write_settings(&self.settings_path, &settings).map_err(|error| error.to_string())?;
-        settings.clone_into(&mut self.deps().settings.locked());
-        self.service.set_settings(settings.clone());
+        let settings = self.service.save_settings(settings)?;
         self.refresh_in_background(false);
         Ok(settings)
     }

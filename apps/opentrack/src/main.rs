@@ -16,6 +16,7 @@ mod platform;
 mod position;
 mod service;
 mod settings;
+mod settings_sync;
 mod state;
 mod system;
 mod tray;
