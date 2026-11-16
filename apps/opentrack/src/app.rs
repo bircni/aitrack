@@ -1,6 +1,7 @@
 //! The window: placing and hiding the popup, routing background events to the UI, and carrying out
 //! what the UI asks for.
 
+use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -31,6 +32,7 @@ pub enum Msg {
     Toggle(Option<Rect>),
     Show(Screen),
     Refresh,
+    ExportLogs,
     Quit,
     State(Arc<AppState>),
     Settings(Box<Settings>),
@@ -69,6 +71,7 @@ enum Run {
 
 pub struct App {
     background: Arc<Background>,
+    data_dir: PathBuf,
     rx: Receiver<Msg>,
     bus: Bus,
     saves: Sender<(u64, Settings)>,
@@ -102,7 +105,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, background: Arc<Background>, listener: Listener) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        background: Arc<Background>,
+        data_dir: PathBuf,
+        listener: Listener,
+    ) -> Self {
         let ctx = cc.egui_ctx.clone();
         install_fonts(&ctx);
         let (tx, rx) = channel();
@@ -132,6 +140,7 @@ impl App {
             state: Arc::new(background.service.state()),
             settings: background.service.settings(),
             background,
+            data_dir,
             rx,
             bus,
             saves: save_count,
@@ -277,6 +286,13 @@ impl App {
                 },
                 Msg::Show(screen) => self.show(ctx, Some(screen)),
                 Msg::Refresh => self.background.refresh_in_background(true),
+                Msg::ExportLogs => {
+                    crate::logs::export(
+                        self.data_dir.clone(),
+                        crate::logs::archive_name(&self.clock),
+                        self.bus.clone(),
+                    );
+                }
                 Msg::Quit => std::process::exit(0),
                 Msg::State(state) => self.on_state(state),
                 Msg::Settings(settings) => {
