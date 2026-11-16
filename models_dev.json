@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-15T13:54:55.582Z",
+  "retrievedAt": "2026-11-16T15:42:33.760Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -248,7 +248,7 @@
     },
     "google-vertex/gemini-2.5-flash-image": {
       "i": 0.3,
-      "o": 30,
+      "o": 2.5,
       "cw": 0.3,
       "cr": 0.03,
       "cre": false,
@@ -293,14 +293,14 @@
     },
     "google-vertex/gemini-3-pro-image": {
       "i": 2,
-      "o": 120,
+      "o": 12,
       "cw": 2,
       "cr": 0.2,
       "cwe": false
     },
     "google-vertex/gemini-3.1-flash-image": {
       "i": 0.5,
-      "o": 60,
+      "o": 3,
       "cw": 0.5,
       "cr": 0.05,
       "cwe": false
@@ -314,7 +314,7 @@
     },
     "google-vertex/gemini-3.1-flash-lite-image": {
       "i": 0.25,
-      "o": 30,
+      "o": 1.5,
       "cw": 0.25,
       "cr": 0.025,
       "cwe": false
@@ -399,7 +399,7 @@
     },
     "google-vertex/gemini-nano-banana-2.1": {
       "i": 1.5,
-      "o": 30,
+      "o": 7.5,
       "cw": 1.5,
       "cr": 0.15,
       "cwe": false
@@ -582,7 +582,7 @@
     },
     "google/gemini-2.5-flash-image": {
       "i": 0.3,
-      "o": 30,
+      "o": 2.5,
       "cw": 0.3,
       "cr": 0.075,
       "cwe": false
@@ -626,7 +626,7 @@
     },
     "google/gemini-3-pro-image": {
       "i": 2,
-      "o": 120,
+      "o": 12,
       "cw": 2,
       "cr": 0.2,
       "cre": false,
@@ -634,7 +634,7 @@
     },
     "google/gemini-3.1-flash-image": {
       "i": 0.5,
-      "o": 60,
+      "o": 3,
       "cw": 0.5,
       "cr": 0.05,
       "cre": false,
@@ -649,7 +649,7 @@
     },
     "google/gemini-3.1-flash-lite-image": {
       "i": 0.25,
-      "o": 30,
+      "o": 1.5,
       "cw": 0.25,
       "cr": 0.025,
       "cre": false,
@@ -1066,13 +1066,6 @@
     "openai/gpt-image-1.5": {
       "i": 5,
       "o": 10,
-      "cw": 5,
-      "cr": 1.25,
-      "cwe": false
-    },
-    "openai/gpt-image-2": {
-      "i": 5,
-      "o": 30,
       "cw": 5,
       "cr": 1.25,
       "cwe": false
