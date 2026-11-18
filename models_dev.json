@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-16T19:45:16.197Z",
+  "retrievedAt": "2026-11-18T15:37:38.773Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -1050,6 +1050,18 @@
       "o": 5,
       "cw": 1.25,
       "cr": 0.05
+    },
+    "openai/gpt-6.2-astra": {
+      "i": 8,
+      "o": 40,
+      "cw": 10,
+      "cr": 0.4
+    },
+    "openai/gpt-6.2-sol": {
+      "i": 2,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 0.1
     },
     "openai/gpt-daybreak-blue-latest": {
       "i": 4,
