@@ -36,6 +36,8 @@ pub trait Deps: Send + Sync {
     fn load_usage(&self, options: UsageLoadOptions) -> UsageLoadResult;
     /// Epoch ms.
     fn now(&self) -> f64;
+    /// Asked for at each use, so a changed system zone is picked up without a restart.
+    fn clock(&self) -> Clock;
     fn on_state(&self, state: Arc<AppState>);
     fn on_alert(&self, alert: &Alert);
     fn persist(&self, cache: &CachedState);
@@ -103,7 +105,6 @@ impl Inner {
 
 pub struct QuotaService<D: Deps> {
     deps: D,
-    clock: Clock,
     inner: Mutex<Inner>,
     /// Signalled when a usage load ends, for a sync waiting to start its own.
     usage_done: Condvar,
@@ -112,7 +113,7 @@ pub struct QuotaService<D: Deps> {
 }
 
 impl<D: Deps> QuotaService<D> {
-    pub fn new(deps: D, clock: Clock, settings: Settings, cache: Option<CachedState>) -> Self {
+    pub fn new(deps: D, settings: Settings, cache: Option<CachedState>) -> Self {
         let cache = cache.unwrap_or_default();
         let now = deps.now();
         let mut runtime = IndexMap::new();
@@ -149,7 +150,7 @@ impl<D: Deps> QuotaService<D> {
             syncing: false,
             sync_result: None,
         };
-        Self { deps, clock, inner: Mutex::new(inner), usage_done: Condvar::new(), emitting: Mutex::new(()) }
+        Self { deps, inner: Mutex::new(inner), usage_done: Condvar::new(), emitting: Mutex::new(()) }
     }
 
     pub const fn deps(&self) -> &D {
@@ -238,9 +239,9 @@ impl<D: Deps> QuotaService<D> {
             .collect();
         let mut fetched: Vec<String> =
             providers.iter().filter_map(|p| p.quota.as_ref()).map(|q| q.fetched_at.clone()).collect();
-        fetched.sort_by(|a, b| {
-            parse_ms(&self.clock, a).partial_cmp(&parse_ms(&self.clock, b)).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        let clock = self.deps.clock();
+        fetched
+            .sort_by(|a, b| parse_ms(&clock, a).partial_cmp(&parse_ms(&clock, b)).unwrap_or(std::cmp::Ordering::Equal));
         let keys: Vec<String> = providers.iter().map(|p| p.key.clone()).collect();
         let usage_empty = inner.cache.usage.is_some()
             && inner.usage_error.is_none()
@@ -360,7 +361,7 @@ impl<D: Deps> QuotaService<D> {
         let cache = {
             let mut inner = self.lock();
             let now = self.deps.now();
-            inner.cache.fired = prune_fired(&self.clock, &inner.cache.fired, now);
+            inner.cache.fired = prune_fired(&self.deps.clock(), &inner.cache.fired, now);
             let limited: IndexMap<String, f64> = inner
                 .runtime
                 .iter()
@@ -427,7 +428,7 @@ impl<D: Deps> QuotaService<D> {
         cache: &mut CachedState,
         now: f64,
     ) -> Vec<Alert> {
-        let alerts = due_alerts(&self.clock, provider_label(key), snapshot, rules, &cache.fired, now);
+        let alerts = due_alerts(&self.deps.clock(), provider_label(key), snapshot, rules, &cache.fired, now);
         for alert in &alerts {
             cache.fired.insert(alert.key.clone(), alert.resets_at.clone());
         }
@@ -591,6 +592,9 @@ mod tests {
         fn now(&self) -> f64 {
             *self.now.lock().unwrap()
         }
+        fn clock(&self) -> Clock {
+            Clock::in_zone("UTC").unwrap()
+        }
         fn on_state(&self, state: Arc<AppState>) {
             self.states.lock().unwrap().push((*state).clone());
         }
@@ -641,7 +645,7 @@ mod tests {
     ) -> (Arc<Fake>, QuotaService<Arc<Fake>>) {
         *fake.now.lock().unwrap() = START;
         let fake = Arc::new(fake);
-        let service = QuotaService::new(std::sync::Arc::clone(&fake), Clock::in_zone("UTC").unwrap(), settings, cache);
+        let service = QuotaService::new(std::sync::Arc::clone(&fake), settings, cache);
         (fake, service)
     }
 

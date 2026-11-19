@@ -4,7 +4,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError, RwLock, RwLockReadGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aitrack_core::data::types::MachineFile;
@@ -80,7 +80,7 @@ impl Output for LogOutput {
 }
 
 pub struct LiveDeps {
-    core: Core,
+    core: RwLock<Core>,
     cache_path: PathBuf,
     settings_path: PathBuf,
     sink: OnceLock<Sink>,
@@ -89,7 +89,23 @@ pub struct LiveDeps {
     last_tray: Mutex<Option<(TraySummary, String, bool)>>,
 }
 
+/// Moves the core to `clock`'s zone unless a load is using it, which the next call makes up for.
+fn follow_zone(core: &RwLock<Core>, clock: Clock) {
+    let moved = core.read().unwrap_or_else(PoisonError::into_inner).clock.zone() != clock.zone();
+    if moved {
+        if let Ok(mut core) = core.try_write() {
+            core.clock = clock;
+        }
+    }
+}
+
 impl LiveDeps {
+    /// The core in the system's zone as it is now: a machine that travelled counts its days where it is.
+    fn core(&self) -> RwLockReadGuard<'_, Core> {
+        follow_zone(&self.core, Clock::system());
+        self.core.read().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn send(&self, event: Event<'_>) {
         if let Some(sink) = self.sink.get() {
             sink(event);
@@ -103,7 +119,7 @@ impl LiveDeps {
             window: &settings.tray_window,
             style: &settings.tray_style,
         };
-        let summary = summarize_tray(&self.core.clock, &state.providers, self.now(), choice);
+        let summary = summarize_tray(&self.core().clock, &state.providers, self.now(), choice);
         // A repeated state can still mean a new tray setting or a passed reset.
         let key = Some((summary.clone(), settings.tray_style.clone(), settings.tray_colored));
         {
@@ -126,11 +142,11 @@ impl LiveDeps {
 
 impl Deps for LiveDeps {
     fn fetch_quota(&self, provider: &str) -> QuotaResult {
-        fetch_quota(&self.core, provider)
+        fetch_quota(&self.core(), provider)
     }
 
     fn load_usage(&self, options: UsageLoadOptions) -> UsageLoadResult {
-        load_usage_summary(&self.core, &options)
+        load_usage_summary(&self.core(), &options)
     }
 
     #[expect(
@@ -139,6 +155,10 @@ impl Deps for LiveDeps {
     )]
     fn now(&self) -> f64 {
         SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
+    }
+
+    fn clock(&self) -> Clock {
+        self.core().clock.clone()
     }
 
     /// The popup first; the tray icon may need redrawing.
@@ -153,14 +173,14 @@ impl Deps for LiveDeps {
 
     fn persist(&self, cache: &CachedState) {
         if let Err(error) = aitrack_core::fs::write_file_atomic(&self.cache_path, cache_json(cache), None) {
-            self.core.output.error(&format!("opentrack: could not write the cache: {error}"));
+            self.core().output.error(&format!("opentrack: could not write the cache: {error}"));
             // The next cycle tries again.
         }
     }
 
     fn sync(&self) -> Result<(String, MachineFile), String> {
         let options = SyncOptions { timeout: Some(GIT_TIMEOUT), ..SyncOptions::default() };
-        sync_data(&self.core, options).map(|done| (done.message, done.machine)).map_err(|error| error.to_string())
+        sync_data(&self.core(), options).map(|done| (done.message, done.machine)).map_err(|error| error.to_string())
     }
 
     fn save_settings(&self, settings: &Settings) -> Result<(), String> {
@@ -174,8 +194,9 @@ impl Deps for LiveDeps {
     }
 
     fn sync_settings(&self, settings: &mut Settings, push: bool) -> Result<(), String> {
-        reconcile(&self.core, settings, push)
-            .inspect_err(|error| self.core.output.warn(&format!("opentrack: could not sync the settings: {error}")))
+        let core = self.core();
+        reconcile(&core, settings, push)
+            .inspect_err(|error| core.output.warn(&format!("opentrack: could not sync the settings: {error}")))
     }
 }
 
@@ -191,16 +212,16 @@ impl Background {
         let settings = load_settings(&settings_path);
         let clock = Clock::system();
         let cached = load_cached_state(&clock, &read_json_file(&cache_path));
-        let core = Core::new(Env::from_process(), clock.clone(), Box::new(LogOutput::open(data_dir)));
+        let core = Core::new(Env::from_process(), clock, Box::new(LogOutput::open(data_dir)));
         let deps = LiveDeps {
-            core,
+            core: RwLock::new(core),
             cache_path,
             settings_path,
             sink: OnceLock::new(),
             settings: Mutex::new(settings.clone()),
             last_tray: Mutex::new(None),
         };
-        Arc::new(Self { service: QuotaService::new(deps, clock, settings, Some(cached)) })
+        Arc::new(Self { service: QuotaService::new(deps, settings, Some(cached)) })
     }
 
     const fn deps(&self) -> &LiveDeps {
@@ -281,11 +302,15 @@ mod tests {
     fn answers_the_smoke_test_from_the_data_dir_alone() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("settings.json"), r#"{"theme":"dark","providers":[{"key":"codex"}]}"#).unwrap();
-        let line = smoke_test_line(&Background::open(dir.path()));
+        let background = Background::open(dir.path());
+        let line = smoke_test_line(&background);
         assert!(line.starts_with(r#"{"settings":{"theme":"dark","display":"used""#), "{line}");
         assert!(line.contains(r#""providers":[{"key":"codex","label":"Codex","enabled":true},"#), "{line}");
         assert!(line.contains(r#""state":{"providers":[{"key":"codex","label":"Codex","refreshing":false}"#), "{line}");
         assert!(line.ends_with(r#""refreshing":false,"syncing":false}}"#), "{line}");
+        let core = &background.deps().core;
+        follow_zone(core, Clock::in_zone("Pacific/Kiritimati").unwrap());
+        assert_eq!(core.read().unwrap().clock.zone_name(), "Pacific/Kiritimati");
         LogOutput::open(dir.path()).warn("could not sync the settings: fatal: 'https://me:s3cret@host/data.git/' 403");
         let log = std::fs::read_to_string(dir.path().join("opentrack.log")).unwrap();
         assert_eq!(log, "could not sync the settings: fatal: 'https://***@host/data.git/' 403\n");
