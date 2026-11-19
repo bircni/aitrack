@@ -157,14 +157,16 @@ impl Settings {
     }
 
     /// Dates a change to the shared settings made after `previous`, so that it wins over older ones
-    /// even when this machine's clock is behind. Without a date, the repo's settings win.
+    /// even when this machine's clock is behind. Without a date, the repo's settings win, as they do
+    /// over changes made before this machine first took or shared them.
     #[must_use]
     pub fn dated(mut self, previous: &Self, now: Timestamp) -> Self {
         self.shared_at = if !self.sync {
             None
         } else if previous.sync && self.shared() != previous.shared() {
-            let after = previous.shared_time().and_then(|at| at.checked_add(SignedDuration::from_millis(1)).ok());
-            Some(iso_millis(after.map_or(now, |after| now.max(after))))
+            let after =
+                |at: Timestamp| at.checked_add(SignedDuration::from_millis(1)).map_or(now, |after| now.max(after));
+            previous.shared_time().map(|at| iso_millis(after(at)))
         } else {
             previous.shared_at.clone()
         };

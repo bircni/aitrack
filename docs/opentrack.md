@@ -103,7 +103,8 @@ compact view, and the tray's provider and limit. Start at login, the shortcut, K
 tray's style and colour and the two data repo switches stay with each machine. The shared settings
 are one file, `opentrack/settings.json`, with the time they last changed, and the newest change
 wins as a whole rather than key by key. opentrack takes a newer file over its own settings after a
-pull, and a machine that turns the setting on takes what the repo already has. Changes made here
+pull, and a machine that turns the setting on takes what the repo already has, over anything
+changed there before that. Changes made here
 go out the next time you press the sync button, never on their own; with **Include other
 machines** off, that is also the only time other machines' changes come in. When two machines push
 at once, the later change is kept and the other machine takes it. With

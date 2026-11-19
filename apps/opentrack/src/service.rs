@@ -891,6 +891,7 @@ mod tests {
                     settings.display = "left".into();
                 }
                 settings.theme = if push { "light" } else { "dark" }.into();
+                settings.shared_at = Some("2026-06-01T11:00:00.000Z".into());
                 if push {
                     Err("remote: permission denied".into())
                 } else {
@@ -908,7 +909,7 @@ mod tests {
         let on = service.save_settings(Settings { sync: true, ..Settings::default() }).unwrap();
         service.refresh(false);
         assert_eq!(fake.pulls(), [true, true], "turning it on pulls at once");
-        let dark = Settings { theme: "dark".into(), ..on };
+        let dark = Settings { theme: "dark".into(), shared_at: Some("2026-06-01T11:00:00.000Z".into()), ..on };
         assert_eq!((service.settings(), fake.shown.lock().unwrap().clone()), (dark.clone(), vec![dark.clone()]));
         assert_eq!(fake.saved.lock().unwrap().last(), Some(&dark));
 
