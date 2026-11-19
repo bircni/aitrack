@@ -16,10 +16,10 @@ use aitrack_core::data::stale_sync::is_stale_sync;
 use aitrack_core::data::top_usage::{
     TopSort, top_days, top_models, top_projects, top_provider_key, unpriced_top_models,
 };
-use aitrack_core::data::types::{CountsByKey, DayMap, MachineFile, ProviderData, TokenCounts};
+use aitrack_core::data::types::{CountsByKey, DayEntry, DayMap, MachineFile, ProviderData, TokenCounts};
 use aitrack_core::data::usage_data::{
-    ZonedUsageData, load_merged_provider_data, load_persisted_machines, machine_usage_totals,
-    merge_persisted_with_local,
+    ZonedUsageData, ZonedUsageSource, load_merged_provider_data, load_persisted_machines, machine_usage_totals,
+    merge_persisted_with_local, merge_usage_sources,
 };
 use aitrack_core::data::usage_periods::{PeriodArgs, UsagePeriod, locale_now_label, parse_positive_integer};
 use aitrack_core::data::usage_report::{
@@ -364,5 +364,33 @@ fn loader_reports_comparisons_and_rankings_match_4x_in_every_zone() {
                 &what,
             );
         }
+    }
+}
+
+#[test]
+fn today_is_the_local_day_in_a_zone_without_an_iana_name() {
+    let pricing = PricingStore::bundled();
+    // Kiritimati's, UTC's and Midway's offsets, nameless as `TZ=AEST-10` is.
+    for (hours, recorded, today) in
+        [(14, "unknown", "2026-04-06"), (0, "UTC", "2026-04-05"), (-11, "unknown", "2026-04-04")]
+    {
+        let clock = Clock::with_zone(Some(now()), jiff::tz::TimeZone::fixed(jiff::tz::offset(hours)));
+        let counts = TokenCounts { input_tokens: 5, ..TokenCounts::default() };
+        let by_model = IndexMap::from([("claude-opus-4-1".to_owned(), counts.clone())]);
+        let day = DayEntry { counts, by_model, ..DayEntry::default() };
+        let maps = IndexMap::from([("claude_code".to_owned(), DayMap::from([(Day::parse(today).unwrap(), day)]))]);
+        let local = build_machine_data("laptop", &maps, clock.zone_name(), now(), false);
+        let source = ZonedUsageSource {
+            hostname: local.hostname,
+            timezone: local.timezone,
+            last_updated: String::new(),
+            current: true,
+            days: local.days,
+        };
+        let loaded = merge_usage_sources(&pricing, vec![source]);
+        let context = ReportContext { pricing: &pricing, clock: &clock, now: now() };
+        let options = ReportOptions { period: UsagePeriod::Today, args: PeriodArgs::default(), project: None };
+        assert_eq!(build_usage_report(&context, &loaded, &options).unwrap().totals.input_tokens, 5, "{hours}");
+        assert_eq!(loaded.zoned_sources[0].timezone, recorded);
     }
 }
