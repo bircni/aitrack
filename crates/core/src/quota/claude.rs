@@ -17,8 +17,8 @@ use crate::time::iso_millis;
 
 const CLAUDE_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const KEYCHAIN_SERVICE: &str = "Claude Code-credentials";
-/// An access prompt nobody answers would otherwise hang the fetch.
-const KEYCHAIN_TIMEOUT: Duration = Duration::from_secs(5);
+/// An access prompt nobody answers would otherwise hang the fetch; long enough to read and allow it.
+const KEYCHAIN_TIMEOUT: Duration = Duration::from_secs(30);
 /// `security`'s exit status for errSecItemNotFound: nobody is signed in, which is worth asking again soon.
 const KEYCHAIN_ITEM_NOT_FOUND: i32 = 44;
 /// Every automatic retry of a blocked read puts the access prompt back on screen; a click still retries at once.
