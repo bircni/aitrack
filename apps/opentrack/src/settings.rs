@@ -125,7 +125,7 @@ fn tray_providers() -> Vec<&'static str> {
 
 impl Settings {
     pub fn alert_rules(&self) -> AlertRules {
-        AlertRules { almost_out_left: f64::from(self.alert_threshold), unused: self.alert_unused }
+        AlertRules { almost_out_left: f64::from(self.alert_threshold), unused: self.alert_unused, stale: false }
     }
 
     pub fn shared(&self) -> Map<String, Value> {

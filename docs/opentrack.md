@@ -18,7 +18,8 @@ Both are drawn the way `aitrack show` draws its heatmap: in cells, in each provi
 - **Pacing** — whether each limit is on track to last until it resets, with alerts when one is
   almost used up or on pace to run out. Settings picks how much left counts as almost used up
   (5, 10, 20 or 30%; 10% by default) and can add an alert for a weekly limit that resets within
-  a day with over half of it left. The outlined cell is the even-pace marker: where usage would be
+  a day with over half of it left; that one also fires from the last limits read while they
+  cannot be refreshed, as with an expired login. The outlined cell is the even-pace marker: where usage would be
   now if the limit were used evenly until it resets. A limit's cells wear its provider's colours
   while it is on track and the warning or critical colour when it is not.
 - **Usage** — one period (Today / 7 days / 30 days / All time) sets the estimated cost, the tokens
