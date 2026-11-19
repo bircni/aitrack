@@ -190,7 +190,6 @@ dependencies = [
  "clap_complete",
  "dialoguer",
  "indexmap",
- "jiff",
  "serde",
  "serde_json",
  "tempfile",
