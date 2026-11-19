@@ -22,6 +22,10 @@ pub fn open_dashboard(provider: &str) -> Result<(), String> {
     open::that_detached(url).map_err(|error| error.to_string())
 }
 
+pub fn open_release_notes() -> Result<(), String> {
+    open::that_detached(crate::whats_new::release_url(crate::whats_new::VERSION)).map_err(|error| error.to_string())
+}
+
 /// Off the UI thread: macOS delivers notifications through a blocking call.
 pub fn notify(title: String, body: String) {
     std::thread::spawn(move || {

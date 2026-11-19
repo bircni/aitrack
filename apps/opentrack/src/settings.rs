@@ -17,6 +17,15 @@ pub struct ProviderSetting {
     pub enabled: bool,
 }
 
+/// The release whose notes this machine was last told of.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotesMark {
+    pub version: String,
+    /// It replaced an earlier version rather than being the first one installed.
+    pub update: bool,
+    pub seen: bool,
+}
+
 #[expect(
     clippy::struct_excessive_bools,
     reason = "mirrors settings.json, whose independent on/off keys stay as 4.x wrote them"
@@ -58,6 +67,9 @@ pub struct Settings {
     /// When the shared settings last changed here or were taken from the repo, where the newest wins.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_at: Option<String>,
+    /// Written once a version with notes has started, so files from before stay as they were.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_notes: Option<NotesMark>,
 }
 
 impl Default for Settings {
@@ -84,6 +96,7 @@ impl Default for Settings {
             alert_unused: false,
             sync: false,
             shared_at: None,
+            release_notes: None,
         }
     }
 }
@@ -222,6 +235,15 @@ fn updated_at(value: Option<&str>, syncing: bool) -> Option<String> {
     value.filter(|at| syncing && at.parse::<Timestamp>().is_ok()).map(str::to_owned)
 }
 
+fn notes_mark(value: Option<&Value>) -> Option<NotesMark> {
+    let mark = value?.as_object()?;
+    Some(NotesMark {
+        version: mark.get("version")?.as_str()?.to_owned(),
+        update: boolean(mark.get("update"), true),
+        seen: boolean(mark.get("seen"), false),
+    })
+}
+
 /// Known providers once each, in the order given, then any missing ones turned on.
 fn complete_providers<'a>(entries: impl IntoIterator<Item = (&'a str, bool)>) -> Vec<ProviderSetting> {
     let mut providers: Vec<ProviderSetting> = Vec::new();
@@ -274,6 +296,7 @@ pub fn normalize_settings(input: &Value) -> Settings {
         alert_unused: boolean(field("alertUnused"), d.alert_unused),
         sync,
         shared_at: updated_at(field("sharedAt").and_then(Value::as_str), sync),
+        release_notes: notes_mark(field("releaseNotes")),
     }
 }
 
@@ -321,6 +344,7 @@ mod tests {
             "trayColored": "yes",
             "alertThreshold": 7,
             "alertUnused": true,
+            "releaseNotes": { "version": "6.0.0", "seen": "yes" },
         }));
         assert_eq!(settings.theme, "system");
         assert_eq!(settings.display, "left");
@@ -328,6 +352,9 @@ mod tests {
         assert!(settings.notifications && settings.tray_colored && !settings.keep_open);
         assert_eq!(settings.tray_style, "icon");
         assert_eq!((settings.alert_threshold, settings.alert_unused), (10, true));
+        let mark = NotesMark { version: "6.0.0".into(), update: true, seen: false };
+        assert_eq!(settings.release_notes, Some(mark));
+        assert_eq!(normalize_settings(&json!({ "releaseNotes": { "seen": true } })).release_notes, None);
         assert!(normalize_settings(&json!({ "windowMode": "floating" })).keep_open);
         assert!(!normalize_settings(&json!({ "windowMode": "docked" })).keep_open);
         assert!(normalize_settings(&json!({ "alwaysOnTop": true })).keep_open);
@@ -346,6 +373,7 @@ mod tests {
             providers: vec![codex.clone(), ProviderSetting { key: "bogus".into(), ..codex.clone() }, codex],
             tray_window: "monthly".into(),
             alert_threshold: 15,
+            release_notes: Some(NotesMark { version: "6.0.0".into(), update: false, seen: true }),
             ..Settings::default()
         };
         let from_file = normalize_settings(&serde_json::to_value(&built).unwrap());
@@ -363,6 +391,7 @@ mod tests {
             theme: "dark".into(),
             tray_style: "bars".into(),
             launch_at_login: true,
+            release_notes: Some(NotesMark { version: "6.0.0".into(), update: true, seen: true }),
             ..Settings::default()
         };
         let shared = laptop.shared();

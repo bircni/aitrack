@@ -127,11 +127,22 @@ the download must carry a signature from the release key or it is refused. On Li
 the AppImage updates itself; a `.deb` install updates through the package manager. A release withdrawn
 after being offered stops being offered at the next check. Development builds never check.
 
+The first time a version starts, after an update or a first install, the dashboard shows a
+banner the next time you open it: **Updated to 6.0.0** (or **opentrack 6.0.0** on a first install)
+with **What's new** and a close button. What's new lists that version's changes to opentrack,
+taken from the changelog built into the app, so nothing is fetched: its features, fixes and
+performance work, plus breaking changes that name no other part of aitrack. **Full release
+notes** below them opens the release on GitHub in your browser. Opening the notes or closing the
+banner dismisses it for that version; **What's new** next to the version in Settings brings the
+notes back at any time. A waiting update takes the banner's place until it is installed. A version
+with no changes to opentrack shows neither, and development builds show no banner.
+
 Settings and the last snapshot live in the app's data folder
 (`~/Library/Application Support/dev.bircni.opentrack` on macOS, `%APPDATA%\dev.bircni.opentrack` on
 Windows, `~/.local/share/dev.bircni.opentrack` on Linux): `settings.json`, `cache.json` (discarded
 rather than migrated when its format is older), and `opentrack.log`, with the previous run's in
-`opentrack.log.1`. **Export…** next to Logs in Settings zips both logs to a place you choose. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
+`opentrack.log.1`. `settings.json` also remembers, for this machine only, which version's notes
+you were shown. **Export…** next to Logs in Settings zips both logs to a place you choose. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
 check, and for the pricing refresh the sync button runs like `aitrack sync` (at most daily).
 
 ## Downloads
