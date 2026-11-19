@@ -10,7 +10,7 @@ use aitrack_core::git::{clone_repo, is_cloned, replace_local_clone};
 use aitrack_core::js::trim;
 use aitrack_core::machine_id::{machine_id_validation_error, normalize_machine_id};
 use aitrack_core::store::machine_files::adopt_pending_data_files;
-use aitrack_core::store::migrate::migrate_machine_data_files;
+use aitrack_core::store::migrate::{migrate_machine_data_files, migrate_pending_machine_data_file};
 use clap::Args;
 use dialoguer::{Confirm, Input};
 
@@ -168,7 +168,12 @@ pub fn run(core: &Core, args: &InitArgs) -> Outcome {
     }
 
     // Renames staged data too, so it runs first: an adopted file is untracked, and the rename's `git add` fails on it.
-    migrate_machine_data_files(core, &previous_machine_id, &machine_id)?;
+    if existing.is_some() {
+        migrate_machine_data_files(core, &previous_machine_id, &machine_id)?;
+    } else {
+        // The hostname is a guess here: the clone's file of that name may be another machine's.
+        migrate_pending_machine_data_file(core, &previous_machine_id, &machine_id)?;
+    }
     // Once a clone exists, pending data may duplicate its synced current-machine file.
     let adopted = if existing.is_none() || !was_cloned { adopt_pending_data_files(core, &core.paths.data)? } else { 0 };
 

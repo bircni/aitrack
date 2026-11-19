@@ -71,16 +71,28 @@ fn rollback(plan: &Plan) -> std::io::Result<()> {
 ///
 /// When the data files cannot be renamed or committed.
 pub fn migrate_machine_data_files(core: &Core, previous_id: &str, next_id: &str) -> Result<()> {
+    migrate(core, previous_id, next_id, &[&core.paths.data, &core.paths.pending_data])
+}
+
+/// Renames only the staged file: a guessed id's namesake in the repo may be another machine's.
+///
+/// # Errors
+///
+/// When the staged file cannot be renamed.
+pub fn migrate_pending_machine_data_file(core: &Core, previous_id: &str, next_id: &str) -> Result<()> {
+    migrate(core, previous_id, next_id, &[&core.paths.pending_data])
+}
+
+fn migrate(core: &Core, previous_id: &str, next_id: &str, dirs: &[&std::path::Path]) -> Result<()> {
     let previous = normalize_machine_id(previous_id).map_err(Error::new)?;
     let next = normalize_machine_id(next_id).map_err(Error::new)?;
     if previous == next {
         return Ok(());
     }
-    let plans: Vec<Plan> =
-        [plan(core, &core.paths.data, previous, next)?, plan(core, &core.paths.pending_data, previous, next)?]
-            .into_iter()
-            .flatten()
-            .collect();
+    let mut plans = Vec::new();
+    for dir in dirs {
+        plans.extend(plan(core, dir, previous, next)?);
+    }
     let mut completed: Vec<&Plan> = Vec::new();
     let attempt = (|| -> Result<()> {
         for plan in &plans {
