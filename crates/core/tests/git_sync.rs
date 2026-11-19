@@ -203,12 +203,17 @@ fn recompute_restores_a_corrupt_file_from_its_last_commit_and_renames_move_files
     sync_data(&core, SyncOptions::default()).unwrap();
     assert_eq!(recompute_costs(&core, RecomputeOptions::default()).unwrap().changed, 0);
 
+    let mispriced = a.file("a.json").replace("\"hostname\": \"a\"", "\"hostname\": \"b\"").replace("0.002025", "9");
+    std::fs::write(a.repo().join("data/b.json"), mispriced).unwrap();
     std::fs::write(a.repo().join("data/a.json"), "{ truncated").unwrap();
     let refused = sync_data(&core, SyncOptions::default()).unwrap_err();
     assert!(refused.0.starts_with("Refusing to overwrite invalid data/a.json"), "{refused}");
     let (later, later_output) = a.core_at("2026-03-10T13:00:00Z");
     let repaired = recompute_costs(&later, RecomputeOptions::default()).unwrap();
-    assert_eq!((repaired.changed, repaired.pushed), (1, true));
+    assert_eq!((repaired.changed, repaired.pushed), (2, true));
+    assert!(a.file("a.json").contains("\"lastUpdated\": \"2026-03-10T13:00:00.000Z\""));
+    let other = a.file("b.json");
+    assert!(other.contains("0.002025") && other.contains("\"lastUpdated\": \"2026-03-10T12:00:00.000Z\""), "{other}");
     assert!(later_output.messages().iter().any(|(_, m)| m == "  Restoring a.json from its last commit."));
     assert!(git(&remote, &["log", "-1", "--format=%s", "main"]).starts_with("recompute: refresh costs at "));
 
@@ -223,7 +228,7 @@ fn recompute_restores_a_corrupt_file_from_its_last_commit_and_renames_move_files
     let names: Vec<String> = std::fs::read_dir(a.repo().join("data"))
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-        .filter(|name| name != "other.json")
+        .filter(|name| name.eq_ignore_ascii_case("laptop.json"))
         .collect();
     assert_eq!(names, ["LAPTOP.json"]);
     assert!(a.file("LAPTOP.json").contains("\"hostname\": \"LAPTOP\""));

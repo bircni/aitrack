@@ -193,7 +193,10 @@ pub fn recompute_costs(core: &Core, options: RecomputeOptions) -> Result<Recompu
             }
             // Another machine's file keeps its owner's choice, or this would publish encrypted data as plaintext.
             let encrypt = if is_current { run.config.encrypt_data == Some(true) } else { check.encrypted };
-            let machine = MachineFile { days, last_updated: iso_millis(core.clock.now()), ..loaded.machine };
+            // Another machine keeps its stamp: it is what shows that machine as stale.
+            let last_updated =
+                if is_current { iso_millis(core.clock.now()) } else { loaded.machine.last_updated.clone() };
+            let machine = MachineFile { days, last_updated, ..loaded.machine };
             pending.push((path, machine, encrypt));
         }
         let changed = pending.len();
