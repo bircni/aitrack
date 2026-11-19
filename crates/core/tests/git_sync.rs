@@ -143,6 +143,9 @@ fn syncs_once_then_finds_nothing_to_push_and_shares_the_repo_with_another_machin
     let carried = sync_data(&core, SyncOptions::default()).unwrap();
     assert_eq!((carried.message.as_str(), carried.days), ("Done! Pushed data/a.json (3 days)", 3));
     assert!(a.file("a.json").contains("\"cursor\""), "a removed provider's day is kept, though no report shows it");
+
+    let failed = core.git().run(&["checkout", "https://me:s3cret@host.invalid/data.git"]).unwrap_err().to_string();
+    assert!(failed.contains("'https://***@host.invalid/data.git'") && !failed.contains("s3cret"), "{failed}");
 }
 
 #[test]
