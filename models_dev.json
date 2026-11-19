@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-18T15:37:38.773Z",
+  "retrievedAt": "2026-11-19T15:42:45.646Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -389,6 +389,13 @@
       "cr": 0.075,
       "cwe": false
     },
+    "google-vertex/gemini-4-neon": {
+      "i": 3,
+      "o": 15,
+      "cw": 3,
+      "cr": 0.15,
+      "cwe": false
+    },
     "google-vertex/gemini-embedding-001": {
       "i": 0.15,
       "o": 0,
@@ -754,6 +761,13 @@
       "o": 7.5,
       "cw": 1.5,
       "cr": 0.075,
+      "cwe": false
+    },
+    "google/gemini-4-neon": {
+      "i": 3,
+      "o": 15,
+      "cw": 3,
+      "cr": 0.15,
       "cwe": false
     },
     "google/gemini-embedding-001": {
