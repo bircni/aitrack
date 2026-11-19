@@ -55,15 +55,18 @@ struct ProviderRuntime {
     error: Option<QuotaError>,
 }
 
-/// A retry-after the provider stated binds even a click; our own backoff after a bare 429 does not.
-fn declared_retry_pending(runtime: Option<&ProviderRuntime>, now: f64) -> bool {
-    runtime.is_some_and(|runtime| {
-        runtime
-            .error
+impl ProviderRuntime {
+    /// Whether the wait is one the provider stated, not our own backoff after a bare 429.
+    fn declared_retry(&self) -> bool {
+        self.error
             .as_ref()
             .is_some_and(|e| e.kind == QuotaErrorKind::RateLimited && e.retry_after_seconds.unwrap_or(0) > 0)
-            && now < runtime.next_attempt_at
-    })
+    }
+}
+
+/// A retry-after the provider stated binds even a click; our own backoff after a bare 429 does not.
+fn declared_retry_pending(runtime: Option<&ProviderRuntime>, now: f64) -> bool {
+    runtime.is_some_and(|runtime| runtime.declared_retry() && now < runtime.next_attempt_at)
 }
 
 fn providers_key(providers: &[String]) -> String {
@@ -361,7 +364,7 @@ impl<D: Deps> QuotaService<D> {
             let limited: IndexMap<String, f64> = inner
                 .runtime
                 .iter()
-                .filter(|(_, r)| r.error.as_ref().is_some_and(|e| e.kind == QuotaErrorKind::RateLimited))
+                .filter(|(_, r)| r.declared_retry())
                 .map(|(key, r)| (key.clone(), r.next_attempt_at))
                 .collect();
             inner.cache.rate_limited_until = limited;
@@ -835,7 +838,7 @@ mod tests {
     fn keeps_a_retry_after_across_restarts() {
         let limited = Fake {
             quota: Some(Box::new(|provider, _| {
-                (provider == "claude_code").then(|| failure(QuotaErrorKind::RateLimited, "slow", Some(600)))
+                Some(failure(QuotaErrorKind::RateLimited, "slow", (provider == "claude_code").then_some(600)))
             })),
             ..Fake::default()
         };
