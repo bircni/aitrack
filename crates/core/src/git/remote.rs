@@ -23,6 +23,26 @@ pub fn redact_url(url: &str) -> String {
     format!("{}://***@{}", &url[..scheme_end], &rest[at + 1..])
 }
 
+/// [`redact_url`] for every URL in free text, such as git's own messages, which can quote the remote.
+#[must_use]
+pub fn redact_urls(text: &str) -> String {
+    let scheme_char = |c: char| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-');
+    let delimiter = |c: char| c.is_whitespace() || matches!(c, '\'' | '"');
+    let mut redacted = String::with_capacity(text.len());
+    for piece in text.split_inclusive(delimiter) {
+        let Some(scheme_end) = piece.find("://") else {
+            redacted.push_str(piece);
+            continue;
+        };
+        let start = piece[..scheme_end].trim_end_matches(scheme_char).len();
+        let end = piece.trim_end_matches(delimiter).len();
+        redacted.push_str(&piece[..start]);
+        redacted.push_str(&redact_url(&piece[start..end]));
+        redacted.push_str(&piece[end..]);
+    }
+    redacted
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct Identity {
     /// Empty for a local path.
@@ -163,7 +183,7 @@ pub fn origin_mismatch_message(origin: &str, repo_url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{redact_url, same_remote};
+    use super::{redact_url, redact_urls, same_remote};
 
     #[test]
     fn matches_the_typescript_library_for_every_fixture_remote() {
@@ -175,5 +195,11 @@ mod tests {
             let ours: Vec<&str> = urls.iter().copied().filter(|other| same_remote(url, other)).collect();
             assert_eq!(ours, same.iter().map(String::as_str).collect::<Vec<_>>(), "same remote as {url}");
         }
+        assert_eq!(
+            redact_urls(
+                "fatal: unable to access 'https://me:s3cret@host/data.git/': 403\n(http://a:b@c/d) as ssh://git@host/x"
+            ),
+            "fatal: unable to access 'https://***@host/data.git/': 403\n(http://***@c/d) as ssh://git@host/x"
+        );
     }
 }

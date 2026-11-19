@@ -9,6 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aitrack_core::data::types::MachineFile;
 use aitrack_core::env::Env;
+use aitrack_core::git::remote::redact_urls;
 use aitrack_core::output::Output;
 use aitrack_core::quota::{fetch_quota, QuotaResult};
 use aitrack_core::sync::{sync_data, SyncOptions};
@@ -61,7 +62,7 @@ impl LogOutput {
 
     fn write(&self, message: &str) {
         if let Some(file) = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_mut() {
-            let _ = writeln!(file, "{message}");
+            let _ = writeln!(file, "{}", redact_urls(message)); // Git's messages can quote a remote with its token.
         }
     }
 }
@@ -285,5 +286,8 @@ mod tests {
         assert!(line.contains(r#""providers":[{"key":"codex","label":"Codex","enabled":true},"#), "{line}");
         assert!(line.contains(r#""state":{"providers":[{"key":"codex","label":"Codex","refreshing":false}"#), "{line}");
         assert!(line.ends_with(r#""refreshing":false,"syncing":false}}"#), "{line}");
+        LogOutput::open(dir.path()).warn("could not sync the settings: fatal: 'https://me:s3cret@host/data.git/' 403");
+        let log = std::fs::read_to_string(dir.path().join("opentrack.log")).unwrap();
+        assert_eq!(log, "could not sync the settings: fatal: 'https://***@host/data.git/' 403\n");
     }
 }
