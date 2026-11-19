@@ -29,6 +29,7 @@ mod windows;
 
 use std::path::PathBuf;
 
+use aitrack_core::output::Level;
 use eframe::egui;
 
 use crate::background::{smoke_test_line, Background};
@@ -69,11 +70,13 @@ fn main() -> eframe::Result {
         Ok(None) => return Ok(()),
         Err(error) => {
             eprintln!("opentrack: {}: {error}", dir.display());
+            logs::LogOutput::append(&dir).event(Level::Error, &format!("instance failed: {error}"));
             return Ok(());
         }
     };
     platform::prepare();
     let background = Background::open(&dir);
+    background.log().event(Level::Info, &logs::start_line(&dir));
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("opentrack")

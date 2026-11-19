@@ -63,13 +63,17 @@ pub fn release() {
 }
 
 /// The listener when this is the only opentrack; `None` after asking the running one for `request`.
+///
+/// # Errors
+///
+/// When the lock cannot be taken, or the opentrack holding it cannot be asked.
 pub fn claim(dir: &Path, request: Request) -> std::io::Result<Option<Listener>> {
     std::fs::create_dir_all(dir)?;
     let lock = File::options().create(true).truncate(false).write(true).open(dir.join("opentrack.lock"))?;
     let port_file = dir.join("opentrack.port");
     if held_elsewhere(lock.try_lock())? {
-        ask(&port_file, request);
-        return Ok(None);
+        let unheard = |error| std::io::Error::other(format!("the running opentrack did not answer: {error}"));
+        return ask(&port_file, request).map(|()| None).map_err(unheard);
     }
     *LOCK.lock().unwrap_or_else(PoisonError::into_inner) = Some(lock);
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
@@ -90,17 +94,15 @@ fn held_elsewhere(locked: Result<(), TryLockError>) -> std::io::Result<bool> {
 }
 
 /// A port file without a token is from a build before tokens, which took the bare request.
-fn ask(port_file: &Path, request: Request) {
-    let Ok(text) = std::fs::read_to_string(port_file) else { return };
+fn ask(port_file: &Path, request: Request) -> std::io::Result<()> {
+    let text = std::fs::read_to_string(port_file)?;
     let text = text.trim();
     let (port, line) = match text.split_once(' ') {
         Some((port, token)) => (port, format!("{token} {}\n", request.as_str())),
         None => (text, format!("{}\n", request.as_str())),
     };
-    let Ok(port) = port.parse::<u16>() else { return };
-    if let Ok(mut stream) = TcpStream::connect_timeout(&(Ipv4Addr::LOCALHOST, port).into(), Duration::from_secs(2)) {
-        let _ = stream.write_all(line.as_bytes());
-    }
+    let port = port.parse::<u16>().map_err(std::io::Error::other)?;
+    TcpStream::connect_timeout(&(Ipv4Addr::LOCALHOST, port).into(), Duration::from_secs(2))?.write_all(line.as_bytes())
 }
 
 /// Calls `on_request` for every later launch; anything else that connects is ignored.
@@ -141,7 +143,8 @@ mod tests {
         assert!(held_elsewhere(second.try_lock()).unwrap());
         let unsupported = TryLockError::Error(std::io::ErrorKind::Unsupported.into());
         assert_eq!(held_elsewhere(Err(unsupported)).unwrap_err().kind(), std::io::ErrorKind::Unsupported);
-        ask(&dir.path().join("opentrack.port"), Request::Settings);
+        ask(&dir.path().join("opentrack.port"), Request::Settings).unwrap();
+        ask(&dir.path().join("missing.port"), Request::Show).unwrap_err();
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Request::Settings);
         rx.try_recv().unwrap_err();
         release();

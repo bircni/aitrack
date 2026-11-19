@@ -291,10 +291,6 @@ pub fn write_settings(path: &Path, settings: &Settings) -> std::io::Result<()> {
     aitrack_core::fs::write_file_atomic(path, settings_json(settings), None)
 }
 
-pub fn load_settings(path: &Path) -> Settings {
-    normalize_settings(&read_json_file(path))
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -418,8 +414,8 @@ mod tests {
             ..Settings::default()
         };
         write_settings(&path, &saved).unwrap();
-        assert_eq!(load_settings(&path), saved);
+        assert_eq!(normalize_settings(&read_json_file(&path)), saved);
         std::fs::write(&path, "{").unwrap();
-        assert_eq!(load_settings(&path), Settings::default());
+        assert_eq!(normalize_settings(&read_json_file(&path)), Settings::default());
     }
 }
