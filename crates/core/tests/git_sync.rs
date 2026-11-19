@@ -218,6 +218,16 @@ fn recompute_restores_a_corrupt_file_from_its_last_commit_and_renames_move_files
     assert!(git(&a.repo(), &["status", "--porcelain"]).contains("R  data/a.json -> data/laptop.json"));
     std::fs::write(a.repo().join("data/other.json"), "{}").unwrap();
     assert!(migrate_machine_data_files(&core, "laptop", "other").unwrap_err().0.contains("already exists"));
+
+    migrate_machine_data_files(&core, "laptop", "LAPTOP").unwrap(); // The same file where names fold.
+    let names: Vec<String> = std::fs::read_dir(a.repo().join("data"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| name != "other.json")
+        .collect();
+    assert_eq!(names, ["LAPTOP.json"]);
+    assert!(a.file("LAPTOP.json").contains("\"hostname\": \"LAPTOP\""));
+    assert!(git(&a.repo(), &["status", "--porcelain"]).contains("R  data/a.json -> data/LAPTOP.json"));
 }
 
 #[test]
