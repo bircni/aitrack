@@ -146,10 +146,29 @@ impl Settings {
         let Ok(Value::Object(mut merged)) = serde_json::to_value(self) else { return self.clone() };
         for key in SHARED_KEYS {
             if let Some(value) = shared.get(*key) {
-                merged.insert((*key).to_owned(), value.clone());
+                let value = if *key == "providers" { self.providers_with_shared(value) } else { value.clone() };
+                merged.insert((*key).to_owned(), value);
             }
         }
         normalize_settings(&Value::Object(merged))
+    }
+
+    /// The shared list, with this machine's entry kept after its neighbour for a provider the list
+    /// leaves out: a machine that does not know a provider has no say in whether it is on.
+    fn providers_with_shared(&self, shared: &Value) -> Value {
+        let mut entries = shared.as_array().cloned().unwrap_or_default();
+        let position = |entries: &[Value], key: &str| {
+            entries.iter().position(|entry| entry.get("key").and_then(Value::as_str) == Some(key))
+        };
+        for (index, provider) in self.providers.iter().enumerate() {
+            if position(&entries, &provider.key).is_some() {
+                continue;
+            }
+            let before = index.checked_sub(1).and_then(|i| position(&entries, &self.providers[i].key));
+            let own = serde_json::json!({ "key": provider.key, "enabled": provider.enabled });
+            entries.insert(before.map_or(0, |at| at + 1), own);
+        }
+        Value::Array(entries)
     }
 
     pub fn shared_time(&self) -> Option<Timestamp> {
@@ -394,6 +413,16 @@ mod tests {
         newer.shift_remove("theme");
         newer.insert("someday".into(), json!(1));
         assert_eq!(taken.with_shared(&newer), taken, "a key the file lacks keeps this machine's value");
+        let mut local = taken.clone();
+        local.providers.reverse();
+        local.providers[0].enabled = false;
+        let partial = Map::from_iter([("providers".to_owned(), json!([{ "key": "claude_code", "enabled": false }]))]);
+        let providers = local.with_shared(&partial).providers;
+        assert_eq!(
+            providers.iter().map(|p| (p.key.as_str(), p.enabled)).collect::<Vec<_>>(),
+            [("codex", false), ("claude_code", false)],
+            "and so does a provider its list lacks"
+        );
 
         let dated = |settings: Settings, previous: &Settings| settings.dated(previous, now).shared_at;
         assert_eq!(dated(taken, &Settings::default()), None, "turning it on lets the repo win");
