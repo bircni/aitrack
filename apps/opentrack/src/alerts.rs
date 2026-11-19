@@ -1,6 +1,6 @@
 use aitrack_core::js::number_to_string;
 use aitrack_core::quota::pacing::{js_round, project_pace, PaceSeverity};
-use aitrack_core::quota::{QuotaFormat, QuotaSnapshot, WEEK_SECONDS};
+use aitrack_core::quota::{QuotaFormat, QuotaSnapshot};
 use aitrack_core::time::Clock;
 use indexmap::IndexMap;
 
@@ -67,11 +67,7 @@ pub fn due_alerts(
             }
             continue;
         }
-        if rules.unused
-            && window.period_seconds >= WEEK_SECONDS
-            && left > UNUSED_LEFT_PERCENT
-            && resets_ms - now <= UNUSED_LEAD_MS
-        {
+        if rules.unused && window.id == "weekly" && left > UNUSED_LEFT_PERCENT && resets_ms - now <= UNUSED_LEAD_MS {
             let key = format!("{scope}:unused");
             if !is_live(clock, fired.get(&key), now) {
                 alerts.push(Alert {
@@ -142,7 +138,7 @@ pub mod fixtures {
 
 #[cfg(test)]
 mod tests {
-    use aitrack_core::quota::QuotaWindow;
+    use aitrack_core::quota::{QuotaWindow, WEEK_SECONDS};
 
     use super::fixtures::*;
     use super::*;
@@ -206,7 +202,9 @@ mod tests {
             period_seconds: WEEK_SECONDS,
             ..session_window(used_percent, 0.0)
         };
-        let windows = vec![weekly(20.0, 12.0), weekly(60.0, 12.0), weekly(20.0, 25.0), session_window(20.0, 4.0)];
+        let sonnet = QuotaWindow { id: "model:sonnet".into(), label: "Sonnet".into(), ..weekly(20.0, 12.0) };
+        let windows =
+            vec![weekly(20.0, 12.0), weekly(60.0, 12.0), weekly(20.0, 25.0), session_window(20.0, 4.0), sonnet];
         let quota = snapshot(windows);
         let rules = AlertRules { unused: true, ..RULES };
         let alerts = due_alerts(&clock(), "Codex", &quota, rules, &FiredAlerts::new(), NOW);
