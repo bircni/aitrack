@@ -8,6 +8,7 @@ use super::validate::{ValidationOptions, check_raw_machine_file};
 use crate::Core;
 use crate::data::types::MachineFile;
 use crate::error::{Error, Result};
+use crate::git::Git;
 use crate::machine_id::{machine_data_filename, normalize_machine_id};
 
 struct Plan {
@@ -76,6 +77,10 @@ pub fn migrate_machine_data_files(core: &Core, previous_id: &str, next_id: &str)
     if previous == next {
         return Ok(());
     }
+    core.with_repo_lock(|guard| migrate(core, guard.git(), previous, next))
+}
+
+fn migrate(core: &Core, git: &Git, previous: &str, next: &str) -> Result<()> {
     let plans: Vec<Plan> =
         [plan(core, &core.paths.data, previous, next)?, plan(core, &core.paths.pending_data, previous, next)?]
             .into_iter()
@@ -92,7 +97,6 @@ pub fn migrate_machine_data_files(core: &Core, previous_id: &str, next_id: &str)
             }
             completed.push(plan);
         }
-        let git = core.git();
         for plan in &plans {
             let Some((source, target)) = &plan.repository_paths else { continue };
             let (source, target) = (format!(":(literal){source}"), format!(":(literal){target}"));
