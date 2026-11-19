@@ -772,6 +772,24 @@ mod tests {
         assert!(fake.take_calls().contains(&"codex".to_owned()));
     }
 
+    #[test]
+    fn waits_out_a_long_wait_the_provider_did_not_state_unless_clicked() {
+        let fake = Fake {
+            quota: Some(Box::new(|provider, _| {
+                (provider == "claude_code").then(|| failure(QuotaErrorKind::NoCredentials, "allow access", Some(3600)))
+            })),
+            ..Fake::default()
+        };
+        let (fake, service) = harness_with(fake, only(&["claude_code"]), None);
+        service.refresh(false);
+        fake.take_calls();
+        fake.advance(3_599_000.0);
+        service.refresh(false);
+        assert!(fake.take_calls().is_empty());
+        service.refresh(true);
+        assert_eq!(fake.take_calls(), ["claude_code"]);
+    }
+
     fn almost_out() -> Fake {
         Fake {
             quota: Some(Box::new(|provider, now| (provider == "claude_code").then(|| Ok(ok(provider, 95.0, now))))),

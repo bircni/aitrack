@@ -11,6 +11,7 @@ use super::{
 use crate::Core;
 use crate::env::Env;
 use crate::http::Request;
+use crate::process::{Finished, RunError};
 use crate::readers::paths::claude_home_dirs;
 use crate::time::iso_millis;
 
@@ -18,6 +19,10 @@ const CLAUDE_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const KEYCHAIN_SERVICE: &str = "Claude Code-credentials";
 /// An access prompt nobody answers would otherwise hang the fetch.
 const KEYCHAIN_TIMEOUT: Duration = Duration::from_secs(5);
+/// `security`'s exit status for errSecItemNotFound: nobody is signed in, which is worth asking again soon.
+const KEYCHAIN_ITEM_NOT_FOUND: i32 = 44;
+/// Every automatic retry of a blocked read puts the access prompt back on screen; a click still retries at once.
+const KEYCHAIN_BLOCKED_RETRY_SECONDS: u64 = 6 * 60 * 60;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ClaudeCredentials {
@@ -43,32 +48,70 @@ pub fn parse_claude_credentials(text: &str) -> Option<ClaudeCredentials> {
     })
 }
 
+/// What the Keychain answered. `Blocked` is a refused or unanswered access prompt, which asking again reopens.
+#[derive(Debug, PartialEq)]
+enum Keychain {
+    Login(ClaudeCredentials),
+    Absent,
+    Blocked,
+}
+
 /// The file Claude Code writes, then on macOS the Keychain item it prefers there. A file left behind by an
 /// earlier login is never refreshed, so an expired source only wins when none is still valid.
-fn read_claude_credentials(env: &Env, now_ms: i64) -> Option<ClaudeCredentials> {
+fn read_claude_credentials(
+    env: &Env,
+    now_ms: i64,
+    keychain: impl FnOnce(&Env) -> Keychain,
+) -> Result<Option<ClaudeCredentials>, QuotaError> {
     let files = claude_home_dirs(env, true).into_iter().filter_map(|dir| {
         std::fs::read_to_string(dir.join(".credentials.json")).ok().as_deref().and_then(parse_claude_credentials)
     });
     let mut latest: Option<ClaudeCredentials> = None;
-    for credentials in files.chain(std::iter::once_with(|| read_keychain(env)).flatten()) {
+    let mut newer = |credentials: ClaudeCredentials| {
         if assert_not_expired(credentials.expires_at, now_ms, "").is_ok() {
             return Some(credentials);
         }
         if latest.as_ref().is_none_or(|latest| latest.expires_at < credentials.expires_at) {
             latest = Some(credentials);
         }
+        None
+    };
+    for credentials in files {
+        if let Some(valid) = newer(credentials) {
+            return Ok(Some(valid));
+        }
     }
-    latest
+    match keychain(env) {
+        Keychain::Login(credentials) => Ok(newer(credentials).or(latest)),
+        Keychain::Absent => Ok(latest),
+        Keychain::Blocked => Err(QuotaError {
+            retry_after_seconds: Some(KEYCHAIN_BLOCKED_RETRY_SECONDS),
+            ..QuotaError::new(
+                QuotaErrorKind::NoCredentials,
+                "macOS did not allow reading the Claude Code login. Retry and choose Always Allow in the Keychain prompt.",
+            )
+        }),
+    }
 }
 
-fn read_keychain(env: &Env) -> Option<ClaudeCredentials> {
+fn read_keychain(env: &Env) -> Keychain {
     // The Keychain item is the default account's, not the one CLAUDE_CONFIG_DIR points at.
     if !cfg!(target_os = "macos") || env.var("CLAUDE_CONFIG_DIR").is_some() {
-        return None;
+        return Keychain::Absent;
     }
     let args = ["find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"];
-    let output = crate::process::run("security", &args, &[], None, Some(KEYCHAIN_TIMEOUT)).ok()?;
-    output.status.success().then(|| parse_claude_credentials(&String::from_utf8_lossy(&output.stdout))).flatten()
+    keychain_answer(crate::process::run("security", &args, &[], None, Some(KEYCHAIN_TIMEOUT)))
+}
+
+fn keychain_answer(output: Result<Finished, RunError>) -> Keychain {
+    match output {
+        Ok(output) if output.status.success() => {
+            parse_claude_credentials(&String::from_utf8_lossy(&output.stdout)).map_or(Keychain::Absent, Keychain::Login)
+        }
+        Ok(output) if output.status.code() != Some(KEYCHAIN_ITEM_NOT_FOUND) => Keychain::Blocked,
+        Err(RunError::Timeout) => Keychain::Blocked,
+        Ok(_) | Err(RunError::Spawn(_)) => Keychain::Absent,
+    }
 }
 
 /// `pro` with `default_claude_max_5x` is "Pro 5x"; Max 5x now sells as Max and Max 20x as Ultra.
@@ -189,7 +232,7 @@ pub fn map_claude_usage(
 /// When there is no usable login or the request fails.
 pub fn fetch_claude_quota(core: &Core, now: Timestamp) -> QuotaResult {
     let now_ms = now.as_millisecond();
-    let credentials = read_claude_credentials(&core.env, now_ms).ok_or_else(|| {
+    let credentials = read_claude_credentials(&core.env, now_ms, read_keychain)?.ok_or_else(|| {
         QuotaError::new(QuotaErrorKind::NoCredentials, "No Claude Code login found. Run `claude` and sign in.")
     })?;
     if credentials.scopes.as_ref().is_some_and(|scopes| !scopes.iter().any(|s| s == "user:profile")) {
@@ -221,6 +264,22 @@ mod tests {
             std::fs::write(dir.join(".credentials.json"), body).unwrap();
         }
         let env = Env::new(home.path(), [("", ""); 0]);
-        assert_eq!(read_claude_credentials(&env, 2_000).unwrap().access_token, "fresh");
+        let unasked = |_: &Env| unreachable!("a valid file needs no Keychain");
+        assert_eq!(read_claude_credentials(&env, 2_000, unasked).unwrap().unwrap().access_token, "fresh");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_blocked_keychain_read_is_not_retried_as_soon_as_a_missing_login() {
+        let home = tempfile::tempdir().unwrap();
+        let env = Env::new(home.path(), [("", ""); 0]);
+        let exits =
+            |code: &str| keychain_answer(crate::process::run("sh", &["-c", &format!("exit {code}")], &[], None, None));
+        assert_eq!(read_claude_credentials(&env, 0, |_| exits("44")), Ok(None));
+        for blocked in [exits("128"), keychain_answer(Err(RunError::Timeout))] {
+            let error = read_claude_credentials(&env, 0, |_| blocked).unwrap_err();
+            assert_eq!(error.kind, QuotaErrorKind::NoCredentials);
+            assert_eq!(error.retry_after_seconds, Some(KEYCHAIN_BLOCKED_RETRY_SECONDS));
+        }
     }
 }
