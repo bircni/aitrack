@@ -34,6 +34,8 @@ fn json_failures_print_one_document_and_usage_errors_exit_2() {
         (&["nosuch", "--json"][..], "aitrack", 2),
         (&["top", "--sort", "nope", "--json"][..], "top", 2),
         (&["config", "get", "nope", "--json"][..], "config", 2),
+        (&["export", "-o", "-", "--json"][..], "export", 2),
+        (&["show", "-o", "-", "--json"][..], "show", 2),
     ] {
         let output = aitrack(home.path()).args(args).output().unwrap();
         assert_eq!(output.status.code(), Some(code), "{args:?}");
@@ -41,6 +43,7 @@ fn json_failures_print_one_document_and_usage_errors_exit_2() {
         assert_eq!(document["command"], command, "{args:?}");
         assert!(document["error"].as_str().is_some_and(|e| !e.is_empty()), "{args:?}");
     }
+    assert!(!home.path().join("-").exists());
     let removed = aitrack(home.path()).args(["show", "--providers", "claude,cursor"]).output().unwrap();
     assert_eq!(removed.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&removed.stderr).contains("Cursor support was removed."));

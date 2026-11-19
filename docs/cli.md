@@ -123,7 +123,7 @@ An empty result keeps these keys at their empty values and adds `message`: `show
 
 **Watching:** `aitrack usage <window> --watch [seconds]` redraws the report in place every 30 seconds by default (minimum 5). It needs an interactive terminal and cannot be combined with `--json`. Ctrl-C stops it with exit code 0.
 
-**`export` flags:** `-o <path>` (output path, default `aitrack-receipt.pdf`) and `--csv` (write a spreadsheet-friendly CSV — raw token counts, one row per provider+model plus a `TOTAL` row — instead of the PDF receipt; the default path becomes `aitrack-receipt.csv`, an explicit `-o` is used as given). `-o -` is rejected, since neither `show` nor `export` writes to stdout. `--json` reports the absolute path.
+**`export` flags:** `-o <path>` (output path, default `aitrack-receipt.pdf`) and `--csv` (write a spreadsheet-friendly CSV — raw token counts, one row per provider+model plus a `TOTAL` row — instead of the PDF receipt; the default path becomes `aitrack-receipt.csv`, an explicit `-o` is used as given). `-o -` is rejected as a usage error, since neither `show` nor `export` writes to stdout; pass `./-` for a file of that name. With `--json`, `show` reports the absolute path and `export` the path as given.
 
 Relative windows (`today`, `thisweek`, and the other windows anchored on today) are evaluated in each machine's recorded timezone. `date` and `range` use the stored date keys as written. A heatmap still draws those keys on one grid; `show` says so when the machines are not in the same zone.
 
