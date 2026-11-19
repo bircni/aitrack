@@ -93,8 +93,12 @@ Keychain item, the one that is still valid is used. Codex limits need a ChatGPT 
 Usage history comes from the local Claude/Codex logs. A provider turned off in Settings is neither
 read nor contacted. Usage is merged with the other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
 `git pull`s that repo every 30 minutes (can be turned off). It commits and pushes only when you
-press the sync button in the dashboard, which does exactly what `aitrack sync` does, including refusing
-a clone whose `origin` differs from `repoUrl`; that shows as a failed sync.
+press the sync button in the dashboard, which does what `aitrack sync` does for the providers that are on, including refusing
+a clone whose `origin` differs from `repoUrl`; that shows as a failed sync. The sync button does not
+read the logs of a provider that is turned off: the days that provider already has in this machine's
+synced file stay as they are (only [`compactAfterDays`](cli.md#compacting-old-history) still applies to them), and its newer usage is
+pushed by the first sync after it is turned on again, as far as its logs still hold it. `aitrack sync` in the terminal has no such switch and always
+syncs every provider.
 
 **Sync settings** (off by default) shares the settings that mean the same on every machine through
 that repo: the theme, limits shown as used or left, reset times, the providers' order and which

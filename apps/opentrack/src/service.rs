@@ -39,8 +39,8 @@ pub trait Deps: Send + Sync {
     fn on_state(&self, state: Arc<AppState>);
     fn on_alert(&self, alert: &Alert);
     fn persist(&self, cache: &CachedState);
-    /// The one-line outcome and the machine file it built.
-    fn sync(&self) -> Result<(String, MachineFile), String>;
+    /// Reads only `providers`' logs. The one-line outcome and the machine file it built.
+    fn sync(&self, providers: &[String]) -> Result<(String, MachineFile), String>;
     fn save_settings(&self, settings: &Settings) -> Result<(), String>;
     /// Settings the data repo changed, for the shell to show.
     fn on_settings(&self, settings: &Settings);
@@ -260,17 +260,19 @@ impl<D: Deps> QuotaService<D> {
         }
     }
 
-    /// Push this machine's usage like `aitrack sync`, then reload so the totals include it.
+    /// Push this machine's usage like `aitrack sync`, but of the enabled providers only, then reload
+    /// so the totals include it.
     pub fn sync(&self) {
-        {
+        let enabled = {
             let mut inner = self.lock();
             if inner.syncing {
                 return;
             }
             inner.syncing = true;
-        }
+            inner.enabled_providers()
+        };
         self.emit();
-        let local_machine = match self.deps.sync() {
+        let local_machine = match self.deps.sync(&enabled) {
             Ok((message, machine)) => {
                 let outcome = match self.sync_settings(true) {
                     Ok(()) => SyncOutcome { ok: true, message },
@@ -563,6 +565,7 @@ mod tests {
         usage_fails: AtomicBool,
         sync_fails: AtomicBool,
         syncs: AtomicUsize,
+        synced: Mutex<Vec<String>>,
         /// What the data repo's shared settings turn a machine's into, and whether that fails.
         shared: Option<SharedFn>,
         saved: Mutex<Vec<Settings>>,
@@ -597,8 +600,9 @@ mod tests {
         fn persist(&self, cache: &CachedState) {
             self.persisted.lock().unwrap().push(cache.clone());
         }
-        fn sync(&self) -> Result<(String, MachineFile), String> {
+        fn sync(&self, providers: &[String]) -> Result<(String, MachineFile), String> {
             self.syncs.fetch_add(1, Ordering::SeqCst);
+            providers.clone_into(&mut self.synced.lock().unwrap());
             if let Some(sync) = &self.sync {
                 return sync();
             }
@@ -863,6 +867,7 @@ mod tests {
         );
         assert_eq!(fake.pulls(), [false]);
         assert_eq!(fake.loads.lock().unwrap()[0].local_machine, Some(machine()));
+        assert_eq!(*fake.synced.lock().unwrap(), all());
 
         fake.advance(REFRESH_INTERVAL_MS);
         service.refresh(false);
@@ -877,6 +882,10 @@ mod tests {
             service.state().sync_result,
             Some(SyncOutcome { ok: false, message: "remote: permission denied".into() })
         );
+
+        service.save_settings(only(&["codex"])).unwrap();
+        service.sync();
+        assert_eq!(*fake.synced.lock().unwrap(), ["codex"], "a provider turned off is not read by the sync");
     }
 
     #[test]
