@@ -109,13 +109,14 @@ impl App {
         background: Arc<Background>,
         data_dir: PathBuf,
         listener: Listener,
+        request: Option<Request>,
     ) -> Self {
         let ctx = cc.egui_ctx.clone();
         install_fonts(&ctx);
         let (tx, rx) = channel();
         let bus = Bus { tx, ctx: ctx.clone() };
         let show_bus = bus.clone();
-        crate::instance::listen(listener, move |request| {
+        crate::instance::listen(listener, request, move |request| {
             let screen = if request == Request::Settings { Screen::Settings } else { Screen::Dashboard };
             show_bus.send(Msg::Show(screen));
         });
