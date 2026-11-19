@@ -12,7 +12,7 @@ use aitrack_core::fs::write_file_atomic;
 
 const ID: &str = "dev.bircni.opentrack";
 
-/// Where Tauri kept settings.json and cache.json for this identifier, so 4.x data carries over.
+/// Holds settings.json and cache.json; moving it would strand every install's data.
 pub fn data_dir() -> PathBuf {
     let home = std::env::home_dir().unwrap_or_default();
     if cfg!(target_os = "macos") {

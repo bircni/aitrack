@@ -4,7 +4,7 @@ all-features = true
 
 [advisories]
 yanked = "warn"
-# Unmaintained crates deep in the Tauri tree cannot be swapped; only direct dependencies fail.
+# Unmaintained crates deep in the dependency tree cannot be swapped; only direct dependencies fail.
 unmaintained = "workspace"
 
 [sources]

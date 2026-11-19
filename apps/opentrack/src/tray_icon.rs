@@ -174,7 +174,7 @@ impl Default for TrayAppearance {
     }
 }
 
-/// The "O" filled like a pie, or one bar per limit, as straight RGBA for Tauri's tray image.
+/// The "O" filled like a pie, or one bar per limit, as straight RGBA for the tray image.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
