@@ -1,6 +1,5 @@
 {
   "claude_code": "https://claude.ai/settings/usage",
   "codex": "https://chatgpt.com/codex/settings/usage",
-  "copilot": "https://github.com/settings/copilot",
-  "cursor": "https://www.cursor.com/dashboard"
+  "copilot": "https://github.com/settings/copilot"
 }

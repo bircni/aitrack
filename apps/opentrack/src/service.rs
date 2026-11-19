@@ -5,10 +5,10 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use aitrack_core::data::types::MachineFile;
 use aitrack_core::providers::{provider_label, PROVIDERS};
 use aitrack_core::quota::{QuotaError, QuotaErrorKind, QuotaResult, QuotaSnapshot};
-use aitrack_core::time::{iso_millis, Clock};
+use aitrack_core::time::{from_js_millis, iso_millis, Clock};
 use indexmap::IndexMap;
 
-use crate::alerts::{due_alerts, prune_fired, Alert};
+use crate::alerts::{due_alerts, prune_fired, Alert, AlertRules};
 use crate::cache::CachedState;
 use crate::pace::parse_ms;
 use crate::settings::Settings;
@@ -41,6 +41,11 @@ pub trait Deps: Send + Sync {
     fn persist(&self, cache: &CachedState);
     /// The one-line outcome and the machine file it built.
     fn sync(&self) -> Result<(String, MachineFile), String>;
+    fn save_settings(&self, settings: &Settings) -> Result<(), String>;
+    /// Settings the data repo changed, for the shell to show.
+    fn on_settings(&self, settings: &Settings);
+    /// Reconciles `settings` with the ones shared through the data repo; `push` shares newer local ones.
+    fn sync_settings(&self, settings: &mut Settings, push: bool) -> Result<(), String>;
 }
 
 #[derive(Clone, Debug, Default)]
@@ -68,7 +73,7 @@ fn providers_key(providers: &[String]) -> String {
 }
 
 fn iso(ms: f64) -> String {
-    iso_millis(aitrack_core::time::from_js_millis(ms).unwrap_or_default())
+    iso_millis(from_js_millis(ms).unwrap_or_default())
 }
 
 struct Inner {
@@ -156,15 +161,51 @@ impl<D: Deps> QuotaService<D> {
         self.lock().settings.clone()
     }
 
-    pub fn set_settings(&self, settings: Settings) {
-        {
+    /// Saves what the user changed; the normalized settings come back.
+    pub fn save_settings(&self, settings: Settings) -> Result<Settings, String> {
+        let now = from_js_millis(self.deps.now()).unwrap_or_default();
+        let settings = {
             let mut inner = self.lock();
+            let settings = settings.normalized().dated(&inner.settings, now);
+            self.deps.save_settings(&settings)?;
             if !settings.pull_synced_data {
                 inner.cache.pull_error = None;
             }
-            inner.settings = settings;
-        }
+            if settings.sync && !inner.settings.sync {
+                // The repo's settings are wanted now, not at the next scheduled pull.
+                inner.next_pull_at = 0.0;
+                inner.next_usage_at = 0.0;
+            }
+            inner.settings = settings.clone();
+            settings
+        };
         self.emit();
+        Ok(settings)
+    }
+
+    /// Takes the data repo's shared settings when they are newer; `push` shares this machine's newer ones.
+    fn sync_settings(&self, push: bool) -> Result<(), String> {
+        let before = self.settings();
+        if !before.sync {
+            return Ok(());
+        }
+        let mut after = before.clone();
+        let result = self.deps.sync_settings(&mut after, push);
+        if after == before {
+            return result;
+        }
+        {
+            let mut inner = self.lock();
+            // A save that landed meanwhile is this machine's newer word; the next pull compares again.
+            if inner.settings != before {
+                return result;
+            }
+            self.deps.save_settings(&after)?;
+            inner.settings = after.clone();
+        }
+        self.deps.on_settings(&after);
+        self.emit();
+        result
     }
 
     pub fn state(&self) -> AppState {
@@ -207,7 +248,6 @@ impl<D: Deps> QuotaService<D> {
             refreshing: inner.usage_running || providers.iter().any(|p| p.refreshing),
             providers,
             machines: usage.and_then(|u| u.machines.clone()),
-            account_usage: usage.and_then(|u| u.account.clone()),
             projects: usage.and_then(|u| u.projects.clone()),
             usage_error: inner.usage_error.clone(),
             updated_at: inner.cache.updated_at.clone(),
@@ -232,9 +272,16 @@ impl<D: Deps> QuotaService<D> {
         self.emit();
         let local_machine = match self.deps.sync() {
             Ok((message, machine)) => {
+                let outcome = match self.sync_settings(true) {
+                    Ok(()) => SyncOutcome { ok: true, message },
+                    Err(error) => {
+                        let message = format!("Usage was synced, but the settings were not: {error}");
+                        SyncOutcome { ok: false, message }
+                    }
+                };
                 let now = self.deps.now();
                 let mut inner = self.lock();
-                inner.sync_result = Some(SyncOutcome { ok: true, message });
+                inner.sync_result = Some(outcome);
                 inner.next_pull_at = now + PULL_INTERVAL_MS;
                 inner.cache.pull_error = None;
                 drop(inner);
@@ -337,8 +384,11 @@ impl<D: Deps> QuotaService<D> {
                     runtime.error = None;
                     runtime.next_attempt_at = now + REFRESH_INTERVAL_MS;
                     cache.updated_at = Some(iso(now));
-                    let alerts =
-                        if settings.notifications { self.alerts_for(key, &snapshot, cache, now) } else { vec![] };
+                    let alerts = if settings.notifications {
+                        self.alerts_for(key, &snapshot, settings.alert_rules(), cache, now)
+                    } else {
+                        vec![]
+                    };
                     cache.quotas.insert(key.to_owned(), snapshot);
                     alerts
                 }
@@ -366,8 +416,15 @@ impl<D: Deps> QuotaService<D> {
         self.emit();
     }
 
-    fn alerts_for(&self, key: &str, snapshot: &QuotaSnapshot, cache: &mut CachedState, now: f64) -> Vec<Alert> {
-        let alerts = due_alerts(&self.clock, provider_label(key), snapshot, &cache.fired, now);
+    fn alerts_for(
+        &self,
+        key: &str,
+        snapshot: &QuotaSnapshot,
+        rules: AlertRules,
+        cache: &mut CachedState,
+        now: f64,
+    ) -> Vec<Alert> {
+        let alerts = due_alerts(&self.clock, provider_label(key), snapshot, rules, &cache.fired, now);
         for alert in &alerts {
             cache.fired.insert(alert.key.clone(), alert.resets_at.clone());
         }
@@ -384,7 +441,7 @@ impl<D: Deps> QuotaService<D> {
         };
         self.emit();
         let key = providers_key(&providers);
-        let result = self.deps.load_usage(UsageLoadOptions { providers, pull, refresh_live: force, local_machine });
+        let result = self.deps.load_usage(UsageLoadOptions { providers, pull, local_machine });
         let completed_at = self.deps.now();
         {
             let mut inner = self.lock();
@@ -414,6 +471,9 @@ impl<D: Deps> QuotaService<D> {
         }
         self.usage_done.notify_all();
         self.emit(); // Usage shows now rather than with the slowest quota fetch.
+        if pull {
+            let _ = self.sync_settings(false); // Logged where it failed; the next pull tries again.
+        }
     }
 
     fn emit(&self) {
@@ -486,6 +546,7 @@ mod tests {
     type QuotaFn = Box<dyn Fn(&str, f64) -> Option<QuotaResult> + Send + Sync>;
     type UsageFn = Box<dyn Fn(&UsageLoadOptions) -> UsageLoadResult + Send + Sync>;
     type SyncFn = Box<dyn Fn() -> Result<(String, MachineFile), String> + Send + Sync>;
+    type SharedFn = Box<dyn Fn(&mut Settings, bool) -> Result<(), String> + Send + Sync>;
 
     /// The deps every test shares, with the clock and each outside call under the test's control.
     #[derive(Default)]
@@ -502,6 +563,10 @@ mod tests {
         usage_fails: AtomicBool,
         sync_fails: AtomicBool,
         syncs: AtomicUsize,
+        /// What the data repo's shared settings turn a machine's into, and whether that fails.
+        shared: Option<SharedFn>,
+        saved: Mutex<Vec<Settings>>,
+        shown: Mutex<Vec<Settings>>,
     }
 
     impl Deps for Arc<Fake> {
@@ -541,6 +606,16 @@ mod tests {
                 return Err("remote: permission denied".into());
             }
             Ok(("Done! Pushed data/host.json (3 days)".into(), machine()))
+        }
+        fn save_settings(&self, settings: &Settings) -> Result<(), String> {
+            self.saved.lock().unwrap().push(settings.clone());
+            Ok(())
+        }
+        fn on_settings(&self, settings: &Settings) {
+            self.shown.lock().unwrap().push(settings.clone());
+        }
+        fn sync_settings(&self, settings: &mut Settings, push: bool) -> Result<(), String> {
+            self.shared.as_ref().map_or(Ok(()), |shared| shared(settings, push))
         }
     }
 
@@ -626,7 +701,7 @@ mod tests {
                 assert!(std::time::Instant::now() < deadline, "usage never showed");
                 std::thread::yield_now();
             }
-            for _ in 0..3 {
+            for _ in all() {
                 release.send(()).unwrap();
             }
         });
@@ -650,12 +725,12 @@ mod tests {
         assert_eq!(fake.pulls().last(), Some(&true));
     }
 
-    fn failing() -> Fake {
+    /// Claude fails with `claude`; Codex is rate limited for five minutes.
+    fn failing(claude: QuotaErrorKind) -> Fake {
         Fake {
-            quota: Some(Box::new(|provider, _| match provider {
-                "claude_code" => Some(failure(QuotaErrorKind::Auth, "token rejected", None)),
-                "codex" => Some(failure(QuotaErrorKind::RateLimited, "slow down", Some(300))),
-                _ => Some(failure(QuotaErrorKind::NoCredentials, "sign in", None)),
+            quota: Some(Box::new(move |provider, _| match provider {
+                "claude_code" => Some(failure(claude, "sign in", None)),
+                _ => Some(failure(QuotaErrorKind::RateLimited, "slow down", Some(300))),
             })),
             ..Fake::default()
         }
@@ -663,22 +738,20 @@ mod tests {
 
     #[test]
     fn backs_off_after_failures_and_honours_retry_after_even_when_forced() {
-        let (fake, service) = harness(failing());
-        service.refresh(false);
-        let state = service.state();
-        assert_eq!(state.providers[1].quota_error.as_ref().unwrap().kind, QuotaErrorKind::RateLimited);
-        assert_eq!(state.providers[1].retry_at, Some(START + 300_000.0));
-        assert!(state.providers[2].quota.is_none());
-        fake.take_calls();
-        service.refresh(true);
-        let mut calls = fake.take_calls();
-        calls.sort();
-        assert_eq!(calls, ["claude_code", "copilot", "cursor"]);
-        fake.advance(FAILURE_BACKOFF_MS);
-        service.refresh(false);
-        let mut calls = fake.take_calls();
-        calls.sort();
-        assert_eq!(calls, ["copilot", "cursor"]);
+        for (kind, retried_after_backoff) in [(QuotaErrorKind::NoCredentials, true), (QuotaErrorKind::Auth, false)] {
+            let (fake, service) = harness(failing(kind));
+            service.refresh(false);
+            let state = service.state();
+            assert_eq!(state.providers[1].quota_error.as_ref().unwrap().kind, QuotaErrorKind::RateLimited);
+            assert_eq!(state.providers[1].retry_at, Some(START + 300_000.0));
+            assert!(state.providers[0].quota.is_none());
+            fake.take_calls();
+            service.refresh(true);
+            assert_eq!(fake.take_calls(), ["claude_code"]);
+            fake.advance(FAILURE_BACKOFF_MS);
+            service.refresh(false);
+            assert_eq!(fake.take_calls().len(), usize::from(retried_after_backoff), "{kind:?}");
+        }
     }
 
     #[test]
@@ -738,7 +811,7 @@ mod tests {
     fn reports_usage_failures_skips_disabled_providers_and_reloads_only_when_the_enabled_set_changes() {
         let (fake, service) = harness(Fake::default());
         fake.usage_fails.store(true, Ordering::SeqCst);
-        service.set_settings(only(&["claude_code"]));
+        service.save_settings(only(&["claude_code"])).unwrap();
         service.refresh(false);
         assert_eq!(fake.take_calls(), ["claude_code"]);
         assert_eq!(fake.pulls(), [false]);
@@ -746,14 +819,14 @@ mod tests {
         assert_eq!(state.usage_error.as_deref(), Some("disk on fire"));
         assert_eq!(state.providers.iter().map(|p| p.key.as_str()).collect::<Vec<_>>(), ["claude_code"]);
 
-        service.set_settings(Settings { pull_synced_data: false, ..Settings::default() });
+        service.save_settings(Settings { pull_synced_data: false, ..Settings::default() }).unwrap();
         service.refresh(false); // Still inside the failure backoff.
         let read: Vec<Vec<String>> = fake.loads.lock().unwrap().iter().map(|l| l.providers.clone()).collect();
         assert_eq!(read, [vec!["claude_code".to_owned()], all()]);
 
         let mut reversed = Settings { pull_synced_data: false, ..Settings::default() };
         reversed.providers.reverse();
-        service.set_settings(reversed);
+        service.save_settings(reversed).unwrap();
         service.refresh(false);
         assert_eq!(fake.loads.lock().unwrap().len(), 2);
     }
@@ -776,7 +849,7 @@ mod tests {
         service.refresh(true);
         let mut calls = restarted.take_calls();
         calls.sort();
-        assert_eq!(calls, ["codex", "copilot", "cursor"]);
+        assert_eq!(calls, ["codex", "copilot"]);
     }
 
     #[test]
@@ -806,6 +879,54 @@ mod tests {
             service.state().sync_result,
             Some(SyncOutcome { ok: false, message: "remote: permission denied".into() })
         );
+    }
+
+    #[test]
+    fn takes_shared_settings_after_a_pull_and_shares_them_on_sync_unless_a_save_landed_meanwhile() {
+        let saving = Arc::new(Mutex::new(None::<Box<dyn Fn() + Send>>));
+        let during = Arc::clone(&saving);
+        let fake = Fake {
+            shared: Some(Box::new(move |settings, push| {
+                let save = during.lock().unwrap().take();
+                if let Some(save) = save {
+                    save();
+                    settings.display = "left".into();
+                }
+                settings.theme = if push { "light" } else { "dark" }.into();
+                if push {
+                    Err("remote: permission denied".into())
+                } else {
+                    Ok(())
+                }
+            })),
+            ..Fake::default()
+        };
+        let (fake, service) = harness(fake);
+        let service = Arc::new(service);
+        service.refresh(false);
+        assert!(fake.saved.lock().unwrap().is_empty(), "off until asked for");
+
+        fake.advance(1.0);
+        let on = service.save_settings(Settings { sync: true, ..Settings::default() }).unwrap();
+        service.refresh(false);
+        assert_eq!(fake.pulls(), [true, true], "turning it on pulls at once");
+        let dark = Settings { theme: "dark".into(), ..on };
+        assert_eq!((service.settings(), fake.shown.lock().unwrap().clone()), (dark.clone(), vec![dark.clone()]));
+        assert_eq!(fake.saved.lock().unwrap().last(), Some(&dark));
+
+        service.sync();
+        assert_eq!(service.settings().theme, "light", "what was taken is kept though the push failed");
+        let message = "Usage was synced, but the settings were not: remote: permission denied".to_owned();
+        assert_eq!(service.state().sync_result, Some(SyncOutcome { ok: false, message }));
+
+        let saver = Arc::clone(&service);
+        let compact = Settings { compact: true, ..service.settings() };
+        *saving.lock().unwrap() = Some(Box::new(move || drop(saver.save_settings(compact.clone()))));
+        service.sync();
+        let kept = service.settings();
+        assert_eq!((kept.display.as_str(), kept.compact), ("used", true));
+        assert_eq!(kept.shared_at.as_deref(), Some("2026-06-01T12:00:00.001Z"));
+        assert_eq!(fake.shown.lock().unwrap().len(), 2);
     }
 
     #[test]
@@ -845,10 +966,7 @@ mod tests {
             assert_eq!(fake.syncs.load(Ordering::SeqCst), 1);
             assert!(service.state().syncing);
             let last = fake.loads.lock().unwrap().last().cloned().unwrap();
-            assert_eq!(
-                last,
-                UsageLoadOptions { providers: all(), pull: false, refresh_live: false, local_machine: Some(machine()) }
-            );
+            assert_eq!(last, UsageLoadOptions { providers: all(), pull: false, local_machine: Some(machine()) });
             finish_reload.send(()).unwrap();
         });
         let state = service.state();

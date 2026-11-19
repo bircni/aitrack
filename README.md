@@ -4,7 +4,7 @@
 
 **Your AI coding usage in the terminal and the menu bar.**
 
-Track Claude Code, Codex, GitHub Copilot and Cursor with two apps built on the same usage data:
+Track Claude Code, Codex and GitHub Copilot with two apps built on the same usage data:
 **aitrack** for reports and git sync, **opentrack** for live limits and a desktop dashboard.
 
 [![npm version](https://img.shields.io/npm/v/aitrack?color=cb3837&logo=npm)](https://www.npmjs.com/package/aitrack)
@@ -21,7 +21,7 @@ Track Claude Code, Codex, GitHub Copilot and Cursor with two apps built on the s
 | -------------- | ----------------------------------------- | ------------------------------------------------------ |
 | Where it runs  | Terminal on macOS, Windows and Linux      | macOS menu bar, Windows and Linux system tray          |
 | Main use       | Usage reports, heatmaps, exports and sync | Live limits, reset times, pacing and usage at a glance |
-| Providers      | Claude Code, Codex, Copilot and Cursor    | Claude Code, Codex, Copilot and Cursor                 |
+| Providers      | Claude Code, Codex and Copilot            | Claude Code, Codex and Copilot                         |
 | Install        | npm / npx                                 | Download a desktop installer                           |
 | Shared history | Optional git repo you control             | Reads the same history and can sync from the dashboard |
 
@@ -95,7 +95,7 @@ Or download it from [GitHub Releases](https://github.com/bircni/aitrack/releases
 opentrack checks GitHub for new releases and offers to install them from the dashboard.
 
 The desktop app is self-contained; you do not need Node.js or the CLI to view local usage and
-limits. Sign in to Claude Code, Codex, GitHub (`gh auth login`, for Copilot) or Cursor as usual: opentrack
+limits. Sign in to Claude Code, Codex or GitHub (`gh auth login`, for Copilot) as usual: opentrack
 reads their saved credentials. Codex live limits require a ChatGPT login.
 
 Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
@@ -117,13 +117,11 @@ Use the same remote and a different, stable machine name for each computer. Your
 git credentials handle authentication. The desktop app reads the same configured repo,
 can pull history automatically, and pushes local usage when you press Sync.
 
-Claude Code, Codex and Copilot history are synced. Cursor usage stays on the current machine.
 You can use both apps locally without setting up a repo.
 
 ## Your data and cost estimates
 
-Claude Code, Codex and Copilot CLI usage comes from local session logs. Cursor usage comes from its
-HTTPS usage export using the current machine's saved Cursor login. opentrack also
+Claude Code, Codex and Copilot CLI usage comes from local session logs. opentrack also
 requests live limits from each provider using the credentials that provider's tool saved.
 Credentials are never written to your usage repo. Synced files do hold your machine name,
 timezone, and daily usage by model and project (`owner/repo`, which can name a private
@@ -133,12 +131,6 @@ lists everything that leaves your machine.
 
 Costs are **API-equivalent estimates**, based on model pricing and token/cache counts.
 They show the pay-as-you-go value of your usage, not your subscription bill.
-
-The CLI selects all three providers by default. To skip Cursor credentials and requests:
-
-```sh
-aitrack show --tui --providers claude,codex
-```
 
 ## Documentation
 

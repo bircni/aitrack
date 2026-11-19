@@ -1,6 +1,7 @@
 //! The window: placing and hiding the popup, routing background events to the UI, and carrying out
 //! what the UI asks for.
 
+use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -69,6 +70,7 @@ enum Run {
 
 pub struct App {
     background: Arc<Background>,
+    data_dir: PathBuf,
     rx: Receiver<Msg>,
     bus: Bus,
     saves: Sender<(u64, Settings)>,
@@ -102,7 +104,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, background: Arc<Background>, listener: Listener) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        background: Arc<Background>,
+        data_dir: PathBuf,
+        listener: Listener,
+    ) -> Self {
         let ctx = cc.egui_ctx.clone();
         install_fonts(&ctx);
         let (tx, rx) = channel();
@@ -132,6 +139,7 @@ impl App {
             state: Arc::new(background.service.state()),
             settings: background.service.settings(),
             background,
+            data_dir,
             rx,
             bus,
             saves: save_count,
@@ -279,7 +287,8 @@ impl App {
                 Msg::Refresh => self.background.refresh_in_background(true),
                 Msg::Quit => std::process::exit(0),
                 Msg::State(state) => self.on_state(state),
-                Msg::Settings(settings) => {
+                // Edits a failed save left pending are newer than what another machine shared.
+                Msg::Settings(settings) if self.settings_error.is_none() => {
                     self.settings = *settings;
                     self.apply_settings(ctx, window);
                 }
@@ -293,7 +302,7 @@ impl App {
                     }
                     Err(error) => self.settings_error = Some(error),
                 },
-                Msg::Saved(..) => {}
+                Msg::Settings(_) | Msg::Saved(..) => {}
                 Msg::LaunchAtLogin(error) => self.setting_errors.launch_at_login = error,
                 Msg::Alert { title, body } => notify(title, body),
                 Msg::Tray(image) => self.tray.set(image),
@@ -325,8 +334,8 @@ impl App {
             }
             Action::Save(settings) => {
                 self.save_seq += 1;
-                let _ = self.saves.send((self.save_seq, settings.clone()));
-                self.settings = settings;
+                let _ = self.saves.send((self.save_seq, (*settings).clone()));
+                self.settings = *settings;
                 self.apply_settings(ctx, window);
             }
             Action::OpenDashboard(provider) => {
@@ -345,6 +354,9 @@ impl App {
                 self.update.installing = true;
                 self.update.error = None;
                 self.updater.install(self.bus.clone());
+            }
+            Action::ExportLogs => {
+                crate::logs::export(self.data_dir.clone(), crate::logs::archive_name(&self.clock), self.bus.clone());
             }
             Action::StartDrag => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
         }

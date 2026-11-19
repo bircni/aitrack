@@ -6,13 +6,13 @@ use aitrack_core::day::Day;
 use aitrack_core::display::format::{fmt, fmt_usd_cost, group_thousands};
 pub use aitrack_core::display::heatmap::intensity::intensity_level;
 use aitrack_core::display::heatmap::stats::MONTHS;
-use aitrack_core::quota::pacing::{js_round, PaceProjection, PaceSeverity};
-use aitrack_core::quota::{QuotaError, QuotaErrorKind, QuotaFormat, QuotaWindow};
+use aitrack_core::quota::pacing::{js_round, project_pace, PaceProjection, PaceSeverity};
+use aitrack_core::quota::{QuotaError, QuotaErrorKind, QuotaFormat, QuotaWindow, WEEK_SECONDS};
 use aitrack_core::time::{from_js_millis, Clock};
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 
-use crate::pace::{format_when, parse_ms};
+use crate::pace::{format_when, has_reset, meter_tone, parse_ms, Tone};
 use crate::state::{
     AppState, DailyUsage, MachineUsage, ModelUsage, PeriodUsage, ProjectProviderEntry, ProjectUsageEntry,
     ProjectUsages, ProviderState, ProviderUsage,
@@ -256,129 +256,77 @@ pub fn day_cost_label(day: &DailyUsage) -> String {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Bucket {
-    Day,
-    Week,
-}
+/// How many weeks the usage grid shows, newest last.
+pub const GRID_WEEKS: usize = 18;
 
+/// One day of the usage grid.
 #[derive(Clone, Debug, PartialEq)]
-pub struct HistoryPart {
-    pub key: String,
-    pub label: String,
-    pub cost_usd: f64,
+pub struct GridCell {
+    pub column: usize,
+    /// Monday is 0.
+    pub row: usize,
+    /// Its shade, 0 to 4, as the heatmap levels a day.
+    pub level: u8,
+    /// Whether the selected period covers it.
+    pub lit: bool,
+    pub day: DailyUsage,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct HistoryBar {
-    pub start: String,
-    pub total_usd: f64,
-    pub parts: Vec<HistoryPart>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct HistoryProvider {
-    pub key: String,
-    pub label: String,
-    pub cost_usd: f64,
-    pub has_unpriced_tokens: bool,
-}
-
+/// The heatmap `aitrack show` draws, for the days the popup holds, with the stats printed under it.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct History {
-    pub bars: Vec<HistoryBar>,
-    pub total_usd: f64,
-    pub average_usd: f64,
-    pub from: String,
-    pub to: String,
-    pub peak_usd: f64,
-    pub busiest: String,
-    pub by_provider: Vec<HistoryProvider>,
-    pub has_unpriced_tokens: bool,
+pub struct UsageGrid {
+    pub cells: Vec<GridCell>,
+    /// The column each month starts in.
+    pub months: Vec<(usize, &'static str)>,
+    pub current_streak: usize,
+    /// Every day held is part of the current streak, so it may be longer than shown.
+    pub streak_capped: bool,
+    pub longest_streak: usize,
+    pub peak: Option<DailyUsage>,
 }
 
-/// Monday of the week `date` falls in.
-pub fn monday_of_week(date: &str) -> String {
-    Day::parse(date).map_or_else(|| date.to_owned(), |day| day.monday_of_week().to_string())
-}
-
-/// Stacked cost per day (or week) over the last `range` days, split by provider.
-pub fn build_history(providers: &[ProviderState], range: usize, bucket: Bucket) -> History {
-    let mut dates: Vec<&str> = providers
+/// Lays the daily series out in Monday-first weeks. Days before the first Monday are left out of
+/// the grid but still count for the streaks, and an idle today does not end the current one.
+pub fn usage_grid(daily: &[DailyUsage], period: Period) -> UsageGrid {
+    let active = |day: &DailyUsage| day.cost_usd > 0.0 || day.has_unpriced_tokens;
+    let finished = if daily.last().is_some_and(|day| !active(day)) { &daily[..daily.len() - 1] } else { daily };
+    let current_streak = finished.iter().rev().take_while(|day| active(day)).count();
+    let longest_streak = daily.split(|day| !active(day)).map(<[DailyUsage]>::len).max().unwrap_or(0);
+    let peak = daily.iter().filter(|day| day.cost_usd > 0.0).max_by(|a, b| a.cost_usd.total_cmp(&b.cost_usd));
+    let top = peak.map_or(0.0, |day| day.cost_usd);
+    let lit_from = match period {
+        Period::Today => daily.len().saturating_sub(1),
+        Period::Week => daily.len().saturating_sub(7),
+        Period::Month => daily.len().saturating_sub(30),
+        Period::All => 0,
+    };
+    let days: Vec<(usize, Day, &DailyUsage)> =
+        daily.iter().enumerate().filter_map(|(index, day)| Some((index, Day::parse(&day.date)?, day))).collect();
+    let monday = |day: Day| day.weekday().to_monday_zero_offset() == 0;
+    let first = days.iter().position(|(_, day, _)| monday(*day)).unwrap_or(0);
+    let Some(origin) = days.get(first).map(|(_, day, _)| day.monday_of_week()) else { return UsageGrid::default() };
+    let mut months: Vec<(usize, &'static str)> = Vec::new();
+    let cells = days[first..]
         .iter()
-        .filter_map(|p| p.usage.as_ref())
-        .flat_map(|u| u.daily.iter().map(|d| d.date.as_str()))
-        .collect();
-    dates.sort_unstable();
-    dates.dedup();
-    let dates = &dates[dates.len().saturating_sub(range)..];
-    let in_range = |date: &str| dates.binary_search(&date).is_ok();
-    let mut bars: BTreeMap<String, HistoryBar> = BTreeMap::new();
-    for provider in providers {
-        for day in provider.usage.iter().flat_map(|u| &u.daily) {
-            if !in_range(&day.date) {
-                continue;
+        .map(|(index, date, day)| {
+            let offset = usize::try_from(origin.inclusive_days_to(*date) - 1).unwrap_or(0);
+            let (column, row) = (offset / 7, offset % 7);
+            let month = MONTHS[usize::try_from(date.date().month() - 1).unwrap_or(0)];
+            if months.last().is_none_or(|(_, last)| *last != month) {
+                months.push((column, month));
             }
-            let start = if bucket == Bucket::Day { day.date.clone() } else { monday_of_week(&day.date) };
-            let bar = bars.entry(start.clone()).or_insert(HistoryBar { start, total_usd: 0.0, parts: Vec::new() });
-            bar.total_usd += day.cost_usd;
-            match bar.parts.iter_mut().find(|part| part.key == provider.key) {
-                Some(part) => part.cost_usd += day.cost_usd,
-                None => bar.parts.push(HistoryPart {
-                    key: provider.key.clone(),
-                    label: provider.label.clone(),
-                    cost_usd: day.cost_usd,
-                }),
-            }
-        }
-    }
-    let bars: Vec<HistoryBar> = bars.into_values().collect();
-    let total_usd = bars.iter().map(|b| b.total_usd).sum();
-    let peak = bars.iter().fold(None::<&HistoryBar>, |best, bar| {
-        if bar.total_usd > best.map_or(0.0, |b| b.total_usd) {
-            Some(bar)
-        } else {
-            best
-        }
-    });
-    let mut by_provider: Vec<HistoryProvider> = providers
-        .iter()
-        .map(|p| {
-            let days: Vec<&DailyUsage> = p.usage.iter().flat_map(|u| &u.daily).filter(|d| in_range(&d.date)).collect();
-            HistoryProvider {
-                key: p.key.clone(),
-                label: p.label.clone(),
-                cost_usd: days.iter().map(|d| d.cost_usd).sum(),
-                has_unpriced_tokens: days.iter().any(|d| d.has_unpriced_tokens),
-            }
+            let level =
+                if day.cost_usd > 0.0 { intensity_level(day.cost_usd, top) } else { u8::from(day.has_unpriced_tokens) };
+            GridCell { column, row, level, lit: *index >= lit_from, day: (*day).clone() }
         })
-        .filter(|p| p.cost_usd > 0.0 || p.has_unpriced_tokens)
         .collect();
-    by_provider.sort_by(|a, b| b.cost_usd.total_cmp(&a.cost_usd));
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
-    )]
-    let average_usd = if dates.is_empty() { 0.0 } else { total_usd / dates.len() as f64 };
-    History {
-        total_usd,
-        average_usd,
-        from: dates.first().map(|d| (*d).to_owned()).unwrap_or_default(),
-        to: dates.last().map(|d| (*d).to_owned()).unwrap_or_default(),
-        peak_usd: peak.map_or(0.0, |b| b.total_usd),
-        busiest: peak.map(|b| b.start.clone()).unwrap_or_default(),
-        has_unpriced_tokens: by_provider.iter().any(|p| p.has_unpriced_tokens),
-        by_provider,
-        bars,
-    }
-}
-
-/// "$115" and ".70", so the cents can be set quieter.
-pub fn split_amount(value: f64) -> (String, String) {
-    let text = format_cost(value);
-    match text.rsplit_once('.') {
-        Some((whole, cents)) if !text.starts_with('<') => (whole.to_owned(), format!(".{cents}")),
-        _ => (text, String::new()),
+    UsageGrid {
+        cells,
+        months,
+        current_streak,
+        streak_capped: !daily.is_empty() && current_streak == daily.len(),
+        longest_streak,
+        peak: peak.cloned(),
     }
 }
 
@@ -431,6 +379,87 @@ pub fn pace_label(pace: &PaceProjection, now: f64, zone: &TimeZone) -> Option<St
         ),
         PaceSeverity::Spent => Some("Limit reached".into()),
     }
+}
+
+/// The limits a provider's card leads with; the others are listed small beneath them.
+pub fn is_primary_limit(window: &QuotaWindow) -> bool {
+    matches!(window.id.as_str(), "session" | "weekly")
+}
+
+/// A week-long limit other than the weekly one covers part of it, which its bare name does not say.
+pub fn limit_label(window: &QuotaWindow) -> String {
+    if window.id != "weekly" && (window.period_seconds - WEEK_SECONDS).abs() < 1.0 {
+        format!("Weekly · {}", window.label)
+    } else {
+        window.label.clone()
+    }
+}
+
+fn lower_first(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| first.to_lowercase().chain(chars).collect())
+}
+
+/// The limit the popup leads with, and whether it needs attention.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LimitStatus {
+    pub tone: Tone,
+    /// The provider's key, for its colours.
+    pub provider: String,
+    /// "Claude Code · Session".
+    pub name: String,
+    pub used_percent: f64,
+    pub title: String,
+    pub detail: Option<String>,
+}
+
+impl LimitStatus {
+    /// The limit and its verdict on one line, for where there is no room for both.
+    pub fn line(&self) -> String {
+        format!("{}: {}", self.name, lower_first(&self.title))
+    }
+}
+
+/// The most urgent limit; when none is, the one that resets next, or failing that the fullest.
+/// Cached limits and ones whose reset has passed say nothing about now and are left out; `None`
+/// when that leaves nothing.
+pub fn limit_status(clock: &Clock, providers: &[ProviderState], now: f64, relative: bool) -> Option<LimitStatus> {
+    let live = providers.iter().filter(|provider| provider.quota_error.is_none()).flat_map(|provider| {
+        let windows = provider.quota.iter().flat_map(|quota| &quota.windows);
+        windows.filter(|window| !has_reset(clock, window, now)).map(move |window| (provider, window))
+    });
+    let mut worst: Option<(Tone, f64, &ProviderState, &QuotaWindow, PaceProjection)> = None;
+    let mut next: Option<(f64, &ProviderState, &QuotaWindow)> = None;
+    let mut fullest: Option<(&ProviderState, &QuotaWindow)> = None;
+    for (provider, window) in live {
+        let pace = project_pace(window, now);
+        let urgency = (meter_tone(window, &pace), window.used_percent);
+        if urgency.0 > Tone::Calm && worst.as_ref().is_none_or(|(tone, used, ..)| urgency > (*tone, *used)) {
+            worst = Some((urgency.0, urgency.1, provider, window, pace));
+        }
+        let at = window.resets_at.as_deref().map_or(f64::NAN, |at| parse_ms(clock, at));
+        if at.is_finite() && next.is_none_or(|(soonest, ..)| at < soonest) {
+            next = Some((at, provider, window));
+        }
+        if fullest.is_none_or(|(_, most)| window.used_percent > most.used_percent) {
+            fullest = Some((provider, window));
+        }
+    }
+    let status = |tone, provider: &ProviderState, window: &QuotaWindow, title: String| LimitStatus {
+        tone,
+        provider: provider.key.clone(),
+        name: format!("{} · {}", provider.label, limit_label(window)),
+        used_percent: window.used_percent.clamp(0.0, 100.0),
+        title,
+        detail: format_reset(clock, window.resets_at.as_deref(), now, relative),
+    };
+    if let Some((tone, _, provider, window, pace)) = worst {
+        let reading = pace_label(&pace, now, clock.zone())
+            .unwrap_or_else(|| format!("{} used", format_percent(fill_percent(window, false) / 100.0)));
+        return Some(status(tone, provider, window, reading));
+    }
+    let (provider, window) = next.map(|(_, provider, window)| (provider, window)).or(fullest)?;
+    Some(status(Tone::Calm, provider, window, "All limits on track".into()))
 }
 
 pub fn fill_percent(window: &QuotaWindow, left: bool) -> f64 {
@@ -523,28 +552,6 @@ pub fn refresh_outcome(state: &AppState) -> String {
     } else {
         format!("Refresh finished, {}", problems.join(", "))
     }
-}
-
-/// Points for a small spend curve in a `width` × `height` box.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
-)]
-pub fn sparkline(values: &[f64], width: f64, height: f64, pad: f64) -> Option<Vec<(f64, f64)>> {
-    let max = values.iter().copied().fold(0.0, f64::max);
-    if values.len() < 2 || max <= 0.0 {
-        return None;
-    }
-    let steps = (values.len() - 1) as f64;
-    Some(
-        values
-            .iter()
-            .enumerate()
-            .map(|(i, v)| {
-                (pad + (i as f64 * (width - pad * 2.0)) / steps, height - pad - (v / max) * (height - pad * 2.0))
-            })
-            .collect(),
-    )
 }
 
 /// How current a machine's numbers are: this one reads its logs live, others are as of their last sync.
@@ -640,7 +647,6 @@ mod tests {
             providers,
             refreshing: false,
             machines: None,
-            account_usage: None,
             projects: None,
             usage_error: None,
             updated_at: None,
@@ -696,44 +702,29 @@ mod tests {
     }
 
     #[test]
-    fn stacks_history_by_provider_and_groups_it_by_monday_start_week() {
-        let providers = [
-            provider("claude_code", "Claude Code", Some(usage(&[1.0, 2.0, 3.0, 4.0], 1.0))),
-            provider("codex", "Codex", Some(usage(&[1.0, 0.0, 0.0, 0.0], 1.0))),
-        ];
-        let days = build_history(&providers, 30, Bucket::Day);
-        assert_eq!(days.bars.len(), 4);
-        assert!((days.total_usd - 11.0).abs() < f64::EPSILON);
-        assert!((days.average_usd - 2.75).abs() < f64::EPSILON);
-        assert_eq!(
-            (days.from.as_str(), days.to.as_str(), days.busiest.as_str()),
-            ("2026-05-01", "2026-05-04", "2026-05-04")
-        );
-        assert!((days.peak_usd - 4.0).abs() < f64::EPSILON);
-        assert_eq!(days.by_provider.iter().map(|p| p.key.as_str()).collect::<Vec<_>>(), ["claude_code", "codex"]);
-        assert_eq!(days.bars[0].parts.len(), 2);
-        let weeks = build_history(&providers, 30, Bucket::Week);
-        let bars: Vec<(&str, f64)> = weeks.bars.iter().map(|b| (b.start.as_str(), b.total_usd)).collect();
-        assert_eq!(bars, [("2026-04-27", 7.0), ("2026-05-04", 4.0)]);
-        let two_days = build_history(&providers, 2, Bucket::Day);
-        let recent: Vec<&str> = two_days.bars.iter().map(|b| b.start.as_str()).collect();
-        assert_eq!(recent, ["2026-05-03", "2026-05-04"]);
-        assert_eq!(build_history(&[], 30, Bucket::Day), History::default());
+    fn lays_days_out_in_monday_first_weeks_with_their_streaks() {
+        // 2026-05-01 is a Friday.
+        let costs = [1.0, 0.0, 2.0, 2.0, 4.0, 0.0, 0.0, 3.0, 1.0, 0.0];
+        let daily = usage(&costs, 0.0).daily;
+        let grid = usage_grid(&daily, Period::Today);
+        let places: Vec<(&str, usize, usize)> =
+            grid.cells.iter().map(|c| (c.day.date.as_str(), c.column, c.row)).collect();
+        assert_eq!(places[0], ("2026-05-04", 0, 0));
+        assert_eq!(places[6], ("2026-05-10", 0, 6));
+        assert_eq!(grid.months, [(0, "May")]);
+        assert_eq!(grid.cells.iter().filter(|c| c.lit).count(), 1);
+        assert_eq!(usage_grid(&daily, Period::All).cells.iter().filter(|c| !c.lit).count(), 0);
+        // Today is idle, which does not end the streak the two days before it made.
+        assert_eq!((grid.current_streak, grid.longest_streak, grid.streak_capped), (2, 3, false));
+        assert_eq!(grid.peak.as_ref().map(|day| day.date.as_str()), Some("2026-05-05"));
+        assert_eq!(grid.cells[1].level, 4);
+        assert_eq!(usage_grid(&[], Period::All), UsageGrid::default());
+        assert!(usage_grid(&daily[2..5], Period::All).streak_capped);
     }
 
     #[test]
-    fn splits_dollars_from_cents_and_shows_sub_cent_as_not_free() {
-        assert_eq!(split_amount(115.7), ("$115".into(), ".70".into()));
-        assert_eq!(split_amount(4246.62), ("$4,246".into(), ".62".into()));
-        assert_eq!(split_amount(0.004), ("<$0.01".into(), String::new()));
+    fn shows_sub_cent_as_not_free() {
         assert_eq!(format_cost(0.004), "<$0.01");
-    }
-
-    #[test]
-    fn draws_a_sparkline_or_nothing_without_data() {
-        assert_eq!(sparkline(&[0.0, 5.0, 10.0], 112.0, 36.0, 3.0), Some(vec![(3.0, 33.0), (56.0, 18.0), (109.0, 3.0)]));
-        assert_eq!(sparkline(&[0.0, 0.0], 112.0, 36.0, 3.0), None);
-        assert_eq!(sparkline(&[4.0], 112.0, 36.0, 3.0), None);
     }
 
     #[test]
@@ -773,6 +764,53 @@ mod tests {
             "Runs out 1:00\u{202f}PM"
         );
         assert_eq!(pace_label(&pace(PaceSeverity::Spent, None), now, &zone).unwrap(), "Limit reached");
+    }
+
+    #[test]
+    fn names_the_most_urgent_limit_or_the_next_reset() {
+        let now = ms("2026-06-01T12:00:00Z");
+        let limits = |label: &str, windows: Vec<QuotaWindow>| ProviderState {
+            quota: Some(aitrack_core::quota::QuotaSnapshot {
+                provider: label.into(),
+                plan: None,
+                windows,
+                values: Vec::new(),
+                fetched_at: "2026-06-01T12:00:00Z".into(),
+            }),
+            ..provider(label, label, None)
+        };
+        let session = QuotaWindow {
+            id: "session".into(),
+            label: "Session".into(),
+            resets_at: Some("2026-06-01T14:00:00Z".into()),
+            ..window(30.0)
+        };
+        let sonnet = QuotaWindow {
+            id: "model:sonnet".into(),
+            label: "Sonnet".into(),
+            period_seconds: WEEK_SECONDS,
+            ..window(92.0)
+        };
+        assert_eq!(limit_label(&sonnet), "Weekly · Sonnet");
+        assert!(is_primary_limit(&session) && !is_primary_limit(&sonnet));
+        assert_eq!(limit_status(&clock(), &[provider("codex", "Codex", None)], now, true), None);
+
+        let calm = limits("Claude Code", vec![session]);
+        let status = limit_status(&clock(), std::slice::from_ref(&calm), now, true).unwrap();
+        assert_eq!((status.tone, status.title.as_str()), (Tone::Calm, "All limits on track"));
+        assert_eq!((status.name.as_str(), status.detail.as_deref()), ("Claude Code · Session", Some("Resets in 2h")));
+
+        let full = limits("Codex", vec![window(85.0), sonnet]);
+        let status = limit_status(&clock(), &[calm.clone(), full.clone()], now, true).unwrap();
+        assert_eq!((status.tone, status.provider.as_str()), (Tone::Crit, "Codex"));
+        assert_eq!(status.line(), "Codex · Weekly · Sonnet: 92% used");
+        assert_eq!(status.detail, None);
+
+        // A cached limit, or one whose reset has passed, says nothing about now.
+        let failed = ProviderState { quota_error: Some(error(QuotaErrorKind::Network, "down")), ..full };
+        let later = ms("2026-06-01T15:00:00Z");
+        assert_eq!(limit_status(&clock(), std::slice::from_ref(&failed), now, true), None);
+        assert_eq!(limit_status(&clock(), &[calm, failed], later, true), None);
     }
 
     #[test]
@@ -856,8 +894,8 @@ mod tests {
         app.usage_error = Some("x".into());
         assert_eq!(usage_availability(&app), Availability::Ready);
         assert_eq!(
-            empty_usage_guidance(&["Codex", "Cursor"]),
-            "Use Codex or Cursor, then refresh. To add your other machines, run `npx aitrack init`."
+            empty_usage_guidance(&["Claude Code", "Codex"]),
+            "Use Claude Code or Codex, then refresh. To add your other machines, run `npx aitrack init`."
         );
         assert_eq!(or_list(&["A", "B", "C"]), "A, B, or C");
     }

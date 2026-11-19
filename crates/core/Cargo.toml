@@ -41,10 +41,3 @@ ureq = { version = "3.5.1", default-features = false, features = ["rustls", "pla
 jiff = { version = "0.2.40", default-features = false, features = ["tzdb-bundle-always"] }
 proptest = "1.12.0"
 tempfile = "3.27.0"
-
-# macOS ships libsqlite3; elsewhere it is compiled in.
-[target.'cfg(target_os = "macos")'.dependencies]
-rusqlite = { version = "0.41", features = ["backup"] }
-
-[target.'cfg(not(target_os = "macos"))'.dependencies]
-rusqlite = { version = "0.41", features = ["backup", "bundled"] }

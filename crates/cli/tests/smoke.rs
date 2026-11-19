@@ -11,7 +11,7 @@ fn aitrack(home: &std::path::Path) -> Command {
             command.env(kept, value);
         }
     }
-    command.env("CURSOR_STATE_DB_PATH", home.join("none.vscdb")).env("AITRACK_NO_PRICING_REFRESH", "1");
+    command.env("AITRACK_NO_PRICING_REFRESH", "1");
     command.current_dir(home);
     command
 }
@@ -41,6 +41,9 @@ fn json_failures_print_one_document_and_usage_errors_exit_2() {
         assert_eq!(document["command"], command, "{args:?}");
         assert!(document["error"].as_str().is_some_and(|e| !e.is_empty()), "{args:?}");
     }
+    let removed = aitrack(home.path()).args(["show", "--providers", "claude,cursor"]).output().unwrap();
+    assert_eq!(removed.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&removed.stderr).contains("Cursor support was removed."));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 [package]
 name = "aitrack-cli"
-description = "Track Claude Code, Codex and Cursor usage across machines."
+description = "Track Claude Code and Codex usage across machines."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

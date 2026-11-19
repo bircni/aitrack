@@ -5,7 +5,7 @@ use crate::data::types::TokenCounts;
 /// Cache reads bill at a tenth of the base input rate for every Codex model and most Claude ones.
 pub const CACHE_READ_RATE_MULTIPLIER: f64 = 0.1;
 
-/// Per-million-token rates for the four buckets Cursor and Claude bill separately.
+/// Per-million-token rates for the four buckets Claude bills separately.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FullRates {
@@ -51,14 +51,4 @@ pub fn cost_from_rates(rates: &FullRates, tokens: &TokenBuckets) -> f64 {
         + tokens.cache_read * rates.cache_read_per_million
         + tokens.cache_write * rates.cache_write_per_million)
         / 1_000_000.0
-}
-
-#[must_use]
-pub fn scale_rates(rates: &FullRates, factor: f64) -> FullRates {
-    FullRates {
-        input_per_million: rates.input_per_million * factor,
-        output_per_million: rates.output_per_million * factor,
-        cache_read_per_million: rates.cache_read_per_million * factor,
-        cache_write_per_million: rates.cache_write_per_million * factor,
-    }
 }

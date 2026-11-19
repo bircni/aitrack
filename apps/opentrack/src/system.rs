@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn every_provider_has_a_dashboard() {
-        for provider in ["claude_code", "codex", "copilot", "cursor"] {
+        for provider in ["claude_code", "codex", "copilot"] {
             assert!(DASHBOARDS.contains_key(provider), "{provider}");
         }
     }

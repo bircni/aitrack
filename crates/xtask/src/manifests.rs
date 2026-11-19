@@ -62,7 +62,7 @@ pub fn homebrew_cask(version: &str, sha256: &str) -> String {
 
   url "https://github.com/bircni/aitrack/releases/download/v#{{version}}/opentrack_#{{version}}_aarch64.dmg"
   name "opentrack"
-  desc "Menu bar dashboard for Claude Code, Codex and Cursor limits and spend"
+  desc "Menu bar dashboard for Claude Code and Codex limits and spend"
   homepage "https://github.com/bircni/aitrack/blob/main/docs/opentrack.md"
 
   livecheck do
@@ -142,9 +142,9 @@ PackageName: opentrack
 PackageUrl: https://github.com/bircni/aitrack/blob/main/docs/opentrack.md
 License: MIT
 LicenseUrl: https://github.com/bircni/aitrack/blob/main/LICENSE
-ShortDescription: Live limits, reset times and spend for Claude Code, Codex and Cursor
+ShortDescription: Live limits, reset times and spend for Claude Code and Codex
 Description: |-
-  A tray dashboard for Claude Code, Codex and Cursor: live session and weekly limits with reset
+  A tray dashboard for Claude Code and Codex: live session and weekly limits with reset
   times and pacing, plus token usage and estimated cost, including other machines synced through
   an aitrack data repo.
 Moniker: aitrack-opentrack
@@ -152,7 +152,6 @@ Tags:
 - ai
 - claude-code
 - codex
-- cursor
 - tray
 - usage
 ReleaseNotesUrl: https://github.com/bircni/aitrack/releases/tag/v{version}

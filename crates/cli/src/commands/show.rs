@@ -14,7 +14,7 @@ use aitrack_core::sync::read_local_provider_maps;
 use clap::Args;
 use serde_json::{Value, json};
 
-use super::args::{PROVIDERS_HELP, Providers, REFRESH_HELP, parse_providers, parse_year, warn_stdout_path};
+use super::args::{PROVIDERS_HELP, Providers, parse_providers, parse_year, warn_stdout_path};
 use super::report::{load, not_configured, print_empty_result};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
@@ -39,8 +39,6 @@ pub struct ShowArgs {
     /// only include days from this calendar year
     #[arg(long, value_name = "year", value_parser = parse_year)]
     pub year: Option<i16>,
-    #[arg(long, help = REFRESH_HELP)]
-    pub refresh: bool,
     /// render a stats table in the terminal instead of a PNG
     #[arg(long)]
     pub tui: bool,
@@ -87,7 +85,7 @@ pub fn run(core: &Core, args: &ShowArgs) -> Outcome {
         None
     };
     let providers = args.providers.as_deref();
-    let loaded = load(core, providers, args.refresh, local)?;
+    let loaded = load(core, providers, local)?;
     let year = args.year;
     let empty_payload = if args.tui {
         let mut payload = json!({ "mode": "tui" });

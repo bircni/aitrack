@@ -5,7 +5,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use super::catalog::{Catalog, ModelRates, find_catalog_rates};
-use super::rates::{CACHE_READ_RATE_MULTIPLIER, FullRates};
+use super::rates::CACHE_READ_RATE_MULTIPLIER;
 use super::supplement::{ClaudePricing, CodexPricing, Overrides, Supplement, compile_pattern};
 use crate::Locked;
 
@@ -14,7 +14,6 @@ pub struct ModelPricing {
     pub supplement: Supplement,
     primary: Catalog,
     secondary: Catalog,
-    aliases: Vec<(regex_lite::Regex, String)>,
     codex_fallbacks: Vec<(regex_lite::Regex, CodexPricing)>,
     fingerprint: String,
     /// Readers price per message, so a model missing from the tables would rescan the catalogs each time.
@@ -29,12 +28,6 @@ fn pick_override<P: Copy>(overrides: &Overrides<P>, id: &str, usage_date: Option
 impl ModelPricing {
     #[must_use]
     pub fn new(supplement: Supplement, primary: Catalog, secondary: Catalog) -> Self {
-        let aliases = supplement
-            .cursor
-            .aliases
-            .iter()
-            .filter_map(|rule| Some((compile_pattern(&rule.pattern).ok()?, rule.canonical.clone())))
-            .collect();
         let codex_fallbacks = supplement
             .codex
             .family_fallback
@@ -48,15 +41,7 @@ impl ModelPricing {
             })
             .collect();
         let fingerprint = fingerprint(&supplement, &primary, &secondary);
-        Self {
-            supplement,
-            primary,
-            secondary,
-            aliases,
-            codex_fallbacks,
-            fingerprint,
-            catalog_lookups: Mutex::default(),
-        }
+        Self { supplement, primary, secondary, codex_fallbacks, fingerprint, catalog_lookups: Mutex::default() }
     }
 
     /// Changes with any effective rate, but not with the daily pack timestamps.
@@ -66,13 +51,6 @@ impl ModelPricing {
 
     pub fn updated_at(&self) -> &str {
         &self.supplement.updated_at
-    }
-
-    pub fn apply_cursor_alias<'a>(&'a self, model: &'a str) -> &'a str {
-        self.aliases
-            .iter()
-            .find(|(pattern, _)| pattern.is_match(model))
-            .map_or(model, |(_, canonical)| canonical.as_str())
     }
 
     pub fn lookup_claude(&self, id: &str, usage_date: Option<&str>) -> Option<ClaudePricing> {
@@ -93,14 +71,6 @@ impl ModelPricing {
 
     pub fn codex_family_fallback(&self, id: &str) -> Option<CodexPricing> {
         self.codex_fallbacks.iter().find(|(pattern, _)| pattern.is_match(id)).map(|(_, pricing)| *pricing)
-    }
-
-    pub fn lookup_cursor_native(&self, id: &str) -> Option<FullRates> {
-        self.supplement.cursor.models.get(id).copied()
-    }
-
-    pub fn cursor_fast_multiplier(&self, base: &str) -> Option<f64> {
-        self.supplement.cursor.fast_multipliers.get(base).copied()
     }
 
     fn catalog_rates(&self, id: &str, provider: &'static str) -> Option<ModelRates> {

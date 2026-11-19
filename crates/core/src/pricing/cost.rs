@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::sync::Mutex;
 
 use super::model_pricing::ModelPricing;
-use super::rates::{CACHE_READ_RATE_MULTIPLIER, FullRates, TokenBuckets, cost_from_rates, scale_rates, token_buckets};
+use super::rates::{CACHE_READ_RATE_MULTIPLIER, TokenBuckets, cost_from_rates, token_buckets};
 use super::supplement::{ClaudePricing, CodexPricing};
 use crate::Locked;
 use crate::data::model_id::{
@@ -156,33 +156,6 @@ pub fn estimate_codex_cost(
     )
 }
 
-fn lookup_exact_cursor_rates(pricing: &ModelPricing, model: &str, usage_date: Option<&str>) -> Option<FullRates> {
-    // No public catalogs here: Cursor slugs missing from the tables stay unpriced on purpose.
-    pricing
-        .lookup_cursor_native(model)
-        .or_else(|| lookup_claude_pricing(pricing, model, usage_date).map(|p| p.rates()))
-        .or_else(|| lookup_codex_pricing(pricing, model, usage_date).map(|p| p.rates()))
-}
-
-pub fn resolve_cursor_rates(pricing: &ModelPricing, model: &str, usage_date: Option<&str>) -> Option<FullRates> {
-    let aliased = pricing.apply_cursor_alias(model);
-    if let Some(exact) = lookup_exact_cursor_rates(pricing, aliased, usage_date) {
-        return Some(exact);
-    }
-    let base = aliased.strip_suffix("-fast").filter(|base| !base.is_empty())?;
-    let base_rates = lookup_exact_cursor_rates(pricing, base, usage_date)?;
-    Some(scale_rates(&base_rates, pricing.cursor_fast_multiplier(base)?))
-}
-
-pub fn estimate_cursor_cost(
-    pricing: &ModelPricing,
-    model: &str,
-    counts: &TokenCounts,
-    usage_date: Option<&str>,
-) -> Option<f64> {
-    resolve_cursor_rates(pricing, model, usage_date).map(|rates| cost_from_rates(&rates, &token_buckets(counts)))
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PriceMode {
     /// Keep a stored cost; price only what has none.
@@ -227,7 +200,6 @@ pub fn price_model_cost(
             usage_date,
             fallbacks,
         ),
-        "cursor" => estimate_cursor_cost(pricing, model, counts, usage_date),
         _ => None,
     }
 }

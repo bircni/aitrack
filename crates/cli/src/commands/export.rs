@@ -10,7 +10,7 @@ use aitrack_core::display::style;
 use clap::Args;
 use serde_json::json;
 
-use super::args::{PROVIDERS_HELP, Providers, REFRESH_HELP, parse_providers, warn_stdout_path};
+use super::args::{PROVIDERS_HELP, Providers, parse_providers, warn_stdout_path};
 use super::report::{load, not_configured};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
@@ -28,8 +28,6 @@ pub struct ExportArgs {
     pub csv: bool,
     #[arg(long, value_name = "list", help = PROVIDERS_HELP, value_parser = parse_providers)]
     pub providers: Option<Providers>,
-    #[arg(long, help = REFRESH_HELP)]
-    pub refresh: bool,
     /// print machine-readable JSON
     #[arg(long)]
     pub json: bool,
@@ -58,7 +56,7 @@ pub fn run(core: &Core, args: &ExportArgs) -> Outcome {
     warn_stdout_path(core, args.output.as_deref());
     let options = report_options(args)?;
     let providers = args.providers.as_deref();
-    let loaded = load(core, providers, args.refresh, None)?;
+    let loaded = load(core, providers, None)?;
     let rates = core.pricing().current();
     let context = ReportContext { pricing: &rates, clock: &core.clock, now: core.clock.now() };
     let report = loaded

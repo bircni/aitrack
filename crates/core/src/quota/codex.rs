@@ -3,13 +3,13 @@ use std::time::Duration;
 use jiff::Timestamp;
 use serde_json::{Map, Value};
 
+use super::jwt::{decode_jwt_payload, jwt_expiry_ms};
 use super::{
     QuotaError, QuotaErrorKind, QuotaFormat, QuotaResult, QuotaSnapshot, QuotaValue, QuotaWindow, SESSION_SECONDS,
     WEEK_SECONDS, assert_not_expired, instant_value, number_value, record, request_json, string_value, title_case,
 };
 use crate::Core;
 use crate::http::Request;
-use crate::readers::cursor::jwt::{decode_jwt_payload, jwt_expiry_ms};
 use crate::readers::paths::codex_home_dirs;
 use crate::time::{from_js_millis, iso_millis};
 

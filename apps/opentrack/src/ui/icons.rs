@@ -293,7 +293,6 @@ pub fn paint_glyph(painter: &egui::Painter, rect: Rect, glyph: Glyph, color: Col
 const CLAUDE: &str = include_str!("../../icons/providers/claude.path");
 const CODEX: &str = include_str!("../../icons/providers/codex.path");
 const COPILOT: &str = include_str!("../../icons/providers/copilot.path");
-const CURSOR: &str = include_str!("../../icons/providers/cursor.path");
 
 const MARK_SIZE: usize = 64;
 
@@ -357,7 +356,7 @@ pub struct ProviderMarks {
 
 impl ProviderMarks {
     pub fn load(ctx: &egui::Context) -> Self {
-        let textures = [("claude_code", CLAUDE), ("codex", CODEX), ("copilot", COPILOT), ("cursor", CURSOR)]
+        let textures = [("claude_code", CLAUDE), ("codex", CODEX), ("copilot", COPILOT)]
             .into_iter()
             .map(|(key, d)| {
                 let alpha = rasterize(&parse(d), 100.0, MARK_SIZE);

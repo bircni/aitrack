@@ -4,8 +4,7 @@ use aitrack_core::data::usage_periods::{invalid_date_message, parse_positive_int
 use aitrack_core::day::Day;
 use aitrack_core::providers::{PROVIDERS, normalize_provider_key};
 
-pub const PROVIDERS_HELP: &str = "comma-separated providers to show (claude, codex, copilot, cursor); default: all";
-pub const REFRESH_HELP: &str = "re-fetch live provider data (Cursor), ignoring the local cache";
+pub const PROVIDERS_HELP: &str = "comma-separated providers to show (claude, codex, copilot); default: all";
 const WATCH_MIN_SECONDS: u64 = 5;
 
 fn provider_names() -> String {
@@ -27,8 +26,11 @@ impl std::ops::Deref for Providers {
 pub fn parse_providers(value: &str) -> Result<Providers, String> {
     let mut keys: Vec<String> = Vec::new();
     for name in value.split(',').map(aitrack_core::js::trim).filter(|n| !n.is_empty()) {
-        let key = normalize_provider_key(name)
-            .ok_or_else(|| format!("Invalid provider: \"{name}\". Expected one of: {}.", provider_names()))?;
+        let key = normalize_provider_key(name).ok_or_else(|| {
+            // Scripts written for 4.x and 5.0 still pass it.
+            let removed = if name.eq_ignore_ascii_case("cursor") { " Cursor support was removed." } else { "" };
+            format!("Invalid provider: \"{name}\".{removed} Expected one of: {}.", provider_names())
+        })?;
         if !keys.iter().any(|k| k == key) {
             keys.push(key.to_owned());
         }

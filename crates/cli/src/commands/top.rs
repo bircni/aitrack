@@ -17,14 +17,10 @@ use clap::{Args, ValueEnum};
 use indexmap::IndexMap;
 use serde_json::{Map, Value, json};
 
-use super::args::{
-    PROVIDERS_HELP, Providers, REFRESH_HELP, parse_date, parse_positive_int, parse_providers, parse_year,
-};
+use super::args::{PROVIDERS_HELP, Providers, parse_date, parse_positive_int, parse_providers, parse_year};
 use super::report::{load, not_configured, print_empty_result};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
-
-const PROJECTS_NOTE: &str = "Cursor usage is not attributed to projects and is not counted here.";
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum TopKind {
@@ -61,8 +57,6 @@ pub struct TopArgs {
     /// only include days on or before this date (YYYY-MM-DD)
     #[arg(long, value_name = "date", value_parser = parse_date)]
     pub until: Option<Day>,
-    #[arg(long, help = REFRESH_HELP)]
-    pub refresh: bool,
     /// print machine-readable JSON
     #[arg(long)]
     pub json: bool,
@@ -129,14 +123,13 @@ struct View {
     sub_header: &'static str,
     items: Vec<Item>,
     unpriced: Vec<String>,
-    notes: Vec<&'static str>,
 }
 
 #[expect(
     clippy::cast_precision_loss,
     reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
 )]
-fn render_top(core: &Core, args: &TopArgs, view: View) {
+fn render_top(core: &Core, args: &TopArgs, view: &View) {
     let window = args.window_description();
     let empty = view.items.is_empty().then(|| usage_empty_window_message(window.as_deref()));
     if args.json {
@@ -152,9 +145,6 @@ fn render_top(core: &Core, args: &TopArgs, view: View) {
         payload.insert("items".into(), Value::Array(items.collect()));
         if !view.unpriced.is_empty() {
             payload.insert("unpricedModels".into(), json!(view.unpriced));
-        }
-        if !view.notes.is_empty() {
-            payload.insert("notes".into(), json!(view.notes));
         }
         if let Some(message) = empty {
             payload.insert("message".into(), json!(message));
@@ -193,9 +183,6 @@ fn render_top(core: &Core, args: &TopArgs, view: View) {
     if let Some(footnote) = unpriced_footnote(&view.unpriced) {
         core.output.info(&style::dim(&footnote));
     }
-    for note in view.notes {
-        core.output.info(&style::dim(note));
-    }
 }
 
 fn top_provider_name(by_provider: &IndexMap<String, u64>) -> String {
@@ -229,7 +216,6 @@ fn view(data: &ProviderData, args: &TopArgs, filter: &DateFilter) -> View {
                         }),
                     })
                     .collect(),
-                notes: Vec::new(),
             }
         }
         TopKind::Projects => View {
@@ -254,7 +240,6 @@ fn view(data: &ProviderData, args: &TopArgs, filter: &DateFilter) -> View {
                 })
                 .collect(),
             unpriced: Vec::new(),
-            notes: vec![PROJECTS_NOTE],
         },
         TopKind::Models => {
             let models = top_models(data, limit, sort, filter);
@@ -280,7 +265,6 @@ fn view(data: &ProviderData, args: &TopArgs, filter: &DateFilter) -> View {
                         }),
                     })
                     .collect(),
-                notes: Vec::new(),
             }
         }
     }
@@ -293,7 +277,7 @@ pub fn run(core: &Core, args: &TopArgs) -> Outcome {
         return Err(Failure::usage(format!("--since \"{since}\" must not be after --until \"{until}\".")));
     }
     let providers = args.providers.as_deref();
-    let Some(loaded) = load(core, providers, args.refresh, None)? else {
+    let Some(loaded) = load(core, providers, None)? else {
         let mut payload = args.envelope();
         payload.insert("items".into(), json!([]));
         let message = usage_empty_message(not_configured(core), providers.unwrap_or_default());
@@ -303,6 +287,6 @@ pub fn run(core: &Core, args: &TopArgs) -> Outcome {
     let data = &loaded.zoned.provider_data;
     let filter = DateFilter { start: args.since, end: args.until, year: args.year };
     let view = view(data, args, &filter);
-    render_top(core, args, view);
+    render_top(core, args, &view);
     Ok(ExitCode::SUCCESS)
 }

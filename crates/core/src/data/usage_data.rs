@@ -9,12 +9,12 @@ use crate::config::resolve_machine_id;
 use crate::data::aggregate::sum_day_map;
 use crate::data::day_map::{add_counts_by_key, add_token_counts, flag_unpriced, get_or_create_day, merge_all_day_maps};
 use crate::data::local_data::{build_machine_data, machine_has_data, merge_persisted_days, rebucket_persisted_days};
-use crate::data::types::{DayEntry, DayMap, MachineDays, MachineFile, ProviderData, ProviderDay, TokenCounts};
+use crate::data::types::{DayEntry, MachineDays, MachineFile, ProviderData, ProviderDay, TokenCounts};
 use crate::day::Day;
 use crate::machine_id::machine_data_filename;
 use crate::pricing::cost::{PriceMode, resolve_model_cost};
 use crate::pricing::model_pricing::ModelPricing;
-use crate::providers::{is_synced_provider, sort_provider_keys};
+use crate::providers::{provider, sort_provider_keys};
 use crate::store::machine_files::{list_data_files, read_data_file};
 use crate::store::validate::ValidationOptions;
 
@@ -68,12 +68,12 @@ pub fn merge_provider_day(
 
 fn overlay_days(pricing: &ModelPricing, data: &mut ProviderData, days: &MachineDays) {
     for (date, providers) in days {
-        for (provider, day) in providers {
-            if !is_synced_provider(provider) {
+        for (key, day) in providers {
+            if provider(key).is_none() {
                 continue;
             }
-            let map = data.entry(provider.clone()).or_default();
-            merge_provider_day(pricing, get_or_create_day(map, *date), provider, day, Some(*date));
+            let map = data.entry(key.clone()).or_default();
+            merge_provider_day(pricing, get_or_create_day(map, *date), key, day, Some(*date));
         }
     }
 }
@@ -90,30 +90,21 @@ pub struct ZonedUsageSource {
     pub days: MachineDays,
 }
 
-/// What reports are built from: `provider_data` is the sources and the live providers merged.
+/// What reports are built from: `provider_data` is the sources merged.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ZonedUsageData {
     pub provider_data: ProviderData,
     /// Per-machine days before the merge; relative windows apply in each source's timezone.
     pub zoned_sources: Vec<ZonedUsageSource>,
-    /// Live providers (Cursor), in the viewing machine's timezone.
-    pub live_provider_data: ProviderData,
 }
 
-/// These machines merged with the live providers, priced the way every report prices them.
-pub fn merge_usage_sources(
-    pricing: &ModelPricing,
-    sources: Vec<ZonedUsageSource>,
-    live: ProviderData,
-) -> ZonedUsageData {
+/// These machines merged, priced the way every report prices them.
+pub fn merge_usage_sources(pricing: &ModelPricing, sources: Vec<ZonedUsageSource>) -> ZonedUsageData {
     let mut provider_data = ProviderData::new();
     for source in &sources {
         overlay_days(pricing, &mut provider_data, &source.days);
     }
-    for (key, days) in &live {
-        provider_data.insert(key.clone(), days.clone());
-    }
-    ZonedUsageData { provider_data, zoned_sources: sources, live_provider_data: live }
+    ZonedUsageData { provider_data, zoned_sources: sources }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -231,7 +222,6 @@ pub fn load_merged_provider_data(
     machine_id: &str,
     local: Option<&MachineFile>,
     providers: Option<&[String]>,
-    live: ProviderData,
 ) -> Option<LoadedUsage> {
     let config = core.try_load_config();
     let not_configured = config.is_none() || !is_cloned(core);
@@ -247,19 +237,17 @@ pub fn load_merged_provider_data(
             last_updated: machine.last_updated,
         })
         .collect();
-    let live: ProviderData = live.into_iter().filter(|(_, days)| !days.is_empty()).collect();
-    let zoned = merge_usage_sources(pricing, sources, live);
+    let zoned = merge_usage_sources(pricing, sources);
     if zoned.provider_data.is_empty() {
         return None;
     }
     Some(LoadedUsage { zoned, machine_data: persisted.into_iter().map(|p| p.machine).collect(), not_configured })
 }
 
-/// Machine files merged after each was clipped to its own window; live data uses the viewer's.
+/// Machine files merged after each was clipped to its own window.
 pub fn provider_data_for_windows(
     pricing: &ModelPricing,
     data: &ZonedUsageData,
-    viewer_zone: &str,
     window_for: impl Fn(&str) -> (Day, Day),
 ) -> ProviderData {
     let mut out = ProviderData::new();
@@ -268,14 +256,6 @@ pub fn provider_data_for_windows(
         let clipped: MachineDays =
             source.days.iter().filter(|(d, _)| **d >= start && **d <= end).map(|(d, p)| (*d, p.clone())).collect();
         overlay_days(pricing, &mut out, &clipped);
-    }
-    let (start, end) = window_for(viewer_zone);
-    for (key, days) in &data.live_provider_data {
-        let filtered: DayMap =
-            days.iter().filter(|(d, _)| **d >= start && **d <= end).map(|(d, e)| (*d, e.clone())).collect();
-        if !filtered.is_empty() {
-            out.insert(key.clone(), filtered);
-        }
     }
     out
 }
@@ -308,8 +288,7 @@ pub fn load_reported_machines(core: &Core) -> crate::error::Result<Vec<MachineFi
     Ok(merge_persisted_with_local(&persisted, Some(&local), &current_file))
 }
 
-/// Every machine's days for reports; the live providers are fetched while the logs are read.
-/// `local`, when given, is this machine's file already read from its logs.
+/// Every machine's days for reports. `local`, when given, is this machine's file already read from its logs.
 ///
 /// # Errors
 ///
@@ -317,23 +296,11 @@ pub fn load_reported_machines(core: &Core) -> crate::error::Result<Vec<MachineFi
 pub fn load_usage(
     core: &Core,
     providers: Option<&[String]>,
-    refresh_live: bool,
     local: Option<MachineFile>,
 ) -> crate::error::Result<Option<LoadedUsage>> {
     let config = core.try_load_config();
     let machine_id = resolve_machine_id(config.as_ref()).map_err(crate::error::Error::new)?;
-    let wants_cursor = providers.is_none_or(|p| p.iter().any(|k| k == "cursor"));
-    let max_age = if refresh_live { None } else { Some(crate::readers::cursor::cache_ttl_seconds(core)) };
-    let (local, cursor) = std::thread::scope(|scope| {
-        let cursor = wants_cursor.then(|| scope.spawn(|| crate::readers::cursor::read_cursor_data(core, max_age)));
-        let local = local.map_or_else(|| build_local_machine_file(core, &machine_id, providers), Ok);
-        (local, cursor.map(|handle| handle.join().unwrap_or_default()))
-    });
-    let local = local?;
-    let mut live = ProviderData::new();
-    if let Some(days) = cursor {
-        live.insert("cursor".to_owned(), days);
-    }
+    let local = local.map_or_else(|| build_local_machine_file(core, &machine_id, providers), Ok)?;
     let rates = core.pricing().current();
-    Ok(load_merged_provider_data(core, &rates, &machine_id, Some(&local), providers, live))
+    Ok(load_merged_provider_data(core, &rates, &machine_id, Some(&local), providers))
 }

@@ -20,9 +20,7 @@ use sha2::{Digest, Sha256};
 use aitrack_core::hex;
 use aitrack_core::js::stringify_pretty;
 
-use crate::pricing::{
-    CURSOR_PROVIDERS, Catalogs, Finding, Result, Tables, apply_catalog_rates, compare_table, fetch_catalogs, summary,
-};
+use crate::pricing::{Catalogs, Finding, Result, Tables, apply_catalog_rates, compare_table, fetch_catalogs, summary};
 
 #[expect(clippy::expect_used, reason = "xtask sits two levels below the workspace root")]
 fn root() -> PathBuf {
@@ -183,23 +181,6 @@ fn pricing_check() -> Result<bool> {
         check_table("Claude (LiteLLM anthropic/* + models.dev)", table("/claude/models"), &["anthropic"], &catalogs);
     let codex =
         check_table("Codex current (LiteLLM openai/* + models.dev)", table("/codex/current"), &["openai"], &catalogs);
-
-    println!("\n── Cursor natives (supplement is authoritative; catalogs are informational) ──");
-    let (mut ok, mut overrides, mut only) = (0, 0, 0);
-    for (id, row, finding) in compare_table(table("/cursor/models"), &CURSOR_PROVIDERS, &catalogs) {
-        match finding {
-            Finding::Ok => {
-                ok += 1;
-                println!("✓ {id:<28} {}", summary(row));
-            }
-            Finding::Drift { saw: rates, .. } => {
-                overrides += 1;
-                println!("i {id:<28} {}  — catalog {} (supplement wins)", summary(row), saw(rates));
-            }
-            Finding::Unverified => only += 1,
-        }
-    }
-    println!("  ({ok} match catalogs, {overrides} intentional overrides, {only} supplement-only)");
 
     let (drift, unverified) = (claude.0 + codex.0, claude.1 + codex.1);
     println!();

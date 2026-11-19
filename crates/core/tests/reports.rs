@@ -16,10 +16,10 @@ use aitrack_core::data::stale_sync::is_stale_sync;
 use aitrack_core::data::top_usage::{
     TopSort, top_days, top_models, top_projects, top_provider_key, unpriced_top_models,
 };
-use aitrack_core::data::types::{CountsByKey, DayEntry, DayMap, MachineFile, ProviderData, TokenCounts};
+use aitrack_core::data::types::{CountsByKey, DayMap, MachineFile, ProviderData, TokenCounts};
 use aitrack_core::data::usage_data::{
     ZonedUsageData, load_merged_provider_data, load_persisted_machines, machine_usage_totals,
-    merge_persisted_with_local, merge_usage_sources,
+    merge_persisted_with_local,
 };
 use aitrack_core::data::usage_periods::{PeriodArgs, UsagePeriod, locale_now_label, parse_positive_integer};
 use aitrack_core::data::usage_report::{
@@ -108,31 +108,6 @@ fn days_json(map: &DayMap) -> Value {
 
 fn data_json(data: &ProviderData) -> Value {
     Value::Array(data.iter().map(|(k, m)| json!([k, days_json(m)])).collect())
-}
-
-fn days_from(value: &Value) -> DayMap {
-    let record = |v: &Value| -> Option<CountsByKey> {
-        v.as_array().map(|rows| {
-            rows.iter()
-                .map(|r| (r[0].as_str().unwrap().to_owned(), serde_json::from_value(r[1].clone()).unwrap()))
-                .collect()
-        })
-    };
-    value
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|row| {
-            let day = &row[1];
-            let entry = DayEntry {
-                counts: serde_json::from_value(day["counts"].clone()).unwrap(),
-                by_model: record(&day["byModel"]).unwrap(),
-                by_project: record(&day["byProject"]),
-                by_cwd: record(&day["byCwd"]),
-            };
-            (Day::parse(row[0].as_str().unwrap()).unwrap(), entry)
-        })
-        .collect()
 }
 
 fn options_from(value: &Value) -> ReportOptions {
@@ -227,7 +202,7 @@ fn periods_formatting_and_small_rules_match_4x() {
     let messages = [
         usage_empty_message(true, &[]),
         usage_empty_message(false, &[]),
-        usage_empty_message(false, &["codex".into(), "cursor".into(), "zzz".into()]),
+        usage_empty_message(false, &["codex".into(), "zzz".into()]),
         usage_empty_window_message(Some("last week")),
         usage_empty_window_message(Some("")),
         usage_empty_window_message(None),
@@ -293,7 +268,7 @@ fn loaded_for(
         ("codex".to_owned(), read_codex_days(&core, &reader_pricing, &NoRemotes).unwrap()),
     ]);
     let local = build_machine_data("laptop", &maps, zone, now(), true);
-    let loaded = load_merged_provider_data(&core, pricing, "laptop", Some(&local), None, ProviderData::new()).unwrap();
+    let loaded = load_merged_provider_data(&core, pricing, "laptop", Some(&local), None).unwrap();
     let machine_data = loaded.machine_data.iter().map(|m| m.hostname.clone()).collect();
     (core, local, loaded.zoned, machine_data, loaded.not_configured)
 }
@@ -317,12 +292,6 @@ fn loader_reports_comparisons_and_rankings_match_4x_in_every_zone() {
             &json!({"providerData": data_json(&loaded.provider_data), "sources": sources, "machineData": machine_data, "warnedNotConfigured": not_configured}),
             &recorded["loaded"],
             &format!("{zone}: loader"),
-        );
-        let live = days_from(&recorded["live"]);
-        let zoned = merge_usage_sources(
-            &pricing,
-            loaded.zoned_sources.clone(),
-            ProviderData::from([("cursor".to_owned(), live)]),
         );
         same(
             &json!(machine_zones(core.clock.zone_name(), &loaded.zoned_sources)),
@@ -351,7 +320,7 @@ fn loader_reports_comparisons_and_rankings_match_4x_in_every_zone() {
             .collect();
         same(&totals, &recorded["machineTotals"], &format!("{zone}: machine totals"));
         same(
-            &aggregate_projects(&zoned.provider_data, &DateFilter::default()),
+            &aggregate_projects(&loaded.provider_data, &DateFilter::default()),
             &recorded["aggregate"],
             &format!("{zone}: projects"),
         );
@@ -360,12 +329,12 @@ fn loader_reports_comparisons_and_rankings_match_4x_in_every_zone() {
         for case in recorded["reports"].as_array().unwrap() {
             let options = options_from(&case["options"]);
             same(
-                &result(build_usage_report(&context, &zoned, &options)),
+                &result(build_usage_report(&context, &loaded, &options)),
                 &case["report"],
                 &format!("{zone}: report {}", case["options"]),
             );
             same(
-                &result(build_project_breakdown(&context, &zoned, &options)),
+                &result(build_project_breakdown(&context, &loaded, &options)),
                 &case["breakdown"],
                 &format!("{zone}: breakdown {}", case["options"]),
             );
@@ -383,11 +352,11 @@ fn loader_reports_comparisons_and_rankings_match_4x_in_every_zone() {
             let sort = if case["sort"] == "tokens" { TopSort::Tokens } else { TopSort::Cost };
             let limit = usize::try_from(case["limit"].as_u64().unwrap()).unwrap();
             let what = format!("{zone}: top {} {} {}", case["filter"], case["sort"], limit);
-            let days = top_days(&zoned.provider_data, limit, sort, &filter);
-            let models = top_models(&zoned.provider_data, limit, sort, &filter);
+            let days = top_days(&loaded.provider_data, limit, sort, &filter);
+            let models = top_models(&loaded.provider_data, limit, sort, &filter);
             same(&days, &case["days"], &what);
             same(&models, &case["models"], &what);
-            same(&top_projects(&zoned.provider_data, limit, sort, &filter), &case["projects"], &what);
+            same(&top_projects(&loaded.provider_data, limit, sort, &filter), &case["projects"], &what);
             same(&unpriced_top_models(&days, &models), &case["unpriced"], &what);
             same(
                 &days.iter().map(|d| top_provider_key(&d.by_provider)).collect::<Vec<_>>(),

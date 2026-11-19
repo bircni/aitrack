@@ -4,16 +4,14 @@ use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Request {
-    pub method: &'static str,
     pub url: String,
     pub headers: Vec<(String, String)>,
-    pub body: Option<Vec<u8>>,
     pub timeout: Duration,
 }
 
 impl Request {
     pub fn get(url: impl Into<String>, timeout: Duration) -> Self {
-        Self { method: "GET", url: url.into(), headers: Vec::new(), body: None, timeout }
+        Self { url: url.into(), headers: Vec::new(), timeout }
     }
 
     #[must_use]
@@ -79,12 +77,11 @@ impl Default for UreqClient {
 impl HttpClient for UreqClient {
     fn send(&self, request: &Request) -> Result<Response, HttpError> {
         let to_error = |error: ureq::Error| HttpError(error.to_string());
-        let mut builder = ureq::http::Request::builder().method(request.method).uri(&request.url);
+        let mut builder = ureq::http::Request::get(&request.url);
         for (name, value) in &request.headers {
             builder = builder.header(name, value);
         }
-        let http_request =
-            builder.body(request.body.clone().unwrap_or_default()).map_err(|e| HttpError(e.to_string()))?;
+        let http_request = builder.body(()).map_err(|e| HttpError(e.to_string()))?;
         let http_request = self.agent.configure_request(http_request).timeout_global(Some(request.timeout)).build();
         let mut response = self.agent.run(http_request).map_err(to_error)?;
         let headers = response
