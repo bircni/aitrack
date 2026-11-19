@@ -87,7 +87,8 @@ opentrack reuses the logins your tools already saved and never writes to them:
 | Codex       | `$CODEX_HOME/auth.json`, `~/.codex/auth.json`   | `GET https://chatgpt.com/backend-api/wham/usage` |
 
 Tokens are not refreshed by opentrack: when one expires, the provider shows a message until you
-next use that tool. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
+next use that tool. When Claude Code left more than one login behind, such as an old file beside the
+Keychain item, the one that is still valid is used. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
 
 Usage history comes from the local Claude/Codex logs. A provider turned off in Settings is neither
 read nor contacted. Usage is merged with the other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
