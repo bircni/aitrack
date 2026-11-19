@@ -80,17 +80,12 @@ pub fn claim(dir: &Path, request: Request) -> std::io::Result<Option<Listener>> 
     Ok(Some(Listener { listener, token }))
 }
 
-/// A port file without a token is from a build before tokens, which took the bare request.
 fn ask(port_file: &Path, request: Request) {
     let Ok(text) = std::fs::read_to_string(port_file) else { return };
-    let text = text.trim();
-    let (port, line) = match text.split_once(' ') {
-        Some((port, token)) => (port, format!("{token} {}\n", request.as_str())),
-        None => (text, format!("{}\n", request.as_str())),
-    };
+    let Some((port, token)) = text.trim().split_once(' ') else { return };
     let Ok(port) = port.parse::<u16>() else { return };
     if let Ok(mut stream) = TcpStream::connect_timeout(&(Ipv4Addr::LOCALHOST, port).into(), Duration::from_secs(2)) {
-        let _ = stream.write_all(line.as_bytes());
+        let _ = stream.write_all(format!("{token} {}\n", request.as_str()).as_bytes());
     }
 }
 
