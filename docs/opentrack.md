@@ -187,8 +187,7 @@ not start them. The behaviour differs from macOS and Windows in a few places:
   Claude Code's `.credentials.json` in `$CLAUDE_CONFIG_DIR`, `~/.config/claude` or `~/.claude`, and
   Codex's `auth.json` in `$CODEX_HOME`, `~/.codex` or `~/.config/codex`.
 - **Updates** — the AppImage replaces itself in place, so keep it in a folder you can write
-  to. A `.deb` install updates by installing the new package and asks for your password
-  through `pkexec`.
+  to. A `.deb` install does not update itself: install the new package.
 - **AppImage** — needs FUSE 2 to start (`libfuse2`, or `libfuse2t64` on Ubuntu 24.04); use the
   `.deb` otherwise.
 
