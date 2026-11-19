@@ -9,6 +9,7 @@ use super::{
     title_case,
 };
 use crate::Core;
+use crate::env::Env;
 use crate::http::Request;
 use crate::readers::paths::claude_home_dirs;
 use crate::time::iso_millis;
@@ -42,17 +43,27 @@ pub fn parse_claude_credentials(text: &str) -> Option<ClaudeCredentials> {
     })
 }
 
-/// The file Claude Code writes, then on macOS the Keychain item it prefers there.
-fn read_claude_credentials(core: &Core) -> Option<ClaudeCredentials> {
-    for dir in claude_home_dirs(&core.env, true) {
-        if let Some(credentials) =
-            std::fs::read_to_string(dir.join(".credentials.json")).ok().as_deref().and_then(parse_claude_credentials)
-        {
+/// The file Claude Code writes, then on macOS the Keychain item it prefers there. A file left behind by an
+/// earlier login is never refreshed, so an expired source only wins when none is still valid.
+fn read_claude_credentials(env: &Env, now_ms: i64) -> Option<ClaudeCredentials> {
+    let files = claude_home_dirs(env, true).into_iter().filter_map(|dir| {
+        std::fs::read_to_string(dir.join(".credentials.json")).ok().as_deref().and_then(parse_claude_credentials)
+    });
+    let mut latest: Option<ClaudeCredentials> = None;
+    for credentials in files.chain(std::iter::once_with(|| read_keychain(env)).flatten()) {
+        if assert_not_expired(credentials.expires_at, now_ms, "").is_ok() {
             return Some(credentials);
         }
+        if latest.as_ref().is_none_or(|latest| latest.expires_at < credentials.expires_at) {
+            latest = Some(credentials);
+        }
     }
+    latest
+}
+
+fn read_keychain(env: &Env) -> Option<ClaudeCredentials> {
     // The Keychain item is the default account's, not the one CLAUDE_CONFIG_DIR points at.
-    if !cfg!(target_os = "macos") || core.env.var("CLAUDE_CONFIG_DIR").is_some() {
+    if !cfg!(target_os = "macos") || env.var("CLAUDE_CONFIG_DIR").is_some() {
         return None;
     }
     let args = ["find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"];
@@ -177,7 +188,8 @@ pub fn map_claude_usage(
 ///
 /// When there is no usable login or the request fails.
 pub fn fetch_claude_quota(core: &Core, now: Timestamp) -> QuotaResult {
-    let credentials = read_claude_credentials(core).ok_or_else(|| {
+    let now_ms = now.as_millisecond();
+    let credentials = read_claude_credentials(&core.env, now_ms).ok_or_else(|| {
         QuotaError::new(QuotaErrorKind::NoCredentials, "No Claude Code login found. Run `claude` and sign in.")
     })?;
     if credentials.scopes.as_ref().is_some_and(|scopes| !scopes.iter().any(|s| s == "user:profile")) {
@@ -186,7 +198,6 @@ pub fn fetch_claude_quota(core: &Core, now: Timestamp) -> QuotaResult {
             "This Claude Code login cannot read usage limits (missing user:profile scope).",
         ));
     }
-    let now_ms = now.as_millisecond();
     assert_not_expired(credentials.expires_at, now_ms, "Claude Code login expired. Open Claude Code to refresh it.")?;
     let request = Request::get(CLAUDE_USAGE_URL, Duration::ZERO)
         .header("Accept", "application/json")
@@ -194,4 +205,22 @@ pub fn fetch_claude_quota(core: &Core, now: Timestamp) -> QuotaResult {
         .header("anthropic-beta", "oauth-2025-04-20");
     let body = request_json(core.http.as_ref(), "Claude", request, now_ms)?;
     Ok(map_claude_usage(&body, credentials.subscription_type.as_deref(), credentials.rate_limit_tier.as_deref(), now))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_valid_login_wins_over_an_expired_one_read_first() {
+        let home = tempfile::tempdir().unwrap();
+        for (dir, token, expires_at) in [(".config/claude", "stale", 1_000), (".claude", "fresh", 3_000)] {
+            let dir = home.path().join(dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let body = format!(r#"{{"claudeAiOauth":{{"accessToken":"{token}","expiresAt":{expires_at}}}}}"#);
+            std::fs::write(dir.join(".credentials.json"), body).unwrap();
+        }
+        let env = Env::new(home.path(), [("", ""); 0]);
+        assert_eq!(read_claude_credentials(&env, 2_000).unwrap().access_token, "fresh");
+    }
 }
