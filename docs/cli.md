@@ -121,7 +121,7 @@ An empty result keeps these keys at their empty values and adds `message`: `show
 
 **Colour:** a non-empty `NO_COLOR` turns colour off unless `FORCE_COLOR` is set.
 
-**Watching:** `aitrack usage <window> --watch [seconds]` redraws the report in place every 30 seconds by default (minimum 5). It needs an interactive terminal and cannot be combined with `--json`. Ctrl-C stops it with exit code 0.
+**Watching:** `aitrack usage <window> --watch [seconds]` redraws the report in place every 30 seconds by default (minimum 5). It needs an interactive terminal and cannot be combined with `--json`. Ctrl-C stops it; the interrupt ends the process, so a shell reports 130 on macOS and Linux, not one of the codes above.
 
 **`export` flags:** `-o <path>` (output path, default `aitrack-receipt.pdf`) and `--csv` (write a spreadsheet-friendly CSV — raw token counts, one row per provider+model plus a `TOTAL` row — instead of the PDF receipt; the default path becomes `aitrack-receipt.csv`, an explicit `-o` is used as given). `-o -` is rejected as a usage error, since neither `show` nor `export` writes to stdout; pass `./-` for a file of that name. With `--json`, `show` reports the absolute path and `export` the path as given.
 
