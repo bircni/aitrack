@@ -404,7 +404,13 @@ impl<D: Deps> QuotaService<D> {
                         cache.quotas.shift_remove(key);
                     }
                     runtime.error = Some(error);
-                    vec![]
+                    match cache.quotas.get(key).cloned() {
+                        Some(snapshot) if settings.notifications => {
+                            let rules = AlertRules { stale: true, ..settings.alert_rules() };
+                            self.alerts_for(key, &snapshot, rules, cache, now)
+                        }
+                        _ => vec![],
+                    }
                 }
             };
             drop(inner);
@@ -799,6 +805,31 @@ mod tests {
     }
 
     #[test]
+    fn alerts_an_unused_limit_from_the_last_snapshot_while_fetches_fail() {
+        let fake = Fake {
+            quota: Some(Box::new(|provider, now| {
+                if now > START {
+                    return Some(failure(QuotaErrorKind::Auth, "sign in", None));
+                }
+                let mut weekly = ok(provider, 20.0, now);
+                weekly.windows[0].period_seconds = aitrack_core::quota::WEEK_SECONDS;
+                weekly.windows[0].resets_at = Some(iso(now + 48.0 * 3_600_000.0));
+                Some(Ok(weekly))
+            })),
+            ..Fake::default()
+        };
+        let (fake, service) = harness_with(fake, Settings { alert_unused: true, ..only(&["claude_code"]) }, None);
+        service.refresh(false);
+        assert!(fake.alerts.lock().unwrap().is_empty());
+        for _ in 0..2 {
+            fake.advance(15.0 * 3_600_000.0);
+            service.refresh(true);
+        }
+        let titles: Vec<String> = fake.alerts.lock().unwrap().iter().map(|a| a.title.clone()).collect();
+        assert_eq!(titles, ["Claude Code session resets soon"]);
+    }
+
+    #[test]
     fn alerts_for_the_next_window_on_the_first_refresh_after_the_last_one_reset() {
         let (fake, service) = harness(almost_out());
         service.refresh(false);
@@ -891,6 +922,7 @@ mod tests {
                     settings.display = "left".into();
                 }
                 settings.theme = if push { "light" } else { "dark" }.into();
+                settings.shared_at = Some("2026-06-01T11:00:00.000Z".into());
                 if push {
                     Err("remote: permission denied".into())
                 } else {
@@ -908,7 +940,7 @@ mod tests {
         let on = service.save_settings(Settings { sync: true, ..Settings::default() }).unwrap();
         service.refresh(false);
         assert_eq!(fake.pulls(), [true, true], "turning it on pulls at once");
-        let dark = Settings { theme: "dark".into(), ..on };
+        let dark = Settings { theme: "dark".into(), shared_at: Some("2026-06-01T11:00:00.000Z".into()), ..on };
         assert_eq!((service.settings(), fake.shown.lock().unwrap().clone()), (dark.clone(), vec![dark.clone()]));
         assert_eq!(fake.saved.lock().unwrap().last(), Some(&dark));
 

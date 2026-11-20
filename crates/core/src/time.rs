@@ -4,7 +4,7 @@ use jiff::{Timestamp, ToSpan};
 
 use crate::day::Day;
 
-/// Written on machine files whose zone is unrecoverable; deliberately not an IANA name.
+/// Written on machine files whose zone has no name or is unrecoverable; deliberately not an IANA name.
 pub const UNKNOWN_TIMEZONE: &str = "unknown";
 
 /// The current instant and the zone local calendar days are counted in.
@@ -54,10 +54,11 @@ impl Clock {
         &self.zone
     }
 
-    /// The IANA name recorded on machine files and in cache keys, `UTC` when the system has none.
+    /// The IANA name recorded on machine files and in cache keys, [`UNKNOWN_TIMEZONE`] when the zone has
+    /// none (`TZ=AEST-10`): `UTC` there would have other machines count this one's days on the wrong calendar.
     #[must_use]
     pub fn zone_name(&self) -> &str {
-        self.zone.iana_name().unwrap_or("UTC")
+        self.zone.iana_name().unwrap_or(UNKNOWN_TIMEZONE)
     }
 
     #[must_use]

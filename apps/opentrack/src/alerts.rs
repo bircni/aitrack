@@ -25,6 +25,9 @@ pub struct AlertRules {
     pub almost_out_left: f64,
     /// Also alert when a weekly limit is about to reset mostly unused.
     pub unused: bool,
+    /// The snapshot could not be refreshed. What it shows as unused still is unless it was used
+    /// since, but it cannot tell that a limit is running out now.
+    pub stale: bool,
 }
 
 const UNUSED_LEFT_PERCENT: f64 = 50.0;
@@ -55,7 +58,7 @@ pub fn due_alerts(
         let scope = format!("{}:{}", snapshot.provider, window.id);
         let left = 100.0 - window.used_percent;
         let name = format!("{label} {}", window.label.to_lowercase());
-        if left <= rules.almost_out_left {
+        if !rules.stale && left <= rules.almost_out_left {
             let key = format!("{scope}:almostOut");
             if !is_live(clock, fired.get(&key), now) {
                 alerts.push(Alert {
@@ -85,6 +88,9 @@ pub fn due_alerts(
                     ),
                 });
             }
+            continue;
+        }
+        if rules.stale {
             continue;
         }
         let pace = project_pace(window, now);
@@ -151,7 +157,7 @@ mod tests {
         Clock::in_zone("UTC").unwrap()
     }
 
-    const RULES: AlertRules = AlertRules { almost_out_left: 10.0, unused: false };
+    const RULES: AlertRules = AlertRules { almost_out_left: 10.0, unused: false, stale: false };
 
     fn fired_from(alerts: &[Alert]) -> FiredAlerts {
         alerts.iter().map(|a| (a.key.clone(), a.resets_at.clone())).collect()
@@ -215,6 +221,11 @@ mod tests {
         assert_eq!(alerts[0].body, "80% is still left, and it resets around Tue 12:00\u{202f}AM.");
         assert!(due_alerts(&clock(), "Codex", &quota, rules, &fired_from(&alerts), NOW).is_empty());
         assert!(due_alerts(&clock(), "Codex", &quota, RULES, &FiredAlerts::new(), NOW).is_empty());
+
+        let cached = snapshot(vec![weekly(20.0, 12.0), session_window(95.0, 2.0), session_window(80.0, 2.5)]);
+        let stale = AlertRules { stale: true, ..rules };
+        let alerts = due_alerts(&clock(), "Codex", &cached, stale, &FiredAlerts::new(), NOW);
+        assert_eq!(alerts.iter().map(|a| a.title.as_str()).collect::<Vec<_>>(), ["Codex weekly resets soon"]);
     }
 
     #[test]
