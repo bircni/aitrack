@@ -133,8 +133,40 @@ Settings and the last snapshot live in the app's data folder
 (`~/Library/Application Support/dev.bircni.opentrack` on macOS, `%APPDATA%\dev.bircni.opentrack` on
 Windows, `~/.local/share/dev.bircni.opentrack` on Linux): `settings.json`, `cache.json` (discarded
 rather than migrated when its format is older), and `opentrack.log`, with the previous run's in
-`opentrack.log.1`. **Export…** next to Logs in Settings zips both logs to a place you choose. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
+`opentrack.log.1`. **Export…** next to Logs in Settings zips both logs to a place you choose, for
+attaching to a bug report. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
 check, and for the pricing refresh the sync button runs like `aitrack sync` (at most daily).
+
+### What the log holds
+
+One line per event, as `<UTC time> <LEVEL> <topic> <what>`:
+
+```
+2026-11-19T08:15:02.114Z INFO  start version=5.2.0 os=macos arch=aarch64 install=app-bundle data_dir=~/Library/Application Support/dev.bircni.opentrack
+2026-11-19T08:15:03.530Z INFO  quota provider=codex ok
+2026-11-19T09:40:11.902Z WARN  quota provider=claude_code failed kind=Network: Claude Code request failed: timed out
+2026-11-19T09:41:12.377Z INFO  quota provider=claude_code ok
+```
+
+- the start of a run: the version, the system and how opentrack was installed;
+- per provider, whether its limits could be read, with the kind of failure and its message;
+- whether usage could be read, the data repo pulled, the settings saved and shared, and the cache
+  written;
+- what `aitrack sync` would print for a sync you start, which names this machine and counts its
+  days, and why a sync failed;
+- update checks and installs, and problems with the tray, notifications, the shortcut, starting at
+  login, opening a provider's dashboard, an unreadable `settings.json` or `cache.json`, and
+  another opentrack that holds the lock or does not answer.
+
+A state is logged when it changes, not at every poll: a provider that fails the same way for an
+hour is one line, and its recovery another. Each file stops at 256 KB, the older lines moving to
+`opentrack.log.1`, so the two never exceed 512 KB.
+
+The log holds no token counts, costs, limits, project names or alert texts. Credentials in URLs,
+bearer tokens, Claude, Codex and git host tokens and the value of anything named `token`,
+`password`, `passphrase` or `secret` are written as `***`, and the home folder as `~`. Git's own
+error messages are logged as git wrote them, so they can name the data repo's URL. Read the
+archive before attaching it to a public issue.
 
 ## Downloads
 

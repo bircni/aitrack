@@ -6,6 +6,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use aitrack_core::output::Level;
 use aitrack_core::time::Clock;
 use eframe::egui::{self, Pos2, Vec2, ViewportCommand};
 use raw_window_handle::HasWindowHandle;
@@ -119,9 +120,9 @@ impl App {
             let screen = if request == Request::Settings { Screen::Settings } else { Screen::Dashboard };
             show_bus.send(Msg::Show(screen));
         });
-        let tray = Tray::new(&bus);
-        let system = System::new(&bus);
-        let updater = Updater::default();
+        let tray = Tray::new(&bus, background.log());
+        let system = System::new(&bus, background.log());
+        let updater = Updater::new(background.log().clone());
         updater.watch(bus.clone());
         let events = bus.clone();
         background.start(move |event| {
@@ -251,6 +252,9 @@ impl App {
         }
         if old.as_ref().is_none_or(|old| old.global_shortcut != settings.global_shortcut) {
             self.setting_errors.global_shortcut = self.system.set_shortcut(&settings.global_shortcut);
+            if let Some(error) = &self.setting_errors.global_shortcut {
+                self.background.log().later(Level::Warn, format!("shortcut failed: {error}"));
+            }
         }
     }
 
@@ -267,7 +271,9 @@ impl App {
                         self.sync_note = Some((result.message.clone(), Instant::now() + SYNC_NOTE_FOR));
                     }
                 }
-                Some(Run::Refresh) => log_outcome(&refresh_outcome(&state)),
+                Some(Run::Refresh) => {
+                    self.background.log().later(Level::Info, format!("refresh asked: {}", refresh_outcome(&state)));
+                }
                 _ => {}
             }
         }
@@ -302,8 +308,13 @@ impl App {
                     Err(error) => self.settings_error = Some(error),
                 },
                 Msg::Settings(_) | Msg::Saved(..) => {}
-                Msg::LaunchAtLogin(error) => self.setting_errors.launch_at_login = error,
-                Msg::Alert { title, body } => notify(title, body),
+                Msg::LaunchAtLogin(error) => {
+                    if let Some(error) = &error {
+                        self.background.log().later(Level::Warn, format!("launch-at-login failed: {error}"));
+                    }
+                    self.setting_errors.launch_at_login = error;
+                }
+                Msg::Alert { title, body } => notify(self.background.log().clone(), title, body),
                 Msg::Tray(image) => self.tray.set(image),
                 Msg::UpdateFound(version) => {
                     self.update.check = if version.is_some() { UpdateCheck::Idle } else { UpdateCheck::Current };
@@ -339,7 +350,8 @@ impl App {
             }
             Action::OpenDashboard(provider) => {
                 if let Err(error) = open_dashboard(&provider) {
-                    log_outcome(&error);
+                    let event = format!("dashboard-open failed provider={provider}: {error}");
+                    self.background.log().later(Level::Warn, event);
                 }
             }
             Action::Hide => self.hide(ctx),
@@ -364,10 +376,6 @@ impl App {
             Action::StartDrag => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
         }
     }
-}
-
-fn log_outcome(message: &str) {
-    eprintln!("opentrack: {message}");
 }
 
 impl eframe::App for App {
