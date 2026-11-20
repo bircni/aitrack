@@ -114,9 +114,11 @@ impl InstallTarget {
         } else if cfg!(target_os = "macos") {
             app_bundle(exe).map(Self::MacBundle).ok_or_else(|| "opentrack is not running from an app bundle".into())
         } else {
-            app_image
-                .map(Self::AppImage)
-                .ok_or_else(|| "Only the AppImage updates itself; update the .deb with your package manager.".into())
+            app_image.map(Self::AppImage).ok_or_else(|| {
+                "Only the AppImage updates itself; install the new .deb from github.com/bircni/aitrack/releases \
+                 with your package manager."
+                    .into()
+            })
         }
     }
 
