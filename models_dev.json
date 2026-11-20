@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-19T15:42:45.646Z",
+  "retrievedAt": "2026-11-20T07:58:31.797Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -1218,13 +1218,6 @@
       "o": 6,
       "cw": 2,
       "cr": 0.5,
-      "cwe": false
-    },
-    "xai/grok-build-0.1": {
-      "i": 1,
-      "o": 2,
-      "cw": 1,
-      "cr": 0.2,
       "cwe": false
     }
   }

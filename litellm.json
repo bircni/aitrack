@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-19T15:42:45.646Z",
+  "retrievedAt": "2026-11-20T07:58:31.797Z",
   "models": {
     "claude-fable-5": {
       "i": 10,
@@ -809,7 +809,7 @@
     "gpt-6-rosalind": {
       "i": 10,
       "o": 50,
-      "cw": 18.75,
+      "cw": 12.5,
       "cr": 1
     },
     "gpt-6-sol": {
