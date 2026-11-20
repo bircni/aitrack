@@ -99,7 +99,7 @@ fn check_app(program: &Path, data_dir: &Path) -> Result<()> {
     let started: Value =
         serde_json::from_str(answer.trim()).map_err(|e| format!("The smoke test did not answer in JSON: {e}"))?;
     let ok = started["settings"]["theme"] == "dark"
-        && started["state"]["providers"].as_array().is_some_and(|p| p.len() == 3)
+        && started["state"]["providers"].as_array().is_some_and(|p| p.len() == 2)
         && started["state"]["refreshing"] == false;
     if !ok {
         return Err(format!("Unexpected smoke-test answer: {answer}"));
