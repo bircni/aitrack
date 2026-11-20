@@ -98,7 +98,7 @@ impl DataRun<'_> {
 }
 
 /// Loads the config, checks the clone, then runs `step` under the repo lock (after a pull when asked)
-/// while the pricing refresh and the log read run beside it.
+/// while the pricing refresh and the log read run beside it. `providers` limits whose logs are read.
 ///
 /// # Errors
 ///
@@ -107,6 +107,7 @@ pub fn run_data_pipeline<T>(
     core: &Core,
     do_pull: bool,
     timeout: Option<Duration>,
+    providers: Option<&[String]>,
     step: impl FnOnce(&RepoGuard<'_>, &Git, DataRun<'_>) -> Result<T>,
 ) -> Result<T> {
     let config = load_config(&core.paths.config)?; // Before the refresh, so an unconfigured machine never contacts GitHub.
@@ -121,7 +122,7 @@ pub fn run_data_pipeline<T>(
     let result = std::thread::scope(|scope| {
         let reader = scope.spawn(|| {
             core.pricing().refresh_if_due(core.http.as_ref(), &core.env, core.clock.now(), false);
-            let maps = read_local_provider_maps(core, Some(&fallbacks), None)?;
+            let maps = read_local_provider_maps(core, Some(&fallbacks), providers)?;
             record_pricing_fallbacks(core, &maps, &fallbacks);
             Ok::<_, Error>(maps)
         });
@@ -150,11 +151,13 @@ pub fn run_data_pipeline<T>(
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct SyncOptions {
+pub struct SyncOptions<'a> {
     pub dry_run: bool,
     /// Fail when commits are still waiting to be pushed after the sync.
     pub verify: bool,
     pub timeout: Option<Duration>,
+    /// Only these providers' logs are read; every other provider's synced days stay as they are.
+    pub providers: Option<&'a [String]>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -220,8 +223,9 @@ fn push_machine_data(core: &Core, guard: &RepoGuard<'_>, git: &Git, host: &str) 
 /// # Errors
 ///
 /// When the data repo cannot be pulled, written or pushed.
-pub fn sync_data(core: &Core, options: SyncOptions) -> Result<SyncResult> {
-    let result = run_data_pipeline(core, !options.dry_run, options.timeout, |guard, git, run| {
+pub fn sync_data(core: &Core, options: SyncOptions<'_>) -> Result<SyncResult> {
+    let pull = !options.dry_run;
+    let result = run_data_pipeline(core, pull, options.timeout, options.providers, |guard, git, run| {
         push_local_usage(core, guard, git, &options, &run)
     })?;
     if options.verify && !options.dry_run && core.git().has_unpushed_commits() {
@@ -234,7 +238,7 @@ fn push_local_usage(
     core: &Core,
     guard: &RepoGuard<'_>,
     git: &Git,
-    options: &SyncOptions,
+    options: &SyncOptions<'_>,
     run: &DataRun<'_>,
 ) -> Result<SyncResult> {
     let host = run.machine_id.as_str();
@@ -253,9 +257,12 @@ fn push_local_usage(
     let total_days = maps.values().flat_map(|m| m.keys()).collect::<HashSet<_>>().len();
     if total_days == 0 {
         let pushed = !options.dry_run && push_machine_data(core, guard, git, host)?;
-        let labels: Vec<&str> = PROVIDERS.iter().map(|p| p.label).collect();
+        let read = |key: &str| options.providers.is_none_or(|p| p.iter().any(|k| k == key));
+        let labels: Vec<&str> = PROVIDERS.iter().filter(|p| read(p.key)).map(|p| p.label).collect();
         let message = if pushed {
             format!("Done! Pushed machine data migration for {host}.")
+        } else if labels.is_empty() {
+            "No provider selected, so no local data was read.".to_owned()
         } else {
             format!("No local data found ({}).", labels.join(" or "))
         };

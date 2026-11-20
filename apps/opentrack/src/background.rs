@@ -171,8 +171,8 @@ impl Deps for LiveDeps {
         }
     }
 
-    fn sync(&self) -> Result<(String, MachineFile), String> {
-        let options = SyncOptions { timeout: Some(GIT_TIMEOUT), ..SyncOptions::default() };
+    fn sync(&self, providers: &[String]) -> Result<(String, MachineFile), String> {
+        let options = SyncOptions { timeout: Some(GIT_TIMEOUT), providers: Some(providers), ..SyncOptions::default() };
         sync_data(&self.core(), options)
             .map(|done| (done.message, done.machine))
             .map_err(|error| error.to_string())

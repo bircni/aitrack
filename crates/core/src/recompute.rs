@@ -155,7 +155,7 @@ fn report_legacy_skipped(core: &Core, skipped: usize, state: &str) {
 ///
 /// When the data repo cannot be read, written or pushed.
 pub fn recompute_costs(core: &Core, options: RecomputeOptions) -> Result<RecomputeResult> {
-    run_data_pipeline(core, true, None, |guard, git, run| {
+    run_data_pipeline(core, true, None, None, |guard, git, run| {
         let files = list_data_files(core);
         if files.is_empty() {
             core.output.info("No synced data files found.");

@@ -72,13 +72,29 @@ impl Machine {
         std::fs::write(path, text).unwrap();
     }
 
+    fn log_codex_day(&self, day: &str, tokens: u64) {
+        let lines = [
+            serde_json::json!({"timestamp": format!("{day}T09:00:00Z"), "type": "turn_context", "payload": {"model": "gpt-5"}}),
+            serde_json::json!({
+                "timestamp": format!("{day}T09:00:05Z"), "type": "event_msg",
+                "payload": {"type": "token_count", "info": {"last_token_usage": {"input_tokens": tokens, "output_tokens": 3}}}
+            }),
+        ];
+        std::fs::write(self.logs.join("codex").join(format!("{day}.jsonl")), lines.map(|l| format!("{l}\n")).concat())
+            .unwrap();
+    }
+
     fn core(&self) -> (Core, std::sync::Arc<VecOutput>) {
         self.core_at("2026-03-10T12:00:00Z")
     }
 
     fn core_at(&self, now: &str) -> (Core, std::sync::Arc<VecOutput>) {
+        self.core_in(now, "UTC")
+    }
+
+    fn core_in(&self, now: &str, zone: &str) -> (Core, std::sync::Arc<VecOutput>) {
         let output = std::sync::Arc::new(VecOutput::default());
-        let clock = Clock::fixed(now.parse().unwrap(), "UTC").unwrap();
+        let clock = Clock::fixed(now.parse().unwrap(), zone).unwrap();
         let core =
             Core::new(Env::new(&self.home, self.vars.clone()), clock, Box::new(Shared(std::sync::Arc::clone(&output))));
         (core, output)
@@ -146,6 +162,47 @@ fn syncs_once_then_finds_nothing_to_push_and_shares_the_repo_with_another_machin
 
     let failed = core.git().run(&["checkout", "https://me:s3cret@host.invalid/data.git"]).unwrap_err().to_string();
     assert!(failed.contains("'https://***@host.invalid/data.git'") && !failed.contains("s3cret"), "{failed}");
+}
+
+#[test]
+fn a_sync_limited_to_some_providers_keeps_the_other_providers_synced_days_untouched() {
+    let root = tempfile::tempdir().unwrap();
+    let remote = remote(root.path());
+    let a = Machine::new(root.path(), "a", &remote, &[("compactAfterDays", "30")]);
+    a.log_day("s.jsonl", "2026-01-05", "m0", 40);
+    a.log_day("s.jsonl", "2026-03-08", "m1", 100);
+    a.log_codex_day("2026-03-08", 10);
+    let (core, _) = a.core();
+    sync_data(&core, SyncOptions::default()).unwrap();
+    let days = |m: &Machine| serde_json::from_str::<serde_json::Value>(&m.file("a.json")).unwrap()["days"].clone();
+    let stored = days(&a);
+    let claude = |days: &serde_json::Value| {
+        let of = |day: &str| serde_json::to_string_pretty(&days[day]["claude_code"]).unwrap();
+        ["2026-01-05", "2026-03-08", "2026-03-09"].map(of)
+    };
+
+    a.log_day("s.jsonl", "2026-03-08", "m2", 900);
+    a.log_day("s.jsonl", "2026-03-09", "m3", 5);
+    a.log_codex_day("2026-03-09", 20);
+    let codex = ["codex".to_owned()];
+    let (moved, _) = a.core_in("2026-03-10T12:00:00Z", "Pacific/Kiritimati"); // Claude's logs now fall a day later.
+    let only = SyncOptions { providers: Some(&codex), ..SyncOptions::default() };
+    let dry = sync_data(&moved, SyncOptions { dry_run: true, ..only }).unwrap();
+    assert_eq!(dry.message, "Dry run: would update data/a.json (3 days). No changes written.");
+    let limited = sync_data(&moved, only).unwrap();
+    assert_eq!((limited.message.as_str(), limited.pushed), ("Done! Pushed data/a.json (3 days)", true));
+    let after = days(&a);
+    assert_eq!(claude(&after), claude(&stored), "the provider that was not read keeps its days byte for byte");
+    assert_eq!(after["2026-03-08"]["codex"], stored["2026-03-08"]["codex"]);
+    assert_eq!(after["2026-03-09"]["codex"]["totals"]["inputTokens"], 20);
+    assert!(!sync_data(&moved, only).unwrap().pushed, "nothing to push while only the skipped provider's logs grew");
+
+    let none = SyncOptions { providers: Some(&[]), ..SyncOptions::default() };
+    assert_eq!(sync_data(&moved, none).unwrap().message, "No provider selected, so no local data was read.");
+    assert_eq!(days(&a), after);
+
+    assert!(sync_data(&core, SyncOptions::default()).unwrap().pushed, "an unlimited sync still reads every provider");
+    assert_eq!(days(&a)["2026-03-08"]["claude_code"]["totals"]["inputTokens"], 1000);
 }
 
 #[test]
