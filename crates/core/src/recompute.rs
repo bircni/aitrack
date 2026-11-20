@@ -155,7 +155,7 @@ fn report_legacy_skipped(core: &Core, skipped: usize, state: &str) {
 ///
 /// When the data repo cannot be read, written or pushed.
 pub fn recompute_costs(core: &Core, options: RecomputeOptions) -> Result<RecomputeResult> {
-    run_data_pipeline(core, true, None, |guard, git, run| {
+    run_data_pipeline(core, true, None, None, |guard, git, run| {
         let files = list_data_files(core);
         if files.is_empty() {
             core.output.info("No synced data files found.");
@@ -193,7 +193,10 @@ pub fn recompute_costs(core: &Core, options: RecomputeOptions) -> Result<Recompu
             }
             // Another machine's file keeps its owner's choice, or this would publish encrypted data as plaintext.
             let encrypt = if is_current { run.config.encrypt_data == Some(true) } else { check.encrypted };
-            let machine = MachineFile { days, last_updated: iso_millis(core.clock.now()), ..loaded.machine };
+            // Another machine keeps its stamp: it is what shows that machine as stale.
+            let last_updated =
+                if is_current { iso_millis(core.clock.now()) } else { loaded.machine.last_updated.clone() };
+            let machine = MachineFile { last_updated, days, ..loaded.machine };
             pending.push((path, machine, encrypt));
         }
         let changed = pending.len();

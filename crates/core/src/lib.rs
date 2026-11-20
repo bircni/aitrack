@@ -27,6 +27,7 @@ pub mod update;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 use crate::config::{Config, ConfigLoad};
 use crate::env::{Env, Paths};
@@ -75,6 +76,8 @@ pub struct Core {
     warned_files: Mutex<HashSet<String>>,
     /// One operation on the data repo at a time.
     repo_lock: Mutex<()>,
+    /// How long to wait for another process to finish with the data repo.
+    pub repo_lock_wait: Duration,
     pub http: Box<dyn HttpClient>,
     pricing: OnceLock<PricingStore>,
 }
@@ -90,6 +93,7 @@ impl Core {
             warned_invalid_config: AtomicBool::new(false),
             warned_files: Mutex::default(),
             repo_lock: Mutex::default(),
+            repo_lock_wait: Duration::from_secs(30),
             http: Box::new(UreqClient::default()),
             pricing: OnceLock::new(),
         }

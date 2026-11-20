@@ -22,7 +22,8 @@ pub struct SyncArgs {
 }
 
 pub fn run(core: &Core, args: &SyncArgs) -> Outcome {
-    let result = sync_data(core, SyncOptions { dry_run: args.dry_run, verify: args.verify, timeout: None })?;
+    let result =
+        sync_data(core, SyncOptions { dry_run: args.dry_run, verify: args.verify, timeout: None, providers: None })?;
     if args.json {
         print_json_command(
             "sync",
