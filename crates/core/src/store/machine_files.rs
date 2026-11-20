@@ -3,10 +3,11 @@
 use std::path::{Path, PathBuf};
 
 use super::encryption::{ENCRYPTION_PASSPHRASE_ENV, encrypt_text, encryption_passphrase};
-use super::validate::{ValidationOptions, check_machine_file, check_raw_machine_file};
+use super::validate::{Failure, ValidationOptions, check_machine_file, check_raw_machine_file};
 use crate::Core;
-use crate::data::types::MachineFile;
-use crate::fs::write_file_atomic;
+use crate::data::local_data::merge_persisted_days;
+use crate::data::types::{MachineDays, MachineFile};
+use crate::fs::{is_missing_path, write_file_atomic};
 use crate::js;
 use crate::machine_id::{machine_data_filename, machine_id_validation_error};
 
@@ -110,14 +111,32 @@ pub fn write_machine_file(
     Ok(())
 }
 
-/// Staging serves a report that must still render, so a bad file only warns.
+/// Stages the logs over what is already staged, as sync does over the synced file, because tools
+/// prune their logs. Staging serves a report that must still render, so a bad file only warns.
 ///
 /// # Errors
 ///
-/// When the file fails validation or cannot be written.
+/// When the staged file cannot be read or written.
 pub fn write_pending_machine_file(core: &Core, machine: &MachineFile) -> Result<(), MachineFileError> {
     let path = machine_file_path(&core.paths.pending_data, &machine.hostname)?;
-    match write_machine_file(core, &path, machine, is_encryption_enabled(core), ValidationOptions::default()) {
+    let staged: Option<MachineDays> = match std::fs::read_to_string(&path) {
+        Ok(raw) => {
+            let file = path.to_string_lossy();
+            let check =
+                check_raw_machine_file(&raw, &file, encryption_passphrase(&core.env), ValidationOptions::default());
+            core.report_diagnostics(&check.diagnostics);
+            // Only unreadable here, so the days it holds are not replaced by the logs alone.
+            if matches!(check.failure, Some(Failure::Encrypted | Failure::FutureSchema)) {
+                core.output.warn(&format!("Left {file} as it is, without the usage from the local logs."));
+                return Ok(());
+            }
+            check.machine.map(|staged| staged.days)
+        }
+        Err(error) if is_missing_path(&error) => None,
+        Err(error) => return Err(error.into()), // Read as empty, the logs would replace the file.
+    };
+    let merged = MachineFile { days: merge_persisted_days(staged.as_ref(), &machine.days), ..machine.clone() };
+    match write_machine_file(core, &path, &merged, is_encryption_enabled(core), ValidationOptions::default()) {
         Err(error @ MachineFileError::Invalid { .. }) => {
             core.output.warn(&error.to_string());
             Ok(())
@@ -204,4 +223,54 @@ pub fn remove_pending_machine_file(core: &Core, machine_id: &str) -> Result<(), 
         std::fs::remove_file(path)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::env::Env;
+    use crate::output::VecOutput;
+    use crate::time::Clock;
+
+    fn machine(schema_version: u32, days: &[(&str, u64)]) -> String {
+        let days: Vec<String> = days
+            .iter()
+            .map(|(date, tokens)| {
+                let counts = format!(r#"{{"inputTokens":{tokens},"outputTokens":0}}"#);
+                format!(r#""{date}":{{"claude_code":{{"byModel":{{"claude-opus-4":{counts}}},"totals":{counts}}}}}"#)
+            })
+            .collect();
+        format!(
+            r#"{{"schemaVersion":{schema_version},"hostname":"box","timezone":"UTC","dayBucket":"local","lastUpdated":"2026-03-10T12:00:00.000Z","days":{{{}}}}}"#,
+            days.join(",")
+        )
+    }
+
+    #[test]
+    fn staging_keeps_days_the_logs_no_longer_cover() {
+        let home = tempfile::tempdir().unwrap();
+        let clock = Clock::fixed("2026-03-10T12:00:00Z".parse().unwrap(), "UTC").unwrap();
+        let core =
+            Core::new(Env::new(home.path(), Vec::<(String, String)>::new()), clock, Box::new(VecOutput::default()));
+        let path = core.paths.pending_data.join("box.json");
+        let stage = |days: &[(&str, u64)]| {
+            let raw = machine(2, days);
+            let logs = check_raw_machine_file(&raw, "logs", None, ValidationOptions::default()).machine.unwrap();
+            write_pending_machine_file(&core, &logs).unwrap();
+            std::fs::read_to_string(&path).unwrap()
+        };
+
+        stage(&[("2026-03-01", 10), ("2026-03-02", 20)]);
+        let pruned = stage(&[("2026-03-02", 5), ("2026-03-03", 30)]);
+        let kept = machine(2, &[("2026-03-01", 10), ("2026-03-02", 20), ("2026-03-03", 30)]);
+        let kept = check_raw_machine_file(&kept, "kept", None, ValidationOptions::default()).machine.unwrap();
+        assert_eq!(pruned, serialize_machine_file(&kept, None).unwrap());
+
+        let newer = machine(99, &[("2026-03-01", 10)]);
+        std::fs::write(&path, &newer).unwrap();
+        assert_eq!(stage(&[("2026-03-03", 30)]), newer, "only unreadable here");
+
+        std::fs::write(&path, "{").unwrap();
+        assert!(!stage(&[("2026-03-03", 30)]).contains("2026-03-01"), "nothing to keep");
+    }
 }

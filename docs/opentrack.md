@@ -18,7 +18,8 @@ Both are drawn the way `aitrack show` draws its heatmap: in cells, in each provi
 - **Pacing** — whether each limit is on track to last until it resets, with alerts when one is
   almost used up or on pace to run out. Settings picks how much left counts as almost used up
   (5, 10, 20 or 30%; 10% by default) and can add an alert for a weekly limit that resets within
-  a day with over half of it left. The outlined cell is the even-pace marker: where usage would be
+  a day with over half of it left; that one also fires from the last limits read while they
+  cannot be refreshed, as with an expired login. The outlined cell is the even-pace marker: where usage would be
   now if the limit were used evenly until it resets. A limit's cells wear its provider's colours
   while it is on track and the warning or critical colour when it is not.
 - **Usage** — one period (Today / 7 days / 30 days / All time) sets the estimated cost, the tokens
@@ -88,7 +89,7 @@ opentrack reuses the logins your tools already saved and never writes to them:
 
 Tokens are not refreshed by opentrack: when one expires, the provider shows a message until you
 next use that tool. When Claude Code left more than one login behind, such as an old file beside the
-Keychain item, the one that is still valid is used. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
+Keychain item, the one that is still valid is used. When the macOS Keychain prompt is denied or goes unanswered, opentrack asks again only on Retry or Refresh, or after six hours. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
 
 Usage history comes from the local Claude/Codex logs. A provider turned off in Settings is neither
 read nor contacted. Usage is merged with the other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
@@ -103,7 +104,8 @@ compact view, and the tray's provider and limit. Start at login, the shortcut, K
 tray's style and colour and the two data repo switches stay with each machine. The shared settings
 are one file, `opentrack/settings.json`, with the time they last changed, and the newest change
 wins as a whole rather than key by key. opentrack takes a newer file over its own settings after a
-pull, and a machine that turns the setting on takes what the repo already has. Changes made here
+pull, and a machine that turns the setting on takes what the repo already has, over anything
+changed there before that. Changes made here
 go out the next time you press the sync button, never on their own; with **Include other
 machines** off, that is also the only time other machines' changes come in. When two machines push
 at once, the later change is kept and the other machine takes it. With
