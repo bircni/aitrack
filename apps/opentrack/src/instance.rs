@@ -1,7 +1,7 @@
 //! One opentrack at a time: a lock in the data dir, and a loopback port a second launch uses to bring
 //! the first one forward instead of starting.
 
-use std::fs::File;
+use std::fs::{File, TryLockError};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -67,7 +67,7 @@ pub fn claim(dir: &Path, request: Request) -> std::io::Result<Option<Listener>> 
     std::fs::create_dir_all(dir)?;
     let lock = File::options().create(true).truncate(false).write(true).open(dir.join("opentrack.lock"))?;
     let port_file = dir.join("opentrack.port");
-    if lock.try_lock().is_err() {
+    if held_elsewhere(lock.try_lock())? {
         ask(&port_file, request);
         return Ok(None);
     }
@@ -78,6 +78,15 @@ pub fn claim(dir: &Path, request: Request) -> std::io::Result<Option<Listener>> 
     let token = aitrack_core::hex(&secret);
     write_file_atomic(&port_file, format!("{} {token}", listener.local_addr()?.port()), Some(0o600))?;
     Ok(Some(Listener { listener, token }))
+}
+
+/// Only a lock someone holds means another opentrack; a filesystem that cannot lock is an error to show.
+fn held_elsewhere(locked: Result<(), TryLockError>) -> std::io::Result<bool> {
+    match locked {
+        Ok(()) => Ok(false),
+        Err(TryLockError::WouldBlock) => Ok(true),
+        Err(TryLockError::Error(error)) => Err(error),
+    }
 }
 
 /// A port file without a token is from a build before tokens, which took the bare request.
@@ -129,7 +138,9 @@ mod tests {
         stranger.write_all(b"GET / HTTP/1.1\r\n").unwrap();
         drop(stranger);
         let second = File::options().write(true).open(dir.path().join("opentrack.lock")).unwrap();
-        assert!(second.try_lock().is_err());
+        assert!(held_elsewhere(second.try_lock()).unwrap());
+        let unsupported = TryLockError::Error(std::io::ErrorKind::Unsupported.into());
+        assert_eq!(held_elsewhere(Err(unsupported)).unwrap_err().kind(), std::io::ErrorKind::Unsupported);
         ask(&dir.path().join("opentrack.port"), Request::Settings);
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Request::Settings);
         rx.try_recv().unwrap_err();

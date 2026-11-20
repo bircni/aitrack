@@ -134,6 +134,15 @@ fn syncs_once_then_finds_nothing_to_push_and_shares_the_repo_with_another_machin
     let after = sync_data(&core, SyncOptions::default()).unwrap();
     assert!(!after.pushed);
     assert!(a.repo().join("data/b.json").exists(), "A pulled B's file");
+
+    let mut file: serde_json::Value = serde_json::from_str(&a.file("a.json")).unwrap();
+    file["days"]["2026-03-01"] = serde_json::json!({ "cursor": file["days"]["2026-03-08"]["claude_code"] });
+    std::fs::write(a.repo().join("data/a.json"), serde_json::to_string_pretty(&file).unwrap()).unwrap();
+    git(&a.repo(), &["commit", "-qam", "sync: a at earlier"]);
+    a.log_day("s.jsonl", "2026-03-10", "m3", 5);
+    let carried = sync_data(&core, SyncOptions::default()).unwrap();
+    assert_eq!((carried.message.as_str(), carried.days), ("Done! Pushed data/a.json (3 days)", 3));
+    assert!(a.file("a.json").contains("\"cursor\""), "a removed provider's day is kept, though no report shows it");
 }
 
 #[test]

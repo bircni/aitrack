@@ -36,6 +36,8 @@ pub trait Deps: Send + Sync {
     fn load_usage(&self, options: UsageLoadOptions) -> UsageLoadResult;
     /// Epoch ms.
     fn now(&self) -> f64;
+    /// Asked for at each use, so a changed system zone is picked up without a restart.
+    fn clock(&self) -> Clock;
     fn on_state(&self, state: Arc<AppState>);
     fn on_alert(&self, alert: &Alert);
     fn persist(&self, cache: &CachedState);
@@ -55,15 +57,18 @@ struct ProviderRuntime {
     error: Option<QuotaError>,
 }
 
-/// A retry-after the provider stated binds even a click; our own backoff after a bare 429 does not.
-fn declared_retry_pending(runtime: Option<&ProviderRuntime>, now: f64) -> bool {
-    runtime.is_some_and(|runtime| {
-        runtime
-            .error
+impl ProviderRuntime {
+    /// Whether the wait is one the provider stated, not our own backoff after a bare 429.
+    fn declared_retry(&self) -> bool {
+        self.error
             .as_ref()
             .is_some_and(|e| e.kind == QuotaErrorKind::RateLimited && e.retry_after_seconds.unwrap_or(0) > 0)
-            && now < runtime.next_attempt_at
-    })
+    }
+}
+
+/// A retry-after the provider stated binds even a click; our own backoff after a bare 429 does not.
+fn declared_retry_pending(runtime: Option<&ProviderRuntime>, now: f64) -> bool {
+    runtime.is_some_and(|runtime| runtime.declared_retry() && now < runtime.next_attempt_at)
 }
 
 fn providers_key(providers: &[String]) -> String {
@@ -100,7 +105,6 @@ impl Inner {
 
 pub struct QuotaService<D: Deps> {
     deps: D,
-    clock: Clock,
     inner: Mutex<Inner>,
     /// Signalled when a usage load ends, for a sync waiting to start its own.
     usage_done: Condvar,
@@ -109,7 +113,7 @@ pub struct QuotaService<D: Deps> {
 }
 
 impl<D: Deps> QuotaService<D> {
-    pub fn new(deps: D, clock: Clock, settings: Settings, cache: Option<CachedState>) -> Self {
+    pub fn new(deps: D, settings: Settings, cache: Option<CachedState>) -> Self {
         let cache = cache.unwrap_or_default();
         let now = deps.now();
         let mut runtime = IndexMap::new();
@@ -146,7 +150,7 @@ impl<D: Deps> QuotaService<D> {
             syncing: false,
             sync_result: None,
         };
-        Self { deps, clock, inner: Mutex::new(inner), usage_done: Condvar::new(), emitting: Mutex::new(()) }
+        Self { deps, inner: Mutex::new(inner), usage_done: Condvar::new(), emitting: Mutex::new(()) }
     }
 
     pub const fn deps(&self) -> &D {
@@ -235,9 +239,9 @@ impl<D: Deps> QuotaService<D> {
             .collect();
         let mut fetched: Vec<String> =
             providers.iter().filter_map(|p| p.quota.as_ref()).map(|q| q.fetched_at.clone()).collect();
-        fetched.sort_by(|a, b| {
-            parse_ms(&self.clock, a).partial_cmp(&parse_ms(&self.clock, b)).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        let clock = self.deps.clock();
+        fetched
+            .sort_by(|a, b| parse_ms(&clock, a).partial_cmp(&parse_ms(&clock, b)).unwrap_or(std::cmp::Ordering::Equal));
         let keys: Vec<String> = providers.iter().map(|p| p.key.clone()).collect();
         let usage_empty = inner.cache.usage.is_some()
             && inner.usage_error.is_none()
@@ -357,11 +361,11 @@ impl<D: Deps> QuotaService<D> {
         let cache = {
             let mut inner = self.lock();
             let now = self.deps.now();
-            inner.cache.fired = prune_fired(&self.clock, &inner.cache.fired, now);
+            inner.cache.fired = prune_fired(&self.deps.clock(), &inner.cache.fired, now);
             let limited: IndexMap<String, f64> = inner
                 .runtime
                 .iter()
-                .filter(|(_, r)| r.error.as_ref().is_some_and(|e| e.kind == QuotaErrorKind::RateLimited))
+                .filter(|(_, r)| r.declared_retry())
                 .map(|(key, r)| (key.clone(), r.next_attempt_at))
                 .collect();
             inner.cache.rate_limited_until = limited;
@@ -430,7 +434,7 @@ impl<D: Deps> QuotaService<D> {
         cache: &mut CachedState,
         now: f64,
     ) -> Vec<Alert> {
-        let alerts = due_alerts(&self.clock, provider_label(key), snapshot, rules, &cache.fired, now);
+        let alerts = due_alerts(&self.deps.clock(), provider_label(key), snapshot, rules, &cache.fired, now);
         for alert in &alerts {
             cache.fired.insert(alert.key.clone(), alert.resets_at.clone());
         }
@@ -594,6 +598,9 @@ mod tests {
         fn now(&self) -> f64 {
             *self.now.lock().unwrap()
         }
+        fn clock(&self) -> Clock {
+            Clock::in_zone("UTC").unwrap()
+        }
         fn on_state(&self, state: Arc<AppState>) {
             self.states.lock().unwrap().push((*state).clone());
         }
@@ -644,7 +651,7 @@ mod tests {
     ) -> (Arc<Fake>, QuotaService<Arc<Fake>>) {
         *fake.now.lock().unwrap() = START;
         let fake = Arc::new(fake);
-        let service = QuotaService::new(std::sync::Arc::clone(&fake), Clock::in_zone("UTC").unwrap(), settings, cache);
+        let service = QuotaService::new(std::sync::Arc::clone(&fake), settings, cache);
         (fake, service)
     }
 
@@ -866,7 +873,7 @@ mod tests {
     fn keeps_a_retry_after_across_restarts() {
         let limited = Fake {
             quota: Some(Box::new(|provider, _| {
-                (provider == "claude_code").then(|| failure(QuotaErrorKind::RateLimited, "slow", Some(600)))
+                Some(failure(QuotaErrorKind::RateLimited, "slow", (provider == "claude_code").then_some(600)))
             })),
             ..Fake::default()
         };
