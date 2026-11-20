@@ -837,7 +837,7 @@ mod tests {
                     return Some(failure(QuotaErrorKind::Auth, "sign in", None));
                 }
                 let mut weekly = ok(provider, 20.0, now);
-                weekly.windows[0].period_seconds = aitrack_core::quota::WEEK_SECONDS;
+                weekly.windows[0].id = "weekly".into();
                 weekly.windows[0].resets_at = Some(iso(now + 48.0 * 3_600_000.0));
                 Some(Ok(weekly))
             })),
