@@ -76,7 +76,6 @@ pub struct App {
     saves: Sender<(u64, Settings)>,
     /// The newest save sent, so an older one's outcome is ignored.
     save_seq: u64,
-    clock: Clock,
     state: Arc<AppState>,
     settings: Settings,
     view: View,
@@ -109,13 +108,14 @@ impl App {
         background: Arc<Background>,
         data_dir: PathBuf,
         listener: Listener,
+        request: Option<Request>,
     ) -> Self {
         let ctx = cc.egui_ctx.clone();
         install_fonts(&ctx);
         let (tx, rx) = channel();
         let bus = Bus { tx, ctx: ctx.clone() };
         let show_bus = bus.clone();
-        crate::instance::listen(listener, move |request| {
+        crate::instance::listen(listener, request, move |request| {
             let screen = if request == Request::Settings { Screen::Settings } else { Screen::Dashboard };
             show_bus.send(Msg::Show(screen));
         });
@@ -144,7 +144,6 @@ impl App {
             bus,
             saves: save_count,
             save_seq: 0,
-            clock: Clock::system(),
             view: View::default(),
             marks: ProviderMarks::load(&ctx),
             panel: PanelState::default(),
@@ -356,7 +355,11 @@ impl App {
                 self.updater.install(self.bus.clone());
             }
             Action::ExportLogs => {
-                crate::logs::export(self.data_dir.clone(), crate::logs::archive_name(&self.clock), self.bus.clone());
+                crate::logs::export(
+                    self.data_dir.clone(),
+                    crate::logs::archive_name(&Clock::system()),
+                    self.bus.clone(),
+                );
             }
             Action::StartDrag => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
         }
@@ -409,16 +412,17 @@ impl eframe::App for App {
         }
         let ctx = ui.ctx().clone();
         let palette = Palette::for_dark(ctx.theme() == egui::Theme::Dark);
+        let clock = Clock::system(); // Each frame, so a changed system zone shows without a restart.
         #[expect(
             clippy::cast_precision_loss,
             reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
         )]
-        let now = self.clock.now().as_millisecond() as f64;
+        let now = clock.now().as_millisecond() as f64;
         let (actions, height) = {
             let model = Model {
                 state: &self.state,
                 settings: &self.settings,
-                clock: &self.clock,
+                clock: &clock,
                 now,
                 update: &self.update,
                 setting_errors: &self.setting_errors,

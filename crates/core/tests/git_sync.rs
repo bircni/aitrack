@@ -134,6 +134,18 @@ fn syncs_once_then_finds_nothing_to_push_and_shares_the_repo_with_another_machin
     let after = sync_data(&core, SyncOptions::default()).unwrap();
     assert!(!after.pushed);
     assert!(a.repo().join("data/b.json").exists(), "A pulled B's file");
+
+    let mut file: serde_json::Value = serde_json::from_str(&a.file("a.json")).unwrap();
+    file["days"]["2026-03-01"] = serde_json::json!({ "cursor": file["days"]["2026-03-08"]["claude_code"] });
+    std::fs::write(a.repo().join("data/a.json"), serde_json::to_string_pretty(&file).unwrap()).unwrap();
+    git(&a.repo(), &["commit", "-qam", "sync: a at earlier"]);
+    a.log_day("s.jsonl", "2026-03-10", "m3", 5);
+    let carried = sync_data(&core, SyncOptions::default()).unwrap();
+    assert_eq!((carried.message.as_str(), carried.days), ("Done! Pushed data/a.json (3 days)", 3));
+    assert!(a.file("a.json").contains("\"cursor\""), "a removed provider's day is kept, though no report shows it");
+
+    let failed = core.git().run(&["checkout", "https://me:s3cret@host.invalid/data.git"]).unwrap_err().to_string();
+    assert!(failed.contains("'https://***@host.invalid/data.git'") && !failed.contains("s3cret"), "{failed}");
 }
 
 #[test]
@@ -222,12 +234,17 @@ fn recompute_restores_a_corrupt_file_from_its_last_commit_and_renames_move_files
     sync_data(&core, SyncOptions::default()).unwrap();
     assert_eq!(recompute_costs(&core, RecomputeOptions::default()).unwrap().changed, 0);
 
+    let mispriced = a.file("a.json").replace("\"hostname\": \"a\"", "\"hostname\": \"b\"").replace("0.002025", "9");
+    std::fs::write(a.repo().join("data/b.json"), mispriced).unwrap();
     std::fs::write(a.repo().join("data/a.json"), "{ truncated").unwrap();
     let refused = sync_data(&core, SyncOptions::default()).unwrap_err();
     assert!(refused.0.starts_with("Refusing to overwrite invalid data/a.json"), "{refused}");
     let (later, later_output) = a.core_at("2026-03-10T13:00:00Z");
     let repaired = recompute_costs(&later, RecomputeOptions::default()).unwrap();
-    assert_eq!((repaired.changed, repaired.pushed), (1, true));
+    assert_eq!((repaired.changed, repaired.pushed), (2, true));
+    assert!(a.file("a.json").contains("\"lastUpdated\": \"2026-03-10T13:00:00.000Z\""));
+    let other = a.file("b.json");
+    assert!(other.contains("0.002025") && other.contains("\"lastUpdated\": \"2026-03-10T12:00:00.000Z\""), "{other}");
     assert!(later_output.messages().iter().any(|(_, m)| m == "  Restoring a.json from its last commit."));
     assert!(git(&remote, &["log", "-1", "--format=%s", "main"]).starts_with("recompute: refresh costs at "));
 
@@ -237,6 +254,16 @@ fn recompute_restores_a_corrupt_file_from_its_last_commit_and_renames_move_files
     assert!(git(&a.repo(), &["status", "--porcelain"]).contains("R  data/a.json -> data/laptop.json"));
     std::fs::write(a.repo().join("data/other.json"), "{}").unwrap();
     assert!(migrate_machine_data_files(&core, "laptop", "other").unwrap_err().0.contains("already exists"));
+
+    migrate_machine_data_files(&core, "laptop", "LAPTOP").unwrap(); // The same file where names fold.
+    let names: Vec<String> = std::fs::read_dir(a.repo().join("data"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| name.eq_ignore_ascii_case("laptop.json"))
+        .collect();
+    assert_eq!(names, ["LAPTOP.json"]);
+    assert!(a.file("LAPTOP.json").contains("\"hostname\": \"LAPTOP\""));
+    assert!(git(&a.repo(), &["status", "--porcelain"]).contains("R  data/a.json -> data/LAPTOP.json"));
 }
 
 #[test]

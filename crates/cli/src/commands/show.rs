@@ -14,7 +14,7 @@ use aitrack_core::sync::read_local_provider_maps;
 use clap::Args;
 use serde_json::{Value, json};
 
-use super::args::{PROVIDERS_HELP, Providers, parse_providers, parse_year, warn_stdout_path};
+use super::args::{PROVIDERS_HELP, Providers, parse_output_path, parse_providers, parse_year};
 use super::report::{load, not_configured, print_empty_result};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
@@ -23,7 +23,7 @@ use crate::{Failure, Outcome};
 #[derive(Args)]
 pub struct ShowArgs {
     /// output file path (default: aitrack.png)
-    #[arg(short, long, value_name = "path")]
+    #[arg(short, long, value_name = "path", value_parser = parse_output_path)]
     pub output: Option<PathBuf>,
     /// dark mode output
     #[arg(long)]
@@ -73,7 +73,6 @@ fn staged_local_machine(core: &Core, machine_id: &str) -> Result<MachineFile, Fa
 }
 
 pub fn run(core: &Core, args: &ShowArgs) -> Outcome {
-    warn_stdout_path(core, args.output.as_deref());
     if args.tui && args.output.is_some() {
         core.output.warn("--output is ignored with --tui, which writes no file.");
     }

@@ -8,6 +8,7 @@ use std::sync::MutexGuard;
 use std::time::{Duration, Instant};
 
 use crate::fs::write_file_atomic;
+use crate::git::remote::redact_urls;
 use crate::machine_id::{machine_data_filename, normalize_machine_id};
 use crate::process::{RunError, run, run_interactive};
 use crate::store::merge_conflict::merge_conflicted_machine_file;
@@ -151,7 +152,7 @@ impl Git {
             env.push(("GIT_TERMINAL_PROMPT".to_owned(), "0".to_owned()));
             env.push(("GCM_INTERACTIVE".to_owned(), "never".to_owned()));
         }
-        let owned = || args.iter().map(|a| (*a).to_owned()).collect::<Vec<_>>();
+        let owned = || args.iter().map(|a| redact_urls(a)).collect::<Vec<_>>(); // Only ever shown.
         match run("git", args, &env, Some(&self.repo), self.timeout) {
             Ok(done) => {
                 let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).trim().to_owned();
@@ -160,6 +161,7 @@ impl Git {
                 } else {
                     let stderr = text(&done.stderr);
                     let output = if stderr.is_empty() { text(&done.stdout) } else { stderr };
+                    let output = redact_urls(&output); // Shown and cached; git can quote a remote with its token.
                     Err(GitError::Command { args: owned(), status: done.status.code(), output })
                 }
             }

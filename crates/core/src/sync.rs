@@ -19,7 +19,7 @@ use crate::js;
 use crate::machine_id::machine_data_filename;
 use crate::pricing::ReaderPricing;
 use crate::pricing::cost::{FallbackCollector, PriceMode, price_model_cost};
-use crate::providers::PROVIDERS;
+use crate::providers::{PROVIDERS, provider};
 use crate::readers::project::GitProjectResolver;
 use crate::readers::read::{read_claude_days, read_codex_days};
 use crate::store::encryption::{ENCRYPTION_PASSPHRASE_ENV, encryption_passphrase};
@@ -298,7 +298,8 @@ fn push_local_usage(
             "Kept {kept} synced day(s) with more tokens than the local logs still show, which is normal once a tool prunes its logs."
         ));
     }
-    let synced_days = outgoing.len();
+    // A day only a provider this version dropped has is kept in the file, but no report shows it.
+    let synced_days = outgoing.values().filter(|day| day.keys().any(|key| provider(key).is_some())).count();
     let normalized_existing = existing.as_ref().map(canonical_days);
     // Usage only: lastUpdated and the schema header alone are not worth a commit.
     let encryption_change = raw.is_some() && encrypted_now != encrypt;

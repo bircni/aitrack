@@ -67,8 +67,9 @@ pub fn parse_watch_seconds(value: &str) -> Result<u64, String> {
 }
 
 /// `-` conventionally means stdout, which these writers do not support.
-pub fn warn_stdout_path(core: &aitrack_core::Core, path: Option<&std::path::Path>) {
-    if path.is_some_and(|p| p.as_os_str() == "-") {
-        core.output.warn("-o - writes a file named \"-\": aitrack cannot write to stdout.");
+pub fn parse_output_path(value: &str) -> Result<std::path::PathBuf, String> {
+    if value == "-" {
+        return Err("aitrack cannot write to stdout; for a file named \"-\" pass ./-".to_owned());
     }
+    Ok(value.into())
 }
