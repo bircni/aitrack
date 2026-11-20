@@ -138,7 +138,7 @@ fn tray_providers() -> Vec<&'static str> {
 
 impl Settings {
     pub fn alert_rules(&self) -> AlertRules {
-        AlertRules { almost_out_left: f64::from(self.alert_threshold), unused: self.alert_unused }
+        AlertRules { almost_out_left: f64::from(self.alert_threshold), unused: self.alert_unused, stale: false }
     }
 
     pub fn shared(&self) -> Map<String, Value> {
@@ -159,10 +159,29 @@ impl Settings {
         let Ok(Value::Object(mut merged)) = serde_json::to_value(self) else { return self.clone() };
         for key in SHARED_KEYS {
             if let Some(value) = shared.get(*key) {
-                merged.insert((*key).to_owned(), value.clone());
+                let value = if *key == "providers" { self.providers_with_shared(value) } else { value.clone() };
+                merged.insert((*key).to_owned(), value);
             }
         }
         normalize_settings(&Value::Object(merged))
+    }
+
+    /// The shared list, with this machine's entry kept after its neighbour for a provider the list
+    /// leaves out: a machine that does not know a provider has no say in whether it is on.
+    fn providers_with_shared(&self, shared: &Value) -> Value {
+        let mut entries = shared.as_array().cloned().unwrap_or_default();
+        let position = |entries: &[Value], key: &str| {
+            entries.iter().position(|entry| entry.get("key").and_then(Value::as_str) == Some(key))
+        };
+        for (index, provider) in self.providers.iter().enumerate() {
+            if position(&entries, &provider.key).is_some() {
+                continue;
+            }
+            let before = index.checked_sub(1).and_then(|i| position(&entries, &self.providers[i].key));
+            let own = serde_json::json!({ "key": provider.key, "enabled": provider.enabled });
+            entries.insert(before.map_or(0, |at| at + 1), own);
+        }
+        Value::Array(entries)
     }
 
     pub fn shared_time(&self) -> Option<Timestamp> {
@@ -170,14 +189,16 @@ impl Settings {
     }
 
     /// Dates a change to the shared settings made after `previous`, so that it wins over older ones
-    /// even when this machine's clock is behind. Without a date, the repo's settings win.
+    /// even when this machine's clock is behind. Without a date, the repo's settings win, as they do
+    /// over changes made before this machine first took or shared them.
     #[must_use]
     pub fn dated(mut self, previous: &Self, now: Timestamp) -> Self {
         self.shared_at = if !self.sync {
             None
         } else if previous.sync && self.shared() != previous.shared() {
-            let after = previous.shared_time().and_then(|at| at.checked_add(SignedDuration::from_millis(1)).ok());
-            Some(iso_millis(after.map_or(now, |after| now.max(after))))
+            let after =
+                |at: Timestamp| at.checked_add(SignedDuration::from_millis(1)).map_or(now, |after| now.max(after));
+            previous.shared_time().map(|at| iso_millis(after(at)))
         } else {
             previous.shared_at.clone()
         };
@@ -314,10 +335,6 @@ pub fn write_settings(path: &Path, settings: &Settings) -> std::io::Result<()> {
     aitrack_core::fs::write_file_atomic(path, settings_json(settings), None)
 }
 
-pub fn load_settings(path: &Path) -> Settings {
-    normalize_settings(&read_json_file(path))
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -421,6 +438,16 @@ mod tests {
         newer.shift_remove("theme");
         newer.insert("someday".into(), json!(1));
         assert_eq!(taken.with_shared(&newer), taken, "a key the file lacks keeps this machine's value");
+        let mut local = taken.clone();
+        local.providers.reverse();
+        local.providers[0].enabled = false;
+        let partial = Map::from_iter([("providers".to_owned(), json!([{ "key": "claude_code", "enabled": false }]))]);
+        let providers = local.with_shared(&partial).providers;
+        assert_eq!(
+            providers.iter().map(|p| (p.key.as_str(), p.enabled)).collect::<Vec<_>>(),
+            [("codex", false), ("claude_code", false)],
+            "and so does a provider its list lacks"
+        );
 
         let dated = |settings: Settings, previous: &Settings| settings.dated(previous, now).shared_at;
         assert_eq!(dated(taken, &Settings::default()), None, "turning it on lets the repo win");
@@ -447,8 +474,8 @@ mod tests {
             ..Settings::default()
         };
         write_settings(&path, &saved).unwrap();
-        assert_eq!(load_settings(&path), saved);
+        assert_eq!(normalize_settings(&read_json_file(&path)), saved);
         std::fs::write(&path, "{").unwrap();
-        assert_eq!(load_settings(&path), Settings::default());
+        assert_eq!(normalize_settings(&read_json_file(&path)), Settings::default());
     }
 }

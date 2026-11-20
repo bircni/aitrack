@@ -8,6 +8,7 @@ use super::validate::{ValidationOptions, check_raw_machine_file};
 use crate::Core;
 use crate::data::types::MachineFile;
 use crate::error::{Error, Result};
+use crate::git::Git;
 use crate::machine_id::{machine_data_filename, normalize_machine_id};
 
 struct Plan {
@@ -16,6 +17,8 @@ struct Plan {
     source_contents: String,
     contents: String,
     repository_paths: Option<(String, String)>,
+    /// A case-only rename where names fold: the target is the source under its new spelling.
+    in_place: bool,
 }
 
 fn plan(core: &Core, dir: &std::path::Path, previous: &str, next: &str) -> Result<Option<Plan>> {
@@ -24,7 +27,8 @@ fn plan(core: &Core, dir: &std::path::Path, previous: &str, next: &str) -> Resul
         return Ok(None);
     }
     let target = machine_file_path(dir, next)?;
-    if target.exists() {
+    let in_place = target.exists() && std::fs::canonicalize(&source)? == std::fs::canonicalize(&target)?;
+    if target.exists() && !in_place {
         return Err(Error::new(format!(
             "Cannot rename machine \"{previous}\" to \"{next}\": {} already exists.",
             target.display()
@@ -48,7 +52,7 @@ fn plan(core: &Core, dir: &std::path::Path, previous: &str, next: &str) -> Resul
     let name = |id: &str| machine_data_filename(id).map_err(Error::new);
     let repository_paths =
         if in_repo { Some((format!("data/{}", name(previous)?), format!("data/{}", name(next)?))) } else { None };
-    Ok(Some(Plan { source, target, source_contents, contents, repository_paths }))
+    Ok(Some(Plan { source, target, source_contents, contents, repository_paths, in_place }))
 }
 
 fn write_new(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
@@ -56,7 +60,20 @@ fn write_new(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
     std::fs::OpenOptions::new().write(true).create_new(true).open(path)?.write_all(contents.as_bytes())
 }
 
+fn apply(plan: &Plan) -> std::io::Result<()> {
+    if plan.in_place {
+        std::fs::rename(&plan.source, &plan.target)?;
+        return std::fs::write(&plan.target, &plan.contents);
+    }
+    write_new(&plan.target, &plan.contents)?;
+    std::fs::remove_file(&plan.source)
+}
+
 fn rollback(plan: &Plan) -> std::io::Result<()> {
+    if plan.in_place {
+        std::fs::rename(&plan.target, &plan.source)?;
+        return std::fs::write(&plan.source, &plan.source_contents);
+    }
     write_new(&plan.source, &plan.source_contents)?;
     if let Err(error) = std::fs::remove_file(&plan.target) {
         let _ = std::fs::remove_file(&plan.source);
@@ -71,38 +88,51 @@ fn rollback(plan: &Plan) -> std::io::Result<()> {
 ///
 /// When the data files cannot be renamed or committed.
 pub fn migrate_machine_data_files(core: &Core, previous_id: &str, next_id: &str) -> Result<()> {
+    migrate(core, previous_id, next_id, &[&core.paths.data, &core.paths.pending_data])
+}
+
+/// Renames only the staged file: a guessed id's namesake in the repo may be another machine's.
+///
+/// # Errors
+///
+/// When the staged file cannot be renamed.
+pub fn migrate_pending_machine_data_file(core: &Core, previous_id: &str, next_id: &str) -> Result<()> {
+    migrate(core, previous_id, next_id, &[&core.paths.pending_data])
+}
+
+fn migrate(core: &Core, previous_id: &str, next_id: &str, dirs: &[&std::path::Path]) -> Result<()> {
     let previous = normalize_machine_id(previous_id).map_err(Error::new)?;
     let next = normalize_machine_id(next_id).map_err(Error::new)?;
     if previous == next {
         return Ok(());
     }
-    let plans: Vec<Plan> =
-        [plan(core, &core.paths.data, previous, next)?, plan(core, &core.paths.pending_data, previous, next)?]
-            .into_iter()
-            .flatten()
-            .collect();
+    core.with_repo_lock(|guard| migrate_locked(core, guard.git(), previous, next, dirs))
+}
+
+fn migrate_locked(core: &Core, git: &Git, previous: &str, next: &str, dirs: &[&std::path::Path]) -> Result<()> {
+    let mut plans = Vec::new();
+    for dir in dirs {
+        plans.extend(plan(core, dir, previous, next)?);
+    }
     let mut completed: Vec<&Plan> = Vec::new();
     let attempt = (|| -> Result<()> {
         for plan in &plans {
-            if let Err(error) =
-                write_new(&plan.target, &plan.contents).and_then(|()| std::fs::remove_file(&plan.source))
-            {
-                let _ = std::fs::remove_file(&plan.target);
+            if let Err(error) = apply(plan) {
+                let _ = if plan.in_place { rollback(plan) } else { std::fs::remove_file(&plan.target) };
                 return Err(error.into());
             }
             completed.push(plan);
         }
-        let git = core.git();
         for plan in &plans {
             let Some((source, target)) = &plan.repository_paths else { continue };
             let (source, target) = (format!(":(literal){source}"), format!(":(literal){target}"));
             // git add refuses a path it knows nothing of, as with a file adopted but not yet committed.
             let tracked = !git.run(&["ls-files", "--", &source])?.is_empty();
             if tracked {
-                git.run(&["add", "--", &source, &target])?
-            } else {
-                git.run(&["add", "--", &target])?
-            };
+                // Not `git add`: where names fold it would keep the old spelling in the index.
+                git.run(&["rm", "--cached", "--force", "--quiet", "--", &source])?;
+            }
+            git.run(&["add", "--", &target])?;
         }
         Ok(())
     })();

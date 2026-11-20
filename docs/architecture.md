@@ -2,7 +2,7 @@
 
 [Back to the overview](../README.md) · [Contributing](../CONTRIBUTING.md)
 
-Everything except the window's markup is Rust. `crates/core` (aitrack-core) holds the logic; the
+Everything is Rust. `crates/core` (aitrack-core) holds the logic; the
 `aitrack` binary in `crates/cli` and the opentrack app in `apps/opentrack` are thin shells over it.
 
 ## Data flow
@@ -29,8 +29,7 @@ local logs                                  other machines
 - **Readers** turn provider logs into a `DayMap`: local calendar day → token counts per model. Only
   lines that can count are parsed, and a large cold read is scanned on up to four threads. Each
   parsed transcript is cached by path, size and modification time, and a provider's merged result
-  is kept in a snapshot reused while no source file changed. See
-  [reader benchmarks](reader-benchmarks.md).
+  is kept in a snapshot reused while no source file changed.
 - **Projects**: each message is attributed to the `owner/repo` of its git origin (Codex records it;
   for Claude Code the transcript's `cwd` is resolved with `git remote get-url origin`, every
   repository at once). Day entries carry an optional `byProject` map, written to machine files
@@ -41,10 +40,11 @@ local logs                                  other machines
 - **`usage_data`** merges this machine's fresh logs over its synced file and the other machines'
   files. Reports are built from that one merged set, so the CLI and the desktop app show the same
   numbers.
-- **Machine files** carry a `schemaVersion`; `store/migrate` upgrades older files in memory.
-- **Byte compatibility**: 4.x machines may sync into the same repo, so everything written there or
-  to the shared config goes through `aitrack_core::js`, which formats numbers, sorts keys and
-  pretty-prints JSON exactly as Node did. The golden fixtures recorded from 4.x pin it.
+- **Machine files** carry a `schemaVersion`; `store/validate` upgrades older files in memory.
+- **Byte compatibility**: machines on other 5.x releases may sync into the same repo, so everything
+  written there or to the shared config goes through `aitrack_core::js`, which formats numbers,
+  sorts keys and pretty-prints JSON as JavaScript does, the form these files have had since 4.x.
+  The golden fixtures pin it.
 
 ## Providers
 
@@ -68,8 +68,8 @@ One native process, no webview. Background threads own all provider access and s
 new `AppState`, the settings, alerts and tray pictures to the UI thread, which wakes even while the
 popup is hidden. The UI draws from that state and hands back actions (refresh, sync, save settings,
 install an update) for `app.rs` to carry out. `tray-icon`, `global-hotkey`, `auto-launch` and
-`notify-rust` cover the tray, shortcut, start at login and alerts; the updater reads the same
-`latest.json` and key as 4.x's Tauri updater through `aitrack_core::update`, which
+`notify-rust` cover the tray, shortcut, start at login and alerts; the updater reads `latest.json`
+and checks downloads against the release key through `aitrack_core::update`, which
 `aitrack install-opentrack` shares.
 
 With **Sync settings** on, `settings_sync.rs` reconciles the settings every machine can use with

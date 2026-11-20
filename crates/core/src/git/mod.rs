@@ -2,19 +2,25 @@
 
 pub mod remote;
 
+use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::sync::MutexGuard;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use crate::Core;
 use crate::fs::write_file_atomic;
+use crate::git::remote::redact_urls;
 use crate::machine_id::{machine_data_filename, normalize_machine_id};
 use crate::process::{RunError, run, run_interactive};
 use crate::store::merge_conflict::merge_conflicted_machine_file;
 use crate::store::shared_settings::{SHARED_SETTINGS_PATH, newest_shared_settings};
 use crate::time::iso_millis;
+use crate::{Core, Locked};
 
 const MAX_PUSH_ATTEMPTS: u32 = 3;
+
+/// Beside the clone, not in it, so it is never committed.
+const REPO_LOCK_FILE: &str = "repo.lock";
+const REPO_LOCK_POLL: Duration = Duration::from_millis(50);
 
 /// Starts the subject of a commit that only adds this machine's usage, the one kind a per-day merge cannot undo,
 /// or that shares opentrack's settings, where the newest file wins.
@@ -28,6 +34,8 @@ pub enum GitError {
     Command { args: Vec<String>, status: Option<i32>, output: String },
     #[error("git {args} timed out after {ms} ms", args = .args.join(" "))]
     Timeout { args: Vec<String>, ms: u128 },
+    #[error("Another aitrack process is using the data repo. Try again once it has finished.")]
+    Busy,
     #[error("{0}")]
     Other(String),
 }
@@ -48,6 +56,7 @@ impl GitError {
 
 /// Proof that the repo lock is held; every operation that changes the clone takes one.
 pub struct RepoGuard<'a> {
+    _file: Option<File>, // Closing it unlocks, so a crashed process cannot leave it locked.
     _lock: MutexGuard<'a, ()>,
     git: Git,
 }
@@ -60,14 +69,40 @@ impl RepoGuard<'_> {
 }
 
 impl Core {
-    /// Runs `step` once every earlier operation on the data repo has finished, so a sync cannot
-    /// interleave with a concurrent pull.
-    pub fn with_repo_lock<T>(&self, step: impl FnOnce(&RepoGuard<'_>) -> T) -> T {
-        let guard = RepoGuard {
-            _lock: self.repo_lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
-            git: Git::new(self),
-        };
-        step(&guard)
+    /// Runs `step` once every earlier operation on the data repo has finished, in this process or
+    /// another, so a sync cannot interleave with a concurrent pull.
+    ///
+    /// # Errors
+    ///
+    /// When another process keeps the repo for longer than `repo_lock_wait`, or `step` fails.
+    pub fn with_repo_lock<T, E: From<GitError>>(
+        &self,
+        step: impl FnOnce(&RepoGuard<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let lock = self.repo_lock.locked();
+        let file = self.lock_repo_file()?;
+        step(&RepoGuard { _file: file, _lock: lock, git: Git::new(self) })
+    }
+
+    /// `None` where the file cannot be opened or locked at all: the repo is then guarded within this process only.
+    fn lock_repo_file(&self) -> Result<Option<File>, GitError> {
+        let path = self.paths.app_dir.join(REPO_LOCK_FILE);
+        let Ok(file) = File::options().create(true).truncate(false).write(true).open(path) else { return Ok(None) };
+        let deadline = Instant::now() + self.repo_lock_wait;
+        let mut announced = false;
+        loop {
+            match file.try_lock() {
+                Ok(()) => return Ok(Some(file)),
+                Err(TryLockError::Error(_)) => return Ok(None),
+                Err(TryLockError::WouldBlock) if Instant::now() >= deadline => return Err(GitError::Busy),
+                Err(TryLockError::WouldBlock) => {
+                    if !std::mem::replace(&mut announced, true) {
+                        self.output.info("Waiting for another aitrack process to finish with the data repo...");
+                    }
+                    std::thread::sleep(REPO_LOCK_POLL);
+                }
+            }
+        }
     }
 
     pub fn git(&self) -> Git {
@@ -117,7 +152,7 @@ impl Git {
             env.push(("GIT_TERMINAL_PROMPT".to_owned(), "0".to_owned()));
             env.push(("GCM_INTERACTIVE".to_owned(), "never".to_owned()));
         }
-        let owned = || args.iter().map(|a| (*a).to_owned()).collect::<Vec<_>>();
+        let owned = || args.iter().map(|a| redact_urls(a)).collect::<Vec<_>>(); // Only ever shown.
         match run("git", args, &env, Some(&self.repo), self.timeout) {
             Ok(done) => {
                 let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).trim().to_owned();
@@ -126,6 +161,7 @@ impl Git {
                 } else {
                     let stderr = text(&done.stderr);
                     let output = if stderr.is_empty() { text(&done.stdout) } else { stderr };
+                    let output = redact_urls(&output); // Shown and cached; git can quote a remote with its token.
                     Err(GitError::Command { args: owned(), status: done.status.code(), output })
                 }
             }
@@ -366,7 +402,7 @@ fn error_clone(error: &GitError) -> GitError {
         GitError::Command { args, status, output } => {
             GitError::Command { args: args.clone(), status: *status, output: output.clone() }
         }
-        other @ (GitError::NotFound | GitError::Timeout { .. } | GitError::Other(_)) => {
+        other @ (GitError::NotFound | GitError::Timeout { .. } | GitError::Busy | GitError::Other(_)) => {
             GitError::Other(other.to_string())
         }
     }

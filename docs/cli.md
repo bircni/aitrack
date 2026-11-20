@@ -121,9 +121,9 @@ An empty result keeps these keys at their empty values and adds `message`: `show
 
 **Colour:** a non-empty `NO_COLOR` turns colour off unless `FORCE_COLOR` is set.
 
-**Watching:** `aitrack usage <window> --watch [seconds]` redraws the report in place every 30 seconds by default (minimum 5). It needs an interactive terminal and cannot be combined with `--json`. Ctrl-C stops it with exit code 0.
+**Watching:** `aitrack usage <window> --watch [seconds]` redraws the report in place every 30 seconds by default (minimum 5). It needs an interactive terminal and cannot be combined with `--json`. Ctrl-C stops it; the interrupt ends the process, so a shell reports 130 on macOS and Linux, not one of the codes above.
 
-**`export` flags:** `-o <path>` (output path, default `aitrack-receipt.pdf`) and `--csv` (write a spreadsheet-friendly CSV — raw token counts, one row per provider+model plus a `TOTAL` row — instead of the PDF receipt; the default path becomes `aitrack-receipt.csv`, an explicit `-o` is used as given). `-o -` is rejected, since neither `show` nor `export` writes to stdout. `--json` reports the absolute path.
+**`export` flags:** `-o <path>` (output path, default `aitrack-receipt.pdf`) and `--csv` (write a spreadsheet-friendly CSV — raw token counts, one row per provider+model plus a `TOTAL` row — instead of the PDF receipt; the default path becomes `aitrack-receipt.csv`, an explicit `-o` is used as given). `-o -` is rejected as a usage error, since neither `show` nor `export` writes to stdout; pass `./-` for a file of that name. With `--json`, `show` reports the absolute path and `export` the path as given.
 
 Relative windows (`today`, `thisweek`, and the other windows anchored on today) are evaluated in each machine's recorded timezone. `date` and `range` use the stored date keys as written. A heatmap still draws those keys on one grid; `show` says so when the machines are not in the same zone.
 
@@ -149,7 +149,7 @@ A project is the git `origin` of the folder the work happened in, written `owner
 
 **`doctor` checks** include warnings for a clone whose `origin` differs from `repoUrl`, for an interrupted rebase and for machine files left out of reports because they cannot be read.
 
-**`doctor` flags:** `--pricing-check` also runs `cargo xtask pricing-check` when you are in a source checkout. Without it, doctor still reports the pricing cache: model counts, refresh outcome and the rates' `updatedAt`.
+**`doctor` and pricing.** `doctor` reports the pricing cache: model counts, refresh outcome and the rates' `updatedAt`.
 
 ---
 
@@ -167,21 +167,22 @@ A project is the git `origin` of the folder the work happened in, written `owner
 │   └── data/            # staged machine JSON before init
 │       └── my-pc.json
 ├── pricing/             # downloaded rate pack, refreshed at most daily
+├── repo.lock            # locked while a process changes the clone
 └── repo/                # local clone of your data repo
     └── data/
         ├── my-pc.json
         └── work-laptop.json
 ```
 
-- **Sync** uses a local git clone at `~/.config/aitrack/repo/` with your existing git credentials. Non-fast-forward pushes are rebased and retried up to three times. A conflict in a machine file in a `sync` commit, on pull or on a retry, is merged per day: every day from both sides is kept, the side with more tokens wins a shared day, and the result is encrypted if either side was. Anything it cannot merge (another file, a side that is unreadable here or from a newer schema, a modify/delete, or a `recompute-costs` commit, since a merge would bring back the days it lowered or dropped) aborts the rebase, leaves the commits unpushed and names the recovery. A rebase a dead process left behind is aborted on the next pull. `sync` refuses to overwrite this machine's file when it cannot read it, and says what to do for that kind of failure.
+- **Sync** uses a local git clone at `~/.config/aitrack/repo/` with your existing git credentials. Non-fast-forward pushes are rebased and retried up to three times. A conflict in a machine file in a `sync` commit, on pull or on a retry, is merged per day: every day from both sides is kept, the side with more tokens wins a shared day, and the result is encrypted if either side was. Anything it cannot merge (another file, a side that is unreadable here or from a newer schema, a modify/delete, or a `recompute-costs` commit, since a merge would bring back the days it lowered or dropped) aborts the rebase, leaves the commits unpushed and names the recovery. A rebase a dead process left behind is aborted on the next pull. Only one aitrack or opentrack process newer than 5.2 changes the clone at a time: another waits up to 30 seconds for the lock on `~/.config/aitrack/repo.lock`, then fails with "Another aitrack process is using the data repo". The lock goes with its process, so a crash cannot leave it behind, and where the filesystem has no file locks aitrack runs without one. `sync` refuses to overwrite this machine's file when it cannot read it, and says what to do for that kind of failure.
 - **The clone can drift from the config.** When the clone's `origin` is a different repository from `repoUrl`, `sync` and `recompute-costs` warn on stderr, naming both URLs, and carry on against `origin`, so a scheduled sync keeps working after a remote move, and your usage goes to the remote the clone names. To move to `repoUrl`, run `aitrack init --repo <url>`, which replaces the clone after asking. To stay on the clone's remote, run `aitrack config set repoUrl <url>` with its URL.
 - **`recompute-costs`** commits only the files it wrote, applies `compactAfterDays` as `sync` does once a day is repriced, and keeps each other machine's encryption mode. If this machine's file is corrupt it is restored from its last commit with the logs merged in; if that commit is unusable or missing it is rebuilt from the logs, with a warning that days they no longer cover remain only in git history. A file from a newer schema, or one this passphrase cannot open, is left alone with a warning, since it is only unreadable here. `--replace-local` is the way past a file no passphrase can open any more. It still refuses a newer schema, and it logs how many synced days it drops.
 - **`show` (PNG or `--tui`) always reads fresh local Claude/Codex JSONL** on the current machine and merges in other machines' synced files. No `sync` needed to preview.
-- Before `init`, local usage is staged in `~/.config/aitrack/pending/data/` and adopted by the next `init`.
+- Before `init`, `show` stages local usage in `~/.config/aitrack/pending/data/`, and the next `init` adopts it. Each run lays the logs over what is already staged, as `sync` does over the synced file, so days a tool has since pruned from its logs stay. A staged file that cannot be decrypted here or was written by a newer aitrack is left as it is, with a warning.
 - **Pricing** starts from the rate tables bundled with aitrack. `sync`, `doctor` and `recompute-costs` overlay them with a rate pack downloaded from `https://raw.githubusercontent.com/bircni/aitrack/pricing/` (`AITRACK_PRICING_URL` for a mirror) into `~/.config/aitrack/pricing/`, at most once a day, without sending usage data or credentials. Each file's SHA-256 is listed in the pack's manifest and checked on download; a pack whose content does not match is rejected, the current rates stay, and `doctor` reports the failure. A pack published without checksums is still accepted, and `doctor` warns that its content was not verified. This guards against corruption, not a hostile mirror, since the manifest is not signed. A failed download keeps the current rates and is retried after 30 minutes. Set `AITRACK_NO_PRICING_REFRESH=1` to skip it.
 - **Heatmap intensity** anchors on the 90th-percentile day rather than the absolute max, so one huge day doesn't flatten the rest of the year.
 - **Parsed transcripts are cached** per file in `~/.config/aitrack/cache/`, keyed by path, size, and modification time, and invalidated when the timezone changes. Each app version and pricing fingerprint gets its own `claude-<key>.json` / `codex-<key>.json`, so the CLI and the desktop app do not invalidate each other; on save, only the newest other key is kept. A `<provider>-merged-<key>.json` snapshot holds the merged result for an exact list of source files, so an unchanged corpus skips the per-file cache. The parse cache is not rewritten when only files changed in the last 10 minutes differ and rewriting would cost more than rescanning them; a crash then costs a rescan of those files. Claude caches retain per-message contributions and aggregated unkeyed usage so overlapping transcripts can be deduplicated without reopening files. Derived-cache upgrades rebuild from logs; synced machine files need no schema migration and existing stored historical costs retain their meaning. Deleting the directory only costs one slower run. Set `AITRACK_NO_CACHE=1` to bypass it entirely.
-- **Machine files carry a `schemaVersion` and the producing machine's `timezone`.** Day keys are still that machine's local calendar day (unchanged from 1.x); relative windows use the recorded timezone, as described under [Commands](#commands). Both fields are tolerated rather than required: a file written by aitrack 1.x (or by a machine still running it) is read normally and upgraded in memory, silently, and the header lands on disk the next time that machine's usage actually changes. A file written by a _newer_ aitrack than the one reading it is skipped with a clear message so the rest of the fleet still loads.
+- **Machine files carry a `schemaVersion` and the producing machine's `timezone`.** Day keys are still that machine's local calendar day (unchanged from 1.x); relative windows use the recorded timezone, as described under [Commands](#commands). A machine whose zone has no IANA name (`TZ=AEST-10`) records `unknown`: its own reports use its local day, and other machines read its days on their own calendar. Both fields are tolerated rather than required: a file written by aitrack 1.x (or by a machine still running it) is read normally and upgraded in memory, silently, and the header lands on disk the next time that machine's usage actually changes. A file written by a _newer_ aitrack than the one reading it is skipped with a clear message so the rest of the fleet still loads.
 - **After a timezone change, usage near midnight can count twice.** The logs put those messages on a neighbouring day, and the per-day merge keeps both the stored day and the new one. Until the next `sync`, reports on this machine correct for it: days the logs fully explain replace the stored ones, and older history stays. That correction is display only and is not persisted. `sync` writes the per-day merge and records the new timezone, so from then on the pushed file, other machines and this machine's own reports can show those messages on two days, with totals to match. `recompute-costs --replace-local` rebuilds the file from the logs and removes the duplicates, but also drops any synced days the logs no longer cover.
 
 ### Cost handling
@@ -308,10 +309,10 @@ The repo can also hold `opentrack/settings.json`, which opentrack writes when it
 
 ## Upgrading from 4.x
 
-aitrack 5.0 is a native binary instead of a Node.js program; `npm install -g aitrack` and `npx aitrack`
-fetch the binary for your platform. Machine files, `config.json`, encrypted files, the pricing cache
-and opentrack's settings keep their format, so 4.x and 5.0 machines can sync into the same repo and
-an upgrade keeps everything. Visible differences:
+aitrack 5 is a native binary instead of a Node.js program; `npm install -g aitrack` and `npx aitrack`
+fetch the binary for your platform. An upgrade keeps your machine files, `config.json`, encrypted
+files and opentrack's settings. 4.x gets no further updates and new releases are not kept
+compatible with it, so upgrade every machine that syncs into the repo. Visible differences:
 
 - The PNG heatmap uses an embedded DejaVu Sans font instead of the system's Arial, so labels are
   slightly wider.
@@ -320,4 +321,6 @@ an upgrade keeps everything. Visible differences:
 - `aitrack completion <shell>` prints different, equivalent completion scripts.
 - `doctor` no longer reports the Node.js version.
 - The first run after the upgrade re-reads the logs once, since the parse cache format changed.
+- Cursor is no longer tracked: `--providers cursor` is rejected and a `cursor` entry in settings or
+  caches is ignored.
 - `aitrack-lib` is discontinued; see the [library note](library.md).

@@ -6,31 +6,45 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use aitrack_core::http::UreqClient;
+use aitrack_core::output::Level;
 use aitrack_core::update::{download_verified, is_newer, latest_release, updater_target, InstallTarget, Release};
 
 use crate::app::{Bus, Msg};
+use crate::logs::LogOutput;
 use aitrack_core::Locked;
 
 const FIRST_CHECK_DELAY: Duration = Duration::from_secs(30);
 const CHECK_INTERVAL: Duration = Duration::from_hours(6);
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Updater {
     pending: Arc<Mutex<Option<Release>>>,
+    log: LogOutput,
 }
 
 impl Updater {
+    pub fn new(log: LogOutput) -> Self {
+        Self { pending: Arc::default(), log }
+    }
+
     /// Sends the newer version on offer, if any. Only a check the user asked for reports a failure;
     /// a background one that finds the network down just tries again later.
     pub fn check(&self, bus: &Bus, asked: bool) {
-        match newer_release() {
+        let found = newer_release();
+        let status = match &found {
+            Ok(Some(newer)) => format!("ok available={}", newer.version),
+            Ok(None) => "ok current".into(),
+            Err(error) => format!("failed: {error}"),
+        };
+        self.log.status(if found.is_ok() { Level::Info } else { Level::Warn }, "update-check", &status);
+        match found {
             Ok(newer) => {
                 let version = newer.as_ref().map(|r| r.version.clone());
                 *self.pending.locked() = newer;
                 bus.send(Msg::UpdateFound(version));
             }
             Err(error) if asked => bus.send(Msg::UpdateCheckFailed(error)),
-            Err(error) => eprintln!("opentrack: update check: {error}"),
+            Err(_) => {}
         }
     }
 
@@ -55,8 +69,11 @@ impl Updater {
             bus.send(Msg::UpdateInstallFailed("No update is available".into()));
             return;
         };
+        let log = self.log.clone();
         std::thread::spawn(move || {
+            log.event(Level::Info, &format!("update-install started version={}", release.version));
             if let Err(error) = install_and_relaunch(&release) {
+                log.event(Level::Error, &format!("update-install failed: {error}"));
                 bus.send(Msg::UpdateInstallFailed(error));
             }
         });

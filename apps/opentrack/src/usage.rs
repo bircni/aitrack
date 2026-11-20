@@ -184,7 +184,7 @@ pub struct UsageLoadResult {
     pub warning: Option<String>,
 }
 
-fn is_usage_not_configured(core: &Core) -> bool {
+pub fn is_usage_not_configured(core: &Core) -> bool {
     core.try_load_config().is_none() || !is_cloned(core)
 }
 

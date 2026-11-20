@@ -196,7 +196,6 @@ mod tests {
             ("opentrack_3.1.0_amd64.AppImage", ""),
             ("opentrack_3.1.0_amd64.AppImage.sig", "appimage-signature\n"),
             ("opentrack_3.1.0_amd64.deb", ""),
-            ("opentrack_3.1.0_amd64.deb.sig", "deb-signature\n"),
         ]);
         let manifest = updater_manifest("v3.1.0", dir.path(), "bircni/aitrack", "2026-01-01T00:00:00.000Z").unwrap();
         let base = "https://github.com/bircni/aitrack/releases/download/v3.1.0";
@@ -209,7 +208,6 @@ mod tests {
                     "darwin-aarch64": { "signature": "mac-signature", "url": format!("{base}/opentrack.app.tar.gz") },
                     "windows-x86_64": { "signature": "windows-signature", "url": format!("{base}/opentrack_3.1.0_x64-setup.exe") },
                     "linux-x86_64": { "signature": "appimage-signature", "url": format!("{base}/opentrack_3.1.0_amd64.AppImage") },
-                    "linux-x86_64-deb": { "signature": "deb-signature", "url": format!("{base}/opentrack_3.1.0_amd64.deb") },
                 },
             })
         );

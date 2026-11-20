@@ -8,8 +8,11 @@ use std::sync::LazyLock;
 use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 
+use aitrack_core::output::Level;
+
 use crate::app::{Bus, Msg};
 use crate::background::latest_worker;
+use crate::logs::LogOutput;
 
 /// Same JSON the 4.x renderer shipped.
 #[expect(clippy::expect_used, reason = "the bundled dashboard list is fixed at build time and tested")]
@@ -27,9 +30,10 @@ pub fn open_release_notes() -> Result<(), String> {
 }
 
 /// Off the UI thread: macOS delivers notifications through a blocking call.
-pub fn notify(title: String, body: String) {
-    std::thread::spawn(move || {
-        let _ = notify_rust::Notification::new().summary(&title).body(&body).show();
+pub fn notify(log: LogOutput, title: String, body: String) {
+    std::thread::spawn(move || match notify_rust::Notification::new().summary(&title).body(&body).show() {
+        Ok(_) => log.status(Level::Info, "notification", "ok"),
+        Err(error) => log.status(Level::Warn, "notification", &format!("failed: {error}")),
     });
 }
 
@@ -50,9 +54,11 @@ pub struct System {
 
 impl System {
     /// On the main thread: macOS registers hotkeys there.
-    pub fn new(bus: &Bus) -> Self {
+    pub fn new(bus: &Bus, log: &LogOutput) -> Self {
         #[cfg(target_os = "macos")]
-        let _ = notify_rust::set_application("dev.bircni.opentrack");
+        if let Err(error) = notify_rust::set_application("dev.bircni.opentrack") {
+            log.later(Level::Warn, format!("notification setup failed: {error}"));
+        }
         let hotkey_bus = bus.clone();
         GlobalHotKeyEvent::set_event_handler(Some(move |event: GlobalHotKeyEvent| {
             if event.state == HotKeyState::Pressed {
@@ -62,7 +68,10 @@ impl System {
         let launch_bus = bus.clone();
         let launch_at_login = (!cfg!(debug_assertions))
             .then(|| latest_worker(move |enabled| launch_bus.send(Msg::LaunchAtLogin(autostart(enabled).err()))));
-        Self { hotkeys: GlobalHotKeyManager::new().ok(), registered: None, launch_at_login }
+        let hotkeys = GlobalHotKeyManager::new()
+            .inspect_err(|error| log.later(Level::Warn, format!("shortcut unavailable: {error}")))
+            .ok();
+        Self { hotkeys, registered: None, launch_at_login }
     }
 
     /// The outcome comes back on the bus.

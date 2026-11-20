@@ -6,6 +6,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use aitrack_core::output::Level;
 use aitrack_core::time::Clock;
 use eframe::egui::{self, Pos2, Vec2, ViewportCommand};
 use raw_window_handle::HasWindowHandle;
@@ -76,7 +77,6 @@ pub struct App {
     saves: Sender<(u64, Settings)>,
     /// The newest save sent, so an older one's outcome is ignored.
     save_seq: u64,
-    clock: Clock,
     state: Arc<AppState>,
     settings: Settings,
     view: View,
@@ -109,6 +109,7 @@ impl App {
         background: Arc<Background>,
         data_dir: PathBuf,
         listener: Listener,
+        request: Option<Request>,
     ) -> Self {
         let ctx = cc.egui_ctx.clone();
         let fresh = crate::whats_new::is_fresh(&data_dir);
@@ -116,13 +117,13 @@ impl App {
         let (tx, rx) = channel();
         let bus = Bus { tx, ctx: ctx.clone() };
         let show_bus = bus.clone();
-        crate::instance::listen(listener, move |request| {
+        crate::instance::listen(listener, request, move |request| {
             let screen = if request == Request::Settings { Screen::Settings } else { Screen::Dashboard };
             show_bus.send(Msg::Show(screen));
         });
-        let tray = Tray::new(&bus);
-        let system = System::new(&bus);
-        let updater = Updater::default();
+        let tray = Tray::new(&bus, background.log());
+        let system = System::new(&bus, background.log());
+        let updater = Updater::new(background.log().clone());
         updater.watch(bus.clone());
         let events = bus.clone();
         background.start(move |event| {
@@ -145,7 +146,6 @@ impl App {
             bus,
             saves: save_count,
             save_seq: 0,
-            clock: Clock::system(),
             view: View::default(),
             marks: ProviderMarks::load(&ctx),
             panel: PanelState::default(),
@@ -256,6 +256,9 @@ impl App {
         }
         if old.as_ref().is_none_or(|old| old.global_shortcut != settings.global_shortcut) {
             self.setting_errors.global_shortcut = self.system.set_shortcut(&settings.global_shortcut);
+            if let Some(error) = &self.setting_errors.global_shortcut {
+                self.background.log().later(Level::Warn, format!("shortcut failed: {error}"));
+            }
         }
     }
 
@@ -272,7 +275,9 @@ impl App {
                         self.sync_note = Some((result.message.clone(), Instant::now() + SYNC_NOTE_FOR));
                     }
                 }
-                Some(Run::Refresh) => log_outcome(&refresh_outcome(&state)),
+                Some(Run::Refresh) => {
+                    self.background.log().later(Level::Info, format!("refresh asked: {}", refresh_outcome(&state)));
+                }
                 _ => {}
             }
         }
@@ -307,8 +312,13 @@ impl App {
                     Err(error) => self.settings_error = Some(error),
                 },
                 Msg::Settings(_) | Msg::Saved(..) => {}
-                Msg::LaunchAtLogin(error) => self.setting_errors.launch_at_login = error,
-                Msg::Alert { title, body } => notify(title, body),
+                Msg::LaunchAtLogin(error) => {
+                    if let Some(error) = &error {
+                        self.background.log().later(Level::Warn, format!("launch-at-login failed: {error}"));
+                    }
+                    self.setting_errors.launch_at_login = error;
+                }
+                Msg::Alert { title, body } => notify(self.background.log().clone(), title, body),
                 Msg::Tray(image) => self.tray.set(image),
                 Msg::UpdateFound(version) => {
                     self.update.check = if version.is_some() { UpdateCheck::Idle } else { UpdateCheck::Current };
@@ -344,7 +354,8 @@ impl App {
             }
             Action::OpenDashboard(provider) => {
                 if let Err(error) = open_dashboard(&provider) {
-                    log_outcome(&error);
+                    let event = format!("dashboard-open failed provider={provider}: {error}");
+                    self.background.log().later(Level::Warn, event);
                 }
             }
             Action::Hide => self.hide(ctx),
@@ -361,19 +372,19 @@ impl App {
             }
             Action::OpenReleaseNotes => {
                 if let Err(error) = open_release_notes() {
-                    log_outcome(&error);
+                    self.background.log().later(Level::Warn, format!("release-notes-open failed: {error}"));
                 }
             }
             Action::ExportLogs => {
-                crate::logs::export(self.data_dir.clone(), crate::logs::archive_name(&self.clock), self.bus.clone());
+                crate::logs::export(
+                    self.data_dir.clone(),
+                    crate::logs::archive_name(&Clock::system()),
+                    self.bus.clone(),
+                );
             }
             Action::StartDrag => ctx.send_viewport_cmd(ViewportCommand::StartDrag),
         }
     }
-}
-
-fn log_outcome(message: &str) {
-    eprintln!("opentrack: {message}");
 }
 
 impl eframe::App for App {
@@ -418,16 +429,17 @@ impl eframe::App for App {
         }
         let ctx = ui.ctx().clone();
         let palette = Palette::for_dark(ctx.theme() == egui::Theme::Dark);
+        let clock = Clock::system(); // Each frame, so a changed system zone shows without a restart.
         #[expect(
             clippy::cast_precision_loss,
             reason = "counts and millisecond times stay far below 2^53, like the JavaScript numbers 4.x used"
         )]
-        let now = self.clock.now().as_millisecond() as f64;
+        let now = clock.now().as_millisecond() as f64;
         let (actions, height) = {
             let model = Model {
                 state: &self.state,
                 settings: &self.settings,
-                clock: &self.clock,
+                clock: &clock,
                 now,
                 update: &self.update,
                 setting_errors: &self.setting_errors,
