@@ -154,7 +154,7 @@ pub fn run(core: &Core, args: &InitArgs) -> Outcome {
             return Ok(abort(core));
         }
         core.output.info(&format!("Replacing the clone at {repo} with {}...", redact_url(&repo_url)));
-        replace_local_clone(core, &repo_url)?;
+        core.with_repo_lock(|_| replace_local_clone(core, &repo_url))?;
         let base = existing.clone().unwrap_or_default();
         save_config(path, &Config { repo_url: repo_url.clone(), ..base })?; // Already true of the clone.
     } else if was_cloned {
@@ -164,7 +164,7 @@ pub fn run(core: &Core, args: &InitArgs) -> Outcome {
         if let Some(parent) = core.paths.repo.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        clone_repo(&repo_url, &core.paths.repo)?;
+        core.with_repo_lock(|_| clone_repo(&repo_url, &core.paths.repo))?;
     }
 
     // Renames staged data too, so it runs first: an adopted file is untracked, and the rename's `git add` fails on it.

@@ -1,5 +1,6 @@
 //! The settings every machine can use, shared through the aitrack data repo: the newest change wins.
 
+use aitrack_core::error::Error;
 use aitrack_core::git::{commit_and_push_shared_settings, is_cloned};
 use aitrack_core::store::shared_settings::{read_shared_settings, write_shared_settings, SharedSettings};
 use aitrack_core::time::iso_millis;
@@ -8,8 +9,8 @@ use aitrack_core::Core;
 use crate::settings::Settings;
 use crate::usage::GIT_TIMEOUT;
 
-fn take_newer(core: &Core, settings: &mut Settings) -> Result<Option<SharedSettings>, String> {
-    let shared = read_shared_settings(core).map_err(|error| error.to_string())?;
+fn take_newer(core: &Core, settings: &mut Settings) -> Result<Option<SharedSettings>, Error> {
+    let shared = read_shared_settings(core)?;
     let newer = |shared: &&SharedSettings| settings.shared_time().is_none_or(|own| shared.updated_at > own);
     if let Some(shared) = shared.as_ref().filter(newer) {
         *settings = settings.with_shared(&shared.settings);
@@ -22,7 +23,7 @@ fn take_newer(core: &Core, settings: &mut Settings) -> Result<Option<SharedSetti
 /// `settings` when they are the newer ones. `settings` holds the outcome even when the push fails.
 pub fn reconcile(core: &Core, settings: &mut Settings, push: bool) -> Result<(), String> {
     let Some(config) = core.try_load_config().filter(|_| is_cloned(core)) else { return Ok(()) };
-    core.with_repo_lock(|guard| {
+    let reconciled: Result<(), Error> = core.with_repo_lock(|guard| {
         let shared = take_newer(core, settings)?;
         // Once encrypted it stays so: another machine's config may not ask for it.
         let encrypt = config.encrypt_data == Some(true) || shared.as_ref().is_some_and(|shared| shared.encrypted);
@@ -36,12 +37,13 @@ pub fn reconcile(core: &Core, settings: &mut Settings, push: bool) -> Result<(),
         settings.shared_at = Some(iso_millis(updated_at));
         let mut merged = shared.map(|shared| shared.settings).unwrap_or_default();
         merged.extend(settings.shared());
-        write_shared_settings(core, updated_at, &merged, encrypt).map_err(|error| error.to_string())?;
+        write_shared_settings(core, updated_at, &merged, encrypt)?;
         let git = guard.git().clone().with_timeout(Some(GIT_TIMEOUT));
         let pushed = commit_and_push_shared_settings(core, guard, &git);
         take_newer(core, settings)?; // The push may have replayed this commit under another machine's newer one.
-        pushed.map(|_| ()).map_err(|error| error.to_string())
-    })
+        Ok(pushed.map(|_| ())?)
+    });
+    reconciled.map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

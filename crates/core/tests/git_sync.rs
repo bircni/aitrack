@@ -230,6 +230,8 @@ fn commit_unpushed(m: &Machine, subject: &str, day: &str) {
 
 #[test]
 fn merges_a_diverged_sync_commit_per_day_but_never_a_recompute_commit() {
+    use aitrack_core::git::{GitError, pull};
+
     let root = tempfile::tempdir().unwrap();
     let remote = remote(root.path());
     let first = Machine::new(root.path(), "first", &remote, &[("machineId", "\"a\"")]);
@@ -240,6 +242,23 @@ fn merges_a_diverged_sync_commit_per_day_but_never_a_recompute_commit() {
     commit_unpushed(&second, "sync: a at earlier", "2026-03-01");
     first.log_day("s.jsonl", "2026-03-09", "m2", 70);
     sync_data(&first.core().0, SyncOptions::default()).unwrap();
+
+    let (holder, mut other) = (second.core().0, second.core().0); // Two processes, as far as the lock can tell.
+    other.repo_lock_wait = std::time::Duration::ZERO;
+    let held = holder.with_repo_lock(|_| {
+        let rebase = Command::new("git").args(["pull", "--rebase", "-q"]).current_dir(second.repo()).output().unwrap();
+        assert!(!rebase.status.success(), "stops on the conflict");
+        let refused = other.with_repo_lock(|guard| pull(&other, guard, guard.git())).unwrap_err();
+        assert_eq!(
+            refused.to_string(),
+            "Another aitrack process is using the data repo. Try again once it has finished."
+        );
+        assert!(second.repo().join(".git/rebase-merge").exists(), "the other process's rebase is left alone");
+        git(&second.repo(), &["rebase", "--abort"]);
+        Ok::<_, GitError>(())
+    });
+    held.unwrap();
+    assert_eq!(git(&second.repo(), &["status", "--porcelain"]), "", "the lock file is outside the clone");
 
     second.log_day("s.jsonl", "2026-03-08", "m1", 100);
     let merged = sync_data(&second.core().0, SyncOptions::default()).unwrap();
