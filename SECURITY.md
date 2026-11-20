@@ -26,7 +26,7 @@
 
 ## Desktop app
 
-opentrack's dashboard runs under a content security policy that allows only the app's own scripts and styles, no inline ones, and connections only to the app's IPC. Network requests come from its background service and Rust shell, not the dashboard.
+opentrack is one native process with no webview. So that a second launch can bring the running one forward, it listens on a loopback port and acts only on a request to show the dashboard or Settings that carries the token it wrote to `opentrack.port` in its data folder (readable only by your user on macOS and Linux).
 
 ## Reporting vulnerabilities
 
