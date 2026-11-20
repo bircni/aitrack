@@ -48,11 +48,10 @@ Both are drawn the way `aitrack show` draws its heatmap: in cells, in each provi
   the "O". Turn off **Colored tray icon** for monochrome; macOS adapts it to the menu-bar appearance.
   A limit whose reset has passed is left out until fresh numbers arrive.
 
-Dates, times and numbers follow the system language: grouping, decimal separators and clock
-format. Costs stay in US dollars. The interface text is English only. Limit meters expose their
-value to screen readers, the results of a refresh or sync you start are announced politely, focus
-is always visible, and with reduced motion enabled the spinners stop and sections expand without
-sliding.
+Dates, times and numbers are written the US English way whatever the system language: a 12-hour
+clock, commas between thousands and a decimal point. Costs are in US dollars and the interface
+text is English only. Limit meters expose their value to screen readers, and the control that has
+keyboard focus is outlined.
 
 The popup opens next to the tray, takes the height of what it shows and hides when you click
 elsewhere. **Keep open** in Settings turns it into a window that stays open and keeps the place you
@@ -60,7 +59,8 @@ drag it to by its footer. The footer's compact button switches to the
 **compact view**: one line per enabled provider with its session limit, and the limit that needs
 attention when there is one. Closing the window
 hides it; quit from the tray menu or the Quit button in Settings. Escape leaves Settings, and
-otherwise hides the popup, but not a window kept open.
+otherwise hides the popup, but not a window kept open. Starting opentrack while it is running
+shows the running one's dashboard, or its Settings with `opentrack --settings`.
 
 ## When something is wrong
 
@@ -72,11 +72,6 @@ otherwise hides the popup, but not a window kept open.
   and say which, never `$0.00`. A real zero still shows `$0.00`.
 - **Old limits** — a limit past its reset reads "Reset passed, waiting for new data". Limits kept
   from an earlier fetch show no pace. The footer's age is that of the oldest limits on screen.
-- **Background service** — if it cannot start or keeps crashing, the dashboard shows a banner with
-  the reason, the footer says it stopped, and Refresh and Sync are disabled. The last numbers stay,
-  as cached ones, and the dashboard reloads when the service recovers. A request the service does
-  not answer within 30 seconds fails with an error. Only 300 seconds with no output while an answer
-  is owed restarts it, and a second such restart in a row counts as down; any `git` it was running continues until its own timeout.
 
 ## Where data comes from
 
@@ -123,9 +118,8 @@ Quota and usage update times advance only after successful updates and survive a
 restarts. Failed refreshes display the age of retained data. Mixed priced/unpriced
 usage displays a partial estimate rather than implying a complete dollar total.
 
-Refresh and sync command-delivery failures show retry controls separately from operation
-failures. Failed settings saves keep the newest queued changes and provide a retry;
-pushed settings cannot overwrite those pending edits.
+A failed refresh, sync or settings save shows its error with a Retry. Until a failed save
+succeeds, settings shared by another machine do not replace the changes it holds.
 
 Shortly after launch and every six hours, opentrack fetches `latest.json` from the latest
 GitHub release. When it lists a newer version, the dashboard offers **Install and restart**;
@@ -225,8 +219,8 @@ not start them. The behaviour differs from macOS and Windows in a few places:
   Claude Code's `.credentials.json` in `$CLAUDE_CONFIG_DIR`, `~/.config/claude` or `~/.claude`, and
   Codex's `auth.json` in `$CODEX_HOME`, `~/.codex` or `~/.config/codex`.
 - **Updates** — the AppImage replaces itself in place, so keep it in a folder you can write
-  to. A `.deb` install updates by installing the new package and asks for your password
-  through `pkexec`.
+  to. A `.deb` install does not update itself; install the new package with your package
+  manager.
 - **AppImage** — needs FUSE 2 to start (`libfuse2`, or `libfuse2t64` on Ubuntu 24.04); use the
   `.deb` otherwise.
 

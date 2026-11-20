@@ -71,7 +71,7 @@ provider limits alongside the usage history and cost estimates used by aitrack.
 
 - Session, weekly and per-model limits where the provider exposes them.
 - Reset times, pacing indicators and notifications when limits are running low.
-- Today, yesterday and 30-day usage with daily trends and model breakdowns.
+- Usage for today, 7 days, 30 days or all time, with a daily heatmap and breakdowns by model, project and machine.
 - A configurable tray icon or bars for your available limits, with colour or monochrome rendering.
 - A tray popup with a compact view, a keep-open mode, global shortcut and optional launch at login.
 

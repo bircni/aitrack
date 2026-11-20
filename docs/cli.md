@@ -309,10 +309,10 @@ The repo can also hold `opentrack/settings.json`, which opentrack writes when it
 
 ## Upgrading from 4.x
 
-aitrack 5.0 is a native binary instead of a Node.js program; `npm install -g aitrack` and `npx aitrack`
-fetch the binary for your platform. Machine files, `config.json`, encrypted files, the pricing cache
-and opentrack's settings keep their format, so 4.x and 5.0 machines can sync into the same repo and
-an upgrade keeps everything. Visible differences:
+aitrack 5 is a native binary instead of a Node.js program; `npm install -g aitrack` and `npx aitrack`
+fetch the binary for your platform. An upgrade keeps your machine files, `config.json`, encrypted
+files and opentrack's settings. 4.x gets no further updates and new releases are not kept
+compatible with it, so upgrade every machine that syncs into the repo. Visible differences:
 
 - The PNG heatmap uses an embedded DejaVu Sans font instead of the system's Arial, so labels are
   slightly wider.
@@ -321,4 +321,6 @@ an upgrade keeps everything. Visible differences:
 - `aitrack completion <shell>` prints different, equivalent completion scripts.
 - `doctor` no longer reports the Node.js version.
 - The first run after the upgrade re-reads the logs once, since the parse cache format changed.
+- Cursor is no longer tracked: `--providers cursor` is rejected and a `cursor` entry in settings or
+  caches is ignored.
 - `aitrack-lib` is discontinued; see the [library note](library.md).
