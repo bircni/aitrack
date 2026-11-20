@@ -78,6 +78,8 @@ pub enum UpdateCheck {
 pub struct UpdateStatus {
     /// A newer version the latest release offers.
     pub available: Option<String>,
+    /// How to get it when this install cannot update itself, as a `.deb` one cannot.
+    pub manual: Option<String>,
     pub installing: bool,
     pub error: Option<String>,
     pub check: UpdateCheck,
@@ -89,14 +91,20 @@ impl UpdateStatus {
         if self.installing {
             return format!("Installing {name}…");
         }
+        if let Some(how) = &self.manual {
+            return format!("{name} is available. {how}");
+        }
         self.error.as_ref().map_or_else(|| format!("{name} is available"), |e| format!("Could not install {name}: {e}"))
     }
 
-    const fn install_label(&self) -> &'static str {
-        if self.error.is_some() {
-            "Retry"
+    /// The install action, unless one is running or could only fail.
+    const fn install_label(&self) -> Option<&'static str> {
+        if self.installing || self.manual.is_some() {
+            None
+        } else if self.error.is_some() {
+            Some("Retry")
         } else {
-            "Install and restart"
+            Some("Install and restart")
         }
     }
 }
@@ -302,7 +310,7 @@ fn body(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) 
             let update = model.update;
             banner(ui, &palette, |ui| {
                 ui.label(text(update.offer(&format!("opentrack {version}")), 12.0, palette.ink2));
-                if !update.installing && link(ui, &palette, update.install_label(), true).clicked() {
+                if update.install_label().is_some_and(|label| link(ui, &palette, label, true).clicked()) {
                     frame.act(Action::InstallUpdate);
                 }
             });
@@ -382,5 +390,20 @@ fn footer_bar(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame
     });
     if busy {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::UpdateStatus;
+
+    #[test]
+    fn offers_no_install_to_a_copy_that_cannot_update_itself() {
+        let mut update = UpdateStatus { available: Some("9.0.0".into()), ..UpdateStatus::default() };
+        assert_eq!(update.install_label(), Some("Install and restart"));
+        assert_eq!(update.offer("9.0.0"), "9.0.0 is available");
+        update.manual = Some("Use your package manager.".into());
+        assert_eq!(update.install_label(), None);
+        assert_eq!(update.offer("9.0.0"), "9.0.0 is available. Use your package manager.");
     }
 }

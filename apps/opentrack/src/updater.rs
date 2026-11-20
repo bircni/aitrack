@@ -89,9 +89,18 @@ fn newer_release() -> Result<Option<Release>, String> {
     Ok(is_newer(&release.version, env!("CARGO_PKG_VERSION")).then_some(release))
 }
 
-fn install_and_relaunch(release: &Release) -> Result<(), String> {
+fn running_target() -> Result<InstallTarget, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let target = InstallTarget::running(&exe, std::env::var_os("APPIMAGE").map(PathBuf::from))?;
+    InstallTarget::running(&exe, std::env::var_os("APPIMAGE").map(PathBuf::from))
+}
+
+/// How to get a newer release when this copy cannot install it itself.
+pub fn manual_update() -> Option<String> {
+    running_target().err()
+}
+
+fn install_and_relaunch(release: &Release) -> Result<(), String> {
+    let target = running_target()?;
     let file = download_verified(&UreqClient::default(), release)?;
     if let Some(mut relaunch) = target.replace_running(&file)? {
         crate::instance::release(); // So the new copy starts as the only one while this one exits.

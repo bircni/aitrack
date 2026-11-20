@@ -124,7 +124,7 @@ succeeds, settings shared by another machine do not replace the changes it holds
 Shortly after launch and every six hours, opentrack fetches `latest.json` from the latest
 GitHub release. When it lists a newer version, the dashboard offers **Install and restart**;
 the download must carry a signature from the release key or it is refused. On Linux only
-the AppImage updates itself; a `.deb` install updates through the package manager. A release withdrawn
+the AppImage updates itself; a `.deb` install is told of the new version without that action. A release withdrawn
 after being offered stops being offered at the next check. Development builds never check.
 
 The first time a version starts, after an update or a first install, the dashboard shows a
@@ -230,8 +230,8 @@ not start them. The behaviour differs from macOS and Windows in a few places:
   Claude Code's `.credentials.json` in `$CLAUDE_CONFIG_DIR`, `~/.config/claude` or `~/.claude`, and
   Codex's `auth.json` in `$CODEX_HOME`, `~/.codex` or `~/.config/codex`.
 - **Updates** — the AppImage replaces itself in place, so keep it in a folder you can write
-  to. A `.deb` install does not update itself; install the new package with your package
-  manager.
+  to. A `.deb` install cannot: it shows that a new version is available, and you install the new
+  `.deb` from the GitHub release with your package manager.
 - **AppImage** — needs FUSE 2 to start (`libfuse2`, or `libfuse2t64` on Ubuntu 24.04); use the
   `.deb` otherwise.
 

@@ -401,15 +401,13 @@ fn about(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>)
         let failed = update.error.is_some() || matches!(update.check, UpdateCheck::Failed(_));
         let (hint, error) = if failed { (None, Some(status.as_str())) } else { (Some(status.as_str()), None) };
         line(ui, &palette, "Updates", hint, error, 130.0, |ui| {
-            if update.available.is_some() && !update.installing {
-                if link(ui, &palette, update.install_label(), true).clicked() {
-                    frame.act(Action::InstallUpdate);
-                }
-            } else if update.available.is_none() {
+            if update.available.is_none() {
                 let checking = update.check == UpdateCheck::Checking;
                 if link(ui, &palette, "Check now", !checking).clicked() {
                     frame.act(Action::CheckUpdate);
                 }
+            } else if update.install_label().is_some_and(|label| link(ui, &palette, label, true).clicked()) {
+                frame.act(Action::InstallUpdate);
             }
         });
         rule(ui, &palette);

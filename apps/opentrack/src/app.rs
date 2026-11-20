@@ -157,7 +157,7 @@ impl App {
             setting_errors: SettingErrors::default(),
             settings_error: None,
             applied: None,
-            update: UpdateStatus::default(),
+            update: UpdateStatus { manual: crate::updater::manual_update(), ..UpdateStatus::default() },
             updater,
             user_run: None,
             sync_note: None,
