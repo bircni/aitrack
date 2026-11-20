@@ -4,7 +4,7 @@
 - PR descriptions: minimal, only what and why, no task or file listings
 - Never rewrite git history unless asked; update PRs with new commits and a normal push
 - Comments: write almost none, short and preferably same-line, explaining why for a future reader. Never narrate code, the change or the prompt
-- Files other aitrack versions read (machine files, config, caches) must stay byte-compatible: go through `aitrack_core::js` for numbers, collation and JSON
+- Files other released 5.x versions read (machine files, config, shared settings, pricing packs) must stay byte-compatible: go through `aitrack_core::js` for numbers, collation and JSON
 - Fix the cause rather than disabling a linter or weakening a test
 - Write the fewest, fastest tests covering the behaviour, extending an existing one where possible
 - Cover local-calendar-day edge cases by passing a `Clock` (`Clock::fixed`, `Clock::with_zone`) in Pacific/Kiritimati, UTC and Pacific/Midway, not by changing `TZ`

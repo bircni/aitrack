@@ -10,7 +10,7 @@ use aitrack_core::display::style;
 use clap::Args;
 use serde_json::json;
 
-use super::args::{PROVIDERS_HELP, Providers, parse_providers, warn_stdout_path};
+use super::args::{PROVIDERS_HELP, Providers, parse_output_path, parse_providers};
 use super::report::{load, not_configured};
 use crate::json::print_json_command;
 use crate::{Failure, Outcome};
@@ -21,7 +21,7 @@ pub struct ExportArgs {
     pub window: Option<String>,
     pub args: Vec<String>,
     /// output path (default: aitrack-receipt.pdf, or .csv with --csv)
-    #[arg(short, long, value_name = "path")]
+    #[arg(short, long, value_name = "path", value_parser = parse_output_path)]
     pub output: Option<PathBuf>,
     /// write a spreadsheet-friendly CSV instead of the PDF receipt
     #[arg(long)]
@@ -53,7 +53,6 @@ fn report_options(args: &ExportArgs) -> Result<ReportOptions, Failure> {
 }
 
 pub fn run(core: &Core, args: &ExportArgs) -> Outcome {
-    warn_stdout_path(core, args.output.as_deref());
     let options = report_options(args)?;
     let providers = args.providers.as_deref();
     let loaded = load(core, providers, None)?;
