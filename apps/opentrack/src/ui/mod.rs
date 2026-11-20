@@ -3,6 +3,7 @@
 mod dashboard;
 pub mod format;
 pub mod icons;
+mod notes;
 mod settings_screen;
 pub mod theme;
 mod views;
@@ -17,10 +18,11 @@ use eframe::egui::{self, Align, Color32, CornerRadius, Layout, Mesh, Rect, Scrol
 use self::format::{freshness_line, Period, UsageGrid};
 use self::icons::{Glyph, ProviderMarks};
 use self::theme::Palette;
-use self::widgets::{banner, icon_button, link, spin_angle, text, IconButton};
+use self::widgets::{banner, closable_banner, icon_button, link, spin_angle, text, IconButton};
 use crate::settings::Settings;
 use crate::state::AppState;
 use crate::system::SettingErrors;
+use crate::whats_new;
 
 pub const WIDTH: f32 = 340.0;
 /// The height before the first layout measures the content.
@@ -31,6 +33,7 @@ const FOOTER_HEIGHT: f32 = 48.0;
 pub enum Screen {
     Dashboard,
     Settings,
+    Notes,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,6 +61,7 @@ pub enum Action {
     CheckUpdate,
     InstallUpdate,
     ExportLogs,
+    OpenReleaseNotes,
     StartDrag,
 }
 
@@ -74,6 +78,8 @@ pub enum UpdateCheck {
 pub struct UpdateStatus {
     /// A newer version the latest release offers.
     pub available: Option<String>,
+    /// How to get it when this install cannot update itself, as a `.deb` one cannot.
+    pub manual: Option<String>,
     pub installing: bool,
     pub error: Option<String>,
     pub check: UpdateCheck,
@@ -85,14 +91,20 @@ impl UpdateStatus {
         if self.installing {
             return format!("Installing {name}…");
         }
+        if let Some(how) = &self.manual {
+            return format!("{name} is available. {how}");
+        }
         self.error.as_ref().map_or_else(|| format!("{name} is available"), |e| format!("Could not install {name}: {e}"))
     }
 
-    const fn install_label(&self) -> &'static str {
-        if self.error.is_some() {
-            "Retry"
+    /// The install action, unless one is running or could only fail.
+    const fn install_label(&self) -> Option<&'static str> {
+        if self.installing || self.manual.is_some() {
+            None
+        } else if self.error.is_some() {
+            Some("Retry")
         } else {
-            "Install and restart"
+            Some("Install and restart")
         }
     }
 }
@@ -144,6 +156,8 @@ pub struct View {
     pub open_row: Option<String>,
     pub shortcut: Option<String>,
     pub scroll_to_top: bool,
+    /// Where Back leaves the release notes for.
+    notes_from: Screen,
     grid: Memo<Period, UsageGrid>,
     machine_rows: Memo<Period, Vec<views::Row>>,
 }
@@ -158,9 +172,18 @@ impl Default for View {
             open_row: None,
             shortcut: None,
             scroll_to_top: false,
+            notes_from: Screen::Dashboard,
             grid: Memo::default(),
             machine_rows: Memo::default(),
         }
+    }
+}
+
+impl View {
+    const fn open_notes(&mut self) {
+        self.notes_from = self.screen;
+        self.screen = Screen::Notes;
+        self.scroll_to_top = true;
     }
 }
 
@@ -249,10 +272,11 @@ fn handle_keys(ui: &Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_
         (i.key_pressed(egui::Key::Escape), i.key_pressed(egui::Key::ArrowLeft), i.key_pressed(egui::Key::ArrowRight))
     });
     if escape && !typing {
-        if view.screen == Screen::Settings {
-            view.screen = Screen::Dashboard;
-        } else if !model.settings.keep_open {
-            frame.act(Action::Hide);
+        match view.screen {
+            Screen::Settings => view.screen = Screen::Dashboard,
+            Screen::Notes => view.screen = view.notes_from,
+            Screen::Dashboard if !model.settings.keep_open => frame.act(Action::Hide),
+            Screen::Dashboard => {}
         }
     }
     if view.screen == Screen::Dashboard && !typing && (left || right) {
@@ -286,14 +310,27 @@ fn body(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) 
             let update = model.update;
             banner(ui, &palette, |ui| {
                 ui.label(text(update.offer(&format!("opentrack {version}")), 12.0, palette.ink2));
-                if !update.installing && link(ui, &palette, update.install_label(), true).clicked() {
+                if update.install_label().is_some_and(|label| link(ui, &palette, label, true).clicked()) {
                     frame.act(Action::InstallUpdate);
                 }
             });
+        } else if let Some(title) = whats_new::banner(model.settings) {
+            let mut open = false;
+            let closed = closable_banner(ui, &palette, |ui| {
+                ui.label(text(title, 12.0, palette.ink2));
+                open = link(ui, &palette, "What's new", true).clicked();
+            });
+            if open {
+                view.open_notes();
+            }
+            if open || closed {
+                frame.patch(model.settings, whats_new::dismiss);
+            }
         }
     }
     match view.screen {
         Screen::Settings => settings_screen::show(ui, view, model, frame),
+        Screen::Notes => notes::show(ui, view, frame),
         Screen::Dashboard if model.settings.compact => dashboard::compact(ui, model, frame),
         Screen::Dashboard => dashboard::show(ui, view, model, frame),
     }
@@ -353,5 +390,20 @@ fn footer_bar(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame
     });
     if busy {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::UpdateStatus;
+
+    #[test]
+    fn offers_no_install_to_a_copy_that_cannot_update_itself() {
+        let mut update = UpdateStatus { available: Some("9.0.0".into()), ..UpdateStatus::default() };
+        assert_eq!(update.install_label(), Some("Install and restart"));
+        assert_eq!(update.offer("9.0.0"), "9.0.0 is available");
+        update.manual = Some("Use your package manager.".into());
+        assert_eq!(update.install_label(), None);
+        assert_eq!(update.offer("9.0.0"), "9.0.0 is available. Use your package manager.");
     }
 }

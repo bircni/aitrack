@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use std::time::Duration;
 
@@ -23,9 +23,6 @@ const GIT_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Args)]
 pub struct DoctorArgs {
-    /// run the pricing drift script from a source checkout
-    #[arg(long)]
-    pub pricing_check: bool,
     /// print machine-readable JSON
     #[arg(long)]
     pub json: bool,
@@ -99,55 +96,6 @@ fn pricing_cache_check(core: &Core) -> Check {
     )
 }
 
-/// The aitrack repo is what carries the check.
-fn is_aitrack_checkout(directory: &Path) -> bool {
-    directory.join("crates/xtask/Cargo.toml").is_file()
-}
-
-/// Exit status and output, stderr first.
-fn run_command(program: &str, args: &[&str], cwd: Option<&Path>) -> (bool, String) {
-    let mut command = Command::new(program);
-    command.args(args);
-    if let Some(cwd) = cwd {
-        command.current_dir(cwd);
-    }
-    match command.output() {
-        Ok(out) => {
-            let parts: Vec<String> = [&out.stderr, &out.stdout]
-                .iter()
-                .map(|b| String::from_utf8_lossy(b).trim().to_owned())
-                .filter(|s| !s.is_empty())
-                .collect();
-            (out.status.success(), parts.join("\n"))
-        }
-        Err(_) => (false, String::new()),
-    }
-}
-
-fn pricing_drift_check() -> Check {
-    let label = "Pricing drift";
-    let cwd = std::env::current_dir().unwrap_or_default();
-    // The check exists only in a source checkout; elsewhere cargo would fail confusingly.
-    if !is_aitrack_checkout(&cwd) {
-        return check(
-            Status::Warn,
-            label,
-            "not an aitrack source checkout; run doctor --pricing-check from the aitrack repo root",
-        );
-    }
-    match run_command("cargo", &["xtask", "pricing-check"], Some(&cwd)) {
-        (true, _) => check(Status::Ok, label, "cargo xtask pricing-check passed"),
-        (false, output) if !output.is_empty() => {
-            check(Status::Warn, label, format!("cargo xtask pricing-check failed: {output}"))
-        }
-        _ => check(
-            Status::Warn,
-            label,
-            "cargo xtask pricing-check did not pass; run from the aitrack repo root and inspect its output",
-        ),
-    }
-}
-
 fn duplicate_machine_check(core: &Core) -> Check {
     let label = "Machine identities";
     let mut unreadable = Vec::new();
@@ -211,11 +159,11 @@ fn git_check(
     }
 }
 
-fn collect_checks(core: &Core, args: &DoctorArgs) -> Vec<Check> {
+fn collect_checks(core: &Core) -> Vec<Check> {
     let loaded = read_config(&core.paths.config);
     let mut checks = Vec::new();
     // Not the repo's git runner: the clone may not exist yet.
-    let has_git = run_command("git", &["--version"], None).0;
+    let has_git = Command::new("git").arg("--version").output().is_ok_and(|out| out.status.success());
     checks.push(check(
         if has_git { Status::Ok } else { Status::Fail },
         "git",
@@ -286,14 +234,11 @@ fn collect_checks(core: &Core, args: &DoctorArgs) -> Vec<Check> {
     checks.extend(repo_checks);
     checks.extend(provider_checks);
     checks.push(pricing);
-    if args.pricing_check {
-        checks.push(pricing_drift_check());
-    }
     checks
 }
 
 pub fn run(core: &Core, args: &DoctorArgs) -> ExitCode {
-    let checks = collect_checks(core, args);
+    let checks = collect_checks(core);
     let has_failures = checks.iter().any(|c| c.status == Status::Fail);
     if args.json {
         print_json_command("doctor", json!({ "checks": checks, "hasFailures": has_failures }));

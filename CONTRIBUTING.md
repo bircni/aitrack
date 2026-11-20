@@ -38,7 +38,7 @@ crates/
       git/, sync.rs   The data repo: clone, pull, rebase, push
       quota/          Live limits per provider
       display/        Terminal table, TUI, CSV, PDF, and the PNG heatmap (feature `render`)
-      js/             Number formatting, collation and parsing as 4.x did, for byte-compatible files
+      js/             Number formatting, collation and JSON as JavaScript does, so files other 5.x versions read stay byte-compatible
     pricing-tables/   claude.json, codex.json: editable first-party rates
     tests/fixtures/   Golden outputs recorded from 4.x (see its README)
   cli/                The `aitrack` binary (clap)

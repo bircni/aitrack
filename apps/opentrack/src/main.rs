@@ -24,11 +24,13 @@ mod tray_icon;
 mod ui;
 mod updater;
 mod usage;
+mod whats_new;
 #[cfg(windows)]
 mod windows;
 
 use std::path::PathBuf;
 
+use aitrack_core::output::Level;
 use eframe::egui;
 
 use crate::background::{smoke_test_line, Background};
@@ -41,7 +43,8 @@ struct Args {
     /// The installer checks that a packaged build starts and reads its settings, without touching
     /// provider credentials, usage logs or the sync repo.
     smoke_test: bool,
-    request: Request,
+    /// `None` starts in the tray.
+    request: Option<Request>,
 }
 
 impl Args {
@@ -51,7 +54,7 @@ impl Args {
         Self {
             data_dir: args.iter().position(|arg| arg == "--data-dir").and_then(|i| args.get(i + 1)).map(PathBuf::from),
             smoke_test: has("--smoke-test"),
-            request: if has("--settings") { Request::Settings } else { Request::Show },
+            request: has("--settings").then_some(Request::Settings),
         }
     }
 }
@@ -64,16 +67,18 @@ fn main() -> eframe::Result {
         return Ok(());
     }
     let dir = args.data_dir.unwrap_or_else(data_dir);
-    let listener = match claim(&dir, args.request) {
+    let listener = match claim(&dir, args.request.unwrap_or(Request::Show)) {
         Ok(Some(listener)) => listener,
         Ok(None) => return Ok(()),
         Err(error) => {
             eprintln!("opentrack: {}: {error}", dir.display());
+            logs::LogOutput::append(&dir).event(Level::Error, &format!("instance failed: {error}"));
             return Ok(());
         }
     };
     platform::prepare();
     let background = Background::open(&dir);
+    background.log().event(Level::Info, &logs::start_line(&dir));
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("opentrack")
@@ -91,6 +96,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "opentrack",
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, background, dir, listener)))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, background, dir, listener, args.request)))),
     )
 }

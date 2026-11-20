@@ -9,8 +9,9 @@ use super::theme::Palette;
 use super::widgets::{icon_button, link, strong, switch, text, IconButton};
 use super::{Action, Frame, Model, Screen, UpdateCheck, View};
 use crate::settings::{Settings, ALERT_THRESHOLDS};
+use crate::whats_new;
 
-fn group(ui: &mut Ui, palette: &Palette, title: &str, add: impl FnOnce(&mut Ui)) {
+pub fn group(ui: &mut Ui, palette: &Palette, title: &str, add: impl FnOnce(&mut Ui)) {
     EguiFrame::new().outer_margin(Margin { left: 12, right: 12, top: 0, bottom: 14 }).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.label(strong(title, 12.0, palette.ink2));
@@ -57,7 +58,7 @@ fn line(
     });
 }
 
-fn rule(ui: &mut Ui, palette: &Palette) {
+pub fn rule(ui: &mut Ui, palette: &Palette) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), Sense::hover());
     ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(1.0, palette.rule));
 }
@@ -133,7 +134,7 @@ pub fn show(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'
     providers(ui, model, frame);
     display(ui, model, frame);
     general(ui, view, model, frame);
-    about(ui, model, frame);
+    about(ui, view, model, frame);
     quit(ui, frame);
 }
 
@@ -373,12 +374,21 @@ fn general(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_
     });
 }
 
-fn about(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
+fn about(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &mut Frame<'_>) {
     let palette = frame.palette;
     group(ui, &palette, "About", |ui| {
-        line(ui, &palette, "Version", None, None, 80.0, |ui| {
-            ui.label(text(env!("CARGO_PKG_VERSION"), 13.0, palette.ink2));
+        let has_notes = !whats_new::current().is_empty();
+        let mut open = false;
+        line(ui, &palette, "Version", None, None, if has_notes { 160.0 } else { 80.0 }, |ui| {
+            if has_notes {
+                open = link(ui, &palette, "What's new", true).clicked();
+            }
+            ui.label(text(whats_new::VERSION, 13.0, palette.ink2));
         });
+        if open {
+            view.open_notes();
+            frame.patch(model.settings, whats_new::dismiss);
+        }
         rule(ui, &palette);
         let update = model.update;
         let status = match (&update.available, &update.check) {
@@ -391,15 +401,13 @@ fn about(ui: &mut Ui, model: &Model<'_>, frame: &mut Frame<'_>) {
         let failed = update.error.is_some() || matches!(update.check, UpdateCheck::Failed(_));
         let (hint, error) = if failed { (None, Some(status.as_str())) } else { (Some(status.as_str()), None) };
         line(ui, &palette, "Updates", hint, error, 130.0, |ui| {
-            if update.available.is_some() && !update.installing {
-                if link(ui, &palette, update.install_label(), true).clicked() {
-                    frame.act(Action::InstallUpdate);
-                }
-            } else if update.available.is_none() {
+            if update.available.is_none() {
                 let checking = update.check == UpdateCheck::Checking;
                 if link(ui, &palette, "Check now", !checking).clicked() {
                     frame.act(Action::CheckUpdate);
                 }
+            } else if update.install_label().is_some_and(|label| link(ui, &palette, label, true).clicked()) {
+                frame.act(Action::InstallUpdate);
             }
         });
         rule(ui, &palette);
