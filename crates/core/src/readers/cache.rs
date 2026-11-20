@@ -1,7 +1,7 @@
 //! Per-file parse cache and per-provider merged snapshot, so an unchanged corpus costs a stat per file.
 //!
-//! Format 8 is Rust's own; files are keyed by format, version and pricing, so 4.x caches sit beside
-//! these untouched and each side keeps the newest file of the other.
+//! Files are keyed by format, version and pricing, so another version's caches sit beside these
+//! untouched and each side keeps the newest file of the other.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -21,7 +21,6 @@ use crate::hex;
 
 /// Bump when the cached shape or baked-in cost changes; old caches are rebuilt, not migrated.
 const CACHE_FORMAT: u32 = 8;
-const STALE_SIBLING: Duration = Duration::from_hours(7 * 24);
 /// A transcript written this recently is likely to be appended to again.
 const ACTIVE_FILE: Duration = Duration::from_mins(10);
 
@@ -286,7 +285,7 @@ fn read_cache_file(path: &Path, timezone: &str) -> IndexMap<String, CacheEntry> 
     }
 }
 
-/// Keeps the newest other keyed file, which another live writer (CLI, app, or 4.x) refreshes on each save.
+/// Keeps the newest other keyed file, which another live writer (CLI, app, or another version) refreshes on each save.
 fn prune_siblings(current: &Path, name: &str) {
     let Some(dir) = current.parent() else { return };
     let Ok(entries) = std::fs::read_dir(dir) else { return };
@@ -303,16 +302,9 @@ fn prune_siblings(current: &Path, name: &str) {
     for (path, _) in others.iter().skip(1) {
         let _ = std::fs::remove_file(path);
     }
-    let legacy = dir.join(format!("{name}.json"));
-    let stale = std::fs::metadata(&legacy)
-        .and_then(|m| m.modified())
-        .is_ok_and(|modified| SystemTime::now().duration_since(modified).unwrap_or_default() > STALE_SIBLING);
-    if stale {
-        let _ = std::fs::remove_file(legacy);
-    }
 }
 
-/// `^<name>-[0-9a-f]+\.json$`, the pattern 4.x prunes with.
+/// `^<name>-[0-9a-f]+\.json$`.
 fn is_keyed_sibling(file: &str, name: &str) -> bool {
     file.strip_prefix(name)
         .and_then(|rest| rest.strip_prefix('-'))

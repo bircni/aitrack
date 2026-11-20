@@ -12,7 +12,7 @@ use aitrack_core::fs::write_file_atomic;
 
 const ID: &str = "dev.bircni.opentrack";
 
-/// Where Tauri kept settings.json and cache.json for this identifier, so 4.x data carries over.
+/// Holds settings.json and cache.json; moving it would strand every install's data.
 pub fn data_dir() -> PathBuf {
     let home = std::env::home_dir().unwrap_or_default();
     if cfg!(target_os = "macos") {
@@ -93,15 +93,12 @@ fn held_elsewhere(locked: Result<(), TryLockError>) -> std::io::Result<bool> {
     }
 }
 
-/// A port file without a token is from a build before tokens, which took the bare request.
 fn ask(port_file: &Path, request: Request) -> std::io::Result<()> {
     let text = std::fs::read_to_string(port_file)?;
-    let text = text.trim();
-    let (port, line) = match text.split_once(' ') {
-        Some((port, token)) => (port, format!("{token} {}\n", request.as_str())),
-        None => (text, format!("{}\n", request.as_str())),
-    };
+    let (port, token) =
+        text.trim().split_once(' ').ok_or_else(|| std::io::Error::other("no token in the port file"))?;
     let port = port.parse::<u16>().map_err(std::io::Error::other)?;
+    let line = format!("{token} {}\n", request.as_str());
     TcpStream::connect_timeout(&(Ipv4Addr::LOCALHOST, port).into(), Duration::from_secs(2))?.write_all(line.as_bytes())
 }
 

@@ -242,7 +242,6 @@ pub enum Glyph {
     ChevronDown,
     ChevronUp,
     Close,
-    Cloud,
     Laptop,
     Compact,
     Refresh,
@@ -257,7 +256,6 @@ fn glyph_lines(glyph: Glyph) -> Polylines {
         Glyph::ChevronUp => parse("m6 15 6-6 6 6"),
         Glyph::Close => parse("M7 7 17 17M17 7 7 17"),
         Glyph::Laptop => [parse(&rounded_rect(4.5, 5.0, 15.0, 10.5, 1.5)), parse("M2.5 19h19")].concat(),
-        Glyph::Cloud => parse("M7 18a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5Z"),
         Glyph::Refresh => [parse("M20 11a8 8 0 1 0-2.3 5.7"), parse("M20 4v7h-7")].concat(),
         Glyph::Sync => {
             [parse("M7 18a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5"), parse("m9 15 3-3 3 3M12 12v8")]

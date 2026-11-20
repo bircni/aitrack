@@ -1,4 +1,4 @@
-//! What the renderer and cache.json see, in the shapes and key order 4.x's sidecar wrote.
+//! What the popup and cache.json see; cache.json depends on these shapes and key order.
 
 use aitrack_core::quota::{QuotaError, QuotaSnapshot};
 use indexmap::IndexMap;

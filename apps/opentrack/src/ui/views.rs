@@ -423,12 +423,8 @@ fn machines_list(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<
     let basis = ShareBasis::new(rows.iter().map(|r| &r.spend));
     let peak = rows.iter().flat_map(|r| r.daily.iter().map(|d| d.cost_usd)).fold(0.0, f64::max);
     for row in rows.iter() {
-        let machine = machines.get(row.machine);
-        let current = machine.is_some_and(|m| m.current);
-        let lead = Lead::Glyph(
-            if machine.is_some() { Glyph::Laptop } else { Glyph::Cloud },
-            if current { palette.focus } else { palette.ink2 },
-        );
+        let Some(machine) = machines.get(row.machine) else { continue };
+        let lead = Lead::Glyph(Glyph::Laptop, if machine.current { palette.focus } else { palette.ink2 });
         rule(ui, &palette);
         let open =
             head(ui, view, frame, &Head { id: Some(&row.id), lead, name: &row.name, muted: false, spend: &row.spend });
@@ -451,13 +447,9 @@ fn machines_list(ui: &mut Ui, view: &mut View, model: &Model<'_>, frame: &Frame<
 }
 
 /// Whether the machine's numbers are current, and its local time when that differs from here.
-fn machine_status(ui: &mut Ui, model: &Model<'_>, palette: &Palette, machine: Option<&MachineUsage>) {
+fn machine_status(ui: &mut Ui, model: &Model<'_>, palette: &Palette, machine: &MachineUsage) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        let Some(machine) = machine else {
-            ui.label(text("Account-wide, not tied to a machine", 11.0, palette.ink2));
-            return;
-        };
         let (status, stale) = sync_status(model.clock, machine, model.now);
         let (dot, _) = ui.allocate_exact_size(Vec2::splat(6.0), Sense::hover());
         ui.painter().circle_filled(dot.center(), 3.0, if stale { palette.warn } else { palette.ok });
