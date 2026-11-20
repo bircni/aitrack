@@ -18,7 +18,7 @@ use crate::platform;
 use crate::position::{window_bounds, Rect};
 use crate::settings::Settings;
 use crate::state::AppState;
-use crate::system::{notify, open_dashboard, SettingErrors, System};
+use crate::system::{notify, open_dashboard, open_release_notes, SettingErrors, System};
 use crate::tray::Tray;
 use crate::ui::format::refresh_outcome;
 use crate::ui::icons::ProviderMarks;
@@ -112,6 +112,7 @@ impl App {
         request: Option<Request>,
     ) -> Self {
         let ctx = cc.egui_ctx.clone();
+        let fresh = crate::whats_new::is_fresh(&data_dir);
         install_fonts(&ctx);
         let (tx, rx) = channel();
         let bus = Bus { tx, ctx: ctx.clone() };
@@ -162,6 +163,9 @@ impl App {
             sync_note: None,
         };
         app.apply_settings(&ctx, cc);
+        if let Some(settings) = crate::whats_new::on_start(&app.settings, fresh) {
+            app.act(&ctx, cc, Action::Save(Box::new(settings)));
+        }
         app
     }
 
@@ -365,6 +369,11 @@ impl App {
                 self.update.installing = true;
                 self.update.error = None;
                 self.updater.install(self.bus.clone());
+            }
+            Action::OpenReleaseNotes => {
+                if let Err(error) = open_release_notes() {
+                    self.background.log().later(Level::Warn, format!("release-notes-open failed: {error}"));
+                }
             }
             Action::ExportLogs => {
                 crate::logs::export(

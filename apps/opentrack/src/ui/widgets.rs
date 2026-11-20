@@ -135,7 +135,7 @@ pub fn ring(ui: &mut Ui, palette: &Palette, share: f32, color: Color32, label: &
     response
 }
 
-pub fn banner(ui: &mut Ui, palette: &Palette, add: impl FnOnce(&mut Ui)) {
+fn banner_frame(ui: &mut Ui, palette: &Palette, add: impl FnOnce(&mut Ui)) {
     Frame::new()
         .fill(palette.raised)
         .corner_radius(CornerRadius::same(8))
@@ -143,11 +143,34 @@ pub fn banner(ui: &mut Ui, palette: &Palette, add: impl FnOnce(&mut Ui)) {
         .outer_margin(Margin { left: 12, right: 12, top: 0, bottom: 12 })
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 6.0;
-                add(ui);
+            add(ui);
+        });
+}
+
+pub fn banner(ui: &mut Ui, palette: &Palette, add: impl FnOnce(&mut Ui)) {
+    banner_frame(ui, palette, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            add(ui);
+        });
+    });
+}
+
+/// A one-line banner with a close control at its end; whether that was pressed.
+pub fn closable_banner(ui: &mut Ui, palette: &Palette, add: impl FnOnce(&mut Ui)) -> bool {
+    let mut closed = false;
+    banner_frame(ui, palette, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            add(ui);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                closed =
+                    icon_button(ui, palette, IconButton { size: 18.0, ..IconButton::new(Glyph::Close, "Dismiss") })
+                        .clicked();
             });
         });
+    });
+    closed
 }
 
 pub fn empty(ui: &mut Ui, palette: &Palette, message: &str) {

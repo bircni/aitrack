@@ -24,6 +24,7 @@ mod tray_icon;
 mod ui;
 mod updater;
 mod usage;
+mod whats_new;
 #[cfg(windows)]
 mod windows;
 
