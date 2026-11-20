@@ -36,11 +36,13 @@ pub trait Deps: Send + Sync {
     fn load_usage(&self, options: UsageLoadOptions) -> UsageLoadResult;
     /// Epoch ms.
     fn now(&self) -> f64;
+    /// Asked for at each use, so a changed system zone is picked up without a restart.
+    fn clock(&self) -> Clock;
     fn on_state(&self, state: Arc<AppState>);
     fn on_alert(&self, alert: &Alert);
     fn persist(&self, cache: &CachedState);
-    /// The one-line outcome and the machine file it built.
-    fn sync(&self) -> Result<(String, MachineFile), String>;
+    /// Reads only `providers`' logs. The one-line outcome and the machine file it built.
+    fn sync(&self, providers: &[String]) -> Result<(String, MachineFile), String>;
     fn save_settings(&self, settings: &Settings) -> Result<(), String>;
     /// Settings the data repo changed, for the shell to show.
     fn on_settings(&self, settings: &Settings);
@@ -55,15 +57,18 @@ struct ProviderRuntime {
     error: Option<QuotaError>,
 }
 
-/// A retry-after the provider stated binds even a click; our own backoff after a bare 429 does not.
-fn declared_retry_pending(runtime: Option<&ProviderRuntime>, now: f64) -> bool {
-    runtime.is_some_and(|runtime| {
-        runtime
-            .error
+impl ProviderRuntime {
+    /// Whether the wait is one the provider stated, not our own backoff after a bare 429.
+    fn declared_retry(&self) -> bool {
+        self.error
             .as_ref()
             .is_some_and(|e| e.kind == QuotaErrorKind::RateLimited && e.retry_after_seconds.unwrap_or(0) > 0)
-            && now < runtime.next_attempt_at
-    })
+    }
+}
+
+/// A retry-after the provider stated binds even a click; our own backoff after a bare 429 does not.
+fn declared_retry_pending(runtime: Option<&ProviderRuntime>, now: f64) -> bool {
+    runtime.is_some_and(|runtime| runtime.declared_retry() && now < runtime.next_attempt_at)
 }
 
 fn providers_key(providers: &[String]) -> String {
@@ -100,7 +105,6 @@ impl Inner {
 
 pub struct QuotaService<D: Deps> {
     deps: D,
-    clock: Clock,
     inner: Mutex<Inner>,
     /// Signalled when a usage load ends, for a sync waiting to start its own.
     usage_done: Condvar,
@@ -109,7 +113,7 @@ pub struct QuotaService<D: Deps> {
 }
 
 impl<D: Deps> QuotaService<D> {
-    pub fn new(deps: D, clock: Clock, settings: Settings, cache: Option<CachedState>) -> Self {
+    pub fn new(deps: D, settings: Settings, cache: Option<CachedState>) -> Self {
         let cache = cache.unwrap_or_default();
         let now = deps.now();
         let mut runtime = IndexMap::new();
@@ -146,7 +150,7 @@ impl<D: Deps> QuotaService<D> {
             syncing: false,
             sync_result: None,
         };
-        Self { deps, clock, inner: Mutex::new(inner), usage_done: Condvar::new(), emitting: Mutex::new(()) }
+        Self { deps, inner: Mutex::new(inner), usage_done: Condvar::new(), emitting: Mutex::new(()) }
     }
 
     pub const fn deps(&self) -> &D {
@@ -235,9 +239,9 @@ impl<D: Deps> QuotaService<D> {
             .collect();
         let mut fetched: Vec<String> =
             providers.iter().filter_map(|p| p.quota.as_ref()).map(|q| q.fetched_at.clone()).collect();
-        fetched.sort_by(|a, b| {
-            parse_ms(&self.clock, a).partial_cmp(&parse_ms(&self.clock, b)).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        let clock = self.deps.clock();
+        fetched
+            .sort_by(|a, b| parse_ms(&clock, a).partial_cmp(&parse_ms(&clock, b)).unwrap_or(std::cmp::Ordering::Equal));
         let keys: Vec<String> = providers.iter().map(|p| p.key.clone()).collect();
         let usage_empty = inner.cache.usage.is_some()
             && inner.usage_error.is_none()
@@ -260,17 +264,19 @@ impl<D: Deps> QuotaService<D> {
         }
     }
 
-    /// Push this machine's usage like `aitrack sync`, then reload so the totals include it.
+    /// Push this machine's usage like `aitrack sync`, but of the enabled providers only, then reload
+    /// so the totals include it.
     pub fn sync(&self) {
-        {
+        let enabled = {
             let mut inner = self.lock();
             if inner.syncing {
                 return;
             }
             inner.syncing = true;
-        }
+            inner.enabled_providers()
+        };
         self.emit();
-        let local_machine = match self.deps.sync() {
+        let local_machine = match self.deps.sync(&enabled) {
             Ok((message, machine)) => {
                 let outcome = match self.sync_settings(true) {
                     Ok(()) => SyncOutcome { ok: true, message },
@@ -357,11 +363,11 @@ impl<D: Deps> QuotaService<D> {
         let cache = {
             let mut inner = self.lock();
             let now = self.deps.now();
-            inner.cache.fired = prune_fired(&self.clock, &inner.cache.fired, now);
+            inner.cache.fired = prune_fired(&self.deps.clock(), &inner.cache.fired, now);
             let limited: IndexMap<String, f64> = inner
                 .runtime
                 .iter()
-                .filter(|(_, r)| r.error.as_ref().is_some_and(|e| e.kind == QuotaErrorKind::RateLimited))
+                .filter(|(_, r)| r.declared_retry())
                 .map(|(key, r)| (key.clone(), r.next_attempt_at))
                 .collect();
             inner.cache.rate_limited_until = limited;
@@ -404,7 +410,13 @@ impl<D: Deps> QuotaService<D> {
                         cache.quotas.shift_remove(key);
                     }
                     runtime.error = Some(error);
-                    vec![]
+                    match cache.quotas.get(key).cloned() {
+                        Some(snapshot) if settings.notifications => {
+                            let rules = AlertRules { stale: true, ..settings.alert_rules() };
+                            self.alerts_for(key, &snapshot, rules, cache, now)
+                        }
+                        _ => vec![],
+                    }
                 }
             };
             drop(inner);
@@ -424,7 +436,7 @@ impl<D: Deps> QuotaService<D> {
         cache: &mut CachedState,
         now: f64,
     ) -> Vec<Alert> {
-        let alerts = due_alerts(&self.clock, provider_label(key), snapshot, rules, &cache.fired, now);
+        let alerts = due_alerts(&self.deps.clock(), provider_label(key), snapshot, rules, &cache.fired, now);
         for alert in &alerts {
             cache.fired.insert(alert.key.clone(), alert.resets_at.clone());
         }
@@ -563,6 +575,7 @@ mod tests {
         usage_fails: AtomicBool,
         sync_fails: AtomicBool,
         syncs: AtomicUsize,
+        synced: Mutex<Vec<String>>,
         /// What the data repo's shared settings turn a machine's into, and whether that fails.
         shared: Option<SharedFn>,
         saved: Mutex<Vec<Settings>>,
@@ -588,6 +601,9 @@ mod tests {
         fn now(&self) -> f64 {
             *self.now.lock().unwrap()
         }
+        fn clock(&self) -> Clock {
+            Clock::in_zone("UTC").unwrap()
+        }
         fn on_state(&self, state: Arc<AppState>) {
             self.states.lock().unwrap().push((*state).clone());
         }
@@ -597,8 +613,9 @@ mod tests {
         fn persist(&self, cache: &CachedState) {
             self.persisted.lock().unwrap().push(cache.clone());
         }
-        fn sync(&self) -> Result<(String, MachineFile), String> {
+        fn sync(&self, providers: &[String]) -> Result<(String, MachineFile), String> {
             self.syncs.fetch_add(1, Ordering::SeqCst);
+            providers.clone_into(&mut self.synced.lock().unwrap());
             if let Some(sync) = &self.sync {
                 return sync();
             }
@@ -638,7 +655,7 @@ mod tests {
     ) -> (Arc<Fake>, QuotaService<Arc<Fake>>) {
         *fake.now.lock().unwrap() = START;
         let fake = Arc::new(fake);
-        let service = QuotaService::new(std::sync::Arc::clone(&fake), Clock::in_zone("UTC").unwrap(), settings, cache);
+        let service = QuotaService::new(std::sync::Arc::clone(&fake), settings, cache);
         (fake, service)
     }
 
@@ -772,6 +789,24 @@ mod tests {
         assert!(fake.take_calls().contains(&"codex".to_owned()));
     }
 
+    #[test]
+    fn waits_out_a_long_wait_the_provider_did_not_state_unless_clicked() {
+        let fake = Fake {
+            quota: Some(Box::new(|provider, _| {
+                (provider == "claude_code").then(|| failure(QuotaErrorKind::NoCredentials, "allow access", Some(3600)))
+            })),
+            ..Fake::default()
+        };
+        let (fake, service) = harness_with(fake, only(&["claude_code"]), None);
+        service.refresh(false);
+        fake.take_calls();
+        fake.advance(3_599_000.0);
+        service.refresh(false);
+        assert!(fake.take_calls().is_empty());
+        service.refresh(true);
+        assert_eq!(fake.take_calls(), ["claude_code"]);
+    }
+
     fn almost_out() -> Fake {
         Fake {
             quota: Some(Box::new(|provider, now| (provider == "claude_code").then(|| Ok(ok(provider, 95.0, now))))),
@@ -796,6 +831,31 @@ mod tests {
             harness_with(almost_out(), Settings { notifications: false, ..Settings::default() }, None);
         service.refresh(false);
         assert!(quiet.alerts.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn alerts_an_unused_limit_from_the_last_snapshot_while_fetches_fail() {
+        let fake = Fake {
+            quota: Some(Box::new(|provider, now| {
+                if now > START {
+                    return Some(failure(QuotaErrorKind::Auth, "sign in", None));
+                }
+                let mut weekly = ok(provider, 20.0, now);
+                weekly.windows[0].id = "weekly".into();
+                weekly.windows[0].resets_at = Some(iso(now + 48.0 * 3_600_000.0));
+                Some(Ok(weekly))
+            })),
+            ..Fake::default()
+        };
+        let (fake, service) = harness_with(fake, Settings { alert_unused: true, ..only(&["claude_code"]) }, None);
+        service.refresh(false);
+        assert!(fake.alerts.lock().unwrap().is_empty());
+        for _ in 0..2 {
+            fake.advance(15.0 * 3_600_000.0);
+            service.refresh(true);
+        }
+        let titles: Vec<String> = fake.alerts.lock().unwrap().iter().map(|a| a.title.clone()).collect();
+        assert_eq!(titles, ["Claude Code session resets soon"]);
     }
 
     #[test]
@@ -835,7 +895,7 @@ mod tests {
     fn keeps_a_retry_after_across_restarts() {
         let limited = Fake {
             quota: Some(Box::new(|provider, _| {
-                (provider == "claude_code").then(|| failure(QuotaErrorKind::RateLimited, "slow", Some(600)))
+                Some(failure(QuotaErrorKind::RateLimited, "slow", (provider == "claude_code").then_some(600)))
             })),
             ..Fake::default()
         };
@@ -863,6 +923,7 @@ mod tests {
         );
         assert_eq!(fake.pulls(), [false]);
         assert_eq!(fake.loads.lock().unwrap()[0].local_machine, Some(machine()));
+        assert_eq!(*fake.synced.lock().unwrap(), all());
 
         fake.advance(REFRESH_INTERVAL_MS);
         service.refresh(false);
@@ -877,6 +938,10 @@ mod tests {
             service.state().sync_result,
             Some(SyncOutcome { ok: false, message: "remote: permission denied".into() })
         );
+
+        service.save_settings(only(&["codex"])).unwrap();
+        service.sync();
+        assert_eq!(*fake.synced.lock().unwrap(), ["codex"], "a provider turned off is not read by the sync");
     }
 
     #[test]
@@ -891,6 +956,7 @@ mod tests {
                     settings.display = "left".into();
                 }
                 settings.theme = if push { "light" } else { "dark" }.into();
+                settings.shared_at = Some("2026-06-01T11:00:00.000Z".into());
                 if push {
                     Err("remote: permission denied".into())
                 } else {
@@ -908,7 +974,7 @@ mod tests {
         let on = service.save_settings(Settings { sync: true, ..Settings::default() }).unwrap();
         service.refresh(false);
         assert_eq!(fake.pulls(), [true, true], "turning it on pulls at once");
-        let dark = Settings { theme: "dark".into(), ..on };
+        let dark = Settings { theme: "dark".into(), shared_at: Some("2026-06-01T11:00:00.000Z".into()), ..on };
         assert_eq!((service.settings(), fake.shown.lock().unwrap().clone()), (dark.clone(), vec![dark.clone()]));
         assert_eq!(fake.saved.lock().unwrap().last(), Some(&dark));
 

@@ -3,8 +3,11 @@
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
+use aitrack_core::output::Level;
+
 use crate::app::{Bus, Msg};
 use crate::background::TrayImage;
+use crate::logs::LogOutput;
 use crate::position::Rect;
 use crate::tray_icon::{render_tray_icon, TrayAppearance};
 use crate::ui::Screen;
@@ -37,7 +40,7 @@ fn listen(bus: &Bus) {
     }));
 }
 
-fn build() -> Option<TrayIcon> {
+fn build(log: &LogOutput) -> Option<TrayIcon> {
     let menu = Menu::new();
     let items = [
         MenuItem::with_id("open", "Open", true, None),
@@ -62,7 +65,7 @@ fn build() -> Option<TrayIcon> {
     let builder = builder.with_icon_templated(icon);
     #[cfg(not(target_os = "macos"))]
     let builder = builder.with_icon(icon);
-    builder.build().ok()
+    builder.build().inspect_err(|error| log.later(Level::Error, format!("tray failed: {error}"))).ok()
 }
 
 fn apply(tray: &TrayIcon, image: TrayImage) {
@@ -81,9 +84,9 @@ pub struct Tray(Option<TrayIcon>);
 #[cfg(not(target_os = "linux"))]
 impl Tray {
     /// On the main thread, after the event loop started.
-    pub fn new(bus: &Bus) -> Self {
+    pub fn new(bus: &Bus, log: &LogOutput) -> Self {
         listen(bus);
-        Self(build())
+        Self(build(log))
     }
 
     pub fn set(&self, image: TrayImage) {
@@ -104,13 +107,15 @@ pub struct Tray;
 #[cfg(target_os = "linux")]
 impl Tray {
     /// `AppIndicator` needs GTK's loop, which egui's window does not run.
-    pub fn new(bus: &Bus) -> Self {
+    pub fn new(bus: &Bus, log: &LogOutput) -> Self {
         listen(bus);
-        std::thread::spawn(|| {
-            if gtk::init().is_err() {
+        let log = log.clone();
+        std::thread::spawn(move || {
+            if let Err(error) = gtk::init() {
+                log.event(Level::Error, &format!("tray failed: {error}"));
                 return;
             }
-            TRAY.with(|tray| *tray.borrow_mut() = build());
+            TRAY.with(|tray| *tray.borrow_mut() = build(&log));
             crate::platform::linux::read_work_area();
             gtk::main();
         });

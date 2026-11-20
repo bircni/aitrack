@@ -18,7 +18,8 @@ Both are drawn the way `aitrack show` draws its heatmap: in cells, in each provi
 - **Pacing** — whether each limit is on track to last until it resets, with alerts when one is
   almost used up or on pace to run out. Settings picks how much left counts as almost used up
   (5, 10, 20 or 30%; 10% by default) and can add an alert for a weekly limit that resets within
-  a day with over half of it left. The outlined cell is the even-pace marker: where usage would be
+  a day with over half of it left; that one also fires from the last limits read while they
+  cannot be refreshed, as with an expired login. The outlined cell is the even-pace marker: where usage would be
   now if the limit were used evenly until it resets. A limit's cells wear its provider's colours
   while it is on track and the warning or critical colour when it is not.
 - **Usage** — one period (Today / 7 days / 30 days / All time) sets the estimated cost, the tokens
@@ -83,14 +84,17 @@ opentrack reuses the logins your tools already saved and never writes to them:
 
 Tokens are not refreshed by opentrack: when one expires, the provider shows a message until you
 next use that tool. When Claude Code left more than one login behind, such as an old file beside the
-Keychain item, the one that is still valid is used. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
+Keychain item, the one that is still valid is used. When the macOS Keychain prompt is denied or goes unanswered, opentrack asks again only on Retry or Refresh, or after six hours. Codex limits need a ChatGPT login; an API-key-only Codex setup shows none.
 
-Usage history comes from the local Claude/Codex logs. A provider turned off in Settings is not
-asked for its limits and its logs are not read for the dashboard; the sync button still reads and
-pushes every provider's logs, as `aitrack sync` does. Usage is merged with the other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
+Usage history comes from the local Claude/Codex logs. A provider turned off in Settings is neither
+read nor contacted. Usage is merged with the other machines in your aitrack data repo when one is configured (`aitrack init`). opentrack
 `git pull`s that repo every 30 minutes (can be turned off). It commits and pushes only when you
-press the sync button in the dashboard, which does exactly what `aitrack sync` does, including refusing
-a clone whose `origin` differs from `repoUrl`; that shows as a failed sync.
+press the sync button in the dashboard, which does what `aitrack sync` does for the providers that are on, including refusing
+a clone whose `origin` differs from `repoUrl`; that shows as a failed sync. The sync button does not
+read the logs of a provider that is turned off: the days that provider already has in this machine's
+synced file stay as they are (only [`compactAfterDays`](cli.md#compacting-old-history) still applies to them), and its newer usage is
+pushed by the first sync after it is turned on again, as far as its logs still hold it. `aitrack sync` in the terminal has no such switch and always
+syncs every provider.
 
 **Sync settings** (off by default) shares the settings that mean the same on every machine through
 that repo: the theme, limits shown as used or left, reset times, the providers' order and which
@@ -99,7 +103,8 @@ compact view, and the tray's provider and limit. Start at login, the shortcut, K
 tray's style and colour and the two data repo switches stay with each machine. The shared settings
 are one file, `opentrack/settings.json`, with the time they last changed, and the newest change
 wins as a whole rather than key by key. opentrack takes a newer file over its own settings after a
-pull, and a machine that turns the setting on takes what the repo already has. Changes made here
+pull, and a machine that turns the setting on takes what the repo already has, over anything
+changed there before that. Changes made here
 go out the next time you press the sync button, never on their own; with **Include other
 machines** off, that is also the only time other machines' changes come in. When two machines push
 at once, the later change is kept and the other machine takes it. With
@@ -126,8 +131,40 @@ Settings and the last snapshot live in the app's data folder
 (`~/Library/Application Support/dev.bircni.opentrack` on macOS, `%APPDATA%\dev.bircni.opentrack` on
 Windows, `~/.local/share/dev.bircni.opentrack` on Linux): `settings.json`, `cache.json` (discarded
 rather than migrated when its format is older), and `opentrack.log`, with the previous run's in
-`opentrack.log.1`. **Export…** next to Logs in Settings zips both logs to a place you choose. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
+`opentrack.log.1`. **Export…** next to Logs in Settings zips both logs to a place you choose, for
+attaching to a bug report. There is no account, telemetry or backend. Besides providers and your data repo, opentrack only contacts GitHub: for the update
 check, and for the pricing refresh the sync button runs like `aitrack sync` (at most daily).
+
+### What the log holds
+
+One line per event, as `<UTC time> <LEVEL> <topic> <what>`:
+
+```
+2026-11-19T08:15:02.114Z INFO  start version=5.2.0 os=macos arch=aarch64 install=app-bundle data_dir=~/Library/Application Support/dev.bircni.opentrack
+2026-11-19T08:15:03.530Z INFO  quota provider=codex ok
+2026-11-19T09:40:11.902Z WARN  quota provider=claude_code failed kind=Network: Claude Code request failed: timed out
+2026-11-19T09:41:12.377Z INFO  quota provider=claude_code ok
+```
+
+- the start of a run: the version, the system and how opentrack was installed;
+- per provider, whether its limits could be read, with the kind of failure and its message;
+- whether usage could be read, the data repo pulled, the settings saved and shared, and the cache
+  written;
+- what `aitrack sync` would print for a sync you start, which names this machine and counts its
+  days, and why a sync failed;
+- update checks and installs, and problems with the tray, notifications, the shortcut, starting at
+  login, opening a provider's dashboard, an unreadable `settings.json` or `cache.json`, and
+  another opentrack that holds the lock or does not answer.
+
+A state is logged when it changes, not at every poll: a provider that fails the same way for an
+hour is one line, and its recovery another. Each file stops at 256 KB, the older lines moving to
+`opentrack.log.1`, so the two never exceed 512 KB.
+
+The log holds no token counts, costs, limits, project names or alert texts. Credentials in URLs,
+bearer tokens, Claude, Codex and git host tokens and the value of anything named `token`,
+`password`, `passphrase` or `secret` are written as `***`, and the home folder as `~`. Git's own
+error messages are logged as git wrote them, so they can name the data repo's URL. Read the
+archive before attaching it to a public issue.
 
 ## Downloads
 

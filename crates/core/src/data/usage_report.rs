@@ -160,7 +160,7 @@ pub struct ReportContext<'a> {
 
 impl ReportContext<'_> {
     fn viewer_today(&self) -> Day {
-        calendar_date_in_zone(self.clock.zone_name(), self.now).unwrap_or_else(|| self.clock.local_day(self.now))
+        self.clock.local_day(self.now)
     }
 
     fn today_for_zone(&self, zone: &str) -> Day {
