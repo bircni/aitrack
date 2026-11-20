@@ -125,7 +125,7 @@ mod tests {
         assert!(desk.file().contains("\"updatedAt\": \"2026-06-01T10:00:00.000Z\""));
         assert!(desk.file().contains("\"theme\": \"dark\"") && !desk.file().contains("keepOpen"));
 
-        laptop.settings.compact = true; // Before it ever saw the repo's settings, so they win.
+        laptop.change("2026-06-01T10:30:00Z", |s| s.compact = true); // Before it ever saw the repo's settings, so they win.
         laptop.sync("2026-06-01T11:00:00Z", Some("pass"), false).unwrap();
         let taken = Settings {
             theme: "dark".into(),

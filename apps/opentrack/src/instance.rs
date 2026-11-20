@@ -105,9 +105,17 @@ fn ask(port_file: &Path, request: Request) -> std::io::Result<()> {
     TcpStream::connect_timeout(&(Ipv4Addr::LOCALHOST, port).into(), Duration::from_secs(2))?.write_all(line.as_bytes())
 }
 
-/// Calls `on_request` for every later launch; anything else that connects is ignored.
-pub fn listen(Listener { listener, token }: Listener, on_request: impl Fn(Request) + Send + 'static) {
+/// Calls `on_request` for what this launch asked for, then for every later launch; anything else that
+/// connects is ignored.
+pub fn listen(
+    Listener { listener, token }: Listener,
+    first: Option<Request>,
+    on_request: impl Fn(Request) + Send + 'static,
+) {
     std::thread::spawn(move || {
+        if let Some(request) = first {
+            on_request(request);
+        }
         for stream in listener.incoming().flatten() {
             let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
             let mut line = String::new();
@@ -135,7 +143,8 @@ mod tests {
         let listener = claim(dir.path(), Request::Show).unwrap().expect("first launch");
         let port = listener.listener.local_addr().unwrap().port();
         let (tx, rx) = mpsc::channel();
-        listen(listener, move |request| tx.send(request).unwrap());
+        listen(listener, Some(Request::Show), move |request| tx.send(request).unwrap());
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), Request::Show);
         let mut stranger = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
         stranger.write_all(b"GET / HTTP/1.1\r\n").unwrap();
         drop(stranger);

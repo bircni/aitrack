@@ -14,7 +14,7 @@
 ## What stays local
 
 - Config (`~/.config/aitrack/config.json`) stays on disk locally. It can contain the git remote URL, machine ID, additional Claude/Codex source paths, and a monthly budget; none of the config file itself is copied into the data repo.
-- A `repoUrl` holding a token is masked in `init`, `doctor`, `config list` and `config set` output. `config get` and `config list --json` print it as stored.
+- A `repoUrl` holding a token is masked in `init`, `doctor`, `config list` and `config set` output, and in the git errors aitrack and opentrack show or cache. `config get` and `config list --json` print it as stored.
 - Working directories of work without a git remote stay in the local parse cache and are never synced.
 - opentrack's log stays in its data folder until you export it. It holds failures and state changes with credentials masked, never usage numbers or project names, but it names this machine and can name the data repo's URL. See [what the log holds](docs/opentrack.md#what-the-log-holds).
 
