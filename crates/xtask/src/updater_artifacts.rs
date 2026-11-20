@@ -88,7 +88,7 @@ fn lay_out(from: &Path, to: &Path, key: Option<&SecretKey>) -> Result<()> {
             let renamed = name.replace("_x86_64.AppImage", Installer::AppImage.suffix());
             signed.push(place(&path, &dir(Installer::AppImage), &renamed)?);
         } else if has_extension(&path, "deb") {
-            signed.push(place(&path, &dir(Installer::Deb), &name)?);
+            place(&path, &dir(Installer::Deb), &name)?;
         }
     }
     let Some(key) = key else {
@@ -130,8 +130,12 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let (from, to) = (root.path().join("out"), root.path().join("bundle"));
         std::fs::create_dir_all(from.join("opentrack.app/Contents")).unwrap();
-        for name in ["opentrack_5.0.0_aarch64.dmg", "opentrack_5.0.0_x64-setup.exe", "opentrack_5.0.0_x86_64.AppImage"]
-        {
+        for name in [
+            "opentrack_5.0.0_aarch64.dmg",
+            "opentrack_5.0.0_x64-setup.exe",
+            "opentrack_5.0.0_x86_64.AppImage",
+            "opentrack_5.0.0_amd64.deb",
+        ] {
             std::fs::write(from.join(name), name).unwrap();
         }
         lay_out(&from, &to, None).unwrap();
@@ -141,6 +145,7 @@ mod tests {
             "dmg/opentrack_5.0.0_aarch64.dmg",
             "nsis/opentrack_5.0.0_x64-setup.exe",
             "appimage/opentrack_5.0.0_amd64.AppImage",
+            "deb/opentrack_5.0.0_amd64.deb",
         ] {
             assert!(to.join(path).exists(), "{path}");
         }

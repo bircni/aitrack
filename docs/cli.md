@@ -149,7 +149,7 @@ A project is the git `origin` of the folder the work happened in, written `owner
 
 **`doctor` checks** include warnings for a clone whose `origin` differs from `repoUrl`, for an interrupted rebase and for machine files left out of reports because they cannot be read.
 
-**`doctor` flags:** `--pricing-check` also runs `cargo xtask pricing-check` when you are in a source checkout. Without it, doctor still reports the pricing cache: model counts, refresh outcome and the rates' `updatedAt`.
+**`doctor` and pricing.** `doctor` reports the pricing cache: model counts, refresh outcome and the rates' `updatedAt`.
 
 ---
 

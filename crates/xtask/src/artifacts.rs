@@ -45,13 +45,11 @@ impl Installer {
 }
 
 /// The updater's platform key for each installer it can install, as `aitrack_core::update` reads them.
-/// 4.x's `.deb` installs read `linux-x86_64-deb` and update through pkexec; 5.0 leaves a `.deb` to
-/// the package manager.
-pub const UPDATER_PLATFORMS: [(&str, Installer); 4] = [
+/// A `.deb` is left to the package manager.
+pub const UPDATER_PLATFORMS: [(&str, Installer); 3] = [
     (update::MAC_TARGET, Installer::AppArchive),
     (update::WINDOWS_TARGET, Installer::Nsis),
     (update::LINUX_TARGET, Installer::AppImage),
-    ("linux-x86_64-deb", Installer::Deb),
 ];
 
 #[cfg(test)]
