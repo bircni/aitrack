@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v6.0.0] - 2026-11-20
+
+
+### ⚠ Breaking Changes
+
+- Remove Cursor support (#151)
+- Drop the 4.x .deb updater entry and doctor --pricing-check (#158)
+
+
+### Bug Fixes
+
+- **opentrack:** Prefer a valid Claude login over an expired credentials file (#154)
+- Keep machine files, shared settings and alerts correct in seven edge cases (#155)
+- Correct a set of smaller opentrack, sync and CLI bugs (#156)
+- **opentrack:** Open Settings when the first launch is given --settings (#160)
+- **aitrack:** Keep staged days the local logs no longer cover (#163)
+- **opentrack:** Stop asking for a denied Claude Keychain login every minute (#165)
+- **sync:** Keep remote credentials out of git error messages (#162)
+- **opentrack:** Skip providers turned off in Settings when syncing (#166)
+- Serialise data repo operations across processes (#164)
+- **opentrack:** Tell a .deb install of a new version without an install action (#161)
+
+### Documentation
+
+- Bring the docs back in line with the 5.x code (#159)
+
+### Features
+
+- **opentrack:** Log what a bug report needs (#167)
+- **opentrack:** Show what's new after an update (#168)
+- **opentrack:** Fold Settings into compact sections (#169)
+
+### Tests
+
+- **xtask:** Expect two providers in the packaged app's smoke check (#170)
+
 ## [v5.2.0] - 2026-11-16
 
 
