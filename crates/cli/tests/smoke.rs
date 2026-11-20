@@ -34,6 +34,8 @@ fn json_failures_print_one_document_and_usage_errors_exit_2() {
         (&["nosuch", "--json"][..], "aitrack", 2),
         (&["top", "--sort", "nope", "--json"][..], "top", 2),
         (&["config", "get", "nope", "--json"][..], "config", 2),
+        (&["export", "-o", "-", "--json"][..], "export", 2),
+        (&["show", "-o", "-", "--json"][..], "show", 2),
     ] {
         let output = aitrack(home.path()).args(args).output().unwrap();
         assert_eq!(output.status.code(), Some(code), "{args:?}");
@@ -41,6 +43,7 @@ fn json_failures_print_one_document_and_usage_errors_exit_2() {
         assert_eq!(document["command"], command, "{args:?}");
         assert!(document["error"].as_str().is_some_and(|e| !e.is_empty()), "{args:?}");
     }
+    assert!(!home.path().join("-").exists());
     let removed = aitrack(home.path()).args(["show", "--providers", "claude,cursor"]).output().unwrap();
     assert_eq!(removed.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&removed.stderr).contains("Cursor support was removed."));
@@ -85,4 +88,34 @@ fn reports_read_local_logs_without_a_data_repo() {
         assert_eq!(document["command"], command, "{args:?}");
     }
     assert!(std::fs::read_to_string(csv).unwrap().lines().count() > 1);
+}
+
+fn git(dir: &std::path::Path, args: &[&str]) {
+    let identity = ["-c", "user.name=Test", "-c", "user.email="];
+    let out = std::process::Command::new("git").args(identity).args(args).current_dir(dir).output().unwrap();
+    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+}
+
+#[test]
+fn first_init_leaves_a_synced_file_named_like_this_host_alone() {
+    let root = tempfile::tempdir().unwrap();
+    let (remote, seed, home) = (root.path().join("remote.git"), root.path().join("seed"), root.path().join("home"));
+    for dir in [&remote, &seed, &home] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    git(&remote, &["init", "--bare", "-q", "-b", "main"]);
+    git(&seed, &["init", "-q", "-b", "main"]);
+    let host = aitrack_core::config::resolve_machine_id(None).unwrap();
+    let theirs = format!(r#"{{"hostname":"{host}","lastUpdated":"2026-03-10T12:00:00.000Z","days":{{}}}}"#);
+    std::fs::create_dir_all(seed.join("data")).unwrap();
+    std::fs::write(seed.join("data").join(format!("{host}.json")), &theirs).unwrap();
+    git(&seed, &["add", "."]);
+    git(&seed, &["commit", "-qm", "sync"]);
+    git(&seed, &["push", "-q", remote.to_str().unwrap(), "main"]);
+
+    let init = aitrack(&home).args(["init", "--repo", remote.to_str().unwrap(), "--machine", "laptop"]).output();
+    assert_eq!(init.unwrap().status.code(), Some(0));
+    let data = home.join(".config/aitrack/repo/data");
+    assert_eq!(std::fs::read_to_string(data.join(format!("{host}.json"))).unwrap(), theirs);
+    assert!(!data.join("laptop.json").exists());
 }
