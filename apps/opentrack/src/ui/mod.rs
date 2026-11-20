@@ -155,6 +155,8 @@ pub struct View {
     pub by: By,
     pub open_row: Option<String>,
     pub shortcut: Option<String>,
+    /// The settings sections unfolded, by title.
+    pub open_settings: std::collections::BTreeSet<&'static str>,
     pub scroll_to_top: bool,
     /// Where Back leaves the release notes for.
     notes_from: Screen,
@@ -171,6 +173,7 @@ impl Default for View {
             by: By::Model,
             open_row: None,
             shortcut: None,
+            open_settings: std::collections::BTreeSet::new(),
             scroll_to_top: false,
             notes_from: Screen::Dashboard,
             grid: Memo::default(),

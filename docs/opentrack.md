@@ -45,7 +45,7 @@ Both are drawn the way `aitrack show` draws its heatmap: in cells, in each provi
   provider and limit by default; Settings picks a provider and session or weekly instead. Choose
   **Bars** for a rounded progress bar per available limit (session, weekly and model limits),
   grouped by provider in dashboard order, or **Icon** for
-  the "O". Turn off **Colored tray icon** for monochrome; macOS adapts it to the menu-bar appearance.
+  the "O". Turn off **Colored** under Tray in Settings for monochrome; macOS adapts it to the menu-bar appearance.
   A limit whose reset has passed is left out until fresh numbers arrive.
 
 Dates, times and numbers are written the US English way whatever the system language: a 12-hour
