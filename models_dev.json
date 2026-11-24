@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-23T18:02:32.766Z",
+  "retrievedAt": "2026-11-24T17:40:11.059Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -1026,13 +1026,6 @@
       "o": 10,
       "cw": 5,
       "cr": 1.25,
-      "cwe": false
-    },
-    "openai/gpt-realtime-2.1": {
-      "i": 4,
-      "o": 24,
-      "cw": 4,
-      "cr": 0.4,
       "cwe": false
     },
     "openai/o3": {
