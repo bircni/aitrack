@@ -384,3 +384,17 @@ jobs:
             git commit -m "opentrack ${GITHUB_REF_NAME#v}"
             git push
           fi
+
+  # Opens the version's pull request to microsoft/winget-pkgs from bircni's fork.
+  winget:
+    name: Update the winget package
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
+        with:
+          identifier: bircni.opentrack
+          # The release also carries aitrack-win32-x64.exe, the CLI.
+          installers-regex: '_x64-setup\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}

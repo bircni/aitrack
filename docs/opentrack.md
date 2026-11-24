@@ -181,6 +181,7 @@ archive before attaching it to a public issue.
 
 ```sh
 brew install --cask bircni/tap/opentrack   # macOS 13.5+, Apple Silicon
+winget install bircni.opentrack            # 64-bit Windows
 npx aitrack install-opentrack              # macOS (Apple Silicon), 64-bit Windows or Linux
 ```
 

@@ -163,19 +163,20 @@ builds and checks every file without releasing:
   `aitrack install-opentrack`, which read `latest.json` from the latest release, never find it half
   uploaded.
 - **Homebrew.** `Casks/opentrack.rb` gets the new version and DMG checksum.
+- **winget.** [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser) opens a pull
+  request to `microsoft/winget-pkgs` for the new setup.exe from `bircni`'s fork, with the
+  `WINGET_TOKEN` secret, a classic token with `public_repo` scope.
 
 A tag with a `-` is a prerelease: npm publishes it under `next`, the GitHub release never becomes
-latest, and the Homebrew job is skipped. After a failure, re-run the failed jobs; the draft job
+latest, and the Homebrew and winget jobs are skipped. After a failure, re-run the failed jobs; the draft job
 replaces assets with the same names and `publish-npm` skips what already published.
 
 Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
 
 ### winget
 
-opentrack's winget package (`bircni.opentrack`) is not in `microsoft/winget-pkgs` yet, and
-release automation can only update an existing package, so the first version is submitted
-by hand. `cargo xtask winget-manifest` writes that version's manifests into a `winget-pkgs`
-checkout:
+If the winget job fails, `cargo xtask winget-manifest` writes a version's manifests for
+`bircni.opentrack` into a `winget-pkgs` checkout instead:
 
 ```sh
 gh release download vX.Y.Z -p '*-setup.exe'
@@ -185,7 +186,7 @@ cargo xtask winget-manifest vX.Y.Z opentrack_X.Y.Z_x64-setup.exe ../winget-pkgs
 On Windows, `winget validate --manifest manifests/b/bircni/opentrack/X.Y.Z` checks them, and
 `winget install --manifest manifests/b/bircni/opentrack/X.Y.Z` (after
 `winget settings --enable LocalManifestFiles`) installs from them. Commit them in a fork as
-`New package: bircni.opentrack version X.Y.Z` and open a pull request to
+`New version: bircni.opentrack version X.Y.Z` and open a pull request to
 `microsoft/winget-pkgs`. The manifest's publisher and product code must match what the
 installer registers: `publisher` and `product-name` under `[package.metadata.packager]` in
 `apps/opentrack/Cargo.toml`.
