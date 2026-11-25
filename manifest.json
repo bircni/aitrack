@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-11-24T17:40:11.059Z",
+  "updatedAt": "2026-11-25T17:10:57.289Z",
   "files": {
     "supplement": "supplement.json",
     "litellm": "litellm.json",
     "modelsDev": "models_dev.json"
   },
   "hashes": {
-    "supplement": "38dda9c099d213ea1a6f181575dc4a5ca399d11d9740b40e21f945c192d24873",
-    "litellm": "f292aad368eeeb6429682303308e0ba79dbdd65f392bc3954594472cae965395",
-    "modelsDev": "77e51b5e3c1fae1a6ef1bf2fa48e8ae5ee50f7eeaada5ab89fadfd9699cc0ae9"
+    "supplement": "07b24d31a8d8f1abb0e8f7006d6901460d7999918e4c099be0ebe0ef86350536",
+    "litellm": "f9cfb48da49fd567c5338fa23c231f81c99d9608a4e5635ca6c0275e140485bf",
+    "modelsDev": "3a302e0ab43b1d6031d3163968a0c160d1834aab9f5d94a4fc029bacba716bc3"
   }
 }

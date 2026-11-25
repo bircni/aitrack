@@ -1,5 +1,5 @@
 {
-  "retrievedAt": "2026-11-24T17:40:11.059Z",
+  "retrievedAt": "2026-11-25T17:10:57.289Z",
   "models": {
     "anthropic/claude-fable-5": {
       "i": 10,
@@ -583,7 +583,8 @@
       "i": 0.3,
       "o": 2.5,
       "cw": 0.3,
-      "cr": 0.075,
+      "cr": 0.03,
+      "cre": false,
       "cwe": false
     },
     "google/gemini-2.5-flash-lite": {
@@ -973,6 +974,13 @@
       "cw": 12.5,
       "cr": 1
     },
+    "openai/gpt-6-astra-healthcare": {
+      "i": 10,
+      "o": 50,
+      "cw": 10,
+      "cr": 1,
+      "cwe": false
+    },
     "openai/gpt-6-luna": {
       "i": 0.1,
       "o": 0.5,
@@ -991,6 +999,13 @@
       "cw": 2.5,
       "cr": 0.1
     },
+    "openai/gpt-6.1-sol-healthcare": {
+      "i": 2,
+      "o": 10,
+      "cw": 2,
+      "cr": 0.1,
+      "cwe": false
+    },
     "openai/gpt-6.1-terra": {
       "i": 1,
       "o": 5,
@@ -1003,7 +1018,19 @@
       "cw": 10,
       "cr": 0.4
     },
+    "openai/gpt-6.2-astra-healthcare": {
+      "i": 8,
+      "o": 40,
+      "cw": 10,
+      "cr": 0.4
+    },
     "openai/gpt-6.2-sol": {
+      "i": 2,
+      "o": 10,
+      "cw": 2.5,
+      "cr": 0.1
+    },
+    "openai/gpt-6.2-sol-healthcare": {
       "i": 2,
       "o": 10,
       "cw": 2.5,
