@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v6.0.1] - 2026-11-26
+
+
+
+### CI
+
+- Bump taiki-e/install-action from 2.90.2 to 2.90.3 in the actions group across 1 directory (#171)
+- Publish each opentrack release to winget (#174)
+
 ## [v6.0.0] - 2026-11-20
 
 

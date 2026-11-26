@@ -3,7 +3,7 @@ resolver = "3"
 members = ["apps/opentrack", "crates/cli", "crates/core", "crates/xtask"]
 
 [workspace.package]
-version = "6.0.0"
+version = "6.0.1"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
