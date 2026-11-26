@@ -384,3 +384,36 @@ jobs:
             git commit -m "opentrack ${GITHUB_REF_NAME#v}"
             git push
           fi
+
+  # Opens the version's pull request to microsoft/winget-pkgs from bircni's fork.
+  winget:
+    name: Update the winget package
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    env:
+      KOMAC_VERSION: 2.17.2
+      KOMAC_SHA256: b03b020eec98acfb0b53e284a6e21815b884be33de6785b97e7a120f0e748966
+    steps:
+      # Pinned by checksum: this job holds a token that can write to every public bircni repo.
+      - name: Install komac
+        run: |
+          archive="komac-$KOMAC_VERSION-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSLO "https://github.com/russellbanks/Komac/releases/download/v$KOMAC_VERSION/$archive"
+          echo "$KOMAC_SHA256  $archive" | sha256sum --check
+          tar -xzf "$archive" komac
+
+      - name: Open the pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          KOMAC_FORK_OWNER: ${{ github.repository_owner }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          release="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases"
+          ./komac sync-fork
+          # The release also carries aitrack-win32-x64.exe, the CLI, so the installer is named.
+          ./komac update bircni.opentrack --version "$version" \
+            --urls "$release/download/$GITHUB_REF_NAME/opentrack_${version}_x64-setup.exe" \
+            --release-notes-url "$release/tag/$GITHUB_REF_NAME" \
+            --submit
