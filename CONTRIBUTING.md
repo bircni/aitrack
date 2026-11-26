@@ -163,13 +163,13 @@ builds and checks every file without releasing:
   `aitrack install-opentrack`, which read `latest.json` from the latest release, never find it half
   uploaded.
 - **Homebrew.** `Casks/opentrack.rb` gets the new version and DMG checksum.
-- **winget.** [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser) opens a pull
-  request to `microsoft/winget-pkgs` for the new setup.exe from `bircni`'s fork, with the
-  `WINGET_TOKEN` secret, a classic token with `public_repo` scope.
+- **winget.** [komac](https://github.com/russellbanks/Komac), pinned by version and checksum,
+  opens a pull request to `microsoft/winget-pkgs` for the new setup.exe from `bircni`'s fork, with
+  the `WINGET_TOKEN` secret, a classic token with `public_repo` scope.
 
 A tag with a `-` is a prerelease: npm publishes it under `next`, the GitHub release never becomes
-latest, and the Homebrew and winget jobs are skipped. After a failure, re-run the failed jobs; the draft job
-replaces assets with the same names and `publish-npm` skips what already published.
+latest, and the Homebrew and winget jobs are skipped. After a failure, re-run the failed jobs; the
+draft job replaces assets with the same names and `publish-npm` skips what already published.
 
 Windows builds are unsigned; macOS builds are ad hoc signed and not notarized.
 
