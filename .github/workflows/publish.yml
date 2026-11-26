@@ -411,7 +411,6 @@ jobs:
         run: |
           version=${GITHUB_REF_NAME#v}
           release="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases"
-          ./komac sync-fork
           # The release also carries aitrack-win32-x64.exe, the CLI, so the installer is named.
           ./komac update bircni.opentrack --version "$version" \
             --urls "$release/download/$GITHUB_REF_NAME/opentrack_${version}_x64-setup.exe" \
