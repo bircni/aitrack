@@ -20,7 +20,7 @@ eframe = { version = "0.37.0", default-features = false, features = ["accesskit"
 getrandom = "0.4.3"
 global-hotkey = "0.10.0"
 indexmap = "2.14.2"
-jiff = { version = "0.2.40", default-features = false, features = ["std"] }
+jiff = { version = "1.0.1", default-features = false, features = ["std"] }
 notify-rust = "4.19.0"
 open = "5.4.5"
 pollster = "1.0.1"

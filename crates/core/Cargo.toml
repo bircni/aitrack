@@ -22,7 +22,7 @@ base64 = "0.23.1"
 gethostname = "1.1.0"
 getrandom = "0.4.3"
 indexmap = { version = "2.14.2", features = ["serde"] }
-jiff = { version = "0.2.40", default-features = false, features = ["std", "tz-system", "tz-fat", "tzdb-bundle-platform", "tzdb-zoneinfo", "tzdb-concatenated", "serde"] }
+jiff = { version = "1.0.1", default-features = false, features = ["std", "tz-system", "tz-fat", "tzdb-bundle-platform", "tzdb-zoneinfo", "tzdb-concatenated", "serde"] }
 memchr = "2.8.3"
 minisign-verify = "0.3.0"
 png = { version = "0.18.1", optional = true }
@@ -38,6 +38,6 @@ ureq = { version = "3.5.1", default-features = false, features = ["rustls", "pla
 
 [dev-dependencies]
 # Hosts disagree on pre-1900 offsets (Debian builds with backzone), so goldens use jiff's own copy.
-jiff = { version = "0.2.40", default-features = false, features = ["tzdb-bundle-always"] }
+jiff = { version = "1.0.1", default-features = false, features = ["tzdb-bundle-always"] }
 proptest = "1.12.0"
 tempfile = "3.27.0"
